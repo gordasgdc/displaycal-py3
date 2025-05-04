@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 # See developers/interfaces/madTPG.h in the madVR package
 
 
