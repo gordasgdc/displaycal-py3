@@ -3427,7 +3427,7 @@ BEGIN_DATA
         # Invert input/output 1d LUTs
         for channel in (self.input, self.output):
             for e, entries in enumerate(channel):
-                lut = dict()
+                lut = {}
                 maxv = len(entries) - 1.0
                 for i, entry in enumerate(entries):
                     lut[entry / 65535.0 * maxv] = i / maxv * 65535
@@ -6426,7 +6426,7 @@ class ICCProfile:
         """
         # Assemble tag table and tag data
         tagCount = len(self.tags)
-        tagTable = dict()
+        tagTable = {}
         tagTableSize = tagCount * 12
         tagsData = []
         tagsDataOffset = []
@@ -7111,7 +7111,7 @@ class ICCProfile:
             ]
         )
         bt1886 = colormath.BT1886(mtx, XYZbp, outoffset, gamma)
-        values = dict()
+        values = {}
         for _i, channel in enumerate(("r", "g", "b")):
             self.tags[channel + "TRC"] = CurveType(profile=self)
             self.tags[channel + "TRC"].set_trc(-709, size)
@@ -7568,7 +7568,7 @@ class ICCProfile:
                     if value and key == "prefix":
                         value = "\n".join(value.split(","))
                     info[f"    {key}"] = value
-                    elements = dict()
+                    elements = {}
                     for subkey in ("display_name", "display_value"):
                         entry = record.get(subkey)
                         if isinstance(entry, MultiLocalizedUnicodeType):
@@ -7580,7 +7580,7 @@ class ICCProfile:
                                         country = f"/{country}"
                                     loc = f"{language}{country}"
                                     if loc not in elements:
-                                        elements[loc] = dict()
+                                        elements[loc] = {}
                                     elements[loc][subkey] = value
                     for loc in elements:
                         items = elements[loc]
