@@ -523,7 +523,7 @@ def create_RGB_A2B_XYZ(input_curves, clut, logfn=print):
     # Fill cLUT
     clut = list(clut)
     itable.clut = []
-    step = 1.0 / (clutres - 1.0)
+    # step = 1.0 / (clutres - 1.0)
     for R in range(clutres):
         for G in range(clutres):
             row = list(clut.pop(0))
@@ -789,7 +789,7 @@ def create_synthetic_hdr_clut_profile(
         maxv = white_cdm2 / 10000.0
         def eotf(v):
             return colormath.specialpow(v, -2084)
-        oetf = eotf_inverse = lambda v: colormath.specialpow(v, 1.0 / -2084)
+        _oetf = eotf_inverse = lambda v: colormath.specialpow(v, 1.0 / -2084)
         eetf = bt2390.apply
 
         # Apply a slight power to the segments to optimize encoding
@@ -834,7 +834,7 @@ def create_synthetic_hdr_clut_profile(
         eotf = hlg.eotf
         def eotf_inverse(v):
             return hlg.eotf(v, True)
-        oetf = hlg.oetf
+        _oetf = hlg.oetf
         def eetf(v):
             return v
 
@@ -914,7 +914,7 @@ def create_synthetic_hdr_clut_profile(
     nextpow = eotf(eetf(encf(segment)))
     prevv = 0
     pprevpow = [0]
-    clipped = False
+    # clipped = False
     xp = []
     if generate_B2A:
         oxp = []
@@ -933,7 +933,7 @@ def create_synthetic_hdr_clut_profile(
             if prevpow > pprevpow[-1]:
                 pprevpow.append(prevpow)
         else:
-            clipped = True
+            # clipped = True
             # Linearly interpolate
             vv = colormath.convert_range(v, prevv, 1, prevpow, 1)
         out = eotf_inverse(vv)
@@ -1598,7 +1598,7 @@ def create_synthetic_hdr_clut_profile(
 
     if display_XYZ:
         Cmaxv = max(Cmax.values())
-        Cdmaxv = max(Cdmax.values())
+        # Cdmaxv = max(Cdmax.values())
 
     if logfile and display_LCH and Cmode == "primaries_secondaries":
         logfile.write(
