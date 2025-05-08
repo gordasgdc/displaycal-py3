@@ -23,6 +23,7 @@ if sys.platform == "win32":
     import winreg
 
     import pywintypes
+
     try:
         import win32api
         import win32gui
@@ -787,8 +788,10 @@ def create_synthetic_hdr_clut_profile(
             bt2390s = colormath.BT2390(black_cdm2, white_cdm2, master_black_cdm2, 10000)
 
         maxv = white_cdm2 / 10000.0
+
         def eotf(v):
             return colormath.specialpow(v, -2084)
+
         _oetf = eotf_inverse = lambda v: colormath.specialpow(v, 1.0 / -2084)
         eetf = bt2390.apply
 
@@ -832,9 +835,12 @@ def create_synthetic_hdr_clut_profile(
 
         maxv = 1.0
         eotf = hlg.eotf
+
         def eotf_inverse(v):
             return hlg.eotf(v, True)
+
         _oetf = hlg.oetf
+
         def eetf(v):
             return v
 
@@ -1438,7 +1444,7 @@ def create_synthetic_hdr_clut_profile(
                 L, C, H = colormath.XYZ2DIN99dLCH(*(v * 100 for v in XYZc))
                 Ld, Cd, Hd = colormath.XYZ2DIN99dLCH(*(v * 100 for v in XYZdisp))
                 Cdmaxk = tuple(map(round, (Ld, Hd)))
-                if C > Cmax.get(Cdmaxk, -1): # noqa: SIM300
+                if C > Cmax.get(Cdmaxk, -1):  # noqa: SIM300
                     Cmax[Cdmaxk] = C
                 Cdiff.append(min(Cd / C, 1.0))
                 if Cd > Cdmax.get(Cdmaxk, -1):
@@ -3340,7 +3346,7 @@ class LUT16Type(ICCProfileTag):
         if len(self.clut[0][0]) != 3:
             raise NotImplementedError("clut_writecgats: output channels != 3")
         if isinstance(stream_or_filename, str):
-            stream = open(stream_or_filename, "wb")  # noqa: SIM115
+            stream = open(stream_or_filename, "wb")  # noqa: SIM115
         else:
             stream = stream_or_filename
         with stream:
@@ -3986,7 +3992,7 @@ class CurveType(ICCProfileTag, list):
     ):
         """Return average or least squares gamma or a list of gamma values"""
         if len(self) <= 1:
-            values = self if len(self) else [1.0] # Identity
+            values = self if len(self) else [1.0]  # Identity
             if average or least_squares:
                 return values[0]
             return [values[0]]
@@ -6195,7 +6201,7 @@ class ICCProfile:
 
         if isinstance(key, tuple):
             # Filename
-            profile = open(profile, "rb")  # noqa: SIM115
+            profile = open(profile, "rb")  # noqa: SIM115
 
         if profile is None:
             self.set_defaults()
@@ -6257,7 +6263,9 @@ class ICCProfile:
                             try:
                                 XYZ.append(float(prim.get(component)) / 100.0)
                             except (TypeError, ValueError) as e:
-                                raise ICCProfileInvalidError("Invalid WCS profile") from e
+                                raise ICCProfileInvalidError(
+                                    "Invalid WCS profile"
+                                ) from e
                         if color == b"White":
                             tag_name = "wtpt"
                         elif color == b"Black":
@@ -6309,7 +6317,9 @@ class ICCProfile:
                             try:
                                 power = float(gamma.get("value"))
                             except (TypeError, ValueError) as e:
-                                raise ICCProfileInvalidError("Invalid WCS profile") from e
+                                raise ICCProfileInvalidError(
+                                    "Invalid WCS profile"
+                                ) from e
                     if gamma is not None:
                         self.set_trc_tags(True, power)
             if it.root.tag == "ColorDeviceModel":
@@ -7333,7 +7343,7 @@ class ICCProfile:
         """
         if not self.is_loaded and self._file:
             if self._file.closed:
-                self._file = open(self._file.name, "rb")  # noqa: SIM115
+                self._file = open(self._file.name, "rb")  # noqa: SIM115
                 self._file.seek(len(self._data))
             read_size = self.size - len(self._data)
             if read_size > 0:
@@ -7525,7 +7535,7 @@ class ICCProfile:
                         value = f"{transfer_function[0][0]}"
                     else:
                         if transfer_function[1] >= 0.95:
-                            value = "≈ {} (Δ {:.2%})".format(  # noqa: UP032
+                            value = "≈ {} (Δ {:.2%})".format(  # noqa: UP032
                                 transfer_function[0][0],
                                 1 - transfer_function[1],
                             )
@@ -7549,7 +7559,7 @@ class ICCProfile:
                         value = f"{transfer_function[0][0]}"
                     else:
                         if transfer_function[1] >= 0.95:
-                            value = "≈ {} (Δ {:.2%})".format(  # noqa: UP032
+                            value = "≈ {} (Δ {:.2%})".format(  # noqa: UP032
                                 transfer_function[0][0],
                                 1 - transfer_function[1],
                             )
@@ -7768,7 +7778,9 @@ class ICCProfile:
                         info[f"    Channel {i + 1} unique values"] = (
                             f"{len(unique[i])} @ 8 Bit"
                         )
-                        info[f"    Channel {i + 1} is linear"] = "Yes" if points[i] == linear_points else "No"
+                        info[f"    Channel {i + 1} is linear"] = (
+                            "Yes" if points[i] == linear_points else "No"
+                        )
             elif isinstance(tag, ViewingConditionsType):
                 info[name] = ""
                 info["    Illuminant"] = tag.illuminantType.description
@@ -7802,7 +7814,10 @@ class ICCProfile:
                         info[f"    {label} Lab"] = " ".join(color)
                     else:
                         color = [
-                            " ".join(file_format.format(v * 100) for v in list(tag.ir.values()))
+                            " ".join(
+                                file_format.format(v * 100)
+                                for v in list(tag.ir.values())
+                            )
                         ]
                         if list(tag.ir.values()) != [0, 0, 0]:
                             xy = " ".join(f"{v:6.4f}" for v in tag.ir.xyY[:2])
@@ -7827,7 +7842,10 @@ class ICCProfile:
                                 )
                     if "chad" in self.tags:
                         color = [
-                            " ".join(file_format.format(v * 100) for v in list(tag.pcs.values()))
+                            " ".join(
+                                file_format.format(v * 100)
+                                for v in list(tag.pcs.values())
+                            )
                         ]
                         if list(tag.pcs.values()) != [0, 0, 0]:
                             xy = " ".join(f"{v:6.4f}" for v in tag.pcs.xyY[:2])
@@ -7846,20 +7864,24 @@ class ICCProfile:
                     info[name] = ""
                     info["    Illuminant-relative XYZ"] = " ".join(
                         [
-                            " ".join(
-                                f"{v * 100:6.2f}" for v in list(tag.ir.values())
+                            " ".join(f"{v * 100:6.2f}" for v in list(tag.ir.values())),
+                            "(xy {})".format(
+                                " ".join(f"{v:6.4f}" for v in tag.ir.xyY[:2])
                             ),
-                            "(xy {})".format(" ".join(f"{v:6.4f}" for v in tag.ir.xyY[:2])),
                         ]
                     )
                     info["    PCS-relative XYZ"] = " ".join(
                         [
                             " ".join(f"{v * 100:6.2f}" for v in list(tag.values())),
-                            "(xy {})".format(" ".join(f"{v:6.4f}" for v in tag.xyY[:2])),
+                            "(xy {})".format(
+                                " ".join(f"{v:6.4f}" for v in tag.xyY[:2])
+                            ),
                         ]
                     )
             elif isinstance(tag, ICCProfileTag):
-                info[name] = f"'{tag.tagData[:4].decode()}' [{len(tag.tagData):d} Bytes]"
+                info[name] = (
+                    f"'{tag.tagData[:4].decode()}' [{len(tag.tagData):d} Bytes]"
+                )
         return info
 
     def get_rgb_space(self, relation="ir", gamma=None):
@@ -7879,9 +7901,7 @@ class ICCProfile:
             rgb_space.append(getattr(tags[f"{component}XYZ"], relation).xyY)
             if not gamma:
                 if len(tags[f"{component}TRC"]) > 1:
-                    rgb_space[0].append(
-                        [v / 65535.0 for v in tags[f"{component}TRC"]]
-                    )
+                    rgb_space[0].append([v / 65535.0 for v in tags[f"{component}TRC"]])
                 else:
                     rgb_space[0].append(tags[f"{component}TRC"][0])
         return rgb_space
@@ -7994,7 +8014,7 @@ class ICCProfile:
                     "EDID_date",
                     "{:04d}-T{:d}".format(
                         int(edid["year_of_manufacture"]),
-                        int(edid["week_of_manufacture"])
+                        int(edid["week_of_manufacture"]),
                     ),
                 ),
                 ("EDID_red_x", edid["red_x"]),
