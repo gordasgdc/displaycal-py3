@@ -8077,8 +8077,6 @@ class ICCProfile:
     def _delfromcache(self):
         # Make double sure to remove ourselves from the cache
         if self._key and self._key in _iccprofilecache:
-            try:
+            with contextlib.suppress(KeyError):
                 del _iccprofilecache[self._key]
-            except KeyError:
                 # GC was faster
-                pass

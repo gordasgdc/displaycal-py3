@@ -1,4 +1,5 @@
 # See developers/interfaces/madTPG.h in the madVR package
+import contextlib
 import ctypes
 import errno
 import getpass
@@ -1573,10 +1574,8 @@ class MadTPG_Net(MadTPGBase):
                 if param in params:
                     values = params[param].split(".")
                     for i, value in enumerate(values):
-                        try:
+                        with contextlib.suppress(ValueError):
                             values[i] = int(value)
-                        except ValueError:
-                            pass
                     params[param] = tuple(values)
         elif command == "reply":
             commandno = record["commandNo"]
