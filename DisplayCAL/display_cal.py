@@ -152,7 +152,7 @@ from DisplayCAL.icc_profile import (
     VideoCardGammaType,
     VideoCardGammaTableType,
 )
-from DisplayCAL.log import log, logbuffer
+from DisplayCAL.log import logbuffer
 from DisplayCAL.meta import (
     DOMAIN,
     VERSION,
