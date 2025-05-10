@@ -2025,7 +2025,9 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             self.header_btm.SetBitmap(header_bmp)
         self.headerpanel.Sizer.Insert(0, self.header_btm, flag=wx.ALIGN_TOP | wx.EXPAND)
         # separator = BitmapBackgroundPanel(self.panel, size=(-1, 1))
-        # separator.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_3DSHADOW))
+        # separator.SetBackgroundColour(
+        #     wx.SystemSettings.GetColour(wx.SYS_COLOUR_3DSHADOW)
+        # )
         # self.panel.Sizer.Insert(2, separator, flag=wx.EXPAND)
 
         # Calibration settings panel
@@ -2086,7 +2088,9 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         if hasattr(sizer, "GetItemIndex"):
             # wxPython 2.8.12+
             # separator = BitmapBackgroundPanel(self.panel, size=(-1, 1))
-            # separator.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_3DLIGHT))
+            # separator.SetBackgroundColour(
+            #     wx.SystemSettings.GetColour(wx.SYS_COLOUR_3DLIGHT)
+            # )
             # sizer.Insert(sizer.GetItemIndex(self.buttonpanel), separator,
             # flag=wx.EXPAND)
             self.buttonpanelheader = BitmapBackgroundPanel(
@@ -2095,7 +2099,9 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             # bmp = getbitmap("theme/gradient", False)
             bmp = getbitmap("theme/shadow-bordertop", False)
             # if bmp.Size[0] >= 8 and bmp.Size[1] >= 96:
-            # bmp = bmp.GetSubBitmap((0, 1, 8, 15)).ConvertToImage().Mirror(False).ConvertToBitmap()
+            # bmp = bmp.GetSubBitmap(
+            #     (0, 1, 8, 15)
+            # ).ConvertToImage().Mirror(False).ConvertToBitmap()
             # image = bmp.ConvertToImage()
             # databuffer = image.GetDataBuffer()
             # for i, byte in enumerate(databuffer):
@@ -2124,7 +2130,9 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         if hasattr(sizer, "GetItemIndex"):
             # wxPython 2.8.12+
             # separator = BitmapBackgroundPanel(self.panel, size=(-1, 1))
-            # separator.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_3DSHADOW))
+            # separator.SetBackgroundColour(
+            #     wx.SystemSettings.GetColour(wx.SYS_COLOUR_3DSHADOW)
+            # )
             # sizer.Insert(sizer.GetItemIndex(self.tabpanel) + 1, separator,
             # flag=wx.EXPAND)
             # self.tabpanelheader = BitmapBackgroundPanel(self.panel,
@@ -2357,7 +2365,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self.lut3dframe = LUT3DFrame(self)
 
     def init_reportframe(self):
-        """Create & initialize the measurement report creation window and its controls."""
+        """Initialize the measurement report creation window."""
         self.reportframe = ReportFrame(self)
         self.reportframe.measurement_report_btn.Bind(
             wx.EVT_BUTTON, self.measurement_report_handler
@@ -7865,7 +7873,8 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             (
                 "metadata",
                 "metadata.json",
-                f'{{"org":{{"freedesktop":{{"openicc":{{"device":{{"monitor":[{metadata.to_json()}]}}}}}}}}}}',
+                '{"org":{"freedesktop":{"openicc":{"device":{"monitor":['
+                f'{metadata.to_json()}]}}}}}}}}}}',
             ),
             ("profile", "profile.icc", data),
         ]
@@ -8124,7 +8133,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             self.install_profile_handler(profile_path=path, install_3dlut=False)
 
     def load_profile_cal_handler(self, event):
-        """Show a dialog for user to select a profile to load calibration (vcgt) from."""
+        """Prompt user to select a profile for loading calibration (vcgt)."""
         if not check_set_argyll_bin():
             return
         defaultDir, defaultFile = get_verified_path("last_cal_or_icc_path")
@@ -11080,10 +11089,8 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     if gamut_volume:
                         for _key, name, volume in gamuts:
                             vinfo.append(
-                                "{:.1f}% {}".format(
-                                    gamut_volume * GAMUT_VOLUME_SRGB / volume * 100,
-                                    name,
-                                )
+                                f"{gamut_volume * GAMUT_VOLUME_SRGB / volume:.1%} "
+                                f"{name}"
                             )
                             if len(vinfo) == len(cinfo):
                                 break
@@ -13332,7 +13339,8 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         technology_strings = self.worker.get_technology_strings()
         if debug:
             print(
-                f'reference_ti3.queryv1("DISPLAY_TYPE_REFRESH"): {reference_ti3.queryv1("DISPLAY_TYPE_REFRESH")}'
+                "reference_ti3.queryv1('DISPLAY_TYPE_REFRESH'): "
+                f"{reference_ti3.queryv1('DISPLAY_TYPE_REFRESH')}"
             )
             print(f"tech: {tech}")
             print(f"technology_string: {technology_strings}")
@@ -13852,7 +13860,10 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     deltaE = colormath.delta(*Lab_ref + Lab_tgt + ("00",))["E"]
                     deltaE_00.append(deltaE)
                     print(
-                        " {:.6f} {:.6f} {:8.4f} | {:.6f} {:.6f} {:8.4f} | {:.6f} | {:.6f} ".format(
+                        (
+                            " {:.6f} {:.6f} {:8.4f} | "
+                            "{:.6f} {:.6f} {:8.4f} | {:.6f} | {:.6f} "
+                        ).format(
                             *(
                                 tuple(xyYabs[0])
                                 + tuple(xyYabs[1])
@@ -14893,9 +14904,15 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
 
     def display_delay_handler(self, event):
         mapping = {
-            self.override_min_display_update_delay_ms.GetId(): "measure.override_min_display_update_delay_ms",
-            self.min_display_update_delay_ms.GetId(): "measure.min_display_update_delay_ms",
-            self.override_display_settle_time_mult.GetId(): "measure.override_display_settle_time_mult",
+            self.override_min_display_update_delay_ms.GetId(): (
+                "measure.override_min_display_update_delay_ms"
+            ),
+            self.min_display_update_delay_ms.GetId(): (
+                "measure.min_display_update_delay_ms"
+            ),
+            self.override_display_settle_time_mult.GetId(): (
+                "measure.override_display_settle_time_mult"
+            ),
             self.display_settle_time_mult.GetId(): "measure.display_settle_time_mult",
         }
         pref = mapping.get(event.GetId())
@@ -15004,7 +15021,9 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             w = self.display_tech_info_tooltip_window
             w.sizer0.Add((0, 2))
             # link1 = HyperLinkCtrl(w.panel, -1,
-            # label=lang.getstr("info.display_tech.linklabel.displayspecifications.com"),
+            # label=lang.getstr(
+            #     "info.display_tech.linklabel.displayspecifications.com"
+            # ),
             # URL="https://www.displayspecifications.com/")
             # link1.BackgroundColour = w.panel.BackgroundColour
             link1 = PlateButton(
@@ -15787,7 +15806,10 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 show_result_dialog(result, self)
             else:
                 self.interactive = False
-                # self.profile_hires_b2a_consumer(self.worker.update_profile_B2A(profile), profile)
+                # self.profile_hires_b2a_consumer(
+                #     self.worker.update_profile_B2A(profile),
+                #     profile
+                # )
                 self.worker.start(
                     self.profile_hires_b2a_consumer,
                     self.worker.update_profile_B2A,
@@ -17935,7 +17957,9 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     # See Worker.create_profile in
                     # worker.py
                     "BLACK_POINT_CORRECTION": "profile.black_point_correction",
-                    "MIN_DISPLAY_UPDATE_DELAY_MS": "measure.min_display_update_delay_ms",
+                    "MIN_DISPLAY_UPDATE_DELAY_MS": (
+                        "measure.min_display_update_delay_ms"
+                    ),
                     "DISPLAY_SETTLE_TIME_MULT": "measure.display_settle_time_mult",
                     "FFP_INSERTION_INTERVAL": "patterngenerator.ffp_insertion.interval",
                     "FFP_INSERTION_DURATION": "patterngenerator.ffp_insertion.duration",
@@ -17948,7 +17972,8 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     "3DLUT_HDR_SAT": "3dlut.hdr_sat",
                     "3DLUT_HDR_HUE": "3dlut.hdr_hue",
                     "3DLUT_HDR_DISPLAY": "3dlut.hdr_display",
-                    # MaxCLL is no longer used, map to mastering display max light level (MaxMLL)
+                    # MaxCLL is no longer used,
+                    # map to mastering display max light level (MaxMLL)
                     "3DLUT_HDR_MAXCLL": "3dlut.hdr_maxmll",
                     "3DLUT_HDR_MAXMLL": "3dlut.hdr_maxmll",
                     "3DLUT_HDR_MAXMLL_ALT_CLIP": "3dlut.hdr_maxmll_alt_clip",
