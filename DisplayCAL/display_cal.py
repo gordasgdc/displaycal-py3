@@ -16865,7 +16865,6 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         setcfg("tc.show", 1)
         self.tcframe.Show()
         self.tcframe.Raise()
-        return
 
     def init_tcframe(self, path=None):
         self.tcframe = TestchartEditor(self, path=path)
