@@ -961,9 +961,7 @@ class MadTPG_Net(MadTPGBase):
 
     def _receive_handler(self, addr, conn):
         if self.debug:
-            safe_print(
-                f"MadTPG_Net: Entering receiver thread for {addr[0]}:{addr[1]}"
-            )
+            safe_print(f"MadTPG_Net: Entering receiver thread for {addr[0]}:{addr[1]}")
         self._incoming[addr] = []
         hello = self._hello(conn)
         blob = b""
@@ -1119,9 +1117,7 @@ class MadTPG_Net(MadTPGBase):
         self._cast_sockets.pop((host, port))
         self._shutdown(sock, (host, port))
         if self.debug:
-            safe_print(
-                f"MadTPG_Net: Exiting {cast} receiver thread for port {port}"
-            )
+            safe_print(f"MadTPG_Net: Exiting {cast} receiver thread for port {port}")
 
     def __del__(self):
         self.shutdown()
@@ -1625,9 +1621,7 @@ class MadTPG_Net(MadTPGBase):
             else:
                 # Got a reply for a command we never issued?
                 if self.debug:
-                    safe_print(
-                        f"MadTPG_Net: Got reply {commandno} for unknown command"
-                    )
+                    safe_print(f"MadTPG_Net: Got reply {commandno} for unknown command")
         record["params"] = params
         if self.debug:
             with _lock:
