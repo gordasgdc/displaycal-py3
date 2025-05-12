@@ -1700,8 +1700,7 @@ class MadTPG_Net(MadTPGBase):
                         # Resource temporarily unavailable
                         sleep(0.001)
                         continue
-                    else:
-                        raise
+                    raise OSError from exception
                 if bytes_sent == 0:
                     raise OSError(errno.ENOLINK, "Link has been severed")
                 packet = packet[bytes_sent:]
