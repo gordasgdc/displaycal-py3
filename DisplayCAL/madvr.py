@@ -1389,8 +1389,7 @@ class MadTPG_Net(MadTPGBase):
                 and self.clients.get(self._client_socket.getpeername(), {}).get(
                     "mvrVersion"
                 )
-                or False
-            )
+            ) or False
         except OSError as exception:
             if self.debug:
                 safe_print("MadTPG_Net:", exception)
@@ -1445,9 +1444,7 @@ class MadTPG_Net(MadTPGBase):
                     commandno in (r_commandno, -1)
                     and command in (r_command, None)
                     and not params
-                    or (r_params in params)
-                    and component in (r_component, None)
-                ):
+                ) or ((r_params in params) and component in (r_component, None)):
                     self._incoming[addr].remove(reply)
                     return r_params
             sleep(0.001)
