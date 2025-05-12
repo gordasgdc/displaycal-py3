@@ -749,9 +749,9 @@ def colorimeter_correction_web_check_choose(resp, parent=None):
                 ok=lang.getstr("ok"),
                 bitmap=geticon(32, "dialog-information"),
             )
-            return
+            return None
     else:
-        return
+        return None
     dlg = ConfirmDialog(
         parent,
         title=lang.getstr("colorimeter_correction.web_check"),
@@ -1005,7 +1005,7 @@ def colorimeter_correction_check_overwrite(
     result = check_create_dir(config.get_argyll_data_dir())
     if isinstance(result, Exception):
         show_result_dialog(result, parent)
-        return
+        return None
     path = get_cgats_path(cgats)
     if os.path.isfile(path):
         dlg = ConfirmDialog(
@@ -5423,7 +5423,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             8,
         ]:
             # We assume these macOS bugs exist since 10.8 "Mountain Lion"
-            return
+            return None
         result = None
         if cal and (
             getcfg("calibration.black_point_correction.auto")
@@ -5699,7 +5699,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             asroot = dlg.install_systemwide.GetValue()
             dlg.Destroy()
             if choice == wx.ID_CANCEL:
-                return
+                return None
             if choice == wx.ID_OK:
                 # Auto
                 path = None
@@ -5719,7 +5719,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 path = dlg.GetPath()
                 dlg.Destroy()
                 if result != wx.ID_OK:
-                    return
+                    return None
             if asroot:
                 result = self.worker.authenticate(
                     get_argyll_util("spyd2en"), lang.getstr("enable_spyder2"), self
@@ -5727,7 +5727,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 if result not in (True, None):
                     if isinstance(result, Exception):
                         show_result_dialog(result, self)
-                    return
+                    return None
             self.worker.start(
                 self.enable_spyder2_consumer,
                 self.enable_spyder2_producer,
@@ -5785,7 +5785,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 safe_glob_wildcard = safe_glob(wildcard)
                 path = safe_glob_wildcard[0] if safe_glob_wildcard else None
             if getcfg("dry_run"):
-                return
+                return None
             if path:
                 result = self.enable_spyder2(path, asroot)
                 if result and not isinstance(result, Exception):
@@ -5796,7 +5796,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 return path
             elif not path:
                 # Cancelled
-                return
+                return None
         return self.enable_spyder2(path, asroot)
 
     def enable_spyder2_consumer(
@@ -8382,7 +8382,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         elif not silent:
             if isinstance(result, Exception) and getcfg("dry_run"):
                 show_result_dialog(result, self)
-                return
+                return None
             if cal is False:
                 InfoDialog(
                     self,
@@ -8484,7 +8484,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 dlg.ok.SetDefault()
                 result = dlg.ShowModal()
                 if result == wx.ID_CANCEL:
-                    return
+                    return None
                 elif result != wx.ID_OK:
                     profile = None
         if not profile:
@@ -8506,7 +8506,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 setcfg("last_cal_or_icc_path", path)
             dlg.Destroy()
             if result != wx.ID_OK:
-                return
+                return None
             try:
                 profile = ICCProfile(path)
             except (OSError, ICCProfileInvalidError):
@@ -8516,7 +8516,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     ok=lang.getstr("ok"),
                     bitmap=geticon(32, "dialog-error"),
                 )
-                return
+                return None
             if check_profile_class and (
                 profile.profileClass != b"mntr" or profile.colorSpace != b"RGB"
             ):
@@ -8531,7 +8531,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     ok=lang.getstr("ok"),
                     bitmap=geticon(32, "dialog-error"),
                 )
-                return
+                return None
         return profile
 
     def measurement_report_create_handler(self, event):
@@ -10036,7 +10036,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 retval = filename
             dlg.Destroy()
             if result != wx.ID_OK or not host:
-                return
+                return None
             setcfg("patterngenerator.prisma.host", host)
         elif display_name == "madVR":
             # Connect to madTPG (launch local instance under Windows)
@@ -10090,7 +10090,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                         self.worker.madtpg, "shutdown"
                     ):
                         self.worker.madtpg.shutdown()
-                    return
+                    return None
                 elif result != wx.ID_OK:
                     # Error
                     return False
@@ -10102,7 +10102,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 self.worker.setup_patterngenerator(logfile)
             except Exception as exception:
                 show_result_dialog(exception, parent)
-                return
+                return None
             if not hasattr(self.worker.patterngenerator, "conn"):
                 # Wait for connection
                 def closedlg(self):
@@ -10139,7 +10139,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 dlg.Destroy()
                 if result == wx.ID_CANCEL:
                     self.worker.patterngenerator.listening = False
-                    return
+                    return None
         elif (
             not config.is_uncalibratable_display()
             and not self.worker.has_lut_access()
@@ -12911,7 +12911,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         else:
             result = -1
         if result == wx.ID_CANCEL:
-            return
+            return None
         elif result in (id_measure_reference, id_measure_colorimeter):
             # Select CCXX testchart
             ccxx_testchart = get_ccxx_testchart()
@@ -12919,7 +12919,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 show_result_dialog(
                     Error(lang.getstr("not_found", lang.getstr("ccxx.ti1"))), self
                 )
-                return
+                return None
             if not is_ccxx_testchart():
                 # Backup testchart selection
                 setcfg("testchart.file.backup", getcfg("testchart.file"))
@@ -12977,7 +12977,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 # Set observer
                 setcfg("observer", getcfg("colorimeter_correction.observer"))
             self.measure_handler()
-            return
+            return None
         try:
             ccxx_testchart = get_ccxx_testchart()
             if not ccxx_testchart:
@@ -12993,7 +12993,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             CGATSValueError,
         ) as exception:
             show_result_dialog(exception, self)
-            return
+            return None
         cgats_list = []
         reference_ti3 = None
         colorimeter_ti3 = None
@@ -13098,7 +13098,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                         ok=lang.getstr("ok"),
                         bitmap=geticon(32, "dialog-error"),
                     )
-                    return
+                    return None
                 else:
                     cgats_list.append(cgats)
                     # Check if measurement contains spectral values
@@ -13125,7 +13125,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                             if result == wx.ID_OK:
                                 break
                             if result == wx.ID_CANCEL:
-                                return
+                                return None
                     elif cgats.queryv1("INSTRUMENT_TYPE_SPECTRAL") == b"YES":
                         if reference_ti3:
                             # We already have a reference ti3
@@ -13142,7 +13142,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                         setcfg("last_colorimeter_ti3_path", path)
             else:
                 # User canceled dialog
-                return
+                return None
         # Check if atleast one file has been measured with a reference
         if not reference_ti3:
             InfoDialog(
@@ -13152,7 +13152,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 ok=lang.getstr("ok"),
                 bitmap=geticon(32, "dialog-error"),
             )
-            return
+            return None
         if event:
             cfgname = "colorimeter_correction.measurement_mode"
         else:
@@ -13168,7 +13168,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     ok=lang.getstr("ok"),
                     bitmap=geticon(32, "dialog-error"),
                 )
-                return
+                return None
             # Use only the device combinations from CCXX testchart
             reference_new = CGATS(b"BEGIN_DATA\nEND_DATA")
             reference_new.DATA_FORMAT = reference_ti3.queryv1("DATA_FORMAT")
@@ -13207,7 +13207,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                             ),
                         )
                     )
-                    return
+                    return None
                 item = data_colorimeter.queryi1(patch)
                 if item:
                     colorimeter_new.DATA.add_data(item)
@@ -13221,7 +13221,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                             ),
                         )
                     )
-                    return
+                    return None
             reference_ti3.queryi1("DATA").DATA = reference_new.DATA
             colorimeter_ti3.queryi1("DATA").DATA = colorimeter_new.DATA
             # If the reference comes from EDID, normalize luminance
@@ -13252,7 +13252,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 ok=lang.getstr("ok"),
                 bitmap=geticon(32, "dialog-error"),
             )
-            return
+            return None
         # Add display type
         for cgats in cgats_list:
             if not cgats.queryv1("DISPLAY_TYPE_REFRESH"):
@@ -13452,7 +13452,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 manufacturer = dlg.manufacturer_txt_ctrl.GetStringSelection()
             dlg.Destroy()
             if result != wx.ID_OK:
-                return
+                return None
         else:
             description += " AUTO"
         args.extend(["-E", description])
@@ -13501,7 +13501,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                         Error(lang.getstr("argyll.util.not_found", "spec2cie"))
                     )
                     self.worker.wrapup(False)
-                    return
+                    return None
                 os.rename(
                     os.path.join(cwd, "reference.ti3"),
                     os.path.join(cwd, "reference_orig.ti3"),
@@ -13634,7 +13634,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 traceback.print_exc()
                 show_result_dialog(exception, self)
                 self.worker.wrapup(False)
-                return
+                return None
             if reference_ti3[0].get("TARGET_INSTRUMENT") and not re.search(
                 rb'\nREFERENCE\s+".+?"\n', cgats
             ):
@@ -13701,7 +13701,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             if isinstance(result, Exception):
                 show_result_dialog(result, self)
                 self.worker.wrapup(False)
-                return
+                return None
             if colorimeter_ti3:
                 # CCMX
                 # Show reference vs corrected colorimeter values along with
@@ -13883,7 +13883,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 dlg.Destroy()
                 if result != wx.ID_OK:
                     self.worker.wrapup(False)
-                    return
+                    return None
                 # Add dE fit error to CGATS as meta
                 for label, fit_error in (
                     ("MAX_DE94", max(deltaE_94)),
@@ -14232,7 +14232,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         asroot = dlg.install_systemwide.GetValue()
         dlg.Destroy()
         if choice == wx.ID_CANCEL:
-            return
+            return None
         if choice != wx.ID_OK and not paths:
             dlg = wx.FileDialog(
                 self,
@@ -14245,7 +14245,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             paths = dlg.GetPaths()
             dlg.Destroy()
             if choice2 != wx.ID_OK:
-                return
+                return None
         elif not paths:
             paths = []
         if asroot:
@@ -14257,7 +14257,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             if result not in (True, None):
                 if isinstance(result, Exception):
                     show_result_dialog(result, self)
-                return
+                return None
         self.worker.interactive = False
         self.worker.start(
             self.import_colorimeter_corrections_consumer,
@@ -16877,7 +16877,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             setcfg("testchart.auto_optimize", 1)
         if path == "auto":
             self.set_testchart(path)
-            return
+            return None
         if os.path.basename(path) in self.dist_testchart_names:
             path = self.dist_testcharts[
                 self.dist_testchart_names.index(os.path.basename(path))
