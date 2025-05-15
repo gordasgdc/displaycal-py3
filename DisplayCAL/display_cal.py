@@ -6568,7 +6568,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 else:
                     geometry = display.Geometry.Get()  # Has to be tuple!
         display_name = display_name.replace("[PRIMARY]", lang.getstr("display.primary"))
-        title = display_name + " ‒ " + lang.getstr("whitepoint.visual_editor")
+        title = f"{display_name} - {lang.getstr('whitepoint.visual_editor')}"
         self.wpeditor = VisualWhitepointEditor(
             self,
             pos=pos,
