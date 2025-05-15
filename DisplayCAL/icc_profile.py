@@ -6789,7 +6789,7 @@ class ICCProfile:
     @staticmethod
     def from_named_rgb_space(
         rgb_space_name, iccv4=False, cat="Bradford", profile_class=b"mntr"
-    ):
+    ) -> "ICCProfile":
         rgb_space = colormath.get_rgb_space(rgb_space_name)
         return ICCProfile.from_rgb_space(
             rgb_space, rgb_space_name, iccv4, cat, profile_class
@@ -6798,7 +6798,7 @@ class ICCProfile:
     @staticmethod
     def from_rgb_space(
         rgb_space, description, iccv4=False, cat="Bradford", profile_class=b"mntr"
-    ):
+    ) -> "ICCProfile":
         rx, ry = rgb_space[2:][0][:2]
         gx, gy = rgb_space[2:][1][:2]
         bx, by = rgb_space[2:][2][:2]
@@ -6821,12 +6821,11 @@ class ICCProfile:
         )
 
     @staticmethod
-    def from_edid(edid, iccv4=False, cat="Bradford"):
+    def from_edid(edid, iccv4=False, cat="Bradford") -> "ICCProfile":
         """Create an ICC Profile from EDID data and return it
 
         You may override the gamma from EDID by setting it to a list of curve
         values.
-
         """
         description = edid.get(
             "monitor_name", edid.get("ascii", str(edid["product_id"] or edid["hash"]))
@@ -6897,7 +6896,7 @@ class ICCProfile:
         iccv4=False,
         cat="Bradford",
         profile_class=b"mntr",
-    ):
+    ) -> "ICCProfile":
         """Create an ICC Profile from chromaticities and return it"""
         wXYZ = colormath.xyY2XYZ(wx, wy, 1.0)
         # Calculate RGB to XYZ matrix from chromaticities and white
@@ -6942,7 +6941,7 @@ class ICCProfile:
         iccv4=False,
         cat="Bradford",
         profile_class=b"mntr",
-    ):
+    ) -> "ICCProfile":
         """Create an ICC Profile from XYZ values and return it"""
         profile = ICCProfile()
         profile.profileClass = profile_class
@@ -7366,8 +7365,8 @@ class ICCProfile:
                 print(label + ":", value)
 
     @staticmethod
-    def add_device_info(info, device, level=1):
-        """Add a device structure (see profile header) to info dict"""
+    def add_device_info(info, device, level=1) -> None:
+        """Add a device structure (see profile header) to info dict."""
         indent = " " * 4 * level
         info[f"{indent}Manufacturer"] = "0x{}".format(
             binascii.hexlify(device.get("manufacturer", b"")).upper().decode()
