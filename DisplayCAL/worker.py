@@ -5445,9 +5445,7 @@ END_DATA
                             print(traceback.format_exc())
                         monitors = []
                 for i, display in enumerate(displays):
-                    if display.startswith("Chromecast ") or display.startswith(
-                        "Prisma "
-                    ):
+                    if display.startswith(("Chromecast ", "Prisma ")):
                         self.display_edid.append({})
                         if display.startswith("Prisma "):
                             display_manufacturer = "Q, Inc"
@@ -5583,11 +5581,7 @@ END_DATA
                         print(tmp)
                         tmp = None
                     for i, disp in enumerate(displays):
-                        if (
-                            disp.startswith("Chromecast ")
-                            or disp.startswith("Prisma ")
-                            or not test_cal
-                        ):
+                        if disp.startswith(("Chromecast ", "Prisma ")) or not test_cal:
                             lut_access.append(None)
                             continue
                         if sys.platform == "darwin":
