@@ -1480,7 +1480,7 @@ class GamapFrame(BaseFrame):
                 src_viewcond = getcfg("gamap_src_viewcond")
                 if event and (
                     (
-                        src_viewcond in ([None] + self.viewconds_out_nondisplay)
+                        src_viewcond in [None, *self.viewconds_out_nondisplay]
                         and profile.profileClass in (b"mntr", b"spac")
                     )
                     or (
@@ -1702,7 +1702,7 @@ class GamapFrame(BaseFrame):
 
         self.gamap_src_viewcond_ctrl.SetItems(list(self.viewconds_ab.values()))
         self.gamap_out_viewcond_ctrl.SetItems(
-            [lang.getstr("none")] + list(self.viewconds_out_ab.values())
+            [lang.getstr("none"), *self.viewconds_out_ab.values()]
         )
 
         self.gamap_default_intent_ctrl.SetItems(
@@ -11655,14 +11655,15 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 self.profile_info[id_].Raise()
 
     def get_commands(self):
-        return self.get_common_commands() + [
+        return [
+            *self.get_common_commands(),
             "3DLUT-maker [create filename]",
             "calibrate",
             "calibrate-profile",
             "create-colorimeter-correction",
             "create-profile [filename]",
             "curve-viewer [filename]",
-            APPNAME + " [filename]",
+            f"{APPNAME} [filename]",
             "enable-spyder2",
             "import-colorimeter-corrections [filename...]",
             "install-profile [filename]",
@@ -12833,7 +12834,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             # Bind event handlers
             def correction_type_handler(event):
                 dlg.Freeze()
-                for item in list(boxsizer.Children) + [boxsizer.StaticBox]:
+                for item in [*list(boxsizer.Children), boxsizer.StaticBox]:
                     if isinstance(item, (wx.SizerItem, wx.Window)):
                         item.Show(dlg.correction_type_matrix.GetValue())
                 matrix = dlg.correction_type_matrix.GetValue()
@@ -15636,7 +15637,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             if exclude_ext:
                 args.extend(f"-xr!*{ext}" for ext in exclude_ext)
             return self.worker.exec_cmd(
-                sevenzip, args + [archive_path] + filenames, capture_output=True
+                sevenzip, [*args, archive_path, *filenames], capture_output=True
             )
         # Create gzipped TAR or ZIP archive
         dirbasename = ""
@@ -16052,7 +16053,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                             ti3_file.write(b"\n".join(ti3_lines))
                         collected_paths.append(collected_path)
                     # Average the TI3 files
-                    args = ["-v"] + collected_paths + [ti3_tmp_path]
+                    args = ["-v", *collected_paths, ti3_tmp_path]
                     cmd = get_argyll_util("average")
                     result = self.worker.exec_cmd(
                         cmd, args, capture_output=True, skip_scripts=True
@@ -16901,15 +16902,14 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             force
             or (
                 lang.getstr(os.path.basename(path))
-                in [""] + self.default_testchart_names
+                in ["", *self.default_testchart_names]
             )
             or not os.path.isfile(path)
         ):
-            if (
-                not force
-                and lang.getstr(os.path.basename(path))
-                in [""] + self.default_testchart_names
-            ):
+            if not force and lang.getstr(os.path.basename(path)) in [
+                "",
+                *self.default_testchart_names,
+            ]:
                 ti1 = os.path.basename(path)
             else:
                 ti1 = self.testchart_defaults[self.get_profile_type()].get(
@@ -17132,7 +17132,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     self.testcharts.append(
                         os.pathsep.join((testchart_name, testchart_dir))
                     )
-        self.testcharts = ["auto"] + natsort(self.testcharts)
+        self.testcharts = ["auto", *natsort(self.testcharts)]
         self.testchart_names = []
         for i, chart in enumerate(self.testcharts):
             chart = chart.split(os.pathsep)
@@ -19116,7 +19116,7 @@ class StartupFrame(start_cls):
             gamma = 2.04  # somewhat arbitrary gamma value, but works the best for macOS
             if self.worker.exec_cmd(
                 screencap,
-                extra_args + ["screencap.png"],
+                [*extra_args, "screencap.png"],
                 capture_output=True,
                 skip_scripts=True,
                 silent=True,
