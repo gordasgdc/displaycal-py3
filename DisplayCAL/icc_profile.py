@@ -56,6 +56,8 @@ try:
 except ImportError:
 
     class Colord:
+        """Dummy class for colord support."""
+
         Colord = None
 
         def quirk_manufacturer(self, manufacturer):
@@ -3009,6 +3011,8 @@ class ADict(dict):
 
 
 class AODict(ADict):
+    """Convenience class for dictionary key access via attributes."""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -3026,7 +3030,7 @@ class AODict(ADict):
 
 
 class LazyLoadTagAODict(AODict):
-    """Lazy-load (and parse) tag data on access"""
+    """Lazy-load (and parse) tag data on access."""
 
     def __init__(self, profile, *args, **kwargs):
         self.profile = profile
@@ -3091,6 +3095,8 @@ class LazyLoadTagAODict(AODict):
 
 
 class ICCProfileTag:
+    """Base class for ICC profile tags."""
+
     def __init__(self, tagData, tagSignature):
         self.tagData = tagData
         self.tagSignature = tagSignature
@@ -3122,6 +3128,8 @@ class ICCProfileTag:
 
 
 class Text(ICCProfileTag, bytes):
+    """Text tag class which is a bytes type and handles str conversion."""
+
     def __init__(self, seq):
         super().__init__(tagData=seq, tagSignature=b"")
         self.data = seq
@@ -3136,6 +3144,8 @@ class Text(ICCProfileTag, bytes):
 
 
 class Colorant:
+    """Colorant class to handle colorant information."""
+
     def __init__(self, binaryString=b"\0" * 4):
         self._type = uInt32Number(binaryString)
         self._channels = []
@@ -3253,6 +3263,8 @@ class Colorant:
 
 
 class Geometry(ADict):
+    """Geometry attribute dictionary class."""
+
     def __init__(self, binaryString):
         super().__init__()
         self.type = uInt32Number(binaryString)
@@ -3260,6 +3272,8 @@ class Geometry(ADict):
 
 
 class Illuminant(ADict):
+    """Illuminant attribute dictionary class."""
+
     def __init__(self, binaryString):
         super().__init__()
         self.type = uInt32Number(binaryString)
@@ -3267,6 +3281,8 @@ class Illuminant(ADict):
 
 
 class LUT16Type(ICCProfileTag):
+    """ICC LUT16Type tag."""
+
     def __init__(self, tagData=None, tagSignature=None, profile=None):
         ICCProfileTag.__init__(self, tagData, tagSignature)
         self.profile = profile
@@ -3931,6 +3947,8 @@ BEGIN_DATA
 
 
 class Observer(ADict):
+    """ICC Observer tag."""
+
     def __init__(self, bytes_data):
         super(ADict, self).__init__()
         self.type = uInt32Number(bytes_data)
@@ -3938,6 +3956,8 @@ class Observer(ADict):
 
 
 class ChromaticityType(ICCProfileTag, Colorant):
+    """ICC ChromaticityType tag."""
+
     def __init__(self, tagData=None, tagSignature=None):
         ICCProfileTag.__init__(self, tagData, tagSignature)
         if not tagData:
@@ -3970,6 +3990,8 @@ class ChromaticityType(ICCProfileTag, Colorant):
 
 
 class ColorantTableType(ICCProfileTag, AODict):
+    """ICC ColorantTableType tag."""
+
     def __init__(self, tagData=None, tagSignature=None, pcs=None):
         ICCProfileTag.__init__(self, tagData, tagSignature)
         AODict.__init__(self)
@@ -4542,6 +4564,8 @@ class CurveType(ICCProfileTag, list):
 
 
 class ParametricCurveType(ICCProfileTag):
+    """ICC ParametricCurveType tag."""
+
     def __init__(self, tagData=None, tagSignature=None, profile=None):
         ICCProfileTag.__init__(self, tagData, tagSignature)
         self.profile = profile
@@ -4593,6 +4617,8 @@ class ParametricCurveType(ICCProfileTag):
 
 
 class DateTimeType(ICCProfileTag, datetime.datetime):
+    """ICC DateTimeType tag."""
+
     def __new__(cls, tagData, tagSignature):
         dt = dateTimeNumber(tagData[8:20])
         return datetime.datetime.__new__(
@@ -4601,6 +4627,8 @@ class DateTimeType(ICCProfileTag, datetime.datetime):
 
 
 class DictList(list):
+    """ICC dictType Tag list."""
+
     def __getitem__(self, key: slice | SupportsIndex) -> Any:
         """Get item from list.
 
@@ -4627,6 +4655,8 @@ class DictList(list):
 
 
 class DictListItem(list):
+    """ICC dictType Tag item."""
+
     def __iadd__(self, value) -> Self:
         """Add value to the last item in the list.
 
@@ -4879,12 +4909,16 @@ class DictTypeJSONEncoder(json.JSONEncoder):
 
 
 class MakeAndModelType(ICCProfileTag, ADict):
+    """ICC makeAndModelType tag."""
+
     def __init__(self, tagData, tagSignature):
         ICCProfileTag.__init__(self, tagData, tagSignature)
         self.update({"manufacturer": tagData[10:12], "model": tagData[14:16]})
 
 
 class MeasurementType(ICCProfileTag, ADict):
+    """ICC measurementType tag."""
+
     def __init__(self, tagData, tagSignature):
         ICCProfileTag.__init__(self, tagData, tagSignature)
 
@@ -4902,6 +4936,8 @@ class MeasurementType(ICCProfileTag, ADict):
 
 
 class MultiLocalizedUnicodeType(ICCProfileTag, AODict):  # ICC v4
+    """ICC v4 MultiLocalizedUnicodeType tag."""
+
     def __init__(self, tagData=None, tagSignature=None):
         ICCProfileTag.__init__(self, tagData, tagSignature)
         AODict.__init__(self)
@@ -5008,6 +5044,8 @@ class MultiLocalizedUnicodeType(ICCProfileTag, AODict):  # ICC v4
 
 
 class ProfileSequenceDescType(ICCProfileTag, list):
+    """ICC profileSequenceDescType tag."""
+
     def __init__(self, tagData=None, tagSignature=None, profile=None):
         ICCProfileTag.__init__(self, tagData, tagSignature)
         self.profile = profile
@@ -5105,6 +5143,8 @@ class ProfileSequenceDescType(ICCProfileTag, list):
 
 
 class S15Fixed16ArrayType(ICCProfileTag, list):
+    """ICC s15Fixed16ArrayType tag."""
+
     def __init__(self, tagData=None, tagSignature=None):
         ICCProfileTag.__init__(self, tagData, tagSignature)
         if tagData:
@@ -5133,6 +5173,7 @@ def SignatureType(tagData, tagSignature):
 
 
 class TextDescriptionType(ICCProfileTag, ADict):  # ICC v2
+    """ICC textDescriptionType tag."""
     def __init__(self, tagData=None, tagSignature=None):
         ICCProfileTag.__init__(self, tagData, tagSignature)
         self.ASCII = b""
@@ -5366,8 +5407,18 @@ def TextType(tagData, tagSignature):
 
 
 class VideoCardGammaType(ICCProfileTag, ADict):
-    # Private tag
-    # http://developer.apple.com/documentation/GraphicsImaging/Reference/ColorSync_Manager/Reference/reference.html#//apple_ref/doc/uid/TP30000259-CH3g-C001473
+    """Video Card Gamma Tag
+
+    This tag contains the gamma correction values for the red, green and blue
+    channels of the video card. The values are stored in a table or as a
+    formula. The table is a 256-entry table with values ranging from 0 to
+    65535. The formula is a gamma correction formula with the following
+    parameters: redMin, redMax, redGamma, greenMin, greenMax, greenGamma,
+    blueMin, blueMax, blueGamma.
+
+    Private tag
+    http://developer.apple.com/documentation/GraphicsImaging/Reference/ColorSync_Manager/Reference/reference.html#//apple_ref/doc/uid/TP30000259-CH3g-C001473
+    """
 
     def __init__(self, tagData, tagSignature):
         ICCProfileTag.__init__(self, tagData, tagSignature)
@@ -5481,6 +5532,8 @@ class VideoCardGammaType(ICCProfileTag, ADict):
 
 
 class VideoCardGammaFormulaType(VideoCardGammaType):
+    """Video card gamma formula type class."""
+
     def __init__(self, tagData, tagSignature):
         VideoCardGammaType.__init__(self, tagData, tagSignature)
         data = tagData[12:]
@@ -5541,6 +5594,8 @@ class VideoCardGammaFormulaType(VideoCardGammaType):
 
 
 class VideoCardGammaTableType(VideoCardGammaType):
+    """Video card gamma table type class."""
+
     def __init__(self, tagData, tagSignature):
         VideoCardGammaType.__init__(self, tagData, tagSignature)
         if not tagData:
@@ -5703,6 +5758,8 @@ class VideoCardGammaTableType(VideoCardGammaType):
 
 
 class ViewingConditionsType(ICCProfileTag, ADict):
+    """ICC viewing conditions tag type."""
+
     def __init__(self, tagData, tagSignature):
         ICCProfileTag.__init__(self, tagData, tagSignature)
         self.update(
@@ -5715,6 +5772,8 @@ class ViewingConditionsType(ICCProfileTag, ADict):
 
 
 class TagData:
+    """ICC tag data type."""
+
     def __init__(self, tagData, offset, size):
         self.tagData = tagData
         self.offset = offset
@@ -5741,6 +5800,8 @@ class TagData:
 
 
 class WcsProfilesTagType(ICCProfileTag, ADict):
+    """ICC WCS profiles tag type."""
+
     def __init__(self, tagData, tagSignature, profile):
         ICCProfileTag.__init__(self, tagData, tagSignature)
         self.profile = profile
@@ -5771,7 +5832,6 @@ class WcsProfilesTagType(ICCProfileTag, ADict):
         quantizations will occur: For quantization bits below 32, first to 32
         bits, then to the chosen quantization bits, then back to 32 bits (which
         will be the final table precision bits).
-
         """
         if quantize and not isinstance(quantize, int):
             raise ValueError(f"Invalid quantization bits: {quantize!r}")
@@ -5882,6 +5942,12 @@ class XYZNumber(AODict):
 
 
 class XYZType(ICCProfileTag, XYZNumber):
+    """XYZType class.
+
+    This class represents the XYZ color space in ICC profiles.
+    It inherits from ICCProfileTag and XYZNumber.
+    """
+
     def __init__(self, tagData=b"\0" * 20, tagSignature=None, profile=None):
         ICCProfileTag.__init__(self, tagData, tagSignature)
         XYZNumber.__init__(self, tagData[8:20])
@@ -5992,6 +6058,25 @@ class XYZType(ICCProfileTag, XYZNumber):
 
 
 class ChromaticAdaptionTag(colormath.Matrix3x3, S15Fixed16ArrayType):
+    """Chromatic Adaptation Matrix.
+
+    The Chromatic Adaptation Matrix is a 3x3 matrix that transforms
+    color values from one illuminant to another. It is used in
+    color management systems to ensure that colors appear consistent
+    across different devices and lighting conditions.
+
+    The matrix is represented as a list of 3 rows, each containing
+    3 values. The values are stored as s15Fixed16Number, which is a
+    fixed-point representation with 15 bits for the integer part
+    and 16 bits for the fractional part:
+
+    Offset Content Encoded as:
+
+        0..3   CIE X   s15Fixed16Number
+        4..7   CIE Y   s15Fixed16Number
+        8..11  CIE Z   s15Fixed16Number
+        ...
+    """
     def __init__(self, tagData=None, tagSignature=None):
         ICCProfileTag.__init__(self, tagData, tagSignature)
         if tagData:
@@ -6033,6 +6118,8 @@ class ChromaticAdaptionTag(colormath.Matrix3x3, S15Fixed16ArrayType):
 
 
 class NamedColor2Value:
+    """Named Color 2 Value."""
+
     def __init__(
         self, valueData=b"\0" * 38, deviceCoordCount=0, pcs="XYZ", device="RGB"
     ):
@@ -6125,6 +6212,11 @@ class NamedColor2Value:
 
 
 class NamedColor2ValueTuple(tuple):
+    """Tuple subclass for NamedColor2Value.
+
+    This class is used to represent a tuple of NamedColor2Value objects.
+    """
+
     __slots__ = ()
     REPR_OUTPUT_SIZE = 10
 
@@ -6152,6 +6244,26 @@ class NamedColor2ValueTuple(tuple):
 
 
 class NamedColor2Type(ICCProfileTag, AODict):
+    """Named Color 2 Type.
+
+    This tag contains a list of named colors, each with a set of device
+    coordinates and a set of PCS coordinates. The device coordinates
+    are used to identify the color on the device, while the PCS
+    coordinates are used to identify the color in a device-independent
+    color space. The tag also contains a prefix and suffix that are
+    used to format the name of the color.
+
+    Byte offset content encoded as:
+
+        0..3    vendorData        s4Fixed32Number
+        4..7    colorCount        uInt32Number
+        8..11   deviceCoordCount  uInt32Number
+        12..15  reserved          uInt32Number
+        16..19  reserved          uInt32Number
+        20..51  prefix            s32Fixed32Number
+        52..83  suffix            s32Fixed32Number
+        84..n   colorValues       NamedColor2Value
+    """
     REPR_OUTPUT_SIZE = 10
 
     def __init__(self, tagData=b"\0" * 84, tagSignature=None, pcs=None, device=None):
@@ -6324,7 +6436,7 @@ TYPE_SIGNATURE_TO_TYPE = {
 
 
 class ICCProfileInvalidError(IOError):
-    pass
+    """Exception raised when an invalid ICC profile is encountered."""
 
 
 _ICCPROFILE_CACHE = WeakValueDictionary()

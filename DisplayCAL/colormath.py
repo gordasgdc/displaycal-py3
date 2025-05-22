@@ -3225,6 +3225,8 @@ class GammaFits:
 
 
 class Interp:
+    """Interpolation class."""
+
     def __init__(self, xp, fp, left=None, right=None, use_numpy=False):
         if use_numpy:
             # Use numpy for speed
