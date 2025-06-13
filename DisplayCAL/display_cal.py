@@ -20403,7 +20403,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             wx.StaticText(
                 self.aboutdialog.panel,
                 -1,
-                lang.getstr("audio.lib", f"{audio._lib} {audio._lib_version}"),
+                lang.getstr("audio.lib", f"{audio._LIB} {audio._LIB_VERSION}"),
             )
         )
         items.append((1, 12))
@@ -20739,8 +20739,8 @@ class StartupFrame(start_cls):
             self._alpha = 0
 
         audio.safe_init()
-        if audio._lib:
-            print(lang.getstr("audio.lib", f"{audio._lib} {audio._lib_version}"))
+        if audio._LIB:
+            print(lang.getstr("audio.lib", f"{audio._LIB} {audio._LIB_VERSION}"))
         # Startup sound
         # Needs to be stereo!
         if getcfg("startup_sound.enable"):
