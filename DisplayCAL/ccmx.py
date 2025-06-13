@@ -38,8 +38,17 @@ END_DATA
 """
 
 
-def convert_devicecorrections_to_ccmx(path, target_dir):
-    """Convert iColorDisplay DeviceCorrections.txt to individual Argyll CCMX files."""
+def convert_devicecorrections_to_ccmx(path: str, target_dir: str) -> tuple[int, int]:
+    """Convert iColorDisplay DeviceCorrections.txt to individual Argyll CCMX files.
+
+    Args:
+        path (str): Path to the DeviceCorrections.txt file.
+        target_dir (str): Directory where the generated CCMX files will be saved.
+
+    Returns:
+        tuple[int, int]: A tuple containing the number of imported and skipped
+            entries.
+    """
     with codecs.open(path, "r", "utf8") as devcorrections_file:
         lines = devcorrections_file.read().strip().splitlines()
     # Convert to JSON
