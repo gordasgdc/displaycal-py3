@@ -21,7 +21,18 @@ class CAT(Enum):
     """Chromatic adaptation transform (CAT) enumeration."""
 
     Bradford = "Bradford"
-    XYZ_Scaling = "XYZ Scaling"
+    BS = "BS"
+    BS_PC = "BS-PC"
+    CAT02 = "CAT02"
+    CAT02BS = "CAT02BS"
+    CAT97s = "CAT97s"
+    CIE2012_2 = "CIE2012_2"
+    CMCCAT2000 = "CMCCAT2000"
+    HPE_D65 = "HPE D65"
+    HPE_E = "HPE E"
+    IPT = "IPT"
+    Sharp = "Sharp"
+    XYZ_Scaling = "XYZ scaling"
 
     def __str__(self) -> str:
         """Get the string representation of the CAT."""
