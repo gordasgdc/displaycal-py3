@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import os
+from enum import Enum
 from typing import TYPE_CHECKING
 
 from DisplayCAL import colormath, x3dom
@@ -13,16 +14,68 @@ from DisplayCAL.util_io import GzipFileProper
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from DisplayCAL.cgats import CGATS
+
+
+class CAT(Enum):
+    """Chromatic adaptation transform (CAT) enumeration."""
+
+    Bradford = "Bradford"
+    XYZ_Scaling = "XYZ Scaling"
+
+    def __str__(self) -> str:
+        """Get the string representation of the CAT."""
+        return self.value
+
+    @classmethod
+    def to_cat(cls, cat: str | CAT) -> CAT:
+        """Convert the given cat value to a CAT enum.
+
+        Args:
+            cat (str | CAT): The value to convert to a CAT.
+
+        Raises:
+            TypeError: Input value type is invalid.
+            ValueError: Input value is invalid.
+
+        Returns:
+            CAT: The enum.
+        """
+        valid_values = sorted(set([c.name for c in cls] + [c.value for c in cls]))
+        if not isinstance(cat, (str, CAT)):
+            raise TypeError(
+                f"cat should be a CAT enum value or one of {valid_values}, "
+                f"not {cat.__class__.__name__}: '{cat}'"
+            )
+        if isinstance(cat, str):
+            cat_name_lut = {c.name.lower(): c.name for c in cls}
+            cat_name_lut.update({c.value.lower(): c.name for c in cls})
+            cat_lower_case = cat.lower()
+            if cat_lower_case not in cat_name_lut:
+                raise ValueError(
+                    f"cat should be a CAT enum value or one of {valid_values}, "
+                    f"not '{cat}'"
+                )
+
+            return cls.__members__[cat_name_lut[cat_lower_case]]
+
+        return cat
+
 
 class ColorSpaceToVRML:
     """Color space class for easy VRML.
 
     Args:
-        data (list): The color data to be processed.
-        white_point (tuple[float, float, float]): The white point for the color space.
-        cat (str): The CAT for the color space. Defaults to "XYZ scaling".
-        rgb_black_offset (float, optional): Offset for RGB black. Defaults to 40.
-        normalize_rgb_white (bool, optional): Normalize RGB white. Defaults to False.
+        data (dict | CGATS): The color data to be processed, could be a
+            dictionary or a CGATS instance containing color values ("DATA").
+        white_point (tuple[float, float, float]): The white point for the color
+            space.
+        cat (str): The chromatic adaptation transform to use. Defaults to
+            "Bradford".
+        rgb_black_offset (float, optional): Offset for RGB black. Defaults to
+            40.
+        normalize_rgb_white (bool, optional): Normalize RGB white. Defaults to
+            False.
     """
 
     sqrt3_100 = math.sqrt(3) * 100
@@ -255,13 +308,14 @@ Transform {{
 
     def __init__(
         self,
-        data: list,
+        data: dict | CGATS,
         white_point: tuple[float, float, float],
-        cat: str = "XYZ scaling",
+        cat: str | CAT = CAT.Bradford,
         rgb_black_offset: float = 40,
         normalize_rgb_white: bool = False,
     ) -> None:
-        self.name = self.__class__.__name__
+        self._data = None
+        self._cat = None
         self.X = None
         self.Y = None
         self.Z = None
@@ -285,6 +339,58 @@ Transform {{
         self.fov = 45
         self.offset_z = 340
 
+    @property
+    def name(self) -> str:
+        """Get the name of the color space.
+
+        Returns:
+            str: The name of the color space.
+        """
+        return self.__class__.__name__.replace("ToVRML", "")
+
+    @property
+    def data(self) -> list:
+        """Get the color data.
+
+        Returns:
+            list: The color data.
+        """
+        return self._data
+
+    @data.setter
+    def data(self, data: list) -> None:
+        """Set the color data.
+
+        Args:
+            data (list): The color data to be set.
+        """
+        from DisplayCAL.cgats import CGATS
+
+        if not isinstance(data, (dict, CGATS)):
+            raise TypeError(
+                f"{self.__class__.__name__}.data must be a dictionary or a "
+                f"CGATS instance, not {data.__class__.__name__}: {data}"
+            )
+        self._data = data
+
+    @property
+    def cat(self) -> CAT:
+        """Get the chromatic adaptation transform (CAT).
+
+        Returns:
+            CAT: The CAT enum.
+        """
+        return self._cat
+
+    @cat.setter
+    def cat(self, cat: str | CAT) -> None:
+        """Set the chromatic adaptation transform (CAT).
+
+        Args:
+            cat (str | CAT): The CAT to be set.
+        """
+        self._cat = CAT.to_cat(cat)
+
     def calculate_xyz_and_lab(self, entry: dict) -> None:
         """Calculate XYZ and Lab values from the white point and CAT info.
 
@@ -297,7 +403,7 @@ Transform {{
             entry["XYZ_Z"],
             self.white_point,
             "D65" if isinstance(self, (ICtCpToVRML, IPTToVRML)) else "D50",
-            cat=self.cat,
+            cat=str(self.cat),
         )
         self.L, self.a, self.b = colormath.XYZ2Lab(self.X, self.Y, self.Z)
 
@@ -318,7 +424,7 @@ Transform {{
     def generate_vrml_children(self) -> None:
         """Generate VRML children for the color space."""
         self.children = []
-        for entry in self.data:
+        for entry in self.data.values():
             self.calculate_xyz_and_lab(entry)
             offset_x, offset_y, offset_z = self.get_offsets(entry)
 
@@ -584,7 +690,7 @@ class DIN99ToVRML(ColorSpaceToVRML):
         super().__init__(data, white_point, cat, rgb_black_offset, normalize_rgb_white)
         self.scale = 100.0 / 40  # Scale factor for DIN99 axes
         self.radius /= self.scale
-        self.fox /= self.scale
+        self.fov /= self.scale
 
     def get_offsets(self, entry: dict) -> tuple[float, float, float]:
         """Get the offset for the color space.
@@ -778,9 +884,17 @@ class LCHabToVRML(ColorSpaceToVRML):
         normalize_rgb_white: bool = False,
     ) -> None:
         super().__init__(data, white_point, cat, rgb_black_offset, normalize_rgb_white)
-        self.name = "LCH(ab)"
-        self.fox /= 16.0
+        self.fov /= 16.0
         self.offset_z *= 16
+
+    @property
+    def name(self) -> str:
+        """Get the name of the color space.
+
+        Returns:
+            str: The name of the color space.
+        """
+        return "LCH(ab)"
 
     def get_offsets(self, entry: dict) -> tuple[float, float, float]:
         """Get the offset for the color space.
@@ -826,9 +940,17 @@ class LCHuvToVRML(ColorSpaceToVRML):
         normalize_rgb_white: bool = False,
     ) -> None:
         super().__init__(data, white_point, cat, rgb_black_offset, normalize_rgb_white)
-        self.name = "LCH(uv)"
-        self.fox /= 16.0
+        self.fov /= 16.0
         self.offset_z *= 16
+
+    @property
+    def name(self) -> str:
+        """Get the name of the color space.
+
+        Returns:
+            str: The name of the color space.
+        """
+        return "LCH(uv)"
 
     def get_offsets(self, entry: dict) -> tuple[float, float, float]:
         """Get the offset for the color space.
@@ -928,16 +1050,14 @@ class LuvPrimeToVRML(ColorSpaceToVRML):
         normalize_rgb_white (bool, optional): Normalize RGB white. Defaults to False.
     """
 
-    def __init__(
-        self,
-        data: list,
-        white_point: tuple[float, float, float],
-        cat: str = "XYZ scaling",
-        rgb_black_offset: float = 40,
-        normalize_rgb_white: bool = False,
-    ) -> None:
-        super().__init__(data, white_point, cat, rgb_black_offset, normalize_rgb_white)
-        self.name = "Lu'v'"
+    @property
+    def name(self) -> str:
+        """Get the name of the color space.
+
+        Returns:
+            str: The name of the color space.
+        """
+        return "Lu'v'"
 
     def get_offsets(self, entry: dict) -> tuple[float, float, float]:
         """Get the offset for the color space.

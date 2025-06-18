@@ -1902,7 +1902,7 @@ class CGATS(dict):
         white = colormath.get_whitepoint(white)
 
         colorspace_to_vrml: ColorSpaceToVRML = COLORSPACE_NAME_TO_VRML_MAP[colorspace](
-            data=data.values(),
+            data=data,
             white_point=white,
             cat=cat,
             rgb_black_offset=rgb_black_offset,

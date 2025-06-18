@@ -32,7 +32,16 @@ from DisplayCAL.icc_profile import ICCProfile
 def data_files():
     """Generate data file list."""
     #  test/data
-    extensions = ["*.txt", "*.tsv", "*.lin", "*.cal", "*.ti1", "*.ti3", "*.icc"]
+    extensions = [
+        "*.cal",
+        "*.icc",
+        "*.lin",
+        "*.ti1",
+        "*.ti3",
+        "*.tsv",
+        "*.txt",
+        "*.vrml",
+    ]
 
     displaycal_parent_dir = pathlib.Path(DisplayCAL.__file__).parent
     search_paths = [
