@@ -137,7 +137,7 @@ def cal_to_fake_profile(cal: str | CGATS) -> None | ICCProfile:
     if not (cal := validate_cgats(cal)) or not (vcgt := cal_to_vcgt(cal)):
         return None
     profile = ICCProfile()
-    profile.fileName = cal.filename
+    profile.filename = cal.filename
     profile._data = b"\0" * 128
     profile._tags.desc = TextDescriptionType(b"", "desc")
     profile._tags.desc.ASCII = str(os.path.basename(cal.filename)).encode(

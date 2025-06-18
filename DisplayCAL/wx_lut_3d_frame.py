@@ -1083,7 +1083,7 @@ class LUT3DMixin:
         try:
             # We need to make sure the link between the original profile object
             # and the one we're eventually going to change is broken
-            profile_in = ICCProfile(profile_in.fileName)
+            profile_in = ICCProfile(profile_in.filename)
             self.worker.create_3dlut(
                 profile_in,
                 path,
@@ -2093,7 +2093,7 @@ class LUT3DFrame(BaseFrame, LUT3DMixin):
                             if (
                                 not hasattr(self, f"{which}_profile")
                                 or self.getcfg(f"3dlut.{which}.profile")
-                                != profile.fileName
+                                != profile.filename
                             ):
                                 # Get profile blackpoint so we can check if it makes
                                 # sense to show TRC type and output offset controls
@@ -2140,7 +2140,7 @@ class LUT3DFrame(BaseFrame, LUT3DMixin):
                             if (
                                 not hasattr(self, f"{which}_profile")
                                 or self.getcfg(f"3dlut.{which}.profile")
-                                != profile.fileName
+                                != profile.filename
                             ):
                                 # Get profile blackpoint so we can check if input
                                 # values would be clipped
@@ -2200,7 +2200,7 @@ class LUT3DFrame(BaseFrame, LUT3DMixin):
                     setattr(self, f"{which}_profile", profile)
                     if which == "output" and not self.output_profile_ctrl.IsShown():
                         return None
-                    self.setcfg(f"3dlut.{which}.profile", profile.fileName)
+                    self.setcfg(f"3dlut.{which}.profile", profile.filename)
                     self.lut3d_create_btn.Enable(
                         bool(self.getcfg("3dlut.input.profile"))
                         and os.path.isfile(self.getcfg("3dlut.input.profile"))
@@ -2287,7 +2287,7 @@ class LUT3DFrame(BaseFrame, LUT3DMixin):
             and isinstance(self.input_profile.tags.rTRC, CurveType)
         ):
             tf = self.input_profile.tags.rTRC.get_transfer_function(outoffset=1.0)
-            if self.getcfg("3dlut.input.profile") != self.input_profile.fileName:
+            if self.getcfg("3dlut.input.profile") != self.input_profile.filename:
                 # Use BT.1886 gamma mapping for SMPTE 240M /
                 # Rec. 709 TRC
                 self.setcfg(

@@ -1896,7 +1896,7 @@ def get_standard_profiles(paths_only: bool = False) -> list:
                 ):
                     STANDARD_PROFILES.append(profile)
     if paths_only:
-        return [profile.fileName for profile in STANDARD_PROFILES]
+        return [profile.filename for profile in STANDARD_PROFILES]
     return STANDARD_PROFILES
 
 

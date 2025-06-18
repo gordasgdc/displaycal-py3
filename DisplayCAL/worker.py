@@ -116,9 +116,9 @@ from DisplayCAL.cgats import (
     CGATSValueError,
     rpad,
     sort_by_rec709_luma,
-    sort_by_RGB,
-    sort_by_RGB_sum,
-    stable_sort_by_L,
+    sort_by_rgb,
+    sort_by_rgb_sum,
+    stable_sort_by_l,
 )
 from DisplayCAL.colormath import VidRGB_to_eeColor, eeColor_to_VidRGB
 from DisplayCAL.config import (
@@ -1171,19 +1171,19 @@ def get_current_profile_path(
                 print(f"ICCProfile({profile_path}):", exception)
     elif include_display_profile:
         profile = config.get_display_profile()
-        if profile and not profile.fileName and save_profile_if_no_path:
+        if profile and not profile.filename and save_profile_if_no_path:
             if profile.ID == "\0" * 16:
                 profile.calculateID()
             profile_cache_path = os.path.join(defaultpaths.CACHE, "icc")
             if check_create_dir(profile_cache_path) is True:
-                profile.fileName = os.path.join(
+                profile.filename = os.path.join(
                     profile_cache_path,
                     "id=" + hexlify(profile.ID).decode() + PROFILE_EXT,
                 )
-                if not os.path.isfile(profile.fileName):
+                if not os.path.isfile(profile.filename):
                     profile.write()
     if profile:
-        return profile.fileName
+        return profile.filename
 
     return profile
 
@@ -2716,7 +2716,7 @@ class Worker(WorkerBase):
             if gamma != "smpte2084.rolloffclip":
                 maxmll = white_cdm2
             self.log(
-                os.path.basename(profile1.fileName)
+                os.path.basename(profile1.filename)
                 + " → "
                 + lang.getstr("trc." + gamma)
                 + (
@@ -2729,7 +2729,7 @@ class Worker(WorkerBase):
             # Hybrid Log-Gamma (HLG)
             outoffset = 1.0
             self.log(
-                os.path.basename(profile1.fileName)
+                os.path.basename(profile1.filename)
                 + " → "
                 + lang.getstr("trc." + gamma)
                 + (
@@ -2740,12 +2740,12 @@ class Worker(WorkerBase):
             )
         elif apply_trc:
             self.log(
-                "Applying BT.1886-like TRC to " + os.path.basename(profile1.fileName)
+                "Applying BT.1886-like TRC to " + os.path.basename(profile1.filename)
             )
         else:
             self.log(
                 "Applying BT.1886-like black offset to "
-                + os.path.basename(profile1.fileName)
+                + os.path.basename(profile1.filename)
             )
         self.log(
             "Black XYZ (normalized 0..100) = {:.6f} {:.6f} {:.6f}".format(
@@ -4256,7 +4256,7 @@ END_DATA
         name = os.path.basename(filename)
 
         if profile_in.profileClass == b"link":
-            link_basename = os.path.basename(profile_in.fileName)
+            link_basename = os.path.basename(profile_in.filename)
             link_filename = os.path.join(cwd, link_basename)
             profile_in.write(link_filename)
         else:
@@ -4271,7 +4271,7 @@ END_DATA
             hdr = smpte2084 or hlg
 
             profile_in_basename = make_argyll_compatible_path(
-                os.path.basename(profile_in.fileName)
+                os.path.basename(profile_in.filename)
             )
 
             # XXX: collink creates dark blotch in yellow with perceptual intent
@@ -4324,16 +4324,16 @@ END_DATA
             link_filename = os.path.join(cwd, link_basename)
 
             profile_out_basename = make_argyll_compatible_path(
-                os.path.basename(profile_out.fileName)
+                os.path.basename(profile_out.filename)
             )
             if profile_in_basename == profile_out_basename:
                 (profile_out_filename, profile_out_ext) = os.path.splitext(
                     profile_out_basename
                 )
                 profile_out_basename = f"{profile_out_filename} (2){profile_out_ext}"
-            profile_out.fileName = os.path.join(cwd, profile_out_basename)
+            profile_out.filename = os.path.join(cwd, profile_out_basename)
             profile_out.write()
-            profile_out_cal_path = os.path.splitext(profile_out.fileName)[0] + ".cal"
+            profile_out_cal_path = os.path.splitext(profile_out.filename)[0] + ".cal"
 
             manufacturer = profile_out.getDeviceManufacturerDescription()
             model = profile_out.getDeviceModelDescription()
@@ -4397,7 +4397,7 @@ END_DATA
                             "-v",
                             profile_out_cal_path,
                             profile_out_basename,
-                            profile_out.fileName,
+                            profile_out.filename,
                         ],
                         capture_output=True,
                         skip_scripts=True,
@@ -4411,7 +4411,7 @@ END_DATA
                                 [lang.getstr("apply_cal.error"), "\n".join(self.errors)]
                             )
                         )
-                    profile_out = ICCProfile(profile_out.fileName)
+                    profile_out = ICCProfile(profile_out.filename)
 
             in_rgb_space = profile_in.get_rgb_space()
             if in_rgb_space:
@@ -4470,7 +4470,7 @@ END_DATA
                     "",
                     cat=cat,
                 )
-                fd, profile_src.fileName = tempfile.mkstemp(
+                fd, profile_src.filename = tempfile.mkstemp(
                     PROFILE_EXT, f"{rgb_space_name}-", dir=cwd
                 )
                 stream = os.fdopen(fd, "wb")
@@ -4490,7 +4490,7 @@ END_DATA
                     # for BT.1886
                     self.log(
                         f"{APPNAME}: Applying Rec. 709 TRC to "
-                        f"{os.path.basename(profile_in.fileName)}"
+                        f"{os.path.basename(profile_in.filename)}"
                     )
                     for channel in ["r", "g", "b"]:
                         if f"{channel}TRC" in profile_in.tags:
@@ -4546,7 +4546,7 @@ END_DATA
                     profile_in.tags.wtpt.Z,
                 ) = XYZwp
 
-            profile_in.fileName = os.path.join(cwd, profile_in_basename)
+            profile_in.filename = os.path.join(cwd, profile_in_basename)
             profile_in.write()
 
             if hdr_use_src_gamut and content_colors[:6] != in_colors[:6] and False:
@@ -4593,7 +4593,7 @@ END_DATA
                         "-v",
                         "-G",
                         "-ir",
-                        profile_src.fileName,
+                        profile_src.filename,
                         profile_in_basename,
                         gam_link_filename,
                     ],
@@ -4643,16 +4643,16 @@ END_DATA
                     )
 
                 # Create gamut surface from image
-                # gam_filename = os.path.splitext(profile_src.fileName)[0] + ".gam"
+                # gam_filename = os.path.splitext(profile_src.filename)[0] + ".gam"
                 # result = self.exec_cmd(tools["iccgamut"], ["-ir", "-pj",
-                # profile_src.fileName],
+                # profile_src.filename],
                 # capture_output=True,
                 # skip_scripts=True,
                 # sessionlogfile=self.sessionlogfile)
                 gam_filename = os.path.splitext(gam_out_tiff)[0] + ".gam"
                 result = self.exec_cmd(
                     tools["tiffgamut"],
-                    ["-ir", "-pj", profile_in.fileName, gam_out_tiff],
+                    ["-ir", "-pj", profile_in.filename, gam_out_tiff],
                     capture_output=True,
                     skip_scripts=True,
                     sessionlogfile=self.sessionlogfile,
@@ -4921,7 +4921,7 @@ END_DATA
                 for slices in pool_slice(
                     _xicclu_mp,
                     XYZ_src_out,
-                    (profile_out.fileName, intent[0], "b" if use_b2a else "if"),
+                    (profile_out.filename, intent[0], "b" if use_b2a else "if"),
                     {
                         "pcs": "x",
                         "use_cam_clipping": True,
@@ -5300,7 +5300,7 @@ END_DATA
                         )
                     # Save source profile
                     in_name, in_ext = os.path.splitext(profile_in_basename)
-                    profile_in.fileName = os.path.join(
+                    profile_in.filename = os.path.join(
                         os.path.dirname(path),
                         self.lut3d_get_filename(profile_in_basename, False, False)
                         + in_ext,
@@ -5310,28 +5310,28 @@ END_DATA
                         # Write diagnostic PNG
                         profile_in.tags.A2B0.clut_writepng(
                             "{}.A2B0.CLUT.png".format(  # noqa: UP032
-                                os.path.splitext(profile_in.fileName)[0]
+                                os.path.splitext(profile_in.filename)[0]
                             )
                         )
                     if isinstance(profile_in.tags.get("DBG0"), LUT16Type):
                         # HDR RGB
                         profile_in.tags.DBG0.clut_writepng(
                             "{}.DBG0.CLUT.png".format(  # noqa: UP032
-                                os.path.splitext(profile_in.fileName)[0]
+                                os.path.splitext(profile_in.filename)[0]
                             )
                         )
                     if isinstance(profile_in.tags.get("DBG1"), LUT16Type):
                         # Display RGB
                         profile_in.tags.DBG1.clut_writepng(
                             "{}.DBG1.CLUT.png".format(  # noqa: UP032
-                                os.path.splitext(profile_in.fileName)[0]
+                                os.path.splitext(profile_in.filename)[0]
                             )
                         )
                     if isinstance(profile_in.tags.get("DBG2"), LUT16Type):
                         # Display XYZ
                         profile_in.tags.DBG2.clut_writepng(
                             "{}.DBG2.CLUT.png".format(  # noqa: UP032
-                                os.path.splitext(profile_in.fileName)[0]
+                                os.path.splitext(profile_in.filename)[0]
                             )
                         )
 
@@ -7621,7 +7621,7 @@ BEGIN_DATA
                             os.path.join(
                                 XDG_DATA_HOME,
                                 "icc",
-                                os.path.basename(self.srgb.fileName),
+                                os.path.basename(self.srgb.filename),
                             )
                         )
                     except Exception as exception:
@@ -8178,7 +8178,7 @@ BEGIN_DATA
 
             # Add matrix from just white + 50% gray + black + primaries
             # as first entry
-            # outname = os.path.splitext(profile.fileName)[0]
+            # outname = os.path.splitext(profile.filename)[0]
             # if not os.path.isfile(outname + ".ti3"):
             # if isinstance(profile.tags.get("targ"), Text):
             # with open(outname + ".ti3", "wb") as ti3:
@@ -8496,7 +8496,7 @@ BEGIN_DATA
                 ti1, ti3, gray = self.ti1_lookup_to_ti3(
                     ti1, profile, intent="a", white_patches=1
                 )
-                dirname, basename = os.path.split(profile.fileName)
+                dirname, basename = os.path.split(profile.filename)
                 basepath = os.path.join(
                     dirname, f".{os.path.splitext(basename)[0]}-MTX.tmp"
                 )
@@ -8721,7 +8721,7 @@ BEGIN_DATA
                 _mp_generate_B2A_clut,
                 list(range(clutres)),
                 (
-                    profile.fileName,
+                    profile.filename,
                     intent,
                     direction,
                     pcs,
@@ -9213,8 +9213,8 @@ BEGIN_DATA
         else:
             if not profile:
                 return arg
-            if profile.fileName:
-                prefix = os.path.basename(profile.fileName)
+            if profile.filename:
+                prefix = os.path.basename(profile.filename)
             else:
                 prefix = (
                     make_filename_safe(profile.getDescription(), concat=False)
@@ -9227,13 +9227,13 @@ BEGIN_DATA
                     [lang.getstr("profile.iccv4.unsupported"), profile.getDescription()]
                 )
             )
-        elif not profile.fileName:
-            fd, profile.fileName = tempfile.mkstemp("", prefix)
+        elif not profile.filename:
+            fd, profile.filename = tempfile.mkstemp("", prefix)
             stream = os.fdopen(fd, "wb")
             profile.write(stream)
             stream.close()
-            atexit.register(os.remove, profile.fileName)
-        return profile.fileName or arg
+            atexit.register(os.remove, profile.filename)
+        return profile.filename or arg
 
     def update_display_name_manufacturer(
         self, ti3, display_name=None, display_manufacturer=None, write=True
@@ -9805,7 +9805,7 @@ BEGIN_DATA
                     self._install_profile_gcm(profile)
                     # gcm-import doesn't seem to return a useful exit code or
                     # stderr output, so check for our profile
-                    profilename = os.path.basename(profile.fileName)
+                    profilename = os.path.basename(profile.filename)
                     for dirname in defaultpaths.ICCPROFILES_HOME:
                         profile_install_path = os.path.join(dirname, profilename)
                         if os.path.isfile(profile_install_path):
@@ -10501,12 +10501,12 @@ BEGIN_DATA
         # gcm-import will check if the profile is already in the database
         # (based on profile ID), but will fail to overwrite a profile with the
         # same name. We need to remove those profiles so gcm-import can work.
-        profilename = os.path.basename(profile.fileName)
+        profilename = os.path.basename(profile.filename)
         for dirname in defaultpaths.ICCPROFILES_HOME:
             profile_install_path = os.path.join(dirname, profilename)
             if (
                 os.path.isfile(profile_install_path)
-                and profile_install_path != profile.fileName
+                and profile_install_path != profile.filename
             ):
                 try:
                     send2trash([profile_install_path])
@@ -10520,7 +10520,7 @@ BEGIN_DATA
         if self._progress_wnd and not getattr(self._progress_wnd, "dlg", None):
             self._progress_wnd.dlg = DummyDialog()
         # Run gcm-import
-        cmd, args = which("gcm-import"), [profile.fileName]
+        cmd, args = which("gcm-import"), [profile.filename]
         # gcm-import does not seem to return a useful exit code (it's always 1)
         # or stderr output
         self.exec_cmd(cmd, args, capture_output=True, skip_scripts=True)
@@ -11396,7 +11396,7 @@ BEGIN_DATA
                             # Simple matrix source profile
                             if gamap_profile.convert_iccv4_tags_to_iccv2():
                                 # Write to temp file
-                                fd, gamap_profile.fileName = mkstemp_bypath(
+                                fd, gamap_profile.filename = mkstemp_bypath(
                                     gamap_profile_filename, dirname=self.tempdir
                                 )
                                 stream = os.fdopen(fd, "wb")
@@ -11526,8 +11526,8 @@ BEGIN_DATA
                                 XYZbp = colormath.Lab2XYZ(*Labbp)
                                 gamap_profile.apply_black_offset(XYZbp)
                                 # Write to temp file because file changed
-                                fd, gamap_profile.fileName = mkstemp_bypath(
-                                    gamap_profile.fileName, dirname=self.tempdir
+                                fd, gamap_profile.filename = mkstemp_bypath(
+                                    gamap_profile.filename, dirname=self.tempdir
                                 )
                                 stream = os.fdopen(fd, "wb")
                                 gamap_profile.write(stream)
@@ -11577,7 +11577,7 @@ BEGIN_DATA
                             + gamap_args
                             + [
                                 "-i" + intent,
-                                gamap_profile.fileName,
+                                gamap_profile.filename,
                                 profile_path,
                                 link_profile,
                             ],
@@ -11610,7 +11610,7 @@ BEGIN_DATA
                                         interp(j / 4095.0 * 65535) for j in range(4096)
                                     ]
                             # Remove temporary link profile
-                            os.remove(link_profile.fileName)
+                            os.remove(link_profile.filename)
                             # Update B2A matrix with source profile matrix
                             matrix = colormath.Matrix3x3(
                                 [
@@ -11692,10 +11692,10 @@ BEGIN_DATA
                 for gamap_profile in gamap_profiles:
                     if (
                         gamap_profile
-                        and os.path.dirname(gamap_profile.fileName) == self.tempdir
+                        and os.path.dirname(gamap_profile.filename) == self.tempdir
                     ):
                         # Remove temporary source profile
-                        os.remove(gamap_profile.fileName)
+                        os.remove(gamap_profile.filename)
                 if profchanged and tables:
                     # Make sure we match Argyll colprof i.e. have a complete
                     # set of tables
@@ -12285,7 +12285,7 @@ BEGIN_DATA
             ]
             step = 100 / (clutres - 1.0)
             XYZ_out = self.xicclu(profile, RGB_in, "a", pcs="X", scale=100)
-            profile.fileName = None
+            profile.filename = None
 
             # Create new cLUT
             clut = []
@@ -12512,7 +12512,7 @@ BEGIN_DATA
                 (ti3, RGB_XYZ, remaining) = extract_device_gray_primaries(
                     ti3, tagcls == "TRC", self.log
                 )
-                ti3.sort_by_RGB()
+                ti3.sort_by_rgb()
                 self.log(ti3.DATA)
                 if tagcls == "TRC" and profile:
                     rgb_space = colormath.get_rgb_space(profile.get_rgb_space("pcs", 1))
@@ -12632,7 +12632,7 @@ BEGIN_DATA
                         self.log(lang.getstr("profile.required_tags_missing", tagname))
             else:
                 profile = matrix_profile
-                profile.fileName = outname + PROFILE_EXT
+                profile.filename = outname + PROFILE_EXT
             try:
                 os.remove(fakeout + PROFILE_EXT)
             except OSError as exception:
@@ -12676,7 +12676,7 @@ BEGIN_DATA
             except (OSError, ICCProfileInvalidError):
                 return Error(lang.getstr("profile.invalid") + "\n" + profile_path)
         else:
-            profile_path = profile.fileName
+            profile_path = profile.filename
         if (
             profile.profileClass == b"mntr"
             and profile.colorSpace == b"RGB"
@@ -12985,7 +12985,7 @@ BEGIN_DATA
             tables.append(0)
         # Invert A2B tables if present. Always invert colorimetric A2B table.
         rtables = []
-        filename = profile.fileName
+        filename = profile.filename
         for tableno in tables:
             if f"A2B{tableno:d}" not in profile.tags:
                 continue
@@ -13024,7 +13024,7 @@ BEGIN_DATA
                 tempdir = self.create_tempdir()
                 if isinstance(tempdir, Exception):
                     return tempdir
-                fd, profile.fileName = tempfile.mkstemp(PROFILE_EXT, dir=tempdir)
+                fd, profile.filename = tempfile.mkstemp(PROFILE_EXT, dir=tempdir)
                 stream = os.fdopen(fd, "wb")
                 profile.write(stream)
                 stream.close()
@@ -13057,8 +13057,8 @@ BEGIN_DATA
                     return False
             finally:
                 if temp:
-                    os.remove(profile.fileName)
-                    profile.fileName = filename
+                    os.remove(profile.filename)
+                    profile.filename = filename
         return rtables
 
     def is_working(self):
@@ -13482,14 +13482,14 @@ BEGIN_DATA
                 "Changing patch sequence:", lang.getstr(f"testchart.{patch_sequence}")
             )
             if patch_sequence == "maximize_lightness_difference":
-                result = ti1.checkerboard(sort1=stable_sort_by_L)
+                result = ti1.checkerboard(sort1=stable_sort_by_l)
             elif patch_sequence == "maximize_rec709_luma_difference":
                 result = ti1.checkerboard(sort_by_rec709_luma)
             elif patch_sequence == "maximize_RGB_difference":
-                result = ti1.checkerboard(sort_by_RGB_sum)
+                result = ti1.checkerboard(sort_by_rgb_sum)
             elif patch_sequence == "vary_RGB_difference":
                 result = ti1.checkerboard(
-                    sort_by_RGB, None, split_grays=True, shift=True
+                    sort_by_rgb, None, split_grays=True, shift=True
                 )
             if not result:
                 self.log("Warning - patch sequence was not changed")
@@ -16152,7 +16152,7 @@ BEGIN_DATA
         outpathname = os.path.splitext(outfilename)[0]
         outname = os.path.basename(outpathname)
         logfiles = Files([self.recent, self.lastmsg, LineBufferedStream(print)])
-        ofilename = profile.fileName
+        ofilename = profile.filename
         temppathname = os.path.join(tempdir, outname)
         if ofilename and os.path.isfile(ofilename):
             # Profile comes from a file
@@ -16161,7 +16161,7 @@ BEGIN_DATA
         else:
             # Profile not associated to a file, write to temp dir
             temp = True
-            profile.fileName = temporig = temppathname + ".orig.icc"
+            profile.filename = temporig = temppathname + ".orig.icc"
             profile.write(temporig)
         # Remember original white XYZ
         origXYZ = profile.tags.wtpt.X, profile.tags.wtpt.Y, profile.tags.wtpt.Z
@@ -16173,7 +16173,7 @@ BEGIN_DATA
         if use_collink:
             collink = get_argyll_util("collink")
             if not collink:
-                profile.fileName = ofilename
+                profile.filename = ofilename
                 self.wrapup(False)
                 return Error(lang.getstr("argyll.util.not_found", "collink"))
             linkpath = temppathname + ".link.icc"
@@ -16183,7 +16183,7 @@ BEGIN_DATA
                 capture_output=True,
             )
             if not result or isinstance(result, Exception):
-                profile.fileName = ofilename
+                profile.filename = ofilename
                 self.wrapup(False)
                 return result
             link = ICCProfile(linkpath)
@@ -16207,7 +16207,7 @@ BEGIN_DATA
                 profile, XYZscaled, "a", "if", pcs="x", get_clip=True
             )
             # Set filename to copy (used by worker.xicclu to get profile path)
-            profile.fileName = tempcopy
+            profile.filename = tempcopy
             # Find point at which it no longer clips
             for i, RGBclip in enumerate(RGBscaled):
                 if RGBclip[3] is True:
@@ -16228,7 +16228,7 @@ BEGIN_DATA
                 )
                 break
             else:
-                profile.fileName = ofilename
+                profile.filename = ofilename
                 self.wrapup(False)
                 return Error(f"No solution found in {i:d} steps")
             # Generate RGB input values
@@ -16244,7 +16244,7 @@ BEGIN_DATA
             # Restore original XYZ
             profile.tags.wtpt.X, profile.tags.wtpt.Y, profile.tags.wtpt.Z = origXYZ
             # Restore original filename (used by worker.xicclu to get profile path)
-            profile.fileName = temporig
+            profile.filename = temporig
             # Get original black point
             XYZk = self.xicclu(profile, [0, 0, 0], "a", pcs="x")[0]
             logfiles.write("XYZ black {:6.4f} {:6.4f} {:6.4f}\n".format(*XYZk))
@@ -16383,13 +16383,13 @@ BEGIN_DATA
             # Use fakeread
             fakeread = get_argyll_util("fakeread")
             if not fakeread:
-                profile.fileName = ofilename
+                profile.filename = ofilename
                 self.wrapup(False)
                 return Error(lang.getstr("argyll.util.not_found", "fakeread"))
             shutil.copyfile(DEFAULTS["testchart.file"], temppathname + ".ti1")
             result = self.exec_cmd(fakeread, [temporig, temppathname])
             if not result or isinstance(result, Exception):
-                profile.fileName = ofilename
+                profile.filename = ofilename
                 self.wrapup(False)
                 return result
             cti3 = CGATS(temppathname + ".ti3")

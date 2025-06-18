@@ -585,7 +585,7 @@ class ReportFrame(BaseFrame):
             #         profile_path != path
             #     )
             profile = config.get_current_profile(True)
-            path = profile.fileName if profile else None
+            path = profile.filename if profile else None
             setcfg("measurement_report.output_profile", path)
             XYZbpout = self.XYZbpout
             # XYZbpout will be set to the blackpoint of the selected profile.
@@ -623,7 +623,7 @@ class ReportFrame(BaseFrame):
                 if not silent:
                     show_result_dialog(exception, parent=self)
         if profile:
-            profile_path = profile.fileName
+            profile_path = profile.filename
             if (
                 (
                     which == "simulation"
@@ -652,7 +652,7 @@ class ReportFrame(BaseFrame):
             else:
                 if (
                     not getattr(self, f"{which}_profile", None)
-                    or getattr(self, f"{which}_profile").fileName != profile.fileName
+                    or getattr(self, f"{which}_profile").filename != profile.filename
                 ):
                     # Profile selection has changed
                     if which == "simulation":

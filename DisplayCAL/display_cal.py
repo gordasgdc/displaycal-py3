@@ -7075,7 +7075,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             else:
                 pos = display.ClientArea[:2]
                 profile = config.get_current_profile(True)
-                if profile and profile.fileName in self.presets:
+                if profile and profile.filename in self.presets:
                     profile = None
                 else:
                     geometry = display.Geometry.Get()  # Has to be tuple!
@@ -8945,8 +8945,8 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         if profile:
             if VERBOSE >= 1:
                 print(lang.getstr("calibration.loading"))
-                if profile.fileName:
-                    print(profile.fileName)
+                if profile.filename:
+                    print(profile.filename)
         elif VERBOSE >= 1:
             print(lang.getstr("calibration.resetting"))
         if (
@@ -9498,7 +9498,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 # Set profile filename to None so it gets written to temp
                 # directory (this makes sure we're actually using the changed
                 # profile for lookup)
-                mprof.fileName = None
+                mprof.filename = None
 
         if sim_profile:
             sim_intent = (
@@ -10476,8 +10476,8 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             return False
         if VERBOSE >= 1 and (getcfg("calibration.autoload") or event):
             print(lang.getstr("calibration.loading_from_display_profile"))
-            if profile and profile.fileName:
-                print(profile.fileName)
+            if profile and profile.filename:
+                print(profile.filename)
         if (not getcfg("calibration.autoload") and not event) or self.install_cal(
             capture_output=True,
             cal=True,
@@ -17219,9 +17219,9 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         if isinstance(result, Exception):
             show_result_dialog(result, self)
         elif result:
-            if not profile.fileName or not os.path.isfile(profile.fileName):
+            if not profile.filename or not os.path.isfile(profile.filename):
                 # Let the user choose a location for the profile
-                defaultDir, defaultFile = os.path.split(profile.fileName)
+                defaultDir, defaultFile = os.path.split(profile.filename)
                 dlg = wx.FileDialog(
                     self,
                     lang.getstr("save_as"),
@@ -17242,7 +17242,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 profile.setDescription(os.path.basename(filename))
             else:
                 result = wx.ID_OK
-                profile_save_path = profile.fileName
+                profile_save_path = profile.filename
             if result == wx.ID_OK:
                 if not waccess(profile_save_path, os.W_OK):
                     show_result_dialog(
@@ -17628,7 +17628,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 show_result_dialog(exception, self)
                 return
             self.profile_finish(
-                True, profile.fileName, install_3dlut=getcfg("3dlut.create")
+                True, profile.filename, install_3dlut=getcfg("3dlut.create")
             )
 
     def create_profile_name(self):

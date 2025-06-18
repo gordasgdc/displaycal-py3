@@ -556,9 +556,9 @@ class Xicclu(WorkerBase):
                     [lang.getstr("profile.iccv4.unsupported"), profile.getDescription()]
                 )
             )
-        if not profile.fileName or not os.path.isfile(profile.fileName):
-            if profile.fileName:
-                prefix = os.path.basename(profile.fileName)
+        if not profile.filename or not os.path.isfile(profile.filename):
+            if profile.filename:
+                prefix = os.path.basename(profile.filename)
             elif is_profile:
                 prefix = (
                     make_filename_safe(profile.getDescription(), concat=False)
@@ -572,14 +572,14 @@ class Xicclu(WorkerBase):
                 cwd = self.create_tempdir()
                 if isinstance(cwd, Exception):
                     raise cwd
-            fd, profile.fileName = tempfile.mkstemp("", prefix, dir=cwd)
+            fd, profile.filename = tempfile.mkstemp("", prefix, dir=cwd)
             with os.fdopen(fd, "wb") as stream:
                 profile.write(stream)
             self.temp = True
         elif not cwd:
-            cwd = os.path.dirname(profile.fileName)
-        profile_basename = os.path.basename(profile.fileName)
-        profile_path = profile.fileName
+            cwd = os.path.dirname(profile.filename)
+        profile_basename = os.path.basename(profile.filename)
+        profile_path = profile.filename
         if sys.platform == "win32":
             profile_path = win32api.GetShortPathName(profile_path)
         self.profile_path = safe_str(profile_path)
@@ -637,10 +637,10 @@ class Xicclu(WorkerBase):
         args.append(self.profile_path)
         if DEBUG or verbose > 1:
             self.sessionlogfile = LogFile(
-                profile_basename + ".xicclu", os.path.dirname(profile.fileName)
+                profile_basename + ".xicclu", os.path.dirname(profile.filename)
             )
             if is_profile:
-                profile_act = ICCProfile(profile.fileName)
+                profile_act = ICCProfile(profile.filename)
                 self.sessionlogfile.write(
                     f"Profile ID {hexlify(profile.ID)} "
                     f"(actual {hexlify(profile_act.calculateID(False))})"
@@ -1026,7 +1026,7 @@ class XiccluMP(Xicclu):
         self.output_stream = output_stream
         self._in = []
         self._args = (
-            profile.fileName,
+            profile.filename,
             intent,
             direction,
             order,

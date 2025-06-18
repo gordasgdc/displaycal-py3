@@ -326,11 +326,11 @@ class H3DLUT:
         if not stream_or_filename:
             return
         if isinstance(stream_or_filename, str):
-            self.fileName = stream_or_filename
+            self.filename = stream_or_filename
             with open(stream_or_filename, "rb") as lut:
                 data = lut.read()
         else:
-            self.fileName = None
+            self.filename = None
             data = stream_or_filename.read()
         self.signature = data[:4]
         self.fileVersion = struct.unpack("<l", data[4:8])[0]
@@ -450,7 +450,7 @@ class H3DLUT:
 
     def _get_stream(self, stream_or_filename=None, ext=None):
         if not stream_or_filename:
-            stream_or_filename = self.fileName
+            stream_or_filename = self.filename
             if ext:
                 stream_or_filename = os.path.splitext(stream_or_filename)[0] + ext
         if isinstance(stream_or_filename, str):
@@ -464,8 +464,8 @@ class H3DLUT:
         stream = self._get_stream(stream_or_filename)
         stream.write(self.data)
         if isinstance(stream_or_filename, str):
-            if not self.fileName:
-                self.fileName = stream_or_filename
+            if not self.filename:
+                self.filename = stream_or_filename
             stream.close()
 
     def write_devicelink(self, stream_or_filename=None):

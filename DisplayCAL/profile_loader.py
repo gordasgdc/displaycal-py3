@@ -2917,7 +2917,7 @@ class ProfileLoader:
                             print(
                                 lang.getstr(
                                     "vcgt.unknown_format",
-                                    os.path.basename(profile.fileName),
+                                    os.path.basename(profile.filename),
                                 )
                             )
                             print(lang.getstr("failure"))
@@ -2925,7 +2925,7 @@ class ProfileLoader:
                             errors.append(
                                 lang.getstr(
                                     "vcgt.unknown_format",
-                                    os.path.basename(profile.fileName),
+                                    os.path.basename(profile.filename),
                                 )
                             )
                         # Fall back to linear calibration

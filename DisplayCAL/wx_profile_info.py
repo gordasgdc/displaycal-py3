@@ -475,7 +475,7 @@ class GamutCanvas(LUTCanvas):
             check = self.profiles.get(i)
             if (
                 check
-                and profile.fileName == check.fileName
+                and profile.filename == check.filename
                 and profile.calculateID(False) == check.ID
                 and intent == self.intent
                 and direction == self.direction
@@ -870,7 +870,7 @@ class GamutViewOptions(wx_Panel):
         self.comparison_profile_select.SetDropTarget(droptarget)
         if srgb:
             self.comparison_profile_select.SetSelection(1)
-            self.comparison_profile_select.SetToolTipString(srgb.fileName)
+            self.comparison_profile_select.SetToolTipString(srgb.filename)
 
         # Rendering intent select
         self.options_sizer.Add((0, 0))
@@ -1008,7 +1008,7 @@ class GamutViewOptions(wx_Panel):
         index = self.comparison_profile_select.GetSelection()
         if index > 0:
             self.comparison_profile_select.SetToolTipString(
-                self.comparison_profile.fileName
+                self.comparison_profile.filename
             )
         else:
             self.comparison_profile_select.SetToolTip(None)
@@ -2215,8 +2215,8 @@ class ProfileInfoFrame(LUTFrame):
                 x3d = False
                 html = False
             profile_path = None
-            if profile.fileName and os.path.isfile(profile.fileName):
-                profile_path = profile.fileName
+            if profile.filename and os.path.isfile(profile.filename):
+                profile_path = profile.filename
             if not profile_path or not waccess(os.path.dirname(profile_path), os.W_OK):
                 result = self.worker.create_tempdir()
                 if isinstance(result, Exception):
@@ -2234,7 +2234,7 @@ class ProfileInfoFrame(LUTFrame):
             comparison_profile_path = None
             comparison_profile_mtime = 0
             if comparison_profile:
-                comparison_profile_path = comparison_profile.fileName
+                comparison_profile_path = comparison_profile.filename
                 if comparison_profile_path and not waccess(
                     os.path.dirname(comparison_profile_path), os.W_OK
                 ):

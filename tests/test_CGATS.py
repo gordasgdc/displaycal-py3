@@ -5,7 +5,7 @@ from typing import TypedDict
 import pytest
 from _pytest.fixtures import SubRequest
 
-from DisplayCAL.cgats import CGATS, stable_sort_by_L
+from DisplayCAL.cgats import CGATS, stable_sort_by_l
 from DisplayCAL.config import get_current_profile
 from DisplayCAL.dev.mocks import check_call
 from DisplayCAL.util_io import LineBufferedStream, Files
@@ -504,8 +504,8 @@ def test_export_3d_1(data_files):
     cgats.export_3d(
         str(export_path.absolute()),
         colorspace="RGB",
-        RGB_black_offset=40,
-        normalize_RGB_white=False,
+        rgb_black_offset=40,
+        normalize_rgb_white=False,
         compress=False,
         file_format="HTML",
     )
@@ -515,7 +515,7 @@ def test_export_3d_1(data_files):
     "function,result",
     [
         (
-            "sort_RGB_gray_to_top",
+            "sort_rgb_gray_to_top",
             [
                 [100.0, 100.0, 100.0, 100.0, 100.0, 100.0],
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -530,7 +530,7 @@ def test_export_3d_1(data_files):
             ],
         ),
         (
-            "sort_RGB_white_to_top",
+            "sort_rgb_white_to_top",
             [
                 [100.0, 100.0, 100.0, 100.0, 100.0, 100.0],
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -545,7 +545,7 @@ def test_export_3d_1(data_files):
             ],
         ),
         (
-            "sort_by_HSI",
+            "sort_by_hsi",
             [
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -560,7 +560,7 @@ def test_export_3d_1(data_files):
             ],
         ),
         (
-            "sort_by_HSL",
+            "sort_by_hsl",
             [
                 [50.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -575,7 +575,7 @@ def test_export_3d_1(data_files):
             ],
         ),
         (
-            "sort_by_HSV",
+            "sort_by_hsv",
             [
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -590,7 +590,7 @@ def test_export_3d_1(data_files):
             ],
         ),
         (
-            "sort_by_L",
+            "sort_by_l",
             [
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -605,7 +605,7 @@ def test_export_3d_1(data_files):
             ],
         ),
         (
-            "sort_by_RGB",
+            "sort_by_rgb",
             [
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -620,7 +620,7 @@ def test_export_3d_1(data_files):
             ],
         ),
         (
-            "sort_by_BGR",
+            "sort_by_bgr",
             [
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -635,7 +635,7 @@ def test_export_3d_1(data_files):
             ],
         ),
         (
-            "sort_by_RGB_pow_sum",
+            "sort_by_rgb_pow_sum",
             [
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -650,7 +650,7 @@ def test_export_3d_1(data_files):
             ],
         ),
         (
-            "sort_by_RGB_sum",
+            "sort_by_rgb_sum",
             [
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -685,7 +685,7 @@ def test_cgats_sorting_1(data_files, function: str, result: list[list[float]]) -
     """Test ``DisplayCAL.cgats.CGATS`` sorting methods except sort_RGB_to_top."""
     path = data_files["0_16_for_sorting.ti1"].absolute()
     cgats = CGATS(cgats=path)
-    with check_call(CGATS, "set_RGB_XYZ_values") as calls:
+    with check_call(CGATS, "set_rgb_xyz_values") as calls:
         getattr(cgats, function)()
         assert calls[0][0][1] == result
 
@@ -846,14 +846,14 @@ def test_cgats_sorting_2(data_files, color_combination: ColorCombination) -> Non
     path = data_files["0_16_for_sorting.ti1"].absolute()
     cgats = CGATS(cgats=path)
     if not color_combination["result"]:
-        assert not cgats.sort_RGB_to_top(
+        assert not cgats.sort_rgb_to_top(
             color_combination["red"],
             color_combination["green"],
             color_combination["blue"],
         )
     else:
-        with check_call(CGATS, "set_RGB_XYZ_values") as calls:
-            cgats.sort_RGB_to_top(
+        with check_call(CGATS, "set_rgb_xyz_values") as calls:
+            cgats.sort_rgb_to_top(
                 color_combination["red"],
                 color_combination["green"],
                 color_combination["blue"],
@@ -942,7 +942,7 @@ def test_cgats_checkerboard(
     """Test ``DisplayCAL.cgats.CGATS`` checkerboard method."""
     path = data_files["0_16_for_sorting.ti1"].absolute()
     cgats = CGATS(cgats=path)
-    with check_call(CGATS, "set_RGB_XYZ_values") as calls:
+    with check_call(CGATS, "set_rgb_xyz_values") as calls:
         cgats.checkerboard(split_grays=split_grays, shift=shift)
         assert calls[0][0][1] == result
 
@@ -956,8 +956,8 @@ def test_cgats_maximise_lightness_sort_is_invariant_to_input(data_files, name):
     results = []
 
     for i in range(3):
-        cgats.checkerboard(sort1=stable_sort_by_L)
-        results.append(cgats.get_RGB_XYZ_values()[1])
+        cgats.checkerboard(sort1=stable_sort_by_l)
+        results.append(cgats.get_rgb_xyz_values()[1])
     assert results
     for i in range(len(results[0])):
         last = None
@@ -1060,7 +1060,7 @@ def test_cgats_convert_XYZ_to_Lab(data_files) -> None:
     """Test ``DisplayCAL.cgats.CGATS`` convert_XYZ_to_Lab method."""
     path = data_files["0_16_proper.ti3"].absolute()
     cgats = CGATS(cgats=path)
-    cgats.convert_XYZ_to_Lab()
+    cgats.convert_xyz_to_lab()
     assert all(key in cgats[0]["DATA"][0] for key in [b"LAB_L", b"LAB_A", b"LAB_B"])
 
 

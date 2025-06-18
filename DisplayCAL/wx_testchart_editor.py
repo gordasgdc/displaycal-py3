@@ -34,9 +34,9 @@ from DisplayCAL.cgats import (
     CGATSKeyError,
     rpad,
     sort_by_rec709_luma,
-    sort_by_RGB,
-    sort_by_RGB_sum,
-    stable_sort_by_L,
+    sort_by_rgb,
+    sort_by_rgb_sum,
+    stable_sort_by_l,
 )
 from DisplayCAL.config import (
     DEFAULTS,
@@ -1569,42 +1569,42 @@ END_DATA"""
         """
         idx = self.change_patch_order_ctrl.GetSelection()
         if idx == 0:
-            self.ti1.sort_RGB_gray_to_top()
+            self.ti1.sort_rgb_gray_to_top()
         elif idx == 1:
-            self.ti1.sort_RGB_white_to_top()
+            self.ti1.sort_rgb_white_to_top()
         elif idx == 2:
-            self.ti1.sort_RGB_to_top(1, 0, 0)  # Red
+            self.ti1.sort_rgb_to_top(1, 0, 0)  # Red
         elif idx == 3:
-            self.ti1.sort_RGB_to_top(0, 1, 0)  # Green
+            self.ti1.sort_rgb_to_top(0, 1, 0)  # Green
         elif idx == 4:
-            self.ti1.sort_RGB_to_top(0, 0, 1)  # Blue
+            self.ti1.sort_rgb_to_top(0, 0, 1)  # Blue
         elif idx == 5:
-            self.ti1.sort_RGB_to_top(0, 1, 1)  # Cyan
+            self.ti1.sort_rgb_to_top(0, 1, 1)  # Cyan
         elif idx == 6:
-            self.ti1.sort_RGB_to_top(1, 0, 1)  # Magenta
+            self.ti1.sort_rgb_to_top(1, 0, 1)  # Magenta
         elif idx == 7:
-            self.ti1.sort_RGB_to_top(1, 1, 0)  # Yellow
+            self.ti1.sort_rgb_to_top(1, 1, 0)  # Yellow
         elif idx == 8:
-            self.ti1.sort_by_HSI()
+            self.ti1.sort_by_hsi()
         elif idx == 9:
-            self.ti1.sort_by_HSL()
+            self.ti1.sort_by_hsl()
         elif idx == 10:
-            self.ti1.sort_by_HSV()
+            self.ti1.sort_by_hsv()
         elif idx == 11:
-            self.ti1.sort_by_L()
+            self.ti1.sort_by_l()
         elif idx == 12:
             self.ti1.sort_by_rec709_luma()
         elif idx == 13:
-            self.ti1.sort_by_RGB()
+            self.ti1.sort_by_rgb()
         elif idx == 14:
-            self.ti1.sort_by_RGB_sum()
+            self.ti1.sort_by_rgb_sum()
         elif idx == 15:
-            self.ti1.sort_by_BGR()
+            self.ti1.sort_by_bgr()
         elif idx == 16:
             # Minimize display response delay
-            self.ti1.sort_by_BGR()
-            self.ti1.sort_RGB_gray_to_top()
-            self.ti1.sort_RGB_white_to_top()
+            self.ti1.sort_by_bgr()
+            self.ti1.sort_rgb_gray_to_top()
+            self.ti1.sort_rgb_white_to_top()
         elif idx == 17:
             # Interleave
             self.ti1.checkerboard(None, None)
@@ -1613,16 +1613,16 @@ END_DATA"""
             self.ti1.checkerboard(None, None, split_grays=True, shift=True)
         elif idx == 19:
             # Maximize L* difference
-            self.ti1.checkerboard(sort1=stable_sort_by_L)
+            self.ti1.checkerboard(sort1=stable_sort_by_l)
         elif idx == 20:
             # Maximize Rec. 709 luma difference
             self.ti1.checkerboard(sort_by_rec709_luma)
         elif idx == 21:
             # Maximize RGB difference
-            self.ti1.checkerboard(sort_by_RGB_sum)
+            self.ti1.checkerboard(sort_by_rgb_sum)
         elif idx == 22:
             # Vary RGB difference
-            self.ti1.checkerboard(sort_by_RGB, None, split_grays=True, shift=True)
+            self.ti1.checkerboard(sort_by_rgb, None, split_grays=True, shift=True)
         self.tc_clear(False)
         self.tc_preview(True)
 

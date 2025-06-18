@@ -1188,7 +1188,7 @@ class LUTFrame(BaseFrame):
             event (wx.Event): The event triggered by the button.
         """
         cal = vcgt_to_cal(self.profile)
-        cal.filename = self.profile.fileName or ""
+        cal.filename = self.profile.filename or ""
         cal.apply_bpc(weight=True)
         self.LoadProfile(cal_to_fake_profile(cal))
 
@@ -1435,12 +1435,12 @@ class LUTFrame(BaseFrame):
                 )
         if profile and (
             profile.is_loaded
-            or not profile.fileName
-            or os.path.isfile(profile.fileName)
+            or not profile.filename
+            or os.path.isfile(profile.filename)
         ):
             if (
                 not self.profile
-                or self.profile.fileName != profile.fileName
+                or self.profile.filename != profile.filename
                 or not self.profile.isSame(profile)
             ):
                 self.LoadProfile(profile)
@@ -2481,7 +2481,7 @@ class LUTFrame(BaseFrame):
             [
                 self.plot_mode_select.GetStringSelection(),
                 os.path.basename(
-                    os.path.splitext(self.profile.fileName or lang.getstr("unnamed"))[0]
+                    os.path.splitext(self.profile.filename or lang.getstr("unnamed"))[0]
                 ),
             ]
         )

@@ -4089,7 +4089,7 @@ BEGIN_DATA
                 raise TypeError("PCS not specified")
 
         if not filename and self.profile:
-            filename = self.profile.fileName
+            filename = self.profile.filename
 
         clutres = len(self.clut[0])
 
@@ -4215,7 +4215,7 @@ BEGIN_DATA
                 raise TypeError("PCS not specified")
 
         if not filename and self.profile:
-            filename = self.profile.fileName
+            filename = self.profile.filename
 
         clutres = len(self.clut[0])
 
@@ -7163,7 +7163,7 @@ class ICCProfile:
         self._file = None
         self._tagoffsets = []  # Original tag offsets
         self._tags = LazyLoadTagAODict(self)
-        self.fileName = None
+        self.filename = None
         self.is_loaded = False
         self.size = 0
 
@@ -7182,7 +7182,7 @@ class ICCProfile:
         else:
             # File object
             self._file = profile
-            self.fileName = self._file.name
+            self.filename = self._file.name
             self._file.seek(0)
             data = self._file.read(128)
             self.close()
@@ -7196,7 +7196,7 @@ class ICCProfile:
 
             from defusedxml import ElementTree
 
-            self.fileName = None
+            self.filename = None
             self._data = data
             self.load()
             data = self._data
@@ -7719,7 +7719,7 @@ class ICCProfile:
             return False
         # Set fileName to None because our profile no longer reflects the file
         # on disk and remove from cache
-        self.fileName = None
+        self.filename = None
         self._delfromcache()
         if version < 2.4 and undo_wtpt_chad:
             # Set whitepoint tag to illuminant relative and remove chromatic
@@ -7763,7 +7763,7 @@ class ICCProfile:
             return False
         # Set fileName to None because our profile no longer reflects the file
         # on disk and remove from cache
-        self.fileName = None
+        self.filename = None
         self._delfromcache()
         wtpt = list(self.tags.wtpt.ir.values())
         # Set whitepoint tag to D50
@@ -8474,7 +8474,7 @@ class ICCProfile:
         print("=" * 80)
         print("ICC profile information")
         print("-" * 80)
-        print("File name:", os.path.basename(self.fileName or ""))
+        print("File name:", os.path.basename(self.filename or ""))
         for label, value in self.get_info():
             if not value:
                 print(label)
@@ -9226,11 +9226,11 @@ class ICCProfile:
         if not stream_or_filename:
             if self._file and not self._file.closed:
                 self.close()
-            stream_or_filename = self.fileName
+            stream_or_filename = self.filename
         if isinstance(stream_or_filename, str):
             with open(stream_or_filename, "wb") as stream:
-                if not self.fileName:
-                    self.fileName = stream_or_filename
+                if not self.filename:
+                    self.filename = stream_or_filename
                 stream.write(self.data)
         else:
             stream_or_filename.write(self.data)

@@ -1783,13 +1783,13 @@ class ProfileManager:
         if not dispwin:
             _show_result_after(Error(lang.getstr("argyll.util.not_found", "dispwin")))
             return
-        if not profile.fileName or not os.path.isfile(profile.fileName):
+        if not profile.filename or not os.path.isfile(profile.filename):
             if not self._set_profile_temp_filename(profile):
                 return
             profile.write()
         result = self._worker.exec_cmd(
             dispwin,
-            ["-v", f"-d{display_no + 1}", "-I", profile.fileName],
+            ["-v", f"-d{display_no + 1}", "-I", profile.filename],
             capture_output=True,
             dry_run=False,
         )
@@ -1811,8 +1811,8 @@ class ProfileManager:
         if isinstance(temp, Exception):
             _show_result_after(temp)
             return None
-        if profile.fileName:
-            profile_name = os.path.basename(profile.fileName)
+        if profile.filename:
+            profile_name = os.path.basename(profile.filename)
         else:
             profile_name = profile.getDescription() + PROFILE_EXT
         if (
@@ -1820,7 +1820,7 @@ class ProfileManager:
             or FS_ENC.upper() not in ("UTF8", "UTF-8")
         ) and re.search(r"[^\x20-\x7e]", profile_name):
             profile_name = safe_asciize(profile_name)
-        profile.fileName = os.path.join(temp, profile_name)
+        profile.filename = os.path.join(temp, profile_name)
         return True
 
     def _stop_timer(self):

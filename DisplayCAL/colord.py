@@ -313,18 +313,18 @@ def install_profile(
 
     """
     profile_install_name = os.path.join(
-        XDG_DATA_HOME, "icc", os.path.basename(profile.fileName)
+        XDG_DATA_HOME, "icc", os.path.basename(profile.filename)
     )
 
     profile_exists = os.path.isfile(profile_install_name)
-    if profile.fileName != profile_install_name and profile_exists:
+    if profile.filename != profile_install_name and profile_exists:
         if logfn:
             logfn("About to overwrite existing", profile_install_name)
-        profile.fileName = None
+        profile.filename = None
 
     if profile.ID == "\0" * 16:
         profile.calculateID()
-        profile.fileName = None
+        profile.filename = None
     profile_id = "icc-" + hexlify(profile.ID).decode()
 
     # Write profile to destination
@@ -334,10 +334,10 @@ def install_profile(
     # colormgr seems to have a bug where the first attempt at importing a
     # specific profile can time out. This seems to be work-aroundable by
     # writing the profile ourself first, and then importing.
-    if not profile.fileName or not profile_exists:
+    if not profile.filename or not profile_exists:
         if logfn:
             logfn("Writing", profile_install_name)
-        profile.fileName = profile_install_name
+        profile.filename = profile_install_name
         profile.write()
 
     cdprofile = None
@@ -365,7 +365,7 @@ def install_profile(
                 logfn("-" * 80)
                 logfn(lang.getstr("commandline"))
 
-            args = [cmd, "import-profile", safe_str(profile.fileName)]
+            args = [cmd, "import-profile", safe_str(profile.filename)]
             printcmdline(args[0], args[1:], fn=logfn)
             if logfn:
                 logfn("")
@@ -393,7 +393,7 @@ def install_profile(
 
             if p.returncode != 0 and not os.path.isfile(profile_install_name):
                 raise CDTimeoutError(
-                    f"Trying to import profile '{profile.fileName}' failed after "
+                    f"Trying to import profile '{profile.filename}' failed after "
                     f"{n} tries."
                 )
 
