@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 
 from DisplayCAL import colormath
@@ -169,7 +171,14 @@ def test_color_space_to_vrml_name_is_read_only(get_cgats_data):
     with pytest.raises(AttributeError) as cm:
         colorspace_to_vrml.name = "New Name"
 
-    assert str(cm.value) == "can't set attribute"
+    py_error_message = {
+        9: "can't set attribute",
+        10: "can't set attribute 'name'",
+        11: "property 'name' of 'ColorSpaceToVRML' object has no setter",
+        12: "property 'name' of 'ColorSpaceToVRML' object has no setter",
+        13: "property 'name' of 'ColorSpaceToVRML' object has no setter",
+    }[sys.version_info.minor]
+    assert str(cm.value) == py_error_message
 
 
 # ColorSpaceToVRML.cat
