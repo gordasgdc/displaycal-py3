@@ -35,7 +35,7 @@ def get_cgats_data(data_files):
     return cgats.queryv1("DATA")
 
 
-def test_color_space_to_vrml_init_data_arg_sis_skipped():
+def test_color_space_to_vrml_init_data_arg_is_skipped():
     """ColorSpaceToVRML.__init__() data is skipped raises TypeError."""
     with pytest.raises(TypeError) as cm:
         _ = ColorSpaceToVRML(
@@ -45,9 +45,15 @@ def test_color_space_to_vrml_init_data_arg_sis_skipped():
             normalize_rgb_white=False,
         )
 
-    assert str(cm.value) == (
-        "__init__() missing 1 required positional argument: 'data'"
-    )
+    py_error_message = {
+        9: "__init__() missing 1 required positional argument: 'data'",
+        10: "ColorSpaceToVRML.__init__() missing 1 required positional argument: 'data'",
+        11: "ColorSpaceToVRML.__init__() missing 1 required positional argument: 'data'",
+        12: "ColorSpaceToVRML.__init__() missing 1 required positional argument: 'data'",
+        13: "ColorSpaceToVRML.__init__() missing 1 required positional argument: 'data'",
+    }[sys.version_info.minor]
+    assert str(cm.value) == py_error_message
+
 
 
 def test_color_space_to_vrml_init_data_arg_is_none():
