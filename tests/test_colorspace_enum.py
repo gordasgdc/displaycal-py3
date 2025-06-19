@@ -60,6 +60,36 @@ def test_enum_values(colorspace, expected_value):
 
 
 @pytest.mark.parametrize(
+    "colorspace,expected_value",
+    [
+        [ColorSpace.DIN99, "DIN99"],
+        [ColorSpace.DIN99b, "DIN99b"],
+        [ColorSpace.DIN99c, "DIN99c"],
+        [ColorSpace.DIN99d, "DIN99d"],
+        [ColorSpace.HSI, "HSI"],
+        [ColorSpace.HSL, "HSL"],
+        [ColorSpace.HSV, "HSV"],
+        [ColorSpace.ICtCp, "ICtCp"],
+        [ColorSpace.IPT, "IPT"],
+        [ColorSpace.Lab, "Lab"],
+        [ColorSpace.LCHab, "LCH(ab)"],
+        [ColorSpace.LCHuv, "LCH(uv)"],
+        [ColorSpace.LCHab, "LCHab"],
+        [ColorSpace.LCHuv, "LCHuv"],
+        [ColorSpace.Lpt, "Lpt"],
+        [ColorSpace.LuvPrime, "Lu'v'"],
+        [ColorSpace.LuvPrime, "LuvPrime"],
+        [ColorSpace.Luv, "Luv"],
+        [ColorSpace.RGB, "RGB"],
+        [ColorSpace.xyY, "xyY"],
+    ],
+)
+def test_str_comparison(colorspace, expected_value):
+    """Test str comparison."""
+    assert colorspace == expected_value
+
+
+@pytest.mark.parametrize(
     "colorspace,expected_name",
     [
         [ColorSpace.DIN99, "DIN99"],

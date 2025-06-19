@@ -132,6 +132,24 @@ class ColorSpace(Enum):
 
         return colorspace
 
+    def __eq__(self, other: object) -> bool:
+        """Check equality with another ColorSpace or string.
+        
+        Args:
+            other (object): The object to compare with.
+
+        Returns:
+            bool: True if equal, False otherwise.
+        """
+        if isinstance(other, str):
+            return (
+                self.value.lower() == other.lower()
+                or self.name.lower() == other.lower()
+            )
+        elif isinstance(other, ColorSpace):
+            return self.value == other.value
+        return False
+
 
 class ColorSpaceToVRML:
     """Color space class for easy VRML.
@@ -152,25 +170,7 @@ class ColorSpaceToVRML:
     sqrt3_100 = math.sqrt(3) * 100
     sqrt3_50 = math.sqrt(3) * 50
 
-    VALID_COLOR_SPACE_NAMES = (
-        "DIN99",
-        "DIN99b",
-        "DIN99c",
-        "DIN99d",
-        "HSI",
-        "HSL",
-        "HSV",
-        "ICtCp",
-        "IPT",
-        "Lab",
-        "LCH(ab)",
-        "LCH(uv)",
-        "Lpt",
-        "Lu'v'",
-        "Luv",
-        "RGB",
-        "xyY",
-    )
+    VALID_COLOR_SPACE_NAMES = [c.value for c in ColorSpace]
 
     VRML_TEMPLATE = """#VRML V2.0 utf8
 
@@ -411,13 +411,13 @@ Transform {{
         self.offset_z = 340
 
     @property
-    def name(self) -> str:
+    def colorspace(self) -> str:
         """Get the name of the color space.
 
         Returns:
             str: The name of the color space.
         """
-        return self.__class__.__name__.replace("ToVRML", "")
+        return ColorSpace.to_colorspace(self.__class__.__name__.replace("ToVRML", ""))
 
     @property
     def data(self) -> list:
@@ -786,7 +786,7 @@ class DIN99ToVRML(ColorSpaceToVRML):
         self.axes += self.VRML_AXES_TEMPLATE.format(
             hundredth_scale=100.0 / self.scale,
             tenth_scale=10.0 / self.scale,
-            colorspace=self.name,
+            colorspace=str(self.colorspace),
         )
         (pxlabel, nxlabel, pylabel, nylabel, pllabel) = (
             f'"a", "+{int(100 / self.scale)}"',
@@ -958,15 +958,6 @@ class LCHabToVRML(ColorSpaceToVRML):
         self.fov /= 16.0
         self.offset_z *= 16
 
-    @property
-    def name(self) -> str:
-        """Get the name of the color space.
-
-        Returns:
-            str: The name of the color space.
-        """
-        return "LCH(ab)"
-
     def get_offsets(self, entry: dict) -> tuple[float, float, float]:
         """Get the offset for the color space.
 
@@ -1013,15 +1004,6 @@ class LCHuvToVRML(ColorSpaceToVRML):
         super().__init__(data, white_point, cat, rgb_black_offset, normalize_rgb_white)
         self.fov /= 16.0
         self.offset_z *= 16
-
-    @property
-    def name(self) -> str:
-        """Get the name of the color space.
-
-        Returns:
-            str: The name of the color space.
-        """
-        return "LCH(uv)"
 
     def get_offsets(self, entry: dict) -> tuple[float, float, float]:
         """Get the offset for the color space.
@@ -1120,15 +1102,6 @@ class LuvPrimeToVRML(ColorSpaceToVRML):
         rgb_black_offset (float, optional): Offset for RGB black. Defaults to 40.
         normalize_rgb_white (bool, optional): Normalize RGB white. Defaults to False.
     """
-
-    @property
-    def name(self) -> str:
-        """Get the name of the color space.
-
-        Returns:
-            str: The name of the color space.
-        """
-        return "Lu'v'"
 
     def get_offsets(self, entry: dict) -> tuple[float, float, float]:
         """Get the offset for the color space.

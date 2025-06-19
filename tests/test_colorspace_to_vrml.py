@@ -175,7 +175,7 @@ def test_color_space_to_vrml_name_is_read_only(get_cgats_data):
         normalize_rgb_white=False,
     )
     with pytest.raises(AttributeError) as cm:
-        colorspace_to_vrml.name = "New Name"
+        colorspace_to_vrml.colorspace = "New Name"
 
     py_error_message = {
         9: "can't set attribute",
@@ -217,7 +217,7 @@ def test_color_space_to_vrml_cat_is_str(get_cgats_data):
 
 
 @pytest.mark.parametrize(
-    "colorspace_class, expected_name",
+    "colorspace_class, expected_colorspace",
     [
         (DIN99bToVRML, "DIN99b"),
         (DIN99cToVRML, "DIN99c"),
@@ -238,8 +238,8 @@ def test_color_space_to_vrml_cat_is_str(get_cgats_data):
         (xyYToVRML, "xyY"),
     ],
 )
-def test_color_space_to_vrml_name_is_correct(
-    colorspace_class, expected_name, get_cgats_data
+def test_color_space_to_vrml_colorspace_is_correct(
+    colorspace_class, expected_colorspace, get_cgats_data
 ):
     """ColorSpaceToVRML.name is correct."""
     obj = colorspace_class(
@@ -249,7 +249,7 @@ def test_color_space_to_vrml_name_is_correct(
         rgb_black_offset=40,
         normalize_rgb_white=False,
     )
-    assert obj.name == expected_name
+    assert obj.colorspace == expected_colorspace
 
 
 @pytest.mark.parametrize(
@@ -294,3 +294,27 @@ def test_color_space_to_vrml_generate_vrml(
     assert obj.vrml == ""
     obj.generate_vrml()
     assert obj.vrml == expected_vrml
+
+
+def test_color_space_to_vrml_valid_color_space_names_is_correct():
+    """ColorSpaceToVRML.VALID_COLOR_SPACE_NAMES contains correct names."""
+    expected_names = [
+        "DIN99",
+        "DIN99b",
+        "DIN99c",
+        "DIN99d",
+        "HSI",
+        "HSL",
+        "HSV",
+        "ICtCp",
+        "IPT",
+        "Lab",
+        "LCH(ab)",
+        "LCH(uv)",
+        "Lpt",
+        "Lu'v'",
+        "Luv",
+        "RGB",
+        "xyY",
+    ]
+    assert ColorSpaceToVRML.VALID_COLOR_SPACE_NAMES == expected_names
