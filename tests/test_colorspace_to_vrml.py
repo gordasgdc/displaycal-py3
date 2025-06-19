@@ -165,8 +165,8 @@ def test_color_space_to_vrml_init_data_arg_value_is_passed_to_the_data_attr(
     assert colorspace_to_vrml.data == test_data
 
 
-def test_color_space_to_vrml_name_is_read_only(get_cgats_data):
-    """ColorSpaceToVRML.name is read-only."""
+def test_color_space_to_vrml_colorspace_is_read_only(get_cgats_data):
+    """ColorSpaceToVRML.colorspace is read-only."""
     colorspace_to_vrml = ColorSpaceToVRML(
         data=get_cgats_data,
         white_point=(0.9642, 1.0, 0.8249),
@@ -175,14 +175,14 @@ def test_color_space_to_vrml_name_is_read_only(get_cgats_data):
         normalize_rgb_white=False,
     )
     with pytest.raises(AttributeError) as cm:
-        colorspace_to_vrml.colorspace = "New Name"
+        colorspace_to_vrml.colorspace = "New Colorspace"
 
     py_error_message = {
         9: "can't set attribute",
-        10: "can't set attribute 'name'",
-        11: "property 'name' of 'ColorSpaceToVRML' object has no setter",
-        12: "property 'name' of 'ColorSpaceToVRML' object has no setter",
-        13: "property 'name' of 'ColorSpaceToVRML' object has no setter",
+        10: "can't set attribute 'colorspace'",
+        11: "property 'colorspace' of 'ColorSpaceToVRML' object has no setter",
+        12: "property 'colorspace' of 'ColorSpaceToVRML' object has no setter",
+        13: "property 'colorspace' of 'ColorSpaceToVRML' object has no setter",
     }[sys.version_info.minor]
     assert str(cm.value) == py_error_message
 
@@ -213,7 +213,7 @@ def test_color_space_to_vrml_cat_is_str(get_cgats_data):
     assert colorspace_to_vrml.cat == CAT.XYZ_Scaling
 
 
-# ColorSpaceToVRML.name
+# ColorSpaceToVRML.colorspace
 
 
 @pytest.mark.parametrize(
@@ -241,7 +241,7 @@ def test_color_space_to_vrml_cat_is_str(get_cgats_data):
 def test_color_space_to_vrml_colorspace_is_correct(
     colorspace_class, expected_colorspace, get_cgats_data
 ):
-    """ColorSpaceToVRML.name is correct."""
+    """ColorSpaceToVRML.colorspace is correct."""
     obj = colorspace_class(
         data=get_cgats_data,
         white_point=(0.9642, 1.0, 0.8249),
