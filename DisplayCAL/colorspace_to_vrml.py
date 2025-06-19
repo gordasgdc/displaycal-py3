@@ -73,6 +73,66 @@ class CAT(Enum):
         return cat
 
 
+class ColorSpace(Enum):
+    """Color space enumeration."""
+
+    DIN99 = "DIN99"
+    DIN99b = "DIN99b"
+    DIN99c = "DIN99c"
+    DIN99d = "DIN99d"
+    HSI = "HSI"
+    HSL = "HSL"
+    HSV = "HSV"
+    ICtCp = "ICtCp"
+    IPT = "IPT"
+    Lab = "Lab"
+    LCHab = "LCH(ab)"
+    LCHuv = "LCH(uv)"
+    Lpt = "Lpt"
+    LuvPrime = "Lu'v'"
+    Luv = "Luv"
+    RGB = "RGB"
+    xyY = "xyY"
+
+    def __str__(self) -> str:
+        """Get the string representation of the ColorSpace."""
+        return self.value
+
+    @classmethod
+    def to_colorspace(cls, colorspace: str | ColorSpace) -> ColorSpace:
+        """Convert the given colorspace value to a ColorSpace enum.
+
+        Args:
+            colorspace (str | ColorSpace): The value to convert to a ColorSpace.
+
+        Raises:
+            TypeError: Input value type is invalid.
+            ValueError: Input value is invalid.
+
+        Returns:
+            ColorSpace: The enum.
+        """
+        valid_values = sorted(set([c.name for c in cls] + [c.value for c in cls]))
+        if not isinstance(colorspace, (str, ColorSpace)):
+            raise TypeError(
+                f"colorspace should be a ColorSpace enum value or one of {valid_values}, "
+                f"not {colorspace.__class__.__name__}: '{colorspace}'"
+            )
+        if isinstance(colorspace, str):
+            colorspace_name_lut = {c.name.lower(): c.name for c in cls}
+            colorspace_name_lut.update({c.value.lower(): c.name for c in cls})
+            colorspace_lower_case = colorspace.lower()
+            if colorspace_lower_case not in colorspace_name_lut:
+                raise ValueError(
+                    f"colorspace should be a ColorSpace enum value or one of {valid_values}, "
+                    f"not '{colorspace}'"
+                )
+
+            return cls.__members__[colorspace_name_lut[colorspace_lower_case]]
+
+        return colorspace
+
+
 class ColorSpaceToVRML:
     """Color space class for easy VRML.
 
