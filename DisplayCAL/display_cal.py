@@ -282,7 +282,7 @@ elif sys.platform == "darwin":
     from DisplayCAL import util_mac
 
 try:
-    from DisplayCAL.chromecast_patterngenerator import ChromeCastPatternGenerator
+    from DisplayCAL.chromecast_pattern_generator import ChromeCastPatternGenerator
 except ImportError:
     from types import NoneType
 
