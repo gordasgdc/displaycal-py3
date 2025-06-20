@@ -89,7 +89,7 @@ tests:
 	@printf "\n\033[36m--- $@: Using virtualenv at '$(VIRTUALENV_DIR)' ---\033[0m"; \
 	source ./$(VIRTUALENV_DIR)/bin/activate; \
 	printf "\n\033[36m--- $@: Using python interpreter '`which python`' ---\033[0m\n"; \
-	pytest -n auto -W ignore --color=yes --cov-report term;
+	pytest -n auto -W ignore --color=yes --cov-report term --cov=DisplayCAL;
 
 # https://www.gnu.org/software/make/manual/html_node/Force-Targets.html
 FORCE:
