@@ -10,7 +10,7 @@ from DisplayCAL.colormath import (
     convert_range,
     get_rgb_space,
     get_whitepoint,
-    specialpow,
+    special_pow,
 )
 from DisplayCAL.icc_profile import (
     create_synthetic_clut_profile,

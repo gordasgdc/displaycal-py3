@@ -1,6 +1,14 @@
 import pytest
 
-from DisplayCAL.colormath import smooth_avg_old, smooth_avg
+from DisplayCAL.colormath import (
+    CAT_MATRICES,
+    get_cat_matrix,
+    get_standard_illuminant,
+    Matrix3x3,
+    smooth_avg_old,
+    smooth_avg,
+    RGB2XYZ,
+)
 from tests.data.display_data import DisplayData
 
 
@@ -124,7 +132,141 @@ def test_smooth_avg_protetced_values_2():
     assert result == expected_result
 
 
-@pytest.mark.skip(reason="TODO: This test is moved from the module, properly implement it.")
+@pytest.mark.parametrize(
+    "test_value, expected",
+    [
+        [
+            "Bradford",
+            Matrix3x3(
+                [
+                    [0.89510, 0.26640, -0.16140],
+                    [-0.75020, 1.71350, 0.03670],
+                    [0.03890, -0.06850, 1.02960],
+                ]
+            ),
+        ],
+        [
+            "CAT02",
+            Matrix3x3(
+                [
+                    [0.7328, 0.4296, -0.1624],
+                    [-0.7036, 1.6975, 0.0061],
+                    [0.0030, 0.0136, 0.9834],
+                ]
+            ),
+        ],
+        [
+            "CAT02BS",
+            Matrix3x3(
+                [
+                    [0.7328, 0.4296, -0.1624],
+                    [-0.7036, 1.6975, 0.0061],
+                    [0.0000, 0.0000, 1.0000],
+                ]
+            ),
+        ],
+        [
+            "CAT97s",
+            Matrix3x3(
+                [
+                    [0.8562, 0.3372, -0.1934],
+                    [-0.8360, 1.8327, 0.0033],
+                    [0.0357, -0.0469, 1.0112],
+                ]
+            ),
+        ],
+        [
+            "CMCCAT2000",
+            Matrix3x3(
+                [
+                    [0.7982, 0.3389, -0.1371],
+                    [-0.5918, 1.5512, 0.0406],
+                    [0.0008, 0.0239, 0.9753],
+                ]
+            ),
+        ],
+        [
+            "HPE E",
+            Matrix3x3(
+                [
+                    [0.38971, 0.68898, -0.07868],
+                    [-0.22981, 1.18340, 0.04641],
+                    [0.00000, 0.00000, 1.00000],
+                ]
+            ),
+        ],
+        [
+            "Sharp",
+            Matrix3x3(
+                [
+                    [1.2694, -0.0988, -0.1706],
+                    [-0.8364, 1.8006, 0.0357],
+                    [0.0297, -0.0315, 1.0018],
+                ]
+            ),
+        ],
+        [
+            "HPE D65",
+            Matrix3x3(
+                [
+                    [0.40024, 0.70760, -0.08081],
+                    [-0.22630, 1.16532, 0.04570],
+                    [0.00000, 0.00000, 0.91822],
+                ]
+            ),
+        ],
+        ["XYZ scaling", Matrix3x3([[1, 0, 0], [0, 1, 0], [0, 0, 1]])],
+        [
+            "IPT",
+            Matrix3x3(
+                [
+                    [0.4002, 0.7075, -0.0807],
+                    [-0.2280, 1.1500, 0.0612],
+                    [0.0000, 0.0000, 0.9184],
+                ]
+            ),
+        ],
+        [
+            "CIE2012_2",
+            Matrix3x3(
+                [
+                    [0.2052445519046028, 0.8334486497310412, -0.0386932016356441],
+                    [-0.4972221301804286, 1.4034846060306130, 0.0937375241498157],
+                    [0.0000000000000000, 0.0000000000000000, 1.0000000000000000],
+                ]
+            ),
+        ],
+        [
+            "BS",
+            Matrix3x3(
+                [
+                    [0.8752, 0.2787, -0.1539],
+                    [-0.8904, 1.8709, 0.0195],
+                    [-0.0061, 0.0162, 0.9899],
+                ]
+            ),
+        ],
+        [
+            "BS-PC",
+            Matrix3x3(
+                [
+                    [0.6489, 0.3915, -0.0404],
+                    [-0.3775, 1.3055, 0.0720],
+                    [-0.0271, 0.0888, 0.9383],
+                ]
+            ),
+        ],
+    ],
+)
+def test_get_cat_matrix_with_str_input(test_value, expected):
+    """Testing get_cat_matrix with str input."""
+    result = get_cat_matrix(test_value)
+    assert result == expected
+
+
+@pytest.mark.skip(
+    reason="TODO: This test is moved from the module, properly implement it."
+)
 def test_from_module():
     for i in range(4):
         if i == 0:

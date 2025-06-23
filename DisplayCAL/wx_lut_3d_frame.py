@@ -1434,9 +1434,9 @@ class LUT3DMixin:
             self.getcfg("3dlut.hdr_maxmll_alt_clip"),
         )
         diffuse_ref_cdm2 = 94.37844
-        diffuse_PQ = colormath.specialpow(diffuse_ref_cdm2 / 10000, 1.0 / -2084)
+        diffuse_PQ = colormath.special_pow(diffuse_ref_cdm2 / 10000, 1.0 / -2084)
         # Determine white cd/m2 after roll-off
-        diffuse_tgt_cdm2 = colormath.specialpow(bt2390.apply(diffuse_PQ), -2084) * 10000
+        diffuse_tgt_cdm2 = colormath.special_pow(bt2390.apply(diffuse_PQ), -2084) * 10000
         signalcolor = "#CC0000" if diffuse_tgt_cdm2 < diffuse_ref_cdm2 else "#008000"
         self.lut3d_hdr_diffuse_white_txt.ForegroundColour = signalcolor
         self.lut3d_hdr_diffuse_white_txt.Label = f"{diffuse_tgt_cdm2:.2f}"

@@ -3,7 +3,6 @@
 Note:
 
 In most cases, unless otherwise stated RGB is R'G'B' (gamma-compressed)
-
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ import logging
 import math
 import sys
 import warnings
-from typing import overload
+from typing import Any, Callable, overload
 
 import numpy
 
@@ -32,7 +31,36 @@ else:
     logger.setLevel(logging.INFO)
 
 
-def get_transfer_function_phi(alpha, gamma):
+def cache(f: Callable) -> Callable[..., Any]:
+    """Decorator to convert list arguments to tuples and cache.
+
+    Args:
+        f (Callable): The function to wrap.
+    """
+
+    def wrapper(*args, **kwargs) -> Any:  # noqa: ANN401
+        cache_hash = (
+            ((tuple(arg) if isinstance(arg, (list, tuple)) else arg for arg in args)),
+            (
+                (key, tuple(kwargs[key]))
+                if isinstance(kwargs[key], (list, tuple))
+                else kwargs[key]
+                for key in kwargs
+            ),
+        )
+        if not hasattr(f, "cache"):
+            f.cache = {}
+        if cache_hash in f.cache:
+            return f.cache[cache_hash]
+
+        result = f(*args, **kwargs)
+        f.cache[cache_hash] = result
+        return result
+
+    return wrapper
+
+
+def get_transfer_function_phi(alpha: float, gamma: float) -> float:
     """Get transfer function phi.
 
     Args:
@@ -62,13 +90,21 @@ SRGB_K0 = 0.04045  # 0.055 / (2.4 - 1)
 SRGB_P = 12.92  # get_transfer_function_phi(0.055, 2.4)
 
 
-def specialpow(a, b, slope_limit=0):
+def special_pow(a: float, b: float, slope_limit: float = 0) -> float:
     """Wrapper for power, Rec. 601/709, SMPTE 240M, sRGB and L* functions.
 
     Positive b = power, -2.4 = sRGB, -3.0 = L*, -240 = SMPTE 240M,
     -601 = Rec. 601, -709 = Rec. 709 (Rec. 601 and 709 transfer functions are
     identical)
 
+    Args:
+        a (float): Input value.
+        b (float): Exponent, transfer function or gamma.
+        slope_limit (float, optional): Slope limit for power curve, defaults to
+            0.
+
+    Returns:
+        float: Output value.
     """
     if b >= 0.0:
         # Power curve
@@ -80,10 +116,10 @@ def specialpow(a, b, slope_limit=0):
             return max(math.pow(a, b), a / slope_limit)
         return math.pow(a, b)
     if a < 0.0:
-        signScale = -1.0
+        sign_scale = -1.0
         a = -a
     else:
-        signScale = 1.0
+        sign_scale = 1.0
     if b in (1.0 / -601, 1.0 / -709):
         # XYZ -> RGB, Rec. 601/709 TRC
         if a < REC709_K0 / REC709_P:
@@ -136,10 +172,10 @@ def specialpow(a, b, slope_limit=0):
         ) ** (1.0 / SMPTE2084_M1)
     else:
         raise ValueError(f"Invalid gamma {b!r}")
-    return v * signScale
+    return v * sign_scale
 
 
-def DICOM(j, inverse=False):
+def DICOM(j: float, inverse: bool = False) -> float:  # noqa: N802
     """DICOM TRC.
 
     Args:
@@ -150,26 +186,26 @@ def DICOM(j, inverse=False):
         float: Output value.
     """
     if inverse:
-        log10Y = math.log10(j)
-        A = 71.498068
-        B = 94.593053
-        C = 41.912053
-        D = 9.8247004
-        E = 0.28175407
-        F = -1.1878455
-        G = -0.18014349
-        H = 0.14710899
-        I = -0.017046845
+        log10y = math.log10(j)
+        a = 71.498068
+        b = 94.593053
+        c = 41.912053
+        d = 9.8247004
+        e = 0.28175407
+        f = -1.1878455
+        g = -0.18014349
+        h = 0.14710899
+        i = -0.017046845
         return (
-            A
-            + B * log10Y
-            + C * math.pow(log10Y, 2)
-            + D * math.pow(log10Y, 3)
-            + E * math.pow(log10Y, 4)
-            + F * math.pow(log10Y, 5)
-            + G * math.pow(log10Y, 6)
-            + H * math.pow(log10Y, 7)
-            + I * math.pow(log10Y, 8)
+            a
+            + b * log10y
+            + c * math.pow(log10y, 2)
+            + d * math.pow(log10y, 3)
+            + e * math.pow(log10y, 4)
+            + f * math.pow(log10y, 5)
+            + g * math.pow(log10y, 6)
+            + h * math.pow(log10y, 7)
+            + i * math.pow(log10y, 8)
         )
     logj = math.log(j)
     a = -1.3011877
@@ -199,16 +235,25 @@ def DICOM(j, inverse=False):
 
 
 class HLG:
-    """Hybrid Log Gamma (HLG) as defined in Rec BT.2100 and BT.2390-4."""
+    """Hybrid Log Gamma (HLG) as defined in Rec BT.2100 and BT.2390-4.
+
+    Args:
+        black_cdm2 (float): Black level in cd/m², defaults to 0.0.
+        white_cdm2 (float): White level in cd/m², defaults to 1000.0.
+        system_gamma (float): System gamma for nominal peak luminance and
+            ambient, defaults to 1.2.
+        ambient_cdm2 (float): Ambient luminance in cd/m², defaults to 5.
+        rgb_space (str): RGB color space, defaults to "Rec. 2020".
+    """
 
     def __init__(
         self,
-        black_cdm2=0.0,
-        white_cdm2=1000.0,
-        system_gamma=1.2,
-        ambient_cdm2=5,
-        rgb_space="Rec. 2020",
-    ):
+        black_cdm2: float = 0.0,
+        white_cdm2: float = 1000.0,
+        system_gamma: float = 1.2,
+        ambient_cdm2: float = 5,
+        rgb_space: str = "Rec. 2020",
+    ) -> None:
         self.black_cdm2 = black_cdm2
         self.white_cdm2 = white_cdm2
         self.rgb_space = get_rgb_space(rgb_space)
@@ -216,19 +261,24 @@ class HLG:
         self.ambient_cdm2 = ambient_cdm2
 
     @property
-    def gamma(self):
-        """System gamma for nominal peak luminance and ambient."""
+    def gamma(self) -> float:
+        """System gamma for nominal peak luminance and ambient.
+
+        Returns:
+            float: Adjusted system gamma based on peak luminance and ambient
+                luminance.
+        """
         # Adjust system gamma for peak luminance != 1000 cd/m2 (extended model
         # described in BT.2390-4)
-        K = 1.111
-        gamma = self.system_gamma * K ** math.log(self.white_cdm2 / 1000.0, 2)
+        k = 1.111
+        gamma = self.system_gamma * k ** math.log(self.white_cdm2 / 1000.0, 2)
         if self.ambient_cdm2 > 0:
             # Adjust system gamma for ambient surround != 5 cd/m2 (BT.2390-4)
             u = 0.98
             gamma *= u ** math.log(self.ambient_cdm2 / 5.0, 2)
         return gamma
 
-    def oetf(self, v, inverse=False):
+    def oetf(self, v: float, inverse: bool = False) -> float:
         """Hybrid Log Gamma (HLG) OETF.
 
         Relative scene linear light to non-linear HLG signal, or inverse
@@ -236,6 +286,13 @@ class HLG:
         Input domain 0..1
         Output range 0..1
 
+        Args:
+            v (float): Relative scene linear light or non-linear HLG signal.
+            inverse (bool): If True, apply inverse OETF.
+
+        Returns:
+            float: Non-linear HLG signal if inverse is False, or relative scene
+                linear light if inverse is True.
         """
         if v == 1:
             return 1.0
@@ -253,7 +310,28 @@ class HLG:
             v = math.sqrt(3 * v) if 0 <= v <= 1 / 12.0 else a * math.log(12 * v - b) + c
         return v
 
-    def eotf(self, RGB, inverse=False, apply_black_offset=True):
+    @overload
+    def eotf(
+        self,
+        RGB: float,
+        inverse: bool = False,
+        apply_black_offset: bool = True,  # noqa: N803
+    ) -> float: ...
+
+    @overload
+    def eotf(
+        self,
+        RGB: tuple[float, float, float],  # noqa: N803
+        inverse: bool = False,
+        apply_black_offset: bool = True,
+    ) -> tuple[float, float, float]: ...
+
+    def eotf(
+        self,
+        RGB: float | tuple[float, float, float],  # noqa: N803
+        inverse: bool = False,
+        apply_black_offset: bool = True,
+    ) -> float | tuple[float, float, float]:
         """Hybrid Log Gamma (HLG) EOTF.
 
         Non-linear HLG signal to display light, or inverse
@@ -261,24 +339,56 @@ class HLG:
         Input domain 0..1
         Output range 0..1
 
+        Args:
+            RGB (float | tuple[float, float, float]): R, G, B components of the
+                non-linear HLG signal or display light.
+            inverse (bool): If True, apply inverse EOTF.
+            apply_black_offset (bool): Whether to apply black offset, defaults
+                to True.
+
+        Returns:
+            float | tuple[float, float, float]: G component of the display
+                light if RGB is a float, or R, G, B components of the display
+                light if RGB is a tuple.
         """
         if isinstance(RGB, (float, int)):
-            R, G, B = (RGB,) * 3
+            r, g, b = (RGB,) * 3
         else:
-            R, G, B = RGB
+            r, g, b = RGB
         if inverse:
             # Display light -> relative scene linear light -> HLG signal
-            R, G, B = (
-                self.oetf(v) for v in self.ootf((R, G, B), True, apply_black_offset)
+            r, g, b = (
+                self.oetf(v) for v in self.ootf((r, g, b), True, apply_black_offset)
             )
         else:
             # HLG signal -> relative scene linear light -> display light
-            R, G, B = self.ootf(
-                [self.oetf(v, True) for v in (R, G, B)], False, apply_black_offset
+            r, g, b = self.ootf(
+                [self.oetf(v, True) for v in (r, g, b)], False, apply_black_offset
             )
-        return G if isinstance(RGB, (float, int)) else (R, G, B)
+        return g if isinstance(RGB, (float, int)) else (r, g, b)
 
-    def ootf(self, RGB, inverse=False, apply_black_offset=True):
+    @overload
+    def ootf(
+        self,
+        RGB: float,
+        inverse: bool = False,
+        apply_black_offset: bool = True,  # noqa: N803
+    ) -> float: ...
+
+    @overload
+    def ootf(
+        self,
+        RGB: tuple[float, float, float],  # noqa: N803
+        inverse: bool = False,
+        apply_black_offset: bool = True,
+    ) -> tuple[float, float, float]: ...
+
+    def ootf(
+        self,
+        RGB: float | tuple[float, float, float],  # noqa: N803
+        inverse: bool = False,
+        apply_black_offset: bool = True,
+    ) -> float | tuple[float, float, float]:
         """Hybrid Log Gamma (HLG) OOTF.
 
         Relative scene linear light to display light, or inverse
@@ -286,55 +396,101 @@ class HLG:
         Input domain 0..1
         Output range 0..1
 
+        Args:
+            RGB (float | tuple[float, float, float]): R, G, B components of the
+                relative scene linear light or non-linear HLG signal.
+            inverse (bool): If True, apply inverse OOTF.
+            apply_black_offset (bool): Whether to apply black offset, defaults
+                to True.
+
+        Returns:
+            float | tuple[float, float, float]: G component of the display
+                light if RGB is a float, or R, G, B components of the display
+                light if RGB is a tuple.
         """
-        R, G, B = (RGB,) * 3 if isinstance(RGB, (float, int)) else RGB
+        r, g, b = (RGB,) * 3 if isinstance(RGB, (float, int)) else RGB
         black_cdm2 = float(self.black_cdm2) if apply_black_offset else 0
         alpha = (self.white_cdm2 - black_cdm2) / self.white_cdm2
         beta = black_cdm2 / self.white_cdm2
-        Y = 0.2627 * R + 0.6780 * G + 0.0593 * B
+        y = 0.2627 * r + 0.6780 * g + 0.0593 * b
         if inverse:
-            if beta < Y:
-                R, G, B = (
-                    ((Y - beta) / alpha) ** ((1 - self.gamma) / self.gamma)
+            if beta < y:
+                r, g, b = (
+                    ((y - beta) / alpha) ** ((1 - self.gamma) / self.gamma)
                     * ((v - beta) / alpha)
-                    for v in (R, G, B)
+                    for v in (r, g, b)
                 )
             else:
-                R, G, B = 0, 0, 0
+                r, g, b = 0, 0, 0
         else:
-            if Y:
-                Y **= self.gamma - 1
-            R, G, B = (alpha * Y * E + beta for E in (R, G, B))
-        return G if isinstance(RGB, (float, int)) else (R, G, B)
+            if y:
+                y **= self.gamma - 1
+            r, g, b = (alpha * y * e + beta for e in (r, g, b))
+        return g if isinstance(RGB, (float, int)) else (r, g, b)
 
-    def RGB2XYZ(self, R, G, B, apply_black_offset=True):
-        """Non-linear HLG signal to display XYZ."""
-        X, Y, Z = self.rgb_space[-1] * [self.oetf(v, True) for v in (R, G, B)]
-        X, Y, Z = (max(v, 0) for v in (X, Y, Z))
-        Yy = self.ootf(Y, apply_black_offset=False)
-        if Y:
-            X, Y, Z = (v / Y * Yy for v in (X, Y, Z))
+    def RGB2XYZ(  # noqa: N802
+        self,
+        R: float,
+        G: float,
+        B: float,
+        apply_black_offset: bool = True,  # noqa: N803
+    ) -> tuple[float, float, float]:
+        """Non-linear HLG signal to display XYZ.
+
+        Args:
+            R (float): R component of the non-linear HLG signal.
+            G (float): G component of the non-linear HLG signal.
+            B (float): B component of the non-linear HLG signal.
+            apply_black_offset (bool): Whether to apply black offset, defaults
+                to True.
+
+        Returns:
+            tuple[float, float, float]: X, Y, Z components of the display XYZ.
+        """
+        x, y, z = self.rgb_space[-1] * [self.oetf(v, True) for v in (R, G, B)]
+        x, y, z = (max(v, 0) for v in (x, y, z))
+        yy = self.ootf(y, apply_black_offset=False)
+        if y:
+            x, y, z = (v / y * yy for v in (x, y, z))
         else:
-            X, Y, Z = (v * Yy for v in self.rgb_space[1])
+            x, y, z = (v * yy for v in self.rgb_space[1])
         if apply_black_offset:
             beta = self.ootf(0)
             bp_out = [v * beta for v in self.rgb_space[1]]
-            X, Y, Z = apply_bpc(X, Y, Z, (0, 0, 0), bp_out, self.rgb_space[1])
-        return X, Y, Z
+            x, y, z = apply_bpc(x, y, z, (0, 0, 0), bp_out, self.rgb_space[1])
+        return x, y, z
 
-    def XYZ2RGB(self, X, Y, Z, apply_black_offset=True):
-        """Display XYZ to non-linear HLG signal."""
+    def XYZ2RGB(  # noqa: N802
+        self,
+        X: float,
+        Y: float,
+        Z: float,
+        apply_black_offset: bool = True,  # noqa: N803
+    ) -> tuple[float, float, float]:
+        """Display XYZ to non-linear HLG signal.
+
+        Args:
+            X (float): X component of the XYZ color value.
+            Y (float): Y component of the XYZ color value.
+            Z (float): Z component of the XYZ color value.
+            apply_black_offset (bool): Whether to apply black offset, defaults
+                to True.
+
+        Returns:
+            tuple[float, float, float]: R, G, B components of the non-linear
+                HLG signal.
+        """
         if apply_black_offset:
             beta = self.ootf(0)
             bp_in = [v * beta for v in self.rgb_space[1]]
-            X, Y, Z = apply_bpc(X, Y, Z, bp_in, (0, 0, 0), self.rgb_space[1])
-        Yy = self.ootf(Y, True, apply_black_offset=False)
+            X, Y, Z = apply_bpc(X, Y, Z, bp_in, (0, 0, 0), self.rgb_space[1])  # noqa: N806
+        yy = self.ootf(Y, True, apply_black_offset=False)
         if Y:
-            X, Y, Z = (v / Y * Yy for v in (X, Y, Z))
-        R, G, B = self.rgb_space[-1].inverted() * (X, Y, Z)
-        R, G, B = (max(v, 0) for v in (R, G, B))
-        R, G, B = [self.oetf(v) for v in (R, G, B)]
-        return R, G, B
+            X, Y, Z = (v / Y * yy for v in (X, Y, Z))  # noqa: N806
+        r, g, b = self.rgb_space[-1].inverted() * (X, Y, Z)
+        r, g, b = (max(v, 0) for v in (r, g, b))
+        r, g, b = [self.oetf(v) for v in (r, g, b)]
+        return r, g, b
 
 
 rgb_spaces = {
@@ -527,29 +683,29 @@ name              gamma             white                     primaries
 """  # noqa: E501
 
 
-def get_cat_matrix(cat: None | str | bytes | Matrix3x3 = None) -> Matrix3x3:
+@cache
+def get_cat_matrix(
+    cat: str | bytes | list | tuple | Matrix3x3 = "Bradford",
+) -> Matrix3x3:
     """Get chromatic adaption matrix.
 
     Args:
-        cat (str or Matrix3x3): Chromatic adaption matrix name or instance.
-            Defaults to "Bradford".
+        cat (bytes | str | list | tuple | Matrix3x3): Chromatic adaption matrix
+            name or instance. Defaults to "Bradford".
 
     Returns:
         Matrix3x3: Chromatic adaption matrix.
     """
-    if cat is None:
-        cat = "Bradford"
-
     if isinstance(cat, str):
-        cat = cat_matrices[cat]
+        cat = CAT_MATRICES[cat]
     elif isinstance(cat, bytes):
-        cat = cat_matrices[cat.decode()]
+        cat = CAT_MATRICES[cat.decode()]
     if not isinstance(cat, Matrix3x3):
         cat = Matrix3x3(cat)
     return cat
 
 
-def cbrt(x):
+def cbrt(x: float) -> float:
     """Cube root.
 
     Args:
@@ -561,8 +717,15 @@ def cbrt(x):
     return math.pow(x, 1.0 / 3.0) if x >= 0 else -math.pow(-x, 1.0 / 3.0)
 
 
-def var(a):
-    """Variance."""
+def var(a: list[float]) -> float:
+    """Variance.
+
+    Args:
+        a (list[float]): List of numbers.
+
+    Returns:
+        float: Variance of the numbers in the list.
+    """
     s = 0.0
     l = len(a)
     while l:
@@ -577,83 +740,120 @@ def var(a):
     return s / len(a)
 
 
-def XYZ2LMS(X, Y, Z, cat="Bradford"):
+def XYZ2LMS(  # noqa: N802
+    X: float,
+    Y: float,
+    Z: float,
+    cat: str = "Bradford",  # noqa: N803
+) -> tuple[float, float, float]:
     """Convert from XYZ to cone response domain.
 
-    :param X:
-    :param Y:
-    :param Z:
-    :param str, Matrix3x3 cat:
+    Args:
+        X (float):  X component of the XYZ color value.
+        Y (float):  Y component of the XYZ color value.
+        Z (float):  Z component of the XYZ color value.
+        cat (str):  Chromatic adaptation transform, defaults to 'Bradford'.
+
+    Returns:
+        tuple[float, float, float]: L, M, S components of the LMS color value.
     """
     cat = get_cat_matrix(cat)
     p, y, b = cat * [X, Y, Z]
     return p, y, b
 
 
-def LMS_wp_adaption_matrix(
-    whitepoint_source=None, whitepoint_destination=None, cat="Bradford"
-):
-    """Prepare a matrix to match the whitepoints in cone response domain."""
+def LMS_wp_adaption_matrix(  # noqa: N802
+    whitepoint_source: None | float | str | list | tuple = None,
+    whitepoint_destination: None | float | str | list | tuple = None,
+    cat: str = "Bradford",
+) -> Matrix3x3:
+    """Prepare a matrix to match the whitepoints in cone response domain.
+
+    Args:
+        whitepoint_source (None | float | str | list | tuple): Source white
+            point, defaults to None.
+        whitepoint_destination (None | float | str | list | tuple): Destination
+            white point, defaults to None.
+        cat (str): Chromatic adaptation transform, defaults to 'Bradford'.
+
+    Returns:
+        Matrix3x3: Matrix to adapt source whitepoint to destination in LMS.
+    """
     # chromatic adaption
     # based on formula http://brucelindbloom.com/Eqn_ChromAdapt.html
     # cat = adaption matrix or predefined choice ('CAT02', 'Bradford',
-    # 'Von Kries', 'XYZ Scaling', see cat_matrices), defaults to 'Bradford'
+    # 'Von Kries', 'XYZ Scaling', see CAT_MATRICES), defaults to 'Bradford'
     cat = get_cat_matrix(cat)
-    XYZWS = get_whitepoint(whitepoint_source)
-    XYZWD = get_whitepoint(whitepoint_destination)
-    if XYZWS[1] <= 1.0 < XYZWD[1]:
+    xyz_ws = get_whitepoint(whitepoint_source)
+    xyz_wd = get_whitepoint(whitepoint_destination)
+    if xyz_ws[1] <= 1.0 < xyz_wd[1]:
         # make sure the scaling is identical
-        XYZWD = [v / XYZWD[1] * XYZWS[1] for v in XYZWD]
-    if XYZWD[1] <= 1.0 < XYZWS[1]:
+        xyz_wd = [v / xyz_wd[1] * xyz_ws[1] for v in xyz_wd]
+    if xyz_wd[1] <= 1.0 < xyz_ws[1]:
         # make sure the scaling is identical
-        XYZWS = [v / XYZWS[1] * XYZWD[1] for v in XYZWS]
-    Ls, Ms, Ss = XYZ2LMS(XYZWS[0], XYZWS[1], XYZWS[2], cat)
-    Ld, Md, Sd = XYZ2LMS(XYZWD[0], XYZWD[1], XYZWD[2], cat)
-    return Matrix3x3([[Ld / Ls, 0, 0], [0, Md / Ms, 0], [0, 0, Sd / Ss]])
+        xyz_ws = [v / xyz_ws[1] * xyz_wd[1] for v in xyz_ws]
+    ls, ms, ss = XYZ2LMS(xyz_ws[0], xyz_ws[1], xyz_ws[2], cat)
+    ld, md, dd = XYZ2LMS(xyz_wd[0], xyz_wd[1], xyz_wd[2], cat)
+    return Matrix3x3([[ld / ls, 0, 0], [0, md / ms, 0], [0, 0, dd / ss]])
 
 
+@cache
 def wp_adaption_matrix(
-    whitepoint_source=None, whitepoint_destination=None, cat="Bradford"
-):
-    """Return matrix to adapt source whitepoint to destination in XYZ."""
+    whitepoint_source: None | float | str | list | tuple = None,
+    whitepoint_destination: None | float | str | list | tuple = None,
+    cat: str = "Bradford",
+) -> Matrix3x3:
+    """Return matrix to adapt source whitepoint to destination in XYZ.
+
+    Args:
+        whitepoint_source (None | float | str | list | tuple): Source white
+            point, defaults to None.
+        whitepoint_destination (None | float | str | list | tuple): Destination
+            white point, defaults to None.
+        cat (str): Chromatic adaptation transform, defaults to 'Bradford'.
+
+    Returns:
+        Matrix3x3: Matrix to adapt source whitepoint to destination.
+    """
     # chromatic adaption
     # based on formula http://brucelindbloom.com/Eqn_ChromAdapt.html
     # cat = adaption matrix or predefined choice ('CAT02', 'Bradford',
-    # 'Von Kries', 'XYZ Scaling', see cat_matrices), defaults to 'Bradford'
-    cachehash = (
-        (
-            tuple(whitepoint_source)
-            if isinstance(whitepoint_source, (list, tuple))
-            else whitepoint_source
-        ),
-        (
-            tuple(whitepoint_destination)
-            if isinstance(whitepoint_destination, (list, tuple))
-            else whitepoint_destination
-        ),
-        cat if isinstance(cat, str) else id(cat),
-    )
-    if cachehash in wp_adaption_matrix.cache:
-        return wp_adaption_matrix.cache[cachehash]
+    # 'Von Kries', 'XYZ Scaling', see CAT_MATRICES), defaults to 'Bradford'
     cat = get_cat_matrix(cat)
-    wpam = (
+    return (
         cat.inverted()
         * LMS_wp_adaption_matrix(whitepoint_source, whitepoint_destination, cat)
         * cat
     )
-    wp_adaption_matrix.cache[cachehash] = wpam
-    return wpam
 
 
-wp_adaption_matrix.cache = {}
+def adapt(
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    whitepoint_source: None | float | str | list | tuple = None,
+    whitepoint_destination: None | float | str | list | tuple = None,
+    cat: str = "Bradford",
+) -> tuple[float, float, float]:
+    """Transform XYZ under source illuminant to XYZ under destination illuminant.
 
+    Args:
+        X (float): X value.
+        Y (float): Y value.
+        Z (float): Z value.
+        whitepoint_source (None | float | str | list | tuple): Source white
+            point, defaults to None.
+        whitepoint_destination (None | float | str | list | tuple): Destination
+            white point, defaults to None.
+        cat (str): Chromatic adaptation transform, defaults to 'Bradford'.
 
-def adapt(X, Y, Z, whitepoint_source=None, whitepoint_destination=None, cat="Bradford"):
-    """Transform XYZ under source illuminant to XYZ under destination illuminant."""
+    Returns:
+        tuple[float, float, float]: Adapted X, Y, Z values.
+    """
     # chromatic adaption
     # based on formula http://brucelindbloom.com/Eqn_ChromAdapt.html
     # cat = adaption matrix or predefined choice ('CAT02', 'Bradford',
-    # 'Von Kries', 'XYZ Scaling', see cat_matrices), defaults to 'Bradford'
+    # 'Von Kries', 'XYZ Scaling', see CAT_MATRICES), defaults to 'Bradford'
     return wp_adaption_matrix(whitepoint_source, whitepoint_destination, cat) * (
         X,
         Y,
@@ -662,8 +862,15 @@ def adapt(X, Y, Z, whitepoint_source=None, whitepoint_destination=None, cat="Bra
 
 
 def apply_bpc(
-    X, Y, Z, bp_in=None, bp_out=None, wp_out="D50", weight=False, pin_chromaticity=False
-):
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    bp_in: None | tuple = None,
+    bp_out: None | tuple = None,
+    wp_out: None | float | str | list | tuple = "D50",
+    weight: bool = False,
+    pin_chromaticity: bool = False,
+) -> tuple[float, float, float]:
     """Apply black point compensation.
 
     Args:
@@ -685,36 +892,36 @@ def apply_bpc(
         bp_out = (0, 0, 0)
     wp_out = get_whitepoint(wp_out)
     if weight:
-        L = XYZ2Lab(*[v * 100 for v in (X, Y, Z)])[0]
-        bp_in_Lab = XYZ2Lab(*[v * 100 for v in bp_in])
-        bp_out_Lab = XYZ2Lab(*[v * 100 for v in bp_out])
-        vv = (L - bp_in_Lab[0]) / (100.0 - bp_in_Lab[0])  # 0 at bp, 1 at wp
+        l = XYZ2Lab(*[v * 100 for v in (X, Y, Z)])[0]
+        bp_in_lab = XYZ2Lab(*[v * 100 for v in bp_in])
+        bp_out_lab = XYZ2Lab(*[v * 100 for v in bp_out])
+        vv = (l - bp_in_lab[0]) / (100.0 - bp_in_lab[0])  # 0 at bp, 1 at wp
         vv = 1.0 - vv
         if vv < 0.0:
             vv = 0.0
         elif vv > 1.0:
             vv = 1.0
-        vv = math.pow(vv, min(40.0, 40.0 / (max(bp_in_Lab[0], bp_out_Lab[0]) or 1.0)))
-        bp_in = Lab2XYZ(*[v * vv for v in bp_in_Lab])
-        bp_out = Lab2XYZ(*[v * vv for v in bp_out_Lab])
+        vv = math.pow(vv, min(40.0, 40.0 / (max(bp_in_lab[0], bp_out_lab[0]) or 1.0)))
+        bp_in = Lab2XYZ(*[v * vv for v in bp_in_lab])
+        bp_out = Lab2XYZ(*[v * vv for v in bp_out_lab])
     if pin_chromaticity:
-        XYZ = [Y]
+        XYZ = [Y]  # noqa: N806
         x, y = XYZ2xyY(X, Y, Z, wp_out)[:2]
         bp_in = bp_in[1:2]
         bp_out = bp_out[1:2]
         wp_out = wp_out[1:2]
     else:
-        XYZ = [X, Y, Z]
+        XYZ = [X, Y, Z]  # noqa: N806
     for i, v in enumerate(XYZ):
-        XYZ[i] = ((wp_out[i] - bp_out[i]) * v - wp_out[i] * (bp_in[i] - bp_out[i])) / (
+        XYZ[i] = ((wp_out[i] - bp_out[i]) * v - wp_out[i] * (bp_in[i] - bp_out[i])) / (  # noqa: N806
             wp_out[i] - bp_in[i]
         )
     if pin_chromaticity:
-        XYZ = xyY2XYZ(x, y, XYZ[0])
+        XYZ = xyY2XYZ(x, y, XYZ[0])  # noqa: N806
     return XYZ
 
 
-def avg(*args):
+def avg(*args: list[float]) -> float:
     """Average of a list of numbers.
 
     Args:
@@ -726,7 +933,15 @@ def avg(*args):
     return float(sum(args)) / len(args)
 
 
-def blend_ab(X, Y, Z, bp, wp, power=40.0, signscale=1):
+def blend_ab(
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    bp: tuple,
+    wp: tuple,
+    power: float = 40.0,
+    signscale: float = 1,
+) -> tuple[float, float, float]:
     """Blend to destination black as L approaches black.
 
     Args:
@@ -743,11 +958,11 @@ def blend_ab(X, Y, Z, bp, wp, power=40.0, signscale=1):
     """
     if Y < 0:
         return 0, 0, 0
-    L, a, b = XYZ2Lab(X, Y, Z, whitepoint=wp)
-    bpL, bpa, bpb = XYZ2Lab(*bp, whitepoint=wp)
-    if bpL == 100:
+    l, a, b = XYZ2Lab(X, Y, Z, whitepoint=wp)
+    bpl, bpa, bpb = XYZ2Lab(*bp, whitepoint=wp)
+    if bpl == 100:
         raise ValueError("Black L* is 100!")
-    vv = (L - bpL) / (100.0 - bpL)  # 0 at bp, 1 at wp
+    vv = (l - bpl) / (100.0 - bpl)  # 0 at bp, 1 at wp
     vv = 1.0 - vv  # 1 at bp, 0 at wp
     if vv < 0.0:
         vv = 0.0
@@ -756,12 +971,19 @@ def blend_ab(X, Y, Z, bp, wp, power=40.0, signscale=1):
     vv = math.pow(vv, power) * signscale
     a += vv * bpa
     b += vv * bpb
-    return Lab2XYZ(L, a, b, whitepoint=wp)
+    return Lab2XYZ(l, a, b, whitepoint=wp)
 
 
 def blend_blackpoint(
-    X, Y, Z, bp_in=None, bp_out=None, wp=None, power=40.0, pin_chromaticity=False
-):
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    bp_in: None | tuple = None,
+    bp_out: None | tuple = None,
+    wp: None | float | str | list | tuple = None,
+    power: float = 40.0,
+    pin_chromaticity: bool = False,
+) -> tuple[float, float, float]:
     """Blend to destination black as L approaches black, with optional input black compensation.
 
     Args:
@@ -784,21 +1006,36 @@ def blend_blackpoint(
             continue
         bp_wp = tuple(v / wp[1] * bp[1] for v in wp)
         if i == 0:
-            X, Y, Z = blend_ab(X, Y, Z, bp, wp, power, -1)
-            X, Y, Z = apply_bpc(X, Y, Z, bp_wp, None, wp, pin_chromaticity)
+            X, Y, Z = blend_ab(X, Y, Z, bp, wp, power, -1)  # noqa: N806
+            X, Y, Z = apply_bpc(X, Y, Z, bp_wp, None, wp, pin_chromaticity)  # noqa: N806
         else:
-            X, Y, Z = apply_bpc(X, Y, Z, None, bp_wp, wp, pin_chromaticity)
-            X, Y, Z = blend_ab(X, Y, Z, bp, wp, power, 1)
+            X, Y, Z = apply_bpc(X, Y, Z, None, bp_wp, wp, pin_chromaticity)  # noqa: N806
+            X, Y, Z = blend_ab(X, Y, Z, bp, wp, power, 1)  # noqa: N806
 
     return X, Y, Z
 
 
-def interp_old(x, xp, fp, left=None, right=None):
+def interp_old(
+    x: float,
+    xp: list,
+    fp: list,
+    left: None | float = None,
+    right: None | float = None,
+) -> float:
     """One-dimensional linear interpolation similar to numpy.interp.
 
     Values do NOT have to be monotonically increasing
-    interp(0, [0, 0], [0, 1]) will return 0
+    interp(0, [0, 0], [0, 1]) will return 0.
 
+    Args:
+        x (float): The x value to interpolate.
+        xp (list): The x-coordinates of the data points.
+        fp (list): The y-coordinates of the data points.
+        left (float, optional): Value to return for x < xp[0]. Defaults to None.
+        right (float, optional): Value to return for x > xp[-1]. Defaults to None.
+
+    Returns:
+        float: Interpolated value.
     """
     if not isinstance(x, (int, float, complex)):
         return [interp_old(n, xp, fp, left, right) for n in x]
@@ -822,12 +1059,29 @@ def interp_old(x, xp, fp, left=None, right=None):
 
 
 # This is much faster than the old implementation
-def interp(x, xp, fp, left=None, right=None, period=None):
+def interp(
+    x: float | list,
+    xp: list,
+    fp: list,
+    left: None | float = None,
+    right: None | float = None,
+    period: None | float = None,
+) -> float | list:
     """One-dimensional linear interpolation similar to numpy.interp.
 
     Values do NOT have to be monotonically increasing
     interp(0, [0, 0], [0, 1]) will return 0
 
+    Args:
+        x (float or list): The x value(s) to interpolate.
+        xp (list): The x-coordinates of the data points.
+        fp (list): The y-coordinates of the data points.
+        left (float, optional): Value to return for x < xp[0]. Defaults to None.
+        right (float, optional): Value to return for x > xp[-1]. Defaults to None.
+        period (float, optional): Periodicity of the interpolation. Defaults to None.
+
+    Returns:
+        float | list: Interpolated value(s).
     """
     # TODO: This function overrides the class implementation (Interp) and forces to use
     #       numpy.interp all the time, and it is kind of rude in that manner.
@@ -835,7 +1089,7 @@ def interp(x, xp, fp, left=None, right=None, period=None):
     return numpy.interp(x, xp, fp, left, right, period)
 
 
-def interp_resize(iterable, new_size, use_numpy=False):
+def interp_resize(iterable: list, new_size: int, use_numpy: bool = False) -> list:
     """Change size of iterable through linear interpolation.
 
     Args:
@@ -857,7 +1111,7 @@ def interp_resize(iterable, new_size, use_numpy=False):
     ]
 
 
-def interp_fill(xp, fp, new_size, use_numpy=False):
+def interp_fill(xp: list, fp: list, new_size: int, use_numpy: bool = False) -> list:
     """Fill missing points by interpolation.
 
     Args:
@@ -873,7 +1127,12 @@ def interp_fill(xp, fp, new_size, use_numpy=False):
     return [interp(i / (new_size - 1.0) * xp[-1], xp, fp) for i in range(new_size)]
 
 
-def smooth_avg_old(values, passes=1, window=None, protect=None):
+def smooth_avg_old(
+    values: list,
+    passes: int = 1,
+    window: None | tuple | list = None,
+    protect: None | list = None,
+) -> list:
     """Smooth values (moving average).
 
     Args:
@@ -883,6 +1142,9 @@ def smooth_avg_old(values, passes=1, window=None, protect=None):
             determines the size of the window to use. Defaults to (1.0, 1.0, 1.0)
         protect (list): A list of indices to protect. The values related to these
             indices will be protected.
+
+    Returns:
+        list: Smoothed values.
     """
     if not window or len(window) < 3 or len(window) % 2 != 1:
         if window:
@@ -914,7 +1176,12 @@ def smooth_avg_old(values, passes=1, window=None, protect=None):
     return values
 
 
-def smooth_avg(values, passes=1, window=None, protect=None):
+def smooth_avg(
+    values: list,
+    passes: int = 1,
+    window: None | tuple[float, float, float] | list = None,
+    protect: None | list = None,
+) -> list:
     """Smooth values fast (moving average).
 
     This is (should be) the fast implementation of the ``smooth_avg``. Inputs are the
@@ -927,6 +1194,9 @@ def smooth_avg(values, passes=1, window=None, protect=None):
             determines the size of the window to use. Defaults to (1.0, 1.0, 1.0)
         protect (list): A list of indices to protect. The values related to these
             indices will be restored after each pass.
+
+    Returns:
+        list: Smoothed values.
     """
     if not window or len(window) < 3 or len(window) % 2 != 1:
         if window:
@@ -975,7 +1245,10 @@ def smooth_avg(values, passes=1, window=None, protect=None):
     return values[extend_amount:-extend_amount]
 
 
-def compute_bpc(bp_in, bp_out):
+def compute_bpc(
+    bp_in: tuple[float, float, float],
+    bp_out: tuple[float, float, float],
+) -> tuple[Matrix3x3, list]:
     """Black point compensation. Implemented as a linear scaling in XYZ.
 
     Black points should come relative to the white point. Fills and
@@ -983,24 +1256,34 @@ def compute_bpc(bp_in, bp_out):
 
     [matrix]*bp_in + offset = bp_out
     [matrix]*D50  + offset = D50
+
+    Args:
+        bp_in (tuple[float, float, float]): Input black point in XYZ.
+        bp_out (tuple[float, float, float]): Output black point in XYZ.
+
+    Returns:
+        tuple[Matrix, list]: A tuple containing a Matrix3x3 and an offset list.
+            The matrix is used to scale the input black point to the output
+            black point, and the offset is used to adjust the output black
+            point to the desired value.
     """
     # This is a linear scaling in the form ax+b, where
     # a = (bp_out - D50) / (bp_in - D50)
     # b = - D50* (bp_out - bp_in) / (bp_in - D50)
 
-    D50 = get_standard_illuminant("D50")
+    d50 = get_standard_illuminant("D50")
 
-    tx = bp_in[0] - D50[0]
-    ty = bp_in[1] - D50[1]
-    tz = bp_in[2] - D50[2]
+    tx = bp_in[0] - d50[0]
+    ty = bp_in[1] - d50[1]
+    tz = bp_in[2] - d50[2]
 
-    ax = (bp_out[0] - D50[0]) / tx
-    ay = (bp_out[1] - D50[1]) / ty
-    az = (bp_out[2] - D50[2]) / tz
+    ax = (bp_out[0] - d50[0]) / tx
+    ay = (bp_out[1] - d50[1]) / ty
+    az = (bp_out[2] - d50[2]) / tz
 
-    bx = -D50[0] * (bp_out[0] - bp_in[0]) / tx
-    by = -D50[1] * (bp_out[1] - bp_in[1]) / ty
-    bz = -D50[2] * (bp_out[2] - bp_in[2]) / tz
+    bx = -d50[0] * (bp_out[0] - bp_in[0]) / tx
+    by = -d50[1] * (bp_out[1] - bp_in[1]) / ty
+    bz = -d50[2] * (bp_out[2] - bp_in[2]) / tz
 
     matrix = Matrix3x3([[ax, 0, 0], [0, ay, 0], [0, 0, az]])
     offset = [bx, by, bz]
@@ -1008,30 +1291,27 @@ def compute_bpc(bp_in, bp_out):
 
 
 def delta(
-    L1,
-    a1,
-    b1,
-    L2,
-    a2,
-    b2,
-    method="1976",
-    p1=None,
-    p2=None,
-    p3=None,
-    cie94_use_symmetric_chrominance=True,
-):
+    L1: float,  # noqa: N803
+    a1: float,
+    b1: float,
+    L2: float,  # noqa: N803
+    a2: float,
+    b2: float,
+    method: str = "1976",
+    p1: None | float = None,
+    p2: None | float = None,
+    p3: None | float = None,
+    cie94_use_symmetric_chrominance: bool = True,
+) -> dict:
     """Compute the delta of two samples.
 
-    CIE 1994 & CMC calculation code derived from formulas on
-     www.brucelindbloom.com
-    CIE 1994 code uses some alterations seen on
-     www.farbmetrik-gall.de/cielab/korrcielab/cie94.html
-     (see notes in code below)
-    CIE 2000 calculation code derived from Excel spreadsheet available at
-     www.ece.rochester.edu/~gsharma/ciede2000
-
-    method: either "CIE94", "CMC", "CIE2K" or "CIE76"
-     (default if method is not set)
+    - CIE 1994 & CMC calculation code derived from formulas on
+        www.brucelindbloom.com
+    - CIE 1994 code uses some alterations seen on
+        www.farbmetrik-gall.de/cielab/korrcielab/cie94.html
+        (see notes in code below)
+    - CIE 2000 calculation code derived from Excel spreadsheet available at
+        www.ece.rochester.edu/~gsharma/ciede2000
 
     p1, p2, p3 arguments have different meaning for each calculation method:
 
@@ -1046,67 +1326,111 @@ def delta(
                   kC (chroma) weighting factor and p3 becomes kH (hue)
                   weighting factor (all three default to 1 if not set)
 
+    Args:
+        L1 (float): Lightness of first sample
+        a1 (float): a* value of first sample
+        b1 (float): b* value of first sample
+        L2 (float): Lightness of second sample
+        a2 (float): a* value of second sample
+        b2 (float): b* value of second sample
+        method (str): Method to use for delta calculation.
+            Can be "CIE94", "CMC", "CIE2K" or "CIE76". Defaults to "CIE76".
+        p1 (float): Parameter 1
+            - for CIE94, if not None, adjusts calculation for textiles,
+              otherwise for graphics arts (default if p1 is not set)
+            - for CMC, equals l (lightness) weighting factor (default if p1 is
+                not set)
+            - for CIE2K, equals kL (lightness) weighting factor (default if p1
+                is not set)
+        p2 (float): Parameter 2
+            - for CIE94, not used (default if p2 is not set)
+            - for CMC, equals c (chroma) weighting factor (default if p2 is not
+                set)
+            - for CIE2K, equals kC (chroma) weighting factor (default if p2 is
+                not set)
+        p3 (float): Parameter 3
+            - for CIE94, not used (default if p3 is not set)
+            - for CMC, not used (default if p3 is not set)
+            - for CIE2K, equals kH (hue) weighting factor (default if p3 is not
+                set)
+        cie94_use_symmetric_chrominance (bool):
+            If True, CIE94 will use symmetric chrominance calculation.
+            If False, it will use asymmetric chrominance calculation.
+            Defaults to True.
+
+    Returns:
+        dict: A dictionary containing the delta E value and the method used.
+            The dictionary will have the following keys:
+                - "E": The calculated delta E value.
+                - "L": The difference in lightness between the two samples.
+                - "C": The difference in chroma between the two samples.
+                - "H": The difference in hue between the two samples.
+                - "a": The a* value of the first sample.
+                - "b": The b* value of the first sample.
+                - "Lw": The lightness difference adjusted for the method used.
+                - "Cw": The chroma difference adjusted for the method used.
+                - "Hw": The hue difference adjusted for the method used.
     """
     method = method.lower() if isinstance(method, str) else str(int(method))
     if method in ("94", "1994", "cie94", "cie1994"):
         textiles = p1
-        dL = L2 - L1
-        C1 = math.sqrt(math.pow(a1, 2) + math.pow(b1, 2))
-        C2 = math.sqrt(math.pow(a2, 2) + math.pow(b2, 2))
-        dC = C2 - C1
-        dH2 = math.pow(a1 - a2, 2) + math.pow(b1 - b2, 2) - math.pow(dC, 2)
-        dH = math.sqrt(dH2) if dH2 > 0 else 0
-        SL = 1.0
-        K1 = 0.048 if textiles else 0.045
-        K2 = 0.014 if textiles else 0.015
-        C_ = math.sqrt(C1 * C2) if cie94_use_symmetric_chrominance else C1
-        SC = 1.0 + K1 * C_
-        SH = 1.0 + K2 * C_
-        KL = 2.0 if textiles else 1.0
-        KC = 1.0
-        KH = 1.0
-        dLw, dCw, dHw = dL / (KL * SL), dC / (KC * SC), dH / (KH * SH)
-        dE = math.sqrt(math.pow(dLw, 2) + math.pow(dCw, 2) + math.pow(dHw, 2))
+        dl = L2 - L1
+        c1 = math.sqrt(math.pow(a1, 2) + math.pow(b1, 2))
+        c2 = math.sqrt(math.pow(a2, 2) + math.pow(b2, 2))
+        dc = c2 - c1
+        dh2 = math.pow(a1 - a2, 2) + math.pow(b1 - b2, 2) - math.pow(dc, 2)
+        dh = math.sqrt(dh2) if dh2 > 0 else 0
+        sl = 1.0
+        k1 = 0.048 if textiles else 0.045
+        k2 = 0.014 if textiles else 0.015
+        c_ = math.sqrt(c1 * c2) if cie94_use_symmetric_chrominance else c1
+        sc = 1.0 + k1 * c_
+        sh = 1.0 + k2 * c_
+        kl = 2.0 if textiles else 1.0
+        kc = 1.0
+        kh = 1.0
+        dlw, dcw, dhw = dl / (kl * sl), dc / (kc * sc), dh / (kh * sh)
+        de = math.sqrt(math.pow(dlw, 2) + math.pow(dcw, 2) + math.pow(dhw, 2))
     elif method in ("cmc(2:1)", "cmc21", "cmc(1:1)", "cmc11", "cmc"):
         if method in ("cmc(2:1)", "cmc21"):
             p1 = 2.0
         l = p1 if isinstance(p1, (float, int)) else 1.0
         c = p2 if isinstance(p2, (float, int)) else 1.0
-        dL = L2 - L1
-        C1 = math.sqrt(math.pow(a1, 2) + math.pow(b1, 2))
-        C2 = math.sqrt(math.pow(a2, 2) + math.pow(b2, 2))
-        dC = C2 - C1
-        dH2 = math.pow(a1 - a2, 2) + math.pow(b1 - b2, 2) - math.pow(dC, 2)
-        dH = math.sqrt(dH2) if dH2 > 0 else 0
-        SL = 0.511 if L1 < 16 else (0.040975 * L1) / (1 + 0.01765 * L1)
-        SC = (0.0638 * C1) / (1 + 0.0131 * C1) + 0.638
-        F = math.sqrt(math.pow(C1, 4) / (math.pow(C1, 4) + 1900.0))
-        H1 = math.degrees(math.atan2(b1, a1)) + (0 if b1 >= 0 else 360.0)
-        T = (
-            0.56 + abs(0.2 * math.cos(math.radians(H1 + 168.0)))
-            if 164 <= H1 <= 345
-            else 0.36 + abs(0.4 * math.cos(math.radians(H1 + 35)))
+        dl = L2 - L1
+        c1 = math.sqrt(math.pow(a1, 2) + math.pow(b1, 2))
+        c2 = math.sqrt(math.pow(a2, 2) + math.pow(b2, 2))
+        dc = c2 - c1
+        dh2 = math.pow(a1 - a2, 2) + math.pow(b1 - b2, 2) - math.pow(dc, 2)
+        dh = math.sqrt(dh2) if dh2 > 0 else 0
+        sl = 0.511 if L1 < 16 else (0.040975 * L1) / (1 + 0.01765 * L1)
+        sc = (0.0638 * c1) / (1 + 0.0131 * c1) + 0.638
+        f = math.sqrt(math.pow(c1, 4) / (math.pow(c1, 4) + 1900.0))
+        h1 = math.degrees(math.atan2(b1, a1)) + (0 if b1 >= 0 else 360.0)
+        t = (
+            0.56 + abs(0.2 * math.cos(math.radians(h1 + 168.0)))
+            if 164 <= h1 <= 345
+            else 0.36 + abs(0.4 * math.cos(math.radians(h1 + 35)))
         )
-        SH = SC * (F * T + 1 - F)
-        dLw, dCw, dHw = dL / (l * SL), dC / (c * SC), dH / SH
-        dE = math.sqrt(math.pow(dLw, 2) + math.pow(dCw, 2) + math.pow(dHw, 2))
+        sh = sc * (f * t + 1 - f)
+        dlw, dcw, dhw = dl / (l * sl), dc / (c * sc), dh / sh
+        de = math.sqrt(math.pow(dlw, 2) + math.pow(dcw, 2) + math.pow(dhw, 2))
     elif method in ("00", "2k", "2000", "cie00", "cie2k", "cie2000"):
         pow25_7 = math.pow(25, 7)
-        k_L = p1 if isinstance(p1, (float, int)) else 1.0
-        k_C = p2 if isinstance(p2, (float, int)) else 1.0
-        k_H = p3 if isinstance(p3, (float, int)) else 1.0
-        C1 = math.sqrt(math.pow(a1, 2) + math.pow(b1, 2))
-        C2 = math.sqrt(math.pow(a2, 2) + math.pow(b2, 2))
-        C_avg = avg(C1, C2)
-        G = 0.5 * (1 - math.sqrt(math.pow(C_avg, 7) / (math.pow(C_avg, 7) + pow25_7)))
-        L1_ = L1
-        a1_ = (1 + G) * a1
+        k_l = p1 if isinstance(p1, (float, int)) else 1.0
+        k_c = p2 if isinstance(p2, (float, int)) else 1.0
+        k_h = p3 if isinstance(p3, (float, int)) else 1.0
+        c1 = math.sqrt(math.pow(a1, 2) + math.pow(b1, 2))
+        c2 = math.sqrt(math.pow(a2, 2) + math.pow(b2, 2))
+        c_avg = avg(c1, c2)
+        g = 0.5 * (1 - math.sqrt(math.pow(c_avg, 7) / (math.pow(c_avg, 7) + pow25_7)))
+        l1_ = L1
+        a1_ = (1 + g) * a1
         b1_ = b1
-        L2_ = L2
-        a2_ = (1 + G) * a2
+        l2_ = L2
+        a2_ = (1 + g) * a2
         b2_ = b2
-        C1_ = math.sqrt(math.pow(a1_, 2) + math.pow(b1_, 2))
-        C2_ = math.sqrt(math.pow(a2_, 2) + math.pow(b2_, 2))
+        c1_ = math.sqrt(math.pow(a1_, 2) + math.pow(b1_, 2))
+        c2_ = math.sqrt(math.pow(a2_, 2) + math.pow(b2_, 2))
         h1_ = (
             0
             if a1_ == 0 and b1_ == 0
@@ -1123,17 +1447,17 @@ def delta(
             if dh_cond == 0
             else (h2_ - h1_ - 360.0 if dh_cond == 1 else h2_ + 360.0 - h1_)
         )
-        dL_ = L2_ - L1_
-        dL = dL_
-        dC_ = C2_ - C1_
-        dC = dC_
-        dH_ = 2 * math.sqrt(C1_ * C2_) * math.sin(math.radians(dh_ / 2.0))
-        dH = dH_
-        L__avg = avg(L1_, L2_)
-        C__avg = avg(C1_, C2_)
+        dl_ = l2_ - l1_
+        dl = dl_
+        dc_ = c2_ - c1_
+        dc = dc_
+        dhh_ = 2 * math.sqrt(c1_ * c2_) * math.sin(math.radians(dh_ / 2.0))
+        dh = dhh_
+        l__avg = avg(l1_, l2_)
+        c__avg = avg(c1_, c2_)
         h__avg_cond = (
             3.0
-            if C1_ * C2_ == 0
+            if c1_ * c2_ == 0
             else (0 if abs(h2_ - h1_) <= 180 else (1.0 if h2_ + h1_ < 360 else 2.0))
         )
         h__avg = (
@@ -1147,65 +1471,65 @@ def delta(
                 )
             )
         )
-        AB = math.pow(L__avg - 50.0, 2)  # (L'_ave-50)^2
-        S_L = 1 + 0.015 * AB / math.sqrt(20.0 + AB)
-        S_C = 1 + 0.045 * C__avg
-        T = (
+        ab = math.pow(l__avg - 50.0, 2)  # (L'_ave-50)^2
+        s_l = 1 + 0.015 * ab / math.sqrt(20.0 + ab)
+        s_c = 1 + 0.045 * c__avg
+        t = (
             1
             - 0.17 * math.cos(math.radians(h__avg - 30.0))
             + 0.24 * math.cos(math.radians(2.0 * h__avg))
             + 0.32 * math.cos(math.radians(3.0 * h__avg + 6.0))
             - 0.2 * math.cos(math.radians(4 * h__avg - 63.0))
         )
-        S_H = 1 + 0.015 * C__avg * T
-        dTheta = 30.0 * math.exp(-1 * math.pow((h__avg - 275.0) / 25.0, 2))
-        R_C = 2.0 * math.sqrt(math.pow(C__avg, 7) / (math.pow(C__avg, 7) + pow25_7))
-        R_T = -math.sin(math.radians(2.0 * dTheta)) * R_C
-        AJ = dL_ / S_L / k_L  # dL' / k_L / S_L
-        AK = dC_ / S_C / k_C  # dC' / k_C / S_C
-        AL = dH_ / S_H / k_H  # dH' / k_H / S_H
-        dLw, dCw, dHw = AJ, AK, AL
-        dE = math.sqrt(
-            math.pow(AJ, 2) + math.pow(AK, 2) + math.pow(AL, 2) + R_T * AK * AL
+        s_h = 1 + 0.015 * c__avg * t
+        dtheta = 30.0 * math.exp(-1 * math.pow((h__avg - 275.0) / 25.0, 2))
+        r_c = 2.0 * math.sqrt(math.pow(c__avg, 7) / (math.pow(c__avg, 7) + pow25_7))
+        r_t = -math.sin(math.radians(2.0 * dtheta)) * r_c
+        aj = dl_ / s_l / k_l  # dL' / k_L / S_L
+        ak = dc_ / s_c / k_c  # dC' / k_C / S_C
+        al = dhh_ / s_h / k_h  # dH' / k_H / S_H
+        dlw, dcw, dhw = aj, ak, al
+        de = math.sqrt(
+            math.pow(aj, 2) + math.pow(ak, 2) + math.pow(al, 2) + r_t * ak * al
         )
     else:
         # dE 1976
-        dL = L2 - L1
-        C1 = math.sqrt(math.pow(a1, 2) + math.pow(b1, 2))
-        C2 = math.sqrt(math.pow(a2, 2) + math.pow(b2, 2))
-        dC = C2 - C1
-        dH2 = math.pow(a1 - a2, 2) + math.pow(b1 - b2, 2) - math.pow(dC, 2)
-        dH = math.sqrt(dH2) if dH2 > 0 else 0
-        dLw, dCw, dHw = dL, dC, dH
-        dE = math.sqrt(math.pow(dL, 2) + math.pow(a1 - a2, 2) + math.pow(b1 - b2, 2))
+        dl = L2 - L1
+        c1 = math.sqrt(math.pow(a1, 2) + math.pow(b1, 2))
+        c2 = math.sqrt(math.pow(a2, 2) + math.pow(b2, 2))
+        dc = c2 - c1
+        dh2 = math.pow(a1 - a2, 2) + math.pow(b1 - b2, 2) - math.pow(dc, 2)
+        dh = math.sqrt(dh2) if dh2 > 0 else 0
+        dlw, dcw, dhw = dl, dc, dh
+        de = math.sqrt(math.pow(dl, 2) + math.pow(a1 - a2, 2) + math.pow(b1 - b2, 2))
 
     return {
-        "E": dE,
-        "L": dL,
-        "C": dC,
-        "H": dH,
+        "E": de,
+        "L": dl,
+        "C": dc,
+        "H": dh,
         "a": a1 - a2,
         "b": b1 - b2,
         # Weighted
-        "Lw": dLw,
-        "Cw": dCw,
-        "Hw": dHw,
+        "Lw": dlw,
+        "Cw": dcw,
+        "Hw": dhw,
     }
 
 
-def XYZ2Lab_delta(
-    X1,
-    Y1,
-    Z1,
-    X2,
-    Y2,
-    Z2,
-    method="76",
-    whitepoint1="D50",
-    whitepoint2="D50",
-    whitepoint_reference="D50",
-    cat="Bradford",
-):
+def XYZ2Lab_delta(  # noqa: N802
+    X1: float,  # noqa: N803
+    Y1: float,  # noqa: N803
+    Z1: float,  # noqa: N803
+    X2: float,  # noqa: N803
+    Y2: float,  # noqa: N803
+    Z2: float,  # noqa: N803
+    method: str = "76",
+    whitepoint1: None | float | str | list | tuple = "D50",
+    whitepoint2: None | float | str | list | tuple = "D50",
+    whitepoint_reference: None | float | str | tuple = "D50",
+    cat: str = "Bradford",
+) -> dict:
     """Compute the delta of two samples in XYZ space.
 
     Args:
@@ -1216,11 +1540,11 @@ def XYZ2Lab_delta(
         Y2 (float): XYZ values of the second sample.
         Z2 (float): XYZ values of the second sample.
         method (str): Method to use for delta calculation. Defaults to "76".
-        whitepoint1 (None | int | float | str | list | tuple): Whitepoint of
+        whitepoint1 (None | float | str | list | tuple): Whitepoint of
             the first sample. Defaults to "D50".
-        whitepoint2 (None | int | float | str | list | tuple): Whitepoint of
+        whitepoint2 (None | float | str | list | tuple): Whitepoint of
             the second sample. Defaults to "D50".
-        whitepoint_reference (None | int | float | str | list | tuple): Reference
+        whitepoint_reference (None | float | str | list | tuple): Reference
             whitepoint. Defaults to "D50".
         cat (str): Chromatic adaptation transform. Defaults to "Bradford".
 
@@ -1231,117 +1555,192 @@ def XYZ2Lab_delta(
     whitepoint2 = get_whitepoint(whitepoint2)
     whitepoint_reference = get_whitepoint(whitepoint_reference)
     if whitepoint1 != whitepoint_reference:
-        X1, Y1, Z1 = adapt(X1, Y1, Z1, whitepoint1, whitepoint_reference, cat)
+        X1, Y1, Z1 = adapt(X1, Y1, Z1, whitepoint1, whitepoint_reference, cat)  # noqa: N806
     if whitepoint2 != whitepoint_reference:
-        X2, Y2, Z2 = adapt(X2, Y2, Z2, whitepoint2, whitepoint_reference, cat)
-    L1, a1, b1 = XYZ2Lab(X1, Y1, Z1, whitepoint_reference)
-    L2, a2, b2 = XYZ2Lab(X2, Y2, Z2, whitepoint_reference)
+        X2, Y2, Z2 = adapt(X2, Y2, Z2, whitepoint2, whitepoint_reference, cat)  # noqa: N806
+    l1, a1, b1 = XYZ2Lab(X1, Y1, Z1, whitepoint_reference)
+    l2, a2, b2 = XYZ2Lab(X2, Y2, Z2, whitepoint_reference)
     logger.debug(
-        f"L*a*b*[1] {L1:.4f} {a1:.4f} {b1:.4f} L*a*b*[2] {L2:.4f} {a2:.4f} {b2:.4f}"
+        f"L*a*b*[1] {l1:.4f} {a1:.4f} {b1:.4f} L*a*b*[2] {l2:.4f} {a2:.4f} {b2:.4f}"
     )
-    return delta(L1, a1, b1, L2, a2, b2, method)
+    return delta(l1, a1, b1, l2, a2, b2, method)
 
 
-def is_similar_matrix(matrix1, matrix2, digits=3):
-    """Check if two matrices are equal up to n decimal digits."""
-    return matrix1.rounded(digits) == matrix2.rounded(digits)
+def is_similar_matrix(
+    matrix1: Matrix3x3, matrix2: Matrix3x3, digits: float = 3
+) -> bool:
+    """Check if two matrices are equal up to n decimal digits.
+
+    Args:
+        matrix1 (Matrix3x3): First matrix to compare.
+        matrix2 (Matrix3x3): Second matrix to compare.
+        digits (int): Number of decimal digits to consider for equality.
+            Defaults to 3.
+
+    Returns:
+        bool: True if the matrices are equal up to the specified number of
+            digits, False otherwise.
+    """
+    result = matrix1.rounded(digits) == matrix2.rounded(digits)
+    print(f"result: {result}")
+    return result
 
 
-def is_equal(values1, values2, quantizer=lambda v: round(v, 4)):
-    """Check if two value sets are equal after quantization."""
+def is_equal(
+    values1: list[float],
+    values2: list[float],
+    quantizer: None | Callable = None,
+) -> bool:
+    """Check if two value sets are equal after quantization.
+
+    Args:
+        values1 (list): First list of float values.
+        values2 (list): Second list of float values.
+        quantizer (callable, optional): Function to quantize the values. If None,
+            defaults to rounding to 4 decimal places.
+
+    Returns:
+        bool: True if the quantized values are equal, False otherwise.
+    """
+    if quantizer is None:
+
+        def quantizer(v: float) -> float:
+            """Default quantizer that rounds to 4 decimal places.
+
+            Args:
+                v (float): The value to quantize.
+
+            Returns:
+                float: The quantized value rounded to 4 decimal places.
+            """
+            return round(v, 4)
+
     return [quantizer(v) for v in values1] == [quantizer(v) for v in values2]
 
 
 def four_color_matrix(
-    XrR,
-    YrR,
-    ZrR,
-    XrG,
-    YrG,
-    ZrG,
-    XrB,
-    YrB,
-    ZrB,
-    XrW,
-    YrW,
-    ZrW,
-    XmR,
-    YmR,
-    ZmR,
-    XmG,
-    YmG,
-    ZmG,
-    XmB,
-    YmB,
-    ZmB,
-    XmW,
-    YmW,
-    ZmW,
-    Y_correction=True,
-):
+    xrr: float,  # noqa: N803
+    yrr: float,  # noqa: N803
+    zrr: float,  # noqa: N803
+    xrg: float,  # noqa: N803
+    yrg: float,  # noqa: N803
+    zrg: float,  # noqa: N803
+    xrb: float,  # noqa: N803
+    yrb: float,  # noqa: N803
+    zrb: float,  # noqa: N803
+    xrw: float,  # noqa: N803
+    yrw: float,  # noqa: N803
+    zrw: float,  # noqa: N803
+    xmr: float,  # noqa: N803
+    ymr: float,  # noqa: N803
+    zmr: float,  # noqa: N803
+    xmg: float,  # noqa: N803
+    ymg: float,  # noqa: N803
+    zmg: float,  # noqa: N803
+    xmb: float,  # noqa: N803
+    ymb: float,  # noqa: N803
+    zmb: float,  # noqa: N803
+    xmw: float,  # noqa: N803
+    ymw: float,  # noqa: N803
+    zmw: float,  # noqa: N803
+    y_correction: bool = True,  # noqa: N803
+) -> Matrix3x3:
     """Four-Color Matrix Method for Correction of Tristimulus Colorimeters.
 
     Based on paper published in Proc., IS&T Fifth Color Imaging Conference,
     301-305 (1997) and IS&T Sixth Color Imaging Conference (1998).
 
     Args:
-        XrR (float): Reference RGB values for red.
-        YrR (float): Reference RGB values for red.
-        ZrR (float): Reference RGB values for red.
-        XrG (float): Reference RGB values for green.
-        YrG (float): Reference RGB values for green.
-        ZrG (float): Reference RGB values for green.
-        XrB (float): Reference RGB values for blue.
-        YrB (float): Reference RGB values for blue.
-        ZrB (float): Reference RGB values for blue.
-        XrW (float): Reference RGB values for white.
-        YrW (float): Reference RGB values for white.
-        ZrW (float): Reference RGB values for white.
-        XmR (float): Measured RGB values for red.
-        YmR (float): Measured RGB values for red.
-        ZmR (float): Measured RGB values for red.
-        XmG (float): Measured RGB values for green.
-        YmG (float): Measured RGB values for green.
-        ZmG (float): Measured RGB values for green.
-        XmB (float): Measured RGB values for blue.
-        YmB (float): Measured RGB values for blue.
-        ZmB (float): Measured RGB values for blue.
-        XmW (float): Measured RGB values for white.
-        YmW (float): Measured RGB values for white.
-        ZmW (float): Measured RGB values for white.
-        Y_correction (bool): If True, apply Y correction. Defaults to True.
+        xrr (float): Reference RGB values for red.
+        yrr (float): Reference RGB values for red.
+        zrr (float): Reference RGB values for red.
+        xrg (float): Reference RGB values for green.
+        yrg (float): Reference RGB values for green.
+        zrg (float): Reference RGB values for green.
+        xrb (float): Reference RGB values for blue.
+        yrb (float): Reference RGB values for blue.
+        zrb (float): Reference RGB values for blue.
+        xrw (float): Reference RGB values for white.
+        yrw (float): Reference RGB values for white.
+        zrw (float): Reference RGB values for white.
+        xmr (float): Measured RGB values for red.
+        ymr (float): Measured RGB values for red.
+        zmr (float): Measured RGB values for red.
+        xmg (float): Measured RGB values for green.
+        ymg (float): Measured RGB values for green.
+        zmg (float): Measured RGB values for green.
+        xmb (float): Measured RGB values for blue.
+        ymb (float): Measured RGB values for blue.
+        zmb (float): Measured RGB values for blue.
+        xmw (float): Measured RGB values for white.
+        ymw (float): Measured RGB values for white.
+        zmw (float): Measured RGB values for white.
+        y_correction (bool): If True, apply Y correction. Defaults to True.
 
     Returns:
         Matrix3x3: The four-color matrix.
     """
-    XYZ = locals()
+    components = {
+        "XrR": xrr,
+        "YrR": yrr,
+        "ZrR": zrr,
+        "XrG": xrg,
+        "YrG": yrg,
+        "ZrG": zrg,
+        "XrB": xrb,
+        "YrB": yrb,
+        "ZrB": zrb,
+        "XrW": xrw,
+        "YrW": yrw,
+        "ZrW": zrw,
+        "XmR": xmr,
+        "YmR": ymr,
+        "ZmR": zmr,
+        "XmG": xmg,
+        "YmG": ymg,
+        "ZmG": zmg,
+        "XmB": xmb,
+        "YmB": ymb,
+        "ZmB": zmb,
+        "XmW": xmw,
+        "YmW": ymw,
+        "ZmW": zmw,
+    }
     xyz = {}
-    M = {}
+    m = {}
     k = {}
     for s in "mr":
         xyz[s] = {}
         for color in "RGBW":
-            X, Y, Z = (XYZ[component + s + color] for component in "XYZ")
-            x, y = XYZ2xyY(X, Y, Z)[:2]
+            x, y, _ = XYZ2xyY(
+                *(components[f"{component}{s}{color}"] for component in "XYZ")
+            )
             xyz[s][color] = x, y, 1 - x - y
-        M[s] = Matrix3x3([xyz[s][color] for color in "RGB"]).transposed()
-        k[s] = M[s].inverted() * xyz[s]["W"]
-        M[s + "RGB"] = M[s] * Matrix3x3(
+        m[s] = Matrix3x3([xyz[s][color] for color in "RGB"]).transposed()
+        k[s] = m[s].inverted() * xyz[s]["W"]
+        m[f"{s}RGB"] = m[s] * Matrix3x3(
             [[k[s][0], 0, 0], [0, k[s][1], 0], [0, 0, k[s][2]]]
         )
-    R = M["rRGB"] * M["mRGB"].inverted()
-    if Y_correction:
+    r = m["rRGB"] * m["mRGB"].inverted()
+    if y_correction:
         # The Y calibration factor kY is obtained as the ratio of the reference
         # luminance value to the matrix-corrected Y value, as defined in
         # Four-Color Matrix Method for Correction of Tristimulus Colorimeters -
         # Part 2
-        MW = XmW, YmW, ZmW
-        kY = YrW / (R * MW)[1]
-        R[:] = [[kY * v for v in row] for row in R]
-    return R
+        mw = xmw, ymw, zmw
+        ky = yrw / (r * mw)[1]
+        r[:] = [[ky * v for v in row] for row in r]
+    return r
 
 
-def get_gamma(values, scale=1.0, vmin=0.0, vmax=1.0, average=True, least_squares=False):
+def get_gamma(
+    values: list | tuple,
+    scale: float = 1.0,
+    vmin: float = 0.0,
+    vmax: float = 1.0,
+    average: bool = True,
+    least_squares: bool = False,
+) -> float | list:
     """Return average or least squares gamma or a list of gamma values.
 
     Args:
@@ -1354,7 +1753,8 @@ def get_gamma(values, scale=1.0, vmin=0.0, vmax=1.0, average=True, least_squares
             to False.
 
     Returns:
-        float or list: The average or least squares gamma, or a list of gamma values.
+        float | list: The average or least squares gamma, or a list of gamma
+            values.
     """
     if least_squares:
         logxy = []
@@ -1383,7 +1783,11 @@ def get_gamma(values, scale=1.0, vmin=0.0, vmax=1.0, average=True, least_squares
     return gammas
 
 
-def guess_cat(chad, whitepoint_source=None, whitepoint_destination=None):
+def guess_cat(
+    chad: Matrix3x3,
+    whitepoint_source: None | float | str | list | tuple = None,
+    whitepoint_destination: None | float | str | list | tuple = None,
+) -> None | str:
     """Guess the chromatic adaption transform used in a chromatic adaption matrix.
 
     ...as found in an ICC profile's 'chad' tag
@@ -1394,26 +1798,26 @@ def guess_cat(chad, whitepoint_source=None, whitepoint_destination=None):
         whitepoint_destination (tuple): The destination whitepoint.
 
     Returns:
-        str: The guessed chromatic adaption transform.
+        None | str: The guessed chromatic adaption transform.
     """
     if chad == [[1, 0, 0], [0, 1, 0], [0, 0, 1]]:
         # Cannot figure out CAT from identity chad
         return None
-    for cat in cat_matrices:
+    for cat in CAT_MATRICES:
         if is_similar_matrix(
             (
                 chad
-                * cat_matrices[cat].inverted()
+                * CAT_MATRICES[cat].inverted()
                 * LMS_wp_adaption_matrix(whitepoint_destination, whitepoint_source, cat)
             ).inverted(),
-            cat_matrices[cat],
+            CAT_MATRICES[cat],
             2,
         ):
             return cat
     return None
 
 
-def CIEDCCT2xyY(T, scale=1.0):
+def CIEDCCT2xyY(T: float, scale: float = 1.0) -> tuple[float, float, float]:  # noqa: N802, N803
     """Convert from CIE correlated daylight temperature to xyY.
 
     Based on formula from http://brucelindbloom.com/Eqn_T_to_xy.html
@@ -1440,24 +1844,24 @@ def CIEDCCT2xyY(T, scale=1.0):
             stacklevel=2,
         )
     if T <= 7000:
-        xD = (
+        xd = (
             ((-4.607 * math.pow(10, 9)) / math.pow(T, 3))
             + ((2.9678 * math.pow(10, 6)) / math.pow(T, 2))
             + ((0.09911 * math.pow(10, 3)) / T)
             + 0.244063
         )
     else:
-        xD = (
+        xd = (
             ((-2.0064 * math.pow(10, 9)) / math.pow(T, 3))
             + ((1.9018 * math.pow(10, 6)) / math.pow(T, 2))
             + ((0.24748 * math.pow(10, 3)) / T)
             + 0.237040
         )
-    yD = -3 * math.pow(xD, 2) + 2.87 * xD - 0.275
-    return xD, yD, scale
+    yd = -3 * math.pow(xd, 2) + 2.87 * xd - 0.275
+    return xd, yd, scale
 
 
-def CIEDCCT2XYZ(T, scale=1.0):
+def CIEDCCT2XYZ(T: float, scale: float = 1.0) -> tuple[float, float, float]:  # noqa: N802, N803
     """Convert from CIE correlated daylight temperature to XYZ.
 
     Args:
@@ -1467,11 +1871,11 @@ def CIEDCCT2XYZ(T, scale=1.0):
     Returns:
         tuple[float, float, float]: The XYZ values.
     """
-    xyY = CIEDCCT2xyY(T, scale)
-    return xyY2XYZ(*xyY) if xyY else None
+    xyY = CIEDCCT2xyY(T, scale)  # noqa: N806
+    return xyY2XYZ(*xyY) if xyY else None  # noqa: N806
 
 
-def cLUT65_to_VidRGB(v, size=65):
+def cLUT65_to_VidRGB(v: float, size: int = 65) -> float:  # noqa: N802
     """cLUT65 to VidRGB conversion.
 
     cLUT Input value tweaks to make Video encoded black land on
@@ -1490,7 +1894,7 @@ def cLUT65_to_VidRGB(v, size=65):
     return 1 - (1 - v) * (1 - 236.0 / 255) / (1 - 236.0 / 256)
 
 
-def VidRGB_to_cLUT65(v, size=65):
+def VidRGB_to_cLUT65(v: float, size: int = 65) -> float:  # noqa: N802
     """Convert from VidRGB to cLUT65.
 
     Args:
@@ -1505,7 +1909,7 @@ def VidRGB_to_cLUT65(v, size=65):
     return 1 - (1 - v) * (1 - 236.0 / 256) / (1 - 236.0 / 255)
 
 
-def VidRGB_to_eeColor(v):
+def VidRGB_to_eeColor(v: float) -> float:  # noqa: N802
     """Convert from VidRGB to eeColor.
 
     Args:
@@ -1517,7 +1921,7 @@ def VidRGB_to_eeColor(v):
     return v * 255.0 / 256.0
 
 
-def eeColor_to_VidRGB(v):
+def eeColor_to_VidRGB(v: float) -> float:  # noqa: N802
     """Convert from eeColor to VidRGB.
 
     Args:
@@ -1529,11 +1933,17 @@ def eeColor_to_VidRGB(v):
     return v * 256.0 / 255.0
 
 
-def DIN992Lab(L99, a99, b99, kCH=1.0, kE=1.0):
+def DIN992Lab(  # noqa: N802
+    l99: float,
+    a99: float,
+    b99: float,
+    kCH: float = 1.0,
+    kE: float = 1.0,  # noqa: N803
+) -> tuple[float, float, float]:
     """Convert from DIN99 to Lab.
 
     Args:
-        L99 (float): The L value of the color.
+        l99 (float): The L value of the color.
         a99 (float): The a value of the color.
         b99 (float): The b value of the color.
         kCH (float, optional): The kCH value of the color. Defaults to 1.0.
@@ -1542,32 +1952,38 @@ def DIN992Lab(L99, a99, b99, kCH=1.0, kE=1.0):
     Returns:
         tuple[float, float, float]: The L, a, b values.
     """
-    C99, H99 = DIN99familyab2DIN99CH(a99, b99)
+    c99, h99 = DIN99familyab2DIN99CH(a99, b99)
     return DIN99familyLCH2Lab(
-        L99, C99, H99, 0, 105.51, 0.0158, 16, 0.7, 1 / (0.045 * kCH * kE), 0.045, kE, 0
+        l99, c99, h99, 0, 105.51, 0.0158, 16, 0.7, 1 / (0.045 * kCH * kE), 0.045, kE, 0
     )
 
 
-def DIN99b2Lab(L99, a99, b99):
+def DIN99b2Lab(l99: float, a99: float, b99: float) -> tuple[float, float, float]:  # noqa: N802, N803
     """Convert from DIN99b to Lab.
 
     Args:
-        L99 (float): The L value of the color.
+        l99 (float): The L value of the color.
         a99 (float): The a value of the color.
         b99 (float): The b value of the color.
 
     Returns:
         tuple[float, float, float]: The L, a, b values.
     """
-    C99, H99 = DIN99familyab2DIN99CH(a99, b99)
-    return DIN99familyLCH2Lab(L99, C99, H99, 0, 303.67, 0.0039, 26, 0.83, 23, 0.075)
+    c99, h99 = DIN99familyab2DIN99CH(a99, b99)
+    return DIN99familyLCH2Lab(l99, c99, h99, 0, 303.67, 0.0039, 26, 0.83, 23, 0.075)
 
 
-def DIN99o2Lab(L99, a99, b99, kCH=1.0, kE=1.0):
+def DIN99o2Lab(  # noqa: N802
+    l99: float,
+    a99: float,
+    b99: float,
+    kCH: float = 1.0,
+    kE: float = 1.0,  # noqa: N803
+) -> tuple[float, float, float]:
     """Convert from DIN99o to Lab.
 
     Args:
-        L99 (float): The L value of the color.
+        l99 (float): The L value of the color.
         a99 (float): The a value of the color.
         b99 (float): The b value of the color.
         kCH (float, optional): The kCH value of the color. Defaults to 1.0.
@@ -1576,91 +1992,118 @@ def DIN99o2Lab(L99, a99, b99, kCH=1.0, kE=1.0):
     Returns:
         tuple[float, float, float]: The L, a, b values.
     """
-    C99, H99 = DIN99familyab2DIN99CH(a99, b99)
+    c99, h99 = DIN99familyab2DIN99CH(a99, b99)
     return DIN99familyLCH2Lab(
-        L99, C99, H99, 0, 303.67, 0.0039, 26, 0.83, 1 / (0.0435 * kCH * kE), 0.075, kE
+        l99, c99, h99, 0, 303.67, 0.0039, 26, 0.83, 1 / (0.0435 * kCH * kE), 0.075, kE
     )
 
 
-def DIN99bLCH2Lab(L99, C99, H99):
+def DIN99bLCH2Lab(l99: float, c99: float, h99: float) -> tuple[float, float, float]:  # noqa: N802, N803
     """Convert from DIN99bLCH to Lab.
 
     Args:
-        L99 (float): The L value of the color.
-        C99 (float): The C value of the color.
-        H99 (float): The H value of the color.
+        l99 (float): The L value of the color.
+        c99 (float): The C value of the color.
+        h99 (float): The H value of the color.
 
     Returns:
         tuple[float, float, float]: The L, a, b values.
     """
-    return DIN99familyLCH2Lab(L99, C99, H99, 0, 303.67, 0.0039, 26, 0.83, 23, 0.075)
+    return DIN99familyLCH2Lab(l99, c99, h99, 0, 303.67, 0.0039, 26, 0.83, 23, 0.075)
 
 
-def DIN99c2Lab(L99, a99, b99, whitepoint=None):
+def DIN99c2Lab(  # noqa: N802
+    l99: float,  # noqa: N803
+    a99: float,
+    b99: float,
+    whitepoint: None | float | str | list | tuple = None,
+) -> tuple[float, float, float]:
     """Convert from DIN99c to Lab.
 
     Args:
-        L99 (float): The L value of the color.
+        l99 (float): The L value of the color.
         a99 (float): The a value of the color.
         b99 (float): The b value of the color.
-        whitepoint (None | int | float | str | list | tuple): The whitepoint to
+        whitepoint (None | float | str | list | tuple): The whitepoint to
             use. Defaults to D50.
 
     Returns:
         tuple[float, float, float]: The L, a, b values.
     """
-    C99, H99 = DIN99familyab2DIN99CH(a99, b99)
+    c99, h99 = DIN99familyab2DIN99CH(a99, b99)
     return DIN99familyLCH2Lab(
-        L99, C99, H99, 0.1, 317.651, 0.0037, 0, 0.94, 23, 0.066, whitepoint
+        l99, c99, h99, 0.1, 317.651, 0.0037, 0, 0.94, 23, 0.066, whitepoint
     )
 
 
-def DIN99d2Lab(L99, a99, b99, whitepoint=None):
+def DIN99d2Lab(  # noqa: N802
+    l99: float,  # noqa: N803
+    a99: float,
+    b99: float,
+    whitepoint: None | float | str | list | tuple = None,
+) -> tuple[float, float, float]:
     """Convert from DIN99d to Lab.
 
     Args:
-        L99 (float): The L value of the color.
+        l99 (float): The L value of the color.
         a99 (float): The a value of the color.
         b99 (float): The b value of the color.
-        whitepoint (None | int | float | str | list | tuple): The whitepoint to
+        whitepoint (None | float | str | list | tuple): The whitepoint to
             use. Defaults to D50.
 
     Returns:
         tuple[float, float, float]: The L, a, b values.
     """
-    C99, H99 = DIN99familyab2DIN99CH(a99, b99)
+    c99, h99 = DIN99familyab2DIN99CH(a99, b99)
     return DIN99familyLCH2Lab(
-        L99, C99, H99, 0.12, 325.221, 0.0036, 50, 1.14, 22.5, 0.06, whitepoint
+        l99, c99, h99, 0.12, 325.221, 0.0036, 50, 1.14, 22.5, 0.06, whitepoint
     )
 
 
-def DIN99dLCH2Lab(L99, C99, H99, whitepoint=None):
+def DIN99dLCH2Lab(  # noqa: N802
+    l99: float,  # noqa: N803
+    c99: float,  # noqa: N803
+    h99: float,  # noqa: N803
+    whitepoint: None | float | str | list | tuple = None,
+) -> tuple[float, float, float]:
     """Convert from DIN99dLCH to Lab.
 
     Args:
-        L99 (float): The L value of the color.
-        C99 (float): The C value of the color.
-        H99 (float): The H value of the color.
-        whitepoint (None | int | float | str | list | tuple): The whitepoint to
+        l99 (float): The L value of the color.
+        c99 (float): The C value of the color.
+        h99 (float): The H value of the color.
+        whitepoint (None | float | str | list | tuple): The whitepoint to
             use. Defaults to D50.
 
     Returns:
         tuple[float, float, float]: The L, a, b values.
     """
     return DIN99familyLCH2Lab(
-        L99, C99, H99, 0.12, 325.221, 0.0036, 50, 1.14, 22.5, 0.06, whitepoint
+        l99, c99, h99, 0.12, 325.221, 0.0036, 50, 1.14, 22.5, 0.06, whitepoint
     )
 
 
-def DIN99familyLCH2Lab(
-    L99, C99, H99, x, l1, l2, deg, f1, c1, c2, whitepoint=None, kE=1.0, hdeg=None
-):
+def DIN99familyLCH2Lab(  # noqa: N802
+    l99: float,  # noqa: N803
+    c99: float,  # noqa: N803
+    h99: float,  # noqa: N803
+    x: float,
+    l1: float,
+    l2: float,
+    deg: float,
+    f1: float,
+    c1: float,
+    c2: float,
+    whitepoint: None | float | str | list | tuple = None,
+    kE: float = 1.0,  # noqa: N803
+    hdeg: None | float = None,
+) -> tuple[float, float, float]:
     """Convert from DIN99LCH to Lab.
 
     Args:
-        L99 (float): The L value of the color.
-        C99 (float): The C value of the color.
-        H99 (float): The H value of the color.
+        l99 (float): The L value of the color.
+        c99 (float): The C value of the color.
+        h99 (float): The H value of the color.
         x (float): The x value of the color.
         l1 (float): The l1 value of the color.
         l2 (float): The l2 value of the color.
@@ -1668,28 +2111,34 @@ def DIN99familyLCH2Lab(
         f1 (float): The f1 value of the color.
         c1 (float): The c1 value of the color.
         c2 (float): The c2 value of the color.
-        whitepoint (None | int | float | str | list | tuple): The whitepoint to
+        whitepoint (None | float | str | list | tuple): The whitepoint to
             use. Defaults to D50.
         kE (float, optional): The kE value of the color. Defaults to 1.0.
-        hdeg (float, optional): The hdeg value of the color. Defaults to None.
+        hdeg (None | float, optional): The hdeg value of the color. Defaults to
+            None.
 
     Returns:
         tuple[float, float, float]: The L, a, b values.
     """
-    G = (math.exp(C99 / c1) - 1) / c2
+    g = (math.exp(c99 / c1) - 1) / c2
     if hdeg is None:
         hdeg = deg
-    H99 -= hdeg
-    L, a, b = DIN99familyLHCG2Lab(L99, H99, C99, G, kE, l1, l2, deg, f1)
+    h99 -= hdeg
+    l, a, b = DIN99familyLHCG2Lab(l99, h99, c99, g, kE, l1, l2, deg, f1)
     if x:
         whitepoint99d = XYZ2DIN99cdXYZ(*get_whitepoint(whitepoint, 100), x=x)
-        X, Y, Z = Lab2XYZ(L, a, b, whitepoint99d, scale=100)
-        X, Y, Z = DIN99cdXYZ2XYZ(X, Y, Z, x)
-        L, a, b = XYZ2Lab(X, Y, Z, whitepoint)
-    return L, a, b
+        X, Y, Z = Lab2XYZ(l, a, b, whitepoint99d, scale=100)  # noqa: N806
+        X, Y, Z = DIN99cdXYZ2XYZ(X, Y, Z, x)  # noqa: N806
+        l, a, b = XYZ2Lab(X, Y, Z, whitepoint)
+    return l, a, b
 
 
-def DIN99cdXYZ2XYZ(X, Y, Z, x):
+def DIN99cdXYZ2XYZ(  # noqa: N802
+    X: float,
+    Y: float,
+    Z: float,
+    x: float,  # noqa: N803
+) -> tuple[float, float, float]:
     """Convert from DIN99cdXYZ to XYZ.
 
     Args:
@@ -1701,17 +2150,27 @@ def DIN99cdXYZ2XYZ(X, Y, Z, x):
     Returns:
         tuple[float, float, float]: The X, Y, Z values.
     """
-    X = (X + x * Z) / (1 + x)
+    X = (X + x * Z) / (1 + x)  # noqa: N806
     return X, Y, Z
 
 
-def DIN99familyLHCG2Lab(L99, H99, C99, G, kE, l1, l2, deg, f1):
+def DIN99familyLHCG2Lab(  # noqa: N802
+    l99: float,  # noqa: N803
+    h99: float,  # noqa: N803
+    c99: float,  # noqa: N803
+    G: float,  # noqa: N803
+    kE: float,  # noqa: N803
+    l1: float,
+    l2: float,
+    deg: float,
+    f1: float,
+) -> tuple[float, float, float]:
     """Convert from DIN99LCH to Lab.
 
     Args:
-        L99 (float): The L value of the color.
-        H99 (float): The H value of the color.
-        C99 (float): The C value of the color.
+        l99 (float): The L value of the color.
+        h99 (float): The H value of the color.
+        c99 (float): The C value of the color.
         G (float): The G value of the color.
         kE (float): The kE value of the color.
         l1 (float): The l1 value of the color.
@@ -1722,31 +2181,31 @@ def DIN99familyLHCG2Lab(L99, H99, C99, G, kE, l1, l2, deg, f1):
     Returns:
         tuple[float, float, float]: The L, a, b values.
     """
-    L = (math.exp((L99 * kE) / l1) - 1) / l2
-    h99ef = H99 * math.pi / 180
+    l = (math.exp((l99 * kE) / l1) - 1) / l2
+    h99ef = h99 * math.pi / 180
     e = G * math.cos(h99ef)
     f = G * math.sin(h99ef)
     rad = deg * math.pi / 180
     a = e * math.cos(rad) - (f / f1) * math.sin(rad)
     b = e * math.sin(rad) + (f / f1) * math.cos(rad)
-    return L, a, b
+    return l, a, b
 
 
-def DIN99familyCH2DIN99ab(C99, H99):
+def DIN99familyCH2DIN99ab(c99: float, h99: float) -> tuple[float, float]:  # noqa: N802, N803
     """Convert from DIN99CH to DIN99ab.
 
     Args:
-        C99 (float): The C value of the color.
-        H99 (float): The H value of the color.
+        c99 (float): The C value of the color.
+        h99 (float): The H value of the color.
 
     Returns:
         tuple[float, float]: The a99 and b99 values.
     """
-    h99ef = H99 * math.pi / 180
-    return C99 * math.cos(h99ef), C99 * math.sin(h99ef)
+    h99ef = h99 * math.pi / 180
+    return c99 * math.cos(h99ef), c99 * math.sin(h99ef)
 
 
-def DIN99familyab2DIN99CH(a99, b99):
+def DIN99familyab2DIN99CH(a99: float, b99: float) -> tuple[float, float]:  # noqa: N802
     """Convert from DIN99ab to DIN99CH.
 
     Args:
@@ -1754,9 +2213,9 @@ def DIN99familyab2DIN99CH(a99, b99):
         b99 (float): The b value of the color.
 
     Returns:
-        tuple[float, float]: The C99 and H99 values.
+        tuple[float, float]: The c99 and h99 values.
     """
-    C99 = math.sqrt(math.pow(a99, 2) + math.pow(b99, 2))
+    c99 = math.sqrt(math.pow(a99, 2) + math.pow(b99, 2))
     if a99 > 0:
         h99ef = math.atan2(b99, a99) if b99 >= 0 else 2 * math.pi + math.atan2(b99, a99)
     elif a99 < 0:
@@ -1767,11 +2226,16 @@ def DIN99familyab2DIN99CH(a99, b99):
         h99ef = (3 * math.pi) / 2
     else:
         h99ef = 0.0
-    H99 = h99ef * 180 / math.pi
-    return C99, H99
+    h99 = h99ef * 180 / math.pi
+    return c99, h99
 
 
-def HSI2RGB(H, S, I, scale=1.0):
+def HSI2RGB(  # noqa: N802
+    H: float,
+    S: float,
+    I: float,
+    scale: float = 1.0,  # noqa: N803
+) -> tuple[float, float, float]:
     """Convert from HSI to RGB.
 
     Args:
@@ -1783,7 +2247,7 @@ def HSI2RGB(H, S, I, scale=1.0):
     Returns:
         tuple[float, float, float]: The R, G, B values.
     """
-    H *= 360
+    H *= 360  # noqa: N806
 
     h = H
     if 120 < H <= 240:
@@ -1797,22 +2261,27 @@ def HSI2RGB(H, S, I, scale=1.0):
     c = I - I * S
 
     if H <= 120:
-        R = a
-        G = b
-        B = c
+        r = a
+        g = b
+        b = c
     elif H <= 240:
-        G = a
-        B = b
-        R = c
+        g = a
+        b = b
+        r = c
     else:
-        B = a
-        R = b
-        G = c
+        b = a
+        r = b
+        g = c
 
-    return tuple(v * scale for v in (R, G, B))
+    return tuple(v * scale for v in (r, g, b))
 
 
-def HSL2RGB(H, S, L, scale=1.0):
+def HSL2RGB(  # noqa: N802
+    H: float,
+    S: float,
+    L: float,
+    scale: float = 1.0,  # noqa: N803
+) -> tuple[float, float, float]:
     """Convert from HSL to RGB.
 
     Args:
@@ -1827,7 +2296,12 @@ def HSL2RGB(H, S, L, scale=1.0):
     return tuple(v * scale for v in colorsys.hls_to_rgb(H, L, S))
 
 
-def HSV2RGB(H, S, V, scale=1.0):
+def HSV2RGB(  # noqa: N802
+    H: float,
+    S: float,
+    V: float,
+    scale: float = 1.0,  # noqa: N803
+) -> tuple[float, float, float]:
     """Convert from HSV to RGB.
 
     Args:
@@ -1842,7 +2316,7 @@ def HSV2RGB(H, S, V, scale=1.0):
     return tuple(v * scale for v in colorsys.hsv_to_rgb(H, S, V))
 
 
-def get_DBL_MIN():
+def get_dbl_min() -> float:
     """Get the smallest positive normalized double value.
 
     Returns:
@@ -1851,6 +2325,7 @@ def get_DBL_MIN():
     t = "0.0"
     i = 10
     n = 0
+    dbl_min = 0.0
     while True:
         if i > 1:
             i -= 1
@@ -1866,14 +2341,14 @@ def get_DBL_MIN():
         else:
             if n > 1:
                 n -= 1
-            DBL_MIN = float(t + str(i))
-    return DBL_MIN
+            dbl_min = float(t + str(i))
+    return dbl_min
 
 
-DBL_MIN = get_DBL_MIN()
+DBL_MIN = get_dbl_min()
 
 
-def LCHab2Lab(L, C, H):
+def LCHab2Lab(L: float, C: float, H: float) -> tuple[float, float, float]:  # noqa: N802, N803
     """Convert from LCHab to Lab.
 
     Args:
@@ -1889,42 +2364,59 @@ def LCHab2Lab(L, C, H):
     return L, a, b
 
 
-def Lab2DIN99(L, a, b, kCH=1.0, kE=1.0):
+def Lab2DIN99(  # noqa: N802
+    L: float,
+    a: float,
+    b: float,
+    kCH: float = 1.0,
+    kE: float = 1.0,  # noqa: N803
+) -> tuple[float, float, float]:
     """Convert from Lab to DIN99.
 
     Args:
         L (float): The L value of the color.
         a (float): The a value of the color.
         b (float): The b value of the color.
-        kCH (float): The kCH value.
-        kE (float): The kE value.
+        kCH (float): The kCH value. Defaults to 1.0.
+        kE (float): The kE value. Defaults to 1.0.
 
     Returns:
-        tuple[float, float, float]: The L99, a99, b99 values.
+        tuple[float, float, float]: The l99, a99, b99 values.
     """
-    L99, C99, H99 = Lab2DIN99LCH(L, a, b, kCH, kE)
-    a99, b99 = DIN99familyCH2DIN99ab(C99, H99)
-    return L99, a99, b99
+    l99, c99, h99 = Lab2DIN99LCH(L, a, b, kCH, kE)
+    a99, b99 = DIN99familyCH2DIN99ab(c99, h99)
+    return l99, a99, b99
 
 
-def Lab2DIN99b(L, a, b, kE=1.0):
+def Lab2DIN99b(  # noqa: N802
+    L: float,
+    a: float,
+    b: float,
+    kE: float = 1.0,  # noqa: N803
+) -> tuple[float, float, float]:
     """Convert from Lab to DIN99b.
 
     Args:
         L (float): The L value of the color.
         a (float): The a value of the color.
         b (float): The b value of the color.
-        kE (float): The kE value.
+        kE (float): The kE value. Defaults to 1.0.
 
     Returns:
-        tuple[float, float, float]: The L99, a99, b99 values.
+        tuple[float, float, float]: The l99, a99, b99 values.
     """
-    L99, C99, H99 = Lab2DIN99bLCH(L, a, b, kE)
-    a99, b99 = DIN99familyCH2DIN99ab(C99, H99)
-    return L99, a99, b99
+    l99, c99, h99 = Lab2DIN99bLCH(L, a, b, kE)
+    a99, b99 = DIN99familyCH2DIN99ab(c99, h99)
+    return l99, a99, b99
 
 
-def Lab2DIN99o(L, a, b, kCH=1.0, kE=1.0):
+def Lab2DIN99o(  # noqa: N802
+    L: float,
+    a: float,
+    b: float,
+    kCH: float = 1.0,
+    kE: float = 1.0,  # noqa: N803
+) -> tuple[float, float, float]:
     """Convert from Lab to DIN99o.
 
     Args:
@@ -1935,50 +2427,67 @@ def Lab2DIN99o(L, a, b, kCH=1.0, kE=1.0):
         kE (float): The kE value.
 
     Returns:
-        tuple[float, float, float]: The L99, a99, b99 values.
+        tuple[float, float, float]: The l99, a99, b99 values.
     """
-    L99, C99, H99 = Lab2DIN99oLCH(L, a, b, kCH, kE)
-    a99, b99 = DIN99familyCH2DIN99ab(C99, H99)
-    return L99, a99, b99
+    l99, c99, h99 = Lab2DIN99oLCH(L, a, b, kCH, kE)
+    a99, b99 = DIN99familyCH2DIN99ab(c99, h99)
+    return l99, a99, b99
 
 
-def Lab2DIN99c(L, a, b, kE=1.0, whitepoint=None):
+def Lab2DIN99c(  # noqa: N802
+    L: float,  # noqa: N803
+    a: float,
+    b: float,
+    kE: float = 1.0,  # noqa: N803
+    whitepoint: None | float | str | list | tuple = None,
+) -> tuple[float, float, float]:
     """Convert from Lab to DIN99c.
 
     Args:
         L (float): The L value of the color.
         a (float): The a value of the color.
         b (float): The b value of the color.
-        kE (float): The kE value.
-        whitepoint (None | int | float | str | list | tuple): The whitepoint to
+        kE (float): The kE value. Defaults to 1.0. Unused, but kept for
+            compatibility.
+        whitepoint (None | float | str | list | tuple): The whitepoint to
             use. Defaults to D50.
 
     Returns:
-        tuple[float, float, float]: The L99, a99, b99 values.
+        tuple[float, float, float]: The l99, a99, b99 values.
     """
-    X, Y, Z = Lab2XYZ(L, a, b, whitepoint, scale=100)
-    return XYZ2DIN99c(X, Y, Z, whitepoint)
+    return XYZ2DIN99c(*Lab2XYZ(L, a, b, whitepoint, scale=100), whitepoint)
 
 
-def Lab2DIN99d(L, a, b, kE=1.0, whitepoint=None):
+def Lab2DIN99d(  # noqa: N802
+    L: float,  # noqa: N803
+    a: float,
+    b: float,
+    kE: float = 1.0,  # noqa: N803
+    whitepoint: None | float | str | tuple | list = None,
+) -> tuple[float, float, float]:
     """Convert from Lab to DIN99d.
 
     Args:
         L (float): The L value of the color.
         a (float): The a value of the color.
         b (float): The b value of the color.
-        kE (float): The kE value.
-        whitepoint (None | int | float | str | list | tuple): The whitepoint to
+        kE (float, optional): The kE value. Currently not used.
+        whitepoint (None | float | str | list | tuple): The whitepoint to
             use. Defaults to D50.
 
     Returns:
-        tuple[float, float, float]: The L99, a99, b99 values.
+        tuple[float, float, float]: The l99, a99, b99 values.
     """
-    X, Y, Z = Lab2XYZ(L, a, b, whitepoint, scale=100)
-    return XYZ2DIN99d(X, Y, Z, whitepoint)
+    return XYZ2DIN99d(*Lab2XYZ(L, a, b, whitepoint, scale=100), whitepoint)
 
 
-def Lab2DIN99LCH(L, a, b, kCH=1.0, kE=1.0):
+def Lab2DIN99LCH(  # noqa: N802
+    L: float,
+    a: float,
+    b: float,
+    kCH: float = 1.0,
+    kE: float = 1.0,  # noqa: N803
+) -> tuple[float, float, float]:
     """Convert from Lab to DIN99 LCH.
 
     Args:
@@ -1989,47 +2498,70 @@ def Lab2DIN99LCH(L, a, b, kCH=1.0, kE=1.0):
         kE (float): The kE value.
 
     Returns:
-        tuple[float, float, float]: The L99, C99, H99 values.
+        tuple[float, float, float]: The l99, c99, h99 values.
     """
     return Lab2DIN99familyLCH(
         L, a, b, 105.51, 0.0158, 16, 0.7, 1 / (0.045 * kCH * kE), 0.045, kE, 0
     )
 
 
-def Lab2DIN99bLCH(L, a, b, kE=1.0):
+def Lab2DIN99bLCH(  # noqa: N802
+    L: float,
+    a: float,
+    b: float,
+    kE: float = 1.0,  # noqa: N803
+) -> tuple[float, float, float]:
     """Convert from Lab to DIN99b LCH.
 
     Args:
         L (float): The L value of the color.
         a (float): The a value of the color.
         b (float): The b value of the color.
-        kE (float): The kE value.
+        kE (float): The kE value. Unused, but kept for compatibility.
 
     Returns:
-        tuple[float, float, float]: The L99, C99, H99 values.
+        tuple[float, float, float]: The l99, c99, h99 values.
     """
     return Lab2DIN99familyLCH(L, a, b, 303.67, 0.0039, 26, 0.83, 23, 0.075)
 
 
-def Lab2DIN99oLCH(L, a, b, kCH=1.0, kE=1.0):
+def Lab2DIN99oLCH(  # noqa: N802
+    L: float,
+    a: float,
+    b: float,
+    kCH: float = 1.0,
+    kE: float = 1.0,  # noqa: N803
+) -> tuple[float, float, float]:
     """Convert from Lab to DIN99o LCH.
 
     Args:
         L (float): The L value of the color.
         a (float): The a value of the color.
         b (float): The b value of the color.
-        kCH (float): The kCH value.
-        kE (float): The kE value.
+        kCH (float, optional): The kCH value. Defaults to 1.0.
+        kE (float, optional): The kE value. Defaults to 1.0.
 
     Returns:
-        tuple[float, float, float]: The L99, C99, H99 values.
+        tuple[float, float, float]: The l99, c99, h99 values.
     """
     return Lab2DIN99familyLCH(
         L, a, b, 303.67, 0.0039, 26, 0.83, 1 / (0.0435 * kCH * kE), 0.075, kE
     )
 
 
-def Lab2DIN99familyLCH(L, a, b, l1, l2, deg, f1, c1, c2, kE=1.0, hdeg=None):
+def Lab2DIN99familyLCH(  # noqa: N802
+    L: float,  # noqa: N803
+    a: float,
+    b: float,
+    l1: float,
+    l2: float,
+    deg: float,
+    f1: float,
+    c1: float,
+    c2: float,
+    kE: float = 1.0,  # noqa: N803
+    hdeg: None | float = None,
+) -> tuple[float, float, float]:
     """Convert from Lab to DIN99 family LCH.
 
     Args:
@@ -2046,17 +2578,26 @@ def Lab2DIN99familyLCH(L, a, b, l1, l2, deg, f1, c1, c2, kE=1.0, hdeg=None):
         hdeg (None | float): The hdeg value. Defaults to None.
 
     Returns:
-        tuple[float, float, float]: The L99, C99, H99 values.
+        tuple[float, float, float]: The l99, c99, h99 values.
     """
-    L99, G, h99ef, rad = Lab2DIN99familyLGhrad(L, a, b, kE, l1, l2, deg, f1)
-    C99 = c1 * math.log(1 + c2 * G)
+    l99, g, h99ef, _ = Lab2DIN99familyLGhrad(L, a, b, kE, l1, l2, deg, f1)
+    c99 = c1 * math.log(1 + c2 * g)
     if hdeg is None:
         hdeg = deg
-    H99 = h99ef * 180 / math.pi + hdeg
-    return L99, C99, H99
+    h99 = h99ef * 180 / math.pi + hdeg
+    return l99, c99, h99
 
 
-def Lab2DIN99familyLGhrad(L, a, b, kE, l1, l2, deg, f1):
+def Lab2DIN99familyLGhrad(  # noqa: N802
+    L: float,
+    a: float,
+    b: float,
+    kE: float,
+    l1: float,
+    l2: float,
+    deg: float,
+    f1: float,  # noqa: N803
+) -> tuple[float, float, float, float]:
     """Convert from Lab to DIN99 family LCH.
 
     Args:
@@ -2070,9 +2611,9 @@ def Lab2DIN99familyLGhrad(L, a, b, kE, l1, l2, deg, f1):
         f1 (float): The f1 value.
 
     Returns:
-        tuple[float, float, float, float]: The L99, G, h99ef values.
+        tuple[float, float, float, float]: The l99, G, h99ef values.
     """
-    L99 = (1.0 / kE) * l1 * math.log(1 + l2 * L)
+    l99 = (1.0 / kE) * l1 * math.log(1 + l2 * L)
     rad = deg * math.pi / 180
     if rad != 0:
         ar = math.cos(rad)  # a rotation term
@@ -2082,12 +2623,12 @@ def Lab2DIN99familyLGhrad(L, a, b, kE, l1, l2, deg, f1):
     else:
         e = a
         f = f1 * b
-    G = math.sqrt(math.pow(e, 2) + math.pow(f, 2))
+    g = math.sqrt(math.pow(e, 2) + math.pow(f, 2))
     h99ef = math.atan2(f, e)
-    return L99, G, h99ef, rad
+    return l99, g, h99ef, rad
 
 
-def Lab2LCHab(L, a, b):
+def Lab2LCHab(L: float, a: float, b: float) -> tuple[float, float, float]:  # noqa: N802, N803
     """Convert from Lab to LCHab.
 
     Args:
@@ -2098,21 +2639,27 @@ def Lab2LCHab(L, a, b):
     Returns:
         tuple[float, float, float]: The LCHab values.
     """
-    C = math.sqrt(math.pow(a, 2) + math.pow(b, 2))
-    H = 180.0 * math.atan2(b, a) / math.pi
-    if H < 0.0:
-        H += 360.0
-    return L, C, H
+    c = math.sqrt(math.pow(a, 2) + math.pow(b, 2))
+    h = 180.0 * math.atan2(b, a) / math.pi
+    if h < 0.0:
+        h += 360.0
+    return L, c, h
 
 
-def Lab2Luv(L, a, b, whitepoint=None, scale=100):
+def Lab2Luv(  # noqa: N802
+    L: float,  # noqa: N803
+    a: float,
+    b: float,
+    whitepoint: None | float | str | list | tuple = None,
+    scale: float = 100,
+) -> tuple[float, float, float]:
     """Convert from Lab to Luv.
 
     Args:
         L (float): The L value of the color.
         a (float): The a value of the color.
         b (float): The b value of the color.
-        whitepoint (None | int | float | str | list | tuple): The whitepoint to
+        whitepoint (None | float | str | list | tuple): The whitepoint to
             use. Defaults to D50.
         scale (float): The scale factor to apply to the output values.
             Defaults to 100.
@@ -2120,23 +2667,22 @@ def Lab2Luv(L, a, b, whitepoint=None, scale=100):
     Returns:
         tuple[float, float, float]: The Luv values.
     """
-    X, Y, Z = Lab2XYZ(L, a, b, whitepoint, scale)
-    return XYZ2Luv(X, Y, Z, whitepoint)
+    return XYZ2Luv(*Lab2XYZ(L, a, b, whitepoint, scale), whitepoint)
 
 
-def Lab2RGB(
-    L,
-    a,
-    b,
-    rgb_space=None,
-    scale=1.0,
-    round_=False,
-    clamp=True,
-    whitepoint=None,
-    whitepoint_source=None,
-    noadapt=False,
-    cat="Bradford",
-):
+def Lab2RGB(  # noqa: N802
+    L: float,  # noqa: N803
+    a: float,
+    b: float,
+    rgb_space: None | str | list | tuple = None,
+    scale: float = 1.0,
+    round_: bool = False,
+    clamp: bool = True,
+    whitepoint: None | float | str | list | tuple = None,
+    whitepoint_source: None | float | str | list | tuple = None,
+    noadapt: bool = False,
+    cat: str = "Bradford",
+) -> list[float]:
     """Convert from Lab to RGB.
 
     Args:
@@ -2148,25 +2694,31 @@ def Lab2RGB(
             Defaults to 1.0.
         round_ (bool): Whether to round the output values. Defaults to False.
         clamp (bool): Whether to clamp the output values. Defaults to True.
-        whitepoint (None | int | float | str | list | tuple): The whitepoint to
+        whitepoint (None | float | str | list | tuple): The whitepoint to
             use. Defaults to D50.
-        whitepoint_source (None | int | float | str | list | tuple): The source
+        whitepoint_source (None | float | str | list | tuple): The source
             whitepoint to use. Defaults to D50.
         noadapt (bool): Whether to skip chromatic adaptation. Defaults to False.
         cat (str): The chromatic adaptation transform to use. Defaults to
             "Bradford".
 
     Returns:
-        tuple[float, float, float]: The RGB values.
+        list[float]: The RGB values.
     """
-    X, Y, Z = Lab2XYZ(L, a, b, whitepoint)
+    x, y, z = Lab2XYZ(L, a, b, whitepoint)
     if not noadapt:
         rgb_space = get_rgb_space(rgb_space)
-        X, Y, Z = adapt(X, Y, Z, whitepoint_source, rgb_space[1], cat)
-    return XYZ2RGB(X, Y, Z, rgb_space, scale, round_, clamp)
+        x, y, z = adapt(x, y, z, whitepoint_source, rgb_space[1], cat)
+    return XYZ2RGB(x, y, z, rgb_space, scale, round_, clamp)
 
 
-def Lab2XYZ(L, a, b, whitepoint=None, scale=1.0):
+def Lab2XYZ(  # noqa: N802
+    L: float,  # noqa: N803
+    a: float,
+    b: float,
+    whitepoint: None | float | str | list | tuple = None,
+    scale: float = 1.0,
+) -> tuple[float, float, float]:
     """Convert from Lab to XYZ.
 
     The input L value needs to be in the nominal range [0.0, 100.0] and
@@ -2182,7 +2734,7 @@ def Lab2XYZ(L, a, b, whitepoint=None, scale=1.0):
         L (float): The L value of the color.
         a (float): The a value of the color.
         b (float): The b value of the color.
-        whitepoint (None | int | float | str | list | tuple): The whitepoint to
+        whitepoint (None | float | str | list | tuple): The whitepoint to
             use. Defaults to D50.
         scale (float): The scale factor to apply to the output values.
             Defaults to 1.0.
@@ -2206,23 +2758,24 @@ def Lab2XYZ(L, a, b, whitepoint=None, scale=1.0):
         else (116.0 * fz - 16) / LSTAR_K
     )
 
-    Xr, Yr, Zr = get_whitepoint(whitepoint, scale)
-
-    X = xr * Xr
-    Y = yr * Yr
-    Z = zr * Zr
-
-    return X, Y, Z
+    Xr, Yr, Zr = get_whitepoint(whitepoint, scale)  # noqa: N806
+    return (xr * Xr), (yr * Yr), (zr * Zr)
 
 
-def Lab2xyY(L, a, b, whitepoint=None, scale=1.0):
+def Lab2xyY(  # noqa: N802
+    L: float,  # noqa: N803
+    a: float,
+    b: float,
+    whitepoint: None | float | str | list | tuple = None,
+    scale: float = 1.0,
+) -> tuple[float, float, float]:
     """Convert from Lab to xyY.
 
     Args:
         L (float): The L value of the color.
         a (float): The a value of the color.
         b (float): The b value of the color.
-        whitepoint (None | int | float | str | list | tuple): The whitepoint to
+        whitepoint (None | float | str | list | tuple): The whitepoint to
             use. Defaults to D50.
         scale (float): The scale factor to apply to the output values.
             Defaults to 1.0.
@@ -2230,11 +2783,10 @@ def Lab2xyY(L, a, b, whitepoint=None, scale=1.0):
     Returns:
         tuple[float, float, float]: The xyY values.
     """
-    X, Y, Z = Lab2XYZ(L, a, b, whitepoint, scale)
-    return XYZ2xyY(X, Y, Z, whitepoint)
+    return XYZ2xyY(*Lab2XYZ(L, a, b, whitepoint, scale), whitepoint)
 
 
-def Luv2LCHuv(L, u, v):
+def Luv2LCHuv(L: float, u: float, v: float) -> tuple[float, float, float]:  # noqa: N802, N803
     """Convert from Luv to LCHuv.
 
     Args:
@@ -2245,16 +2797,23 @@ def Luv2LCHuv(L, u, v):
     Returns:
         tuple[float, float, float]: The LCHuv values.
     """
-    C = math.sqrt(math.pow(u, 2) + math.pow(v, 2))
-    H = 180.0 * math.atan2(v, u) / math.pi
-    if H < 0.0:
-        H += 360.0
-    return L, C, H
+    c = math.sqrt(math.pow(u, 2) + math.pow(v, 2))
+    h = 180.0 * math.atan2(v, u) / math.pi
+    if h < 0.0:
+        h += 360.0
+    return L, c, h
 
 
-def Luv2RGB(
-    L, u, v, rgb_space=None, scale=1.0, round_=False, clamp=True, whitepoint=None
-):
+def Luv2RGB(  # noqa: N802
+    L: float,  # noqa: N803
+    u: float,
+    v: float,
+    rgb_space: None | str | list | tuple = None,
+    scale: float = 1.0,
+    round_: bool = False,
+    clamp: bool = True,
+    whitepoint: None | float | str | list | tuple = None,
+) -> list[float]:
     """Convert from Luv to RGB.
 
     Args:
@@ -2266,17 +2825,16 @@ def Luv2RGB(
             Defaults to 1.0.
         round_ (bool): Whether to round the output values. Defaults to False.
         clamp (bool): Whether to clamp the output values. Defaults to True.
-        whitepoint (None | int | float | str | list | tuple): The whitepoint to
+        whitepoint (None | float | str | list | tuple): The whitepoint to
             use. Defaults to D50.
 
     Returns:
         tuple[float, float, float]: The RGB values.
     """
-    X, Y, Z = Luv2XYZ(L, u, v, whitepoint)
-    return XYZ2RGB(X, Y, Z, rgb_space, scale, round_, clamp)
+    return XYZ2RGB(*Luv2XYZ(L, u, v, whitepoint), rgb_space, scale, round_, clamp)
 
 
-def u_v_2xy(u, v):
+def u_v_2xy(u: float, v: float) -> tuple[float, float]:
     """Convert from u'v' to xy.
 
     Args:
@@ -2292,7 +2850,13 @@ def u_v_2xy(u, v):
     return x, y
 
 
-def Luv2XYZ(L, u, v, whitepoint=None, scale=1.0):
+def Luv2XYZ(  # noqa: N802
+    L: float,  # noqa: N803
+    u: float,
+    v: float,
+    whitepoint: None | str | float | list | tuple = None,
+    scale: float = 1.0,
+) -> tuple[float, float, float]:
     """Convert from Luv to XYZ.
 
     Args:
@@ -2306,25 +2870,30 @@ def Luv2XYZ(L, u, v, whitepoint=None, scale=1.0):
     Returns:
         tuple[float, float, float]: The XYZ values.
     """
-    Xr, Yr, Zr = get_whitepoint(whitepoint)
+    xr, yr, zr = get_whitepoint(whitepoint)
 
-    Y = math.pow((L + 16.0) / 116.0, 3) if L > LSTAR_K * LSTAR_E else L / LSTAR_K
+    y = math.pow((L + 16.0) / 116.0, 3) if L > LSTAR_K * LSTAR_E else L / LSTAR_K
 
-    uo = (4.0 * Xr) / (Xr + 15.0 * Yr + 3.0 * Zr)
-    vo = (9.0 * Yr) / (Xr + 15.0 * Yr + 3.0 * Zr)
+    uo = (4.0 * xr) / (xr + 15.0 * yr + 3.0 * zr)
+    vo = (9.0 * yr) / (xr + 15.0 * yr + 3.0 * zr)
 
     a = (1.0 / 3.0) * (((52.0 * L) / (u + 13 * L * uo)) - 1)
-    b = -5.0 * Y
+    b = -5.0 * y
     c = -(1.0 / 3.0)
-    d = Y * (((39.0 * L) / (v + 13 * L * vo)) - 5)
+    d = y * (((39.0 * L) / (v + 13 * L * vo)) - 5)
 
-    X = (d - b) / (a - c)
-    Z = X * a + b
+    x = (d - b) / (a - c)
+    z = x * a + b
 
-    return tuple([v * scale for v in (X, Y, Z)])
+    return tuple([v * scale for v in (x, y, z)])
 
 
-def RGB2HSI(R, G, B, scale=1.0):
+def RGB2HSI(  # noqa: N802
+    R: float,
+    G: float,
+    B: float,
+    scale: float = 1.0,  # noqa: N803
+) -> tuple[float, float, float]:
     """Convert from RGB to HSI.
 
     The input RGB values need to be in the nominal range [0.0, 1.0] and
@@ -2340,20 +2909,25 @@ def RGB2HSI(R, G, B, scale=1.0):
     Returns:
         tuple[float, float, float]: The HSI values.
     """
-    I = (R + G + B) / 3.0
-    S = 1 - min(R, G, B) / I if I else 0
+    i = (R + G + B) / 3.0
+    s = 1 - min(R, G, B) / i if i else 0
     if not R == G == B:
-        H = math.atan2(math.sqrt(3) * (G - B), 2 * R - G - B) / math.pi / 2
-        if H < 0:
-            H += 1.0
-        if H > 1:
-            H -= 1.0
+        h = math.atan2(math.sqrt(3) * (G - B), 2 * R - G - B) / math.pi / 2
+        if h < 0:
+            h += 1.0
+        if h > 1:
+            h -= 1.0
     else:
-        H = 0
-    return H * scale, S * scale, I * scale
+        h = 0
+    return h * scale, s * scale, i * scale
 
 
-def RGB2HSL(R, G, B, scale=1.0):
+def RGB2HSL(  # noqa: N802
+    R: float,  # noqa: N803
+    G: float,  # noqa: N803
+    B: float,  # noqa: N803
+    scale: float = 1.0,
+) -> tuple[float, float, float]:
     """Convert from RGB to HSL.
 
     The input RGB values need to be in the nominal range [0.0, 1.0] and
@@ -2369,11 +2943,16 @@ def RGB2HSL(R, G, B, scale=1.0):
     Returns:
         tuple[float, float, float]: The HSL values.
     """
-    H, L, S = colorsys.rgb_to_hls(R, G, B)
-    return tuple(v * scale for v in (H, S, L))
+    h, l, s = colorsys.rgb_to_hls(R, G, B)
+    return tuple(v * scale for v in (h, s, l))
 
 
-def RGB2HSV(R, G, B, scale=1.0):
+def RGB2HSV(  # noqa: N802
+    R: float,
+    G: float,
+    B: float,
+    scale: float = 1.0,  # noqa: N803
+) -> tuple[float, float, float]:
     """Convert from RGB to HSV.
 
     The input RGB values need to be in the nominal range [0.0, 1.0] and
@@ -2392,16 +2971,41 @@ def RGB2HSV(R, G, B, scale=1.0):
     return tuple(v * scale for v in colorsys.rgb_to_hsv(R, G, B))
 
 
-def LinearRGB2ICtCp(R, G, B, oetf=lambda FD: specialpow(FD, 1.0 / -2084)):
-    """Rec. 2020 linear RGB to non-linear ICtCp."""
-    # http://www.dolby.com/us/en/technologies/dolby-vision/ICtCp-white-paper.pdf
-    LMS = LinearRGB2LMS_matrix * (R, G, B)
-    L_, M_, S_ = (oetf(FD) for FD in LMS)
-    I, Ct, Cp = L_M_S_2ICtCp_matrix * (L_, M_, S_)
-    return I, Ct, Cp
+def LinearRGB2ICtCp(  # noqa: N802
+    R: float,  # noqa: N803
+    G: float,  # noqa: N803
+    B: float,  # noqa: N803
+    oetf: None | Callable = None,
+) -> tuple[float, float, float]:
+    """Rec. 2020 linear RGB to non-linear ICtCp.
+
+    http://www.dolby.com/us/en/technologies/dolby-vision/ICtCp-white-paper.pdf
+    """
+    if oetf is None:
+
+        def oetf(FD: float) -> float:  # noqa: N803
+            """Default OETF for Rec. 2020.
+
+            Args:
+                FD (float): The value to apply the OETF to.
+
+            Returns:
+                float: The transformed value.
+            """
+            return special_pow(FD, 1.0 / -2084)
+
+    lms = LinearRGB2LMS_matrix * (R, G, B)
+    l_, m_, s_ = (oetf(FD) for FD in lms)
+    i, ct, cp = L_M_S_2ICtCp_matrix * (l_, m_, s_)
+    return i, ct, cp
 
 
-def ICtCp2LinearRGB(I, Ct, Cp, eotf=None):
+def ICtCp2LinearRGB(  # noqa: N802
+    I: float,
+    Ct: float,
+    Cp: float,
+    eotf: None | Callable = None,  # noqa: N803
+) -> tuple[float, float, float]:
     """Non-linear ICtCp to Rec. 2020 linear RGB.
 
     http://www.dolby.com/us/en/technologies/dolby-vision/ICtCp-white-paper.pdf
@@ -2414,31 +3018,38 @@ def ICtCp2LinearRGB(I, Ct, Cp, eotf=None):
             Defaults to the Rec. 2020 EOTF.
             This function should take a single argument and return a float.
             The default function is the Rec. 2020 OETF.
-            See the `specialpow` function for more details.
+            See the `special_pow` function for more details.
 
     Returns:
-        tuple: The RGB values.
+        tuple[float, float, float]: The RGB values.
     """
     if eotf is None:
 
-        def eotf(v):
-            return specialpow(v, -2084)
+        def eotf(v: float) -> float:
+            """Default EOTF for Rec. 2020.
 
-    L_M_S_ = ICtCp2L_M_S__matrix * (I, Ct, Cp)
-    L, M, S = (eotf(v) for v in L_M_S_)
-    R, G, B = LMS2LinearRGB_matrix * (L, M, S)
-    return R, G, B
+            Args:
+                v (float): The value to apply the EOTF to.
+
+            Returns:
+                float: The transformed value.
+            """
+            return special_pow(v, -2084)
+
+    l_m_s_ = ICtCp2L_M_S__matrix * (I, Ct, Cp)
+    l, m, s = (eotf(v) for v in l_m_s_)
+    return LMS2LinearRGB_matrix * (l, m, s)
 
 
-def RGB2ICtCp(
-    R,
-    G,
-    B,
-    rgb_space="Rec. 2020",
-    eotf=None,
-    clamp=False,
-    oetf=None,
-):
+def RGB2ICtCp(  # noqa: N802
+    R: float,  # noqa: N803
+    G: float,  # noqa: N803
+    B: float,  # noqa: N803
+    rgb_space: None | str | list | tuple = "Rec. 2020",
+    eotf: None | Callable = None,
+    clamp: bool = False,
+    oetf: None | Callable = None,
+) -> tuple[float, float, float]:
     """R'G'B' to ICtCp.
 
     Args:
@@ -2451,41 +3062,56 @@ def RGB2ICtCp(
             Defaults to the Rec. 2020 EOTF.
             This function should take a single argument and return a float.
             The default function is the inverse of the Rec. 2020 EOTF.
-            See the `specialpow` function for more details.
+            See the `special_pow` function for more details.
         clamp (bool): If True, clamp the output values to [0, 1].
             Defaults to False.
         oetf (None | callable): The opto-electrical transfer function to use.
             Defaults to the Rec. 2020 OETF.
             This function should take a single argument and return a float.
             The default function is the Rec. 2020 OETF.
-            See the `specialpow` function for more details.
+            See the `special_pow` function for more details.
 
     Returns:
-        tuple: The ICtCp values.
+        tuple[float, float, float]: The ICtCp values.
     """
     if eotf is None:
 
-        def eotf(v):
-            return specialpow(v, -2084)
+        def eotf(v: float) -> float:
+            """Default EOTF for Rec. 2020.
+
+            Args:
+                v (float): The value to apply the EOTF to.
+
+            Returns:
+                float: The transformed value.
+            """
+            return special_pow(v, -2084)
 
     if oetf is None:
 
-        def oetf(E):
-            return specialpow(E, 1.0 / -2084)
+        def oetf(E: float) -> float:  # noqa: N803
+            """Default OETF for Rec. 2020.
 
-    X, Y, Z = RGB2XYZ(R, G, B, rgb_space, eotf=eotf)
-    return XYZ2ICtCp(X, Y, Z, clamp, oetf)
+            Args:
+                E (float): The value to apply the OETF to.
+
+            Returns:
+                float: The transformed value.
+            """
+            return special_pow(E, 1.0 / -2084)
+
+    return XYZ2ICtCp(*RGB2XYZ(R, G, B, rgb_space, eotf=eotf), clamp, oetf)
 
 
-def ICtCp2RGB(
-    I,
-    Ct,
-    Cp,
-    rgb_space="Rec. 2020",
-    eotf=None,
-    clamp=False,
-    oetf=None,
-):
+def ICtCp2RGB(  # noqa: N802
+    I: float,  # noqa: N803
+    Ct: float,  # noqa: N803
+    Cp: float,  # noqa: N803
+    rgb_space: None | str | list | tuple = "Rec. 2020",
+    eotf: None | Callable = None,
+    clamp: bool = False,
+    oetf: None | Callable = None,
+) -> list[float]:
     """ICtCp to R'G'B'.
 
     Args:
@@ -2498,33 +3124,54 @@ def ICtCp2RGB(
             Defaults to the Rec. 2020 EOTF.
             This function should take a single argument and return a float.
             The default function is the inverse of the Rec. 2020 EOTF.
-            See the `specialpow` function for more details.
+            See the `special_pow` function for more details.
         clamp (bool): If True, clamp the output values to [0, 1].
             Defaults to False.
         oetf (None | callable): The opto-electrical transfer function to use.
             Defaults to the Rec. 2020 OETF.
             This function should take a single argument and return a float.
             The default function is the Rec. 2020 OETF.
-            See the `specialpow` function for more details.
+            See the `special_pow` function for more details.
 
     Returns:
         tuple: The RGB values.
     """
     if eotf is None:
 
-        def eotf(v):
-            return specialpow(v, -2084)
+        def eotf(v: float) -> float:
+            """Default EOTF for Rec. 2020.
+
+            Args:
+                v (float): The value to apply the EOTF to.
+
+            Returns:
+                float: The transformed value.
+            """
+            return special_pow(v, -2084)
 
     if oetf is None:
 
-        def oetf(E):
-            return specialpow(E, 1.0 / -2084)
+        def oetf(E: float) -> float:  # noqa: N803
+            """Default OETF for Rec. 2020.
 
-    X, Y, Z = ICtCp2XYZ(I, Ct, Cp, eotf)
-    return XYZ2RGB(X, Y, Z, rgb_space, clamp=clamp, oetf=oetf)
+            Args:
+                E (float): The value to apply the OETF to.
+
+            Returns:
+                float: The transformed value.
+            """
+            return special_pow(E, 1.0 / -2084)
+
+    return XYZ2RGB(*ICtCp2XYZ(I, Ct, Cp, eotf), rgb_space, clamp=clamp, oetf=oetf)
 
 
-def XYZ2ICtCp(X, Y, Z, clamp=False, oetf=None):
+def XYZ2ICtCp(  # noqa: N802
+    X: float,
+    Y: float,
+    Z: float,
+    clamp: bool = False,
+    oetf: None | Callable = None,  # noqa: N803
+) -> tuple[float, float, float]:
     """XYZ to ICtCp.
 
     Args:
@@ -2537,21 +3184,30 @@ def XYZ2ICtCp(X, Y, Z, clamp=False, oetf=None):
             Defaults to the Rec. 2020 OETF.
             This function should take a single argument and return a float.
             The default function is the Rec. 2020 OETF.
-            See the `specialpow` function for more details.
+            See the `special_pow` function for more details.
 
     Returns:
         tuple: The ICtCp values.
     """
     if oetf is None:
 
-        def oetf(E):
-            return specialpow(E, 1.0 / -2084)
+        def oetf(E: float) -> float:  # noqa: N803
+            """Default OETF for Rec. 2020.
 
-    R, G, B = XYZ2RGB(X, Y, Z, "Rec. 2020", clamp=clamp, oetf=lambda v: v)
-    return LinearRGB2ICtCp(R, G, B, oetf)
+            Args:
+                E (float): The value to apply the OETF to.
+
+            Returns:
+                float: The transformed value.
+            """
+            return special_pow(E, 1.0 / -2084)
+
+    return LinearRGB2ICtCp(
+        *XYZ2RGB(X, Y, Z, "Rec. 2020", clamp=clamp, oetf=lambda v: v), oetf
+    )
 
 
-def ICtCp2XYZ(I, Ct, Cp, eotf=None) -> tuple:
+def ICtCp2XYZ(I: float, Ct: float, Cp: float, eotf: None | Callable = None) -> tuple:  # noqa: N802, N803
     """ICtCp to XYZ.
 
     Args:
@@ -2562,28 +3218,43 @@ def ICtCp2XYZ(I, Ct, Cp, eotf=None) -> tuple:
             Defaults to the Rec. 2020 EOTF.
             This function should take a single argument and return a float.
             The default function is the inverse of the Rec. 2020 EOTF.
-            See the `specialpow` function for more details.
+            See the `special_pow` function for more details.
 
     Returns:
         tuple: The XYZ values.
     """
     if eotf is None:
 
-        def eotf(v):
-            return specialpow(v, -2084)
+        def eotf(v: float) -> float:
+            """Default EOTF for Rec. 2020.
 
-    R, G, B = ICtCp2LinearRGB(I, Ct, Cp, eotf)
-    return RGB2XYZ(R, G, B, "Rec. 2020", eotf=lambda v: v)
+            Args:
+                v (float): The value to apply the EOTF to.
+
+            Returns:
+                float: The transformed value.
+            """
+            return special_pow(v, -2084)
+
+    return RGB2XYZ(*ICtCp2LinearRGB(I, Ct, Cp, eotf), "Rec. 2020", eotf=lambda v: v)
 
 
-def RGB2Lab(R, G, B, rgb_space=None, whitepoint=None, noadapt=False, cat="Bradford"):
+def RGB2Lab(  # noqa: N802
+    R: float,  # noqa: N803
+    G: float,  # noqa: N803
+    B: float,  # noqa: N803
+    rgb_space: None | str | list | tuple = None,
+    whitepoint: None | float | str | list | tuple = None,
+    noadapt: bool = False,
+    cat: str = "Bradford",
+) -> tuple[float, float, float]:
     """Convert from RGB to Lab.
 
     Args:
         R (float): The R' value of the color.
         G (float): The G' value of the color.
         B (float): The B' value of the color.
-        rgb_space (None | int | float | str | list | tuple): The RGB space
+        rgb_space (None | str | list | tuple): The RGB space
             to use for conversion. Defaults to sRGB if not set.
             If a string is given, it must be a valid RGB space name.
             If a list or tuple is given, it must be in the format
@@ -2606,16 +3277,23 @@ def RGB2Lab(R, G, B, rgb_space=None, whitepoint=None, noadapt=False, cat="Bradfo
             See the `adapt` function for more details.
 
     Returns:
-        tuple: The Lab values.
+        tuple[float, float, float]: The Lab values.
     """
-    X, Y, Z = RGB2XYZ(R, G, B, rgb_space, scale=100)
+    x, y, z = RGB2XYZ(R, G, B, rgb_space, scale=100)
     if not noadapt:
         rgb_space = get_rgb_space(rgb_space)
-        X, Y, Z = adapt(X, Y, Z, rgb_space[1], whitepoint, cat)
-    return XYZ2Lab(X, Y, Z, whitepoint=whitepoint)
+        x, y, z = adapt(x, y, z, rgb_space[1], whitepoint, cat)
+    return XYZ2Lab(x, y, z, whitepoint=whitepoint)
 
 
-def RGB2XYZ(R, G, B, rgb_space=None, scale=1.0, eotf=None):
+def RGB2XYZ(  # noqa: N802
+    R: float,  # noqa: N803
+    G: float,  # noqa: N803
+    B: float,  # noqa: N803
+    rgb_space: None | str | list | tuple = None,
+    scale: float = 1.0,
+    eotf: None | Callable = None,
+) -> tuple[float, float, float]:
     """Convert from RGB to XYZ.
 
     Use optional RGB colorspace definition, which can be a named colorspace
@@ -2652,32 +3330,63 @@ def RGB2XYZ(R, G, B, rgb_space=None, scale=1.0, eotf=None):
        replaced by a "simplified" version using a straight gamma function
        with gamma = 2.2.
 
+    Args:
+        R (float): The R' value of the color.
+        G (float): The G' value of the color.
+        B (float): The B' value of the color.
+        rgb_space (None | str | list | tuple): The RGB space
+            to use for conversion. Defaults to sRGB if not set.
+            If a string is given, it must be a valid RGB space name.
+            If a list or tuple is given, it must be in the format
+            (gamma, whitepoint, red, green, blue).
+            The whitepoint can be a string (e.g. "D50"), a tuple of XYZ
+            coordinates, or a color temperature in degrees K (float or
+            int). The gamma should be a float. The RGB primaries red,
+            green, blue should be lists or tuples of xyY coordinates
+            (only x and y will be used, so Y can be zero or None).
+        scale (float): The scale factor for the output values. Defaults to 1.0.
+        eotf (function): A function to apply to the RGB values before conversion.
+            If not set, the RGB values will be treated as linear RGB values.
+            This function should take a single argument and return a float.
+            The default function is the inverse of the Rec. 2020 EOTF.
+            See the `special_pow` function for more details.
+
+    Returns:
+        tuple[float, float, float]: The XYZ values.
+
     """
-    trc, whitepoint, rxyY, gxyY, bxyY, matrix = get_rgb_space(rgb_space)
-    RGB = [R, G, B]
+    trc, _, _, _, _, matrix = get_rgb_space(rgb_space)
+    rgb = [R, G, B]
     is_trc = isinstance(trc, (list, tuple))
-    for i, v in enumerate(RGB):
+    for i, v in enumerate(rgb):
         gamma = trc[i] if is_trc else trc
         if eotf:
-            RGB[i] = eotf(v)
+            rgb[i] = eotf(v)
         elif isinstance(gamma, (list, tuple)):
-            RGB[i] = interp(
+            rgb[i] = interp(
                 v, [n / float(len(gamma) - 1) for n in range(len(gamma))], gamma
             )
         else:
-            RGB[i] = specialpow(v, gamma)
-    XYZ = matrix * RGB
-    return tuple(v * scale for v in XYZ)
+            rgb[i] = special_pow(v, gamma)
+    xyz = matrix * rgb
+    return tuple(v * scale for v in xyz)
 
 
-def RGB2xyY(R, G, B, rgb_space=None, scale=1.0, eotf=None):
+def RGB2xyY(  # noqa: N802
+    R: float,  # noqa: N803
+    G: float,  # noqa: N803
+    B: float,  # noqa: N803
+    rgb_space: None | str | list | tuple = None,
+    scale: float = 1.0,
+    eotf: None | Callable = None,
+) -> tuple[float, float, float]:
     """Convert RGB to xyY.
 
     Args:
         R (float): The R' value of the color.
         G (float): The G' value of the color.
         B (float): The B' value of the color.
-        rgb_space (None | int | float | str | list | tuple): The RGB space
+        rgb_space (None | str | list | tuple): The RGB space
             to use for conversion. Defaults to sRGB if not set.
             If a string is given, it must be a valid RGB space name.
             If a list or tuple is given, it must be in the format
@@ -2691,7 +3400,7 @@ def RGB2xyY(R, G, B, rgb_space=None, scale=1.0, eotf=None):
         eotf (function): A function to apply to the RGB values before conversion.
 
     Returns:
-        tuple: The xyY values.
+        tuple[float, float, float]: The xyY values.
     """
     return XYZ2xyY(
         *RGB2XYZ(R, G, B, rgb_space, scale, eotf),
@@ -2699,14 +3408,21 @@ def RGB2xyY(R, G, B, rgb_space=None, scale=1.0, eotf=None):
     )
 
 
-def RGB2YCbCr(R, G, B, rgb_space="NTSC 1953", bits=8, fullrange=False):
+def RGB2YCbCr(  # noqa: N802
+    R: float,  # noqa: N803
+    G: float,  # noqa: N803
+    B: float,  # noqa: N803
+    rgb_space: None | str | list | tuple = "NTSC 1953",
+    bits: int = 8,
+    fullrange: bool = False,
+) -> tuple[float, float, float]:
     """R'G'B' to Y'CbCr quantized to n bits.
 
     Args:
         R (float): The R' value of the color.
         G (float): The G' value of the color.
         B (float): The B' value of the color.
-        rgb_space (None | int | float | str | list | tuple): The RGB space
+        rgb_space (None | str | list | tuple): The RGB space
             to use for conversion. Defaults to sRGB if not set.
             If a string is given, it must be a valid RGB space name.
             If a list or tuple is given, it must be in the format
@@ -2725,14 +3441,19 @@ def RGB2YCbCr(R, G, B, rgb_space="NTSC 1953", bits=8, fullrange=False):
     return YPbPr2YCbCr(*RGB2YPbPr(R, G, B, rgb_space), bits=bits, fullrange=fullrange)
 
 
-def RGB2YPbPr(R, G, B, rgb_space="NTSC 1953"):
+def RGB2YPbPr(  # noqa: N802
+    R: float,  # noqa: N803
+    G: float,  # noqa: N803
+    B: float,  # noqa: N803
+    rgb_space: None | str | list | tuple = "NTSC 1953",
+) -> tuple[float, float, float]:
     """R'G'B' to Y'PbPr.
 
     Args:
         R (float): The R' value of the color.
         G (float): The G' value of the color.
         B (float): The B' value of the color.
-        rgb_space (None | int | float | str | list | tuple): The RGB space
+        rgb_space (None | str | list | tuple): The RGB space
             to use for conversion. Defaults to sRGB if not set.
             If a string is given, it must be a valid RGB space name.
             If a list or tuple is given, it must be in the format
@@ -2749,11 +3470,11 @@ def RGB2YPbPr(R, G, B, rgb_space="NTSC 1953"):
     return RGB2YPbPr_matrix(rgb_space) * (R, G, B)
 
 
-def RGB2YPbPr_matrix(rgb_space="NTSC 1953"):
+def RGB2YPbPr_matrix(rgb_space: None | str | list | tuple = "NTSC 1953") -> Matrix3x3:  # noqa: N802
     """Get the RGB to Y'PbPr matrix for the given RGB space.
 
     Args:
-        rgb_space (None | int | float | str | list | tuple): The RGB space
+        rgb_space (None | str | list | tuple): The RGB space
             to use for conversion. Defaults to sRGB if not set.
             If a string is given, it must be a valid RGB space name.
             If a list or tuple is given, it must be in the format
@@ -2767,76 +3488,81 @@ def RGB2YPbPr_matrix(rgb_space="NTSC 1953"):
     Returns:
         Matrix3x3: The RGB to Y'PbPr matrix.
     """
-    (trc, whitepoint, (rx, ry, rY), (gx, gy, gY), (bx, by, bY), matrix) = get_rgb_space(
-        rgb_space
-    )
+    matrix = get_rgb_space(rgb_space)[-1]
     ndigits = 3 if matrix == get_rgb_space("NTSC 1953")[-1] else 4
-    KR = round((matrix * (1, 0, 0))[1], ndigits)
-    KB = round((matrix * (0, 0, 1))[1], ndigits)
-    KG = 1.0 - KR - KB
-    Pb_scale = (1 - KB) / 0.5
-    Pr_scale = (1 - KR) / 0.5
+    kr = round((matrix * (1, 0, 0))[1], ndigits)
+    kb = round((matrix * (0, 0, 1))[1], ndigits)
+    kg = 1.0 - kr - kb
+    pb_scale = (1 - kb) / 0.5
+    pr_scale = (1 - kr) / 0.5
     return Matrix3x3(
         [
-            [KR, KG, KB],
-            [-KR / Pb_scale, -KG / Pb_scale, 0.5],
-            [0.5, -KG / Pr_scale, -KB / Pr_scale],
+            [kr, kg, kb],
+            [-kr / pb_scale, -kg / pb_scale, 0.5],
+            [0.5, -kg / pr_scale, -kb / pr_scale],
         ]
     )
 
 
-def YCbCr2YPbPr(Y, Cb, Cr, bits=8, fullrange=False):
+def YCbCr2YPbPr(  # noqa: N802
+    Y: float,
+    Cb: float,
+    Cr: float,
+    bits: int = 8,
+    fullrange: bool = False,  # noqa: N803
+) -> tuple[float, float, float]:
     """Y'CbCr to Y'PbPr.
 
     Args:
         Y (float): The Y value of the color.
         Cb (float): The Cb value of the color.
         Cr (float): The Cr value of the color.
-        bits (int): The number of bits to quantize to. Defaults to 8.
-        fullrange (bool): Whether to use full range or limited range. Defaults to False.
+        bits (int, optional): The number of bits to quantize to. Defaults to 8.
+        fullrange (bool, optional): Whether to use full range or limited range.
+            Defaults to False.
 
     Returns:
-        tuple: The Y'PbPr values.
+        tuple[float, float, float]: The Y'PbPr values.
     """
     bitlevels = 2**bits
     if not fullrange:
-        Yblack = 16
-        Ywhite = 235
-        Cmax = 240
+        yblack = 16
+        ywhite = 235
+        cmax = 240
     else:
-        Yblack = 0
-        Ywhite = 255
-        Cmax = 255
-    Yscale = (Ywhite - Yblack) / 256.0 * bitlevels
-    Y -= Yblack / 256.0 * bitlevels
-    Y /= Yscale
-    Cneutral = 128 / 256.0 * bitlevels
-    Cscale = (Cmax - Yblack) / 256.0 * bitlevels
-    Pb = Cb - Cneutral
-    Pb /= Cscale
-    Pr = Cr - Cneutral
-    Pr /= Cscale
-    return Y, Pb, Pr
+        yblack = 0
+        ywhite = 255
+        cmax = 255
+    yscale = (ywhite - yblack) / 256.0 * bitlevels
+    Y -= yblack / 256.0 * bitlevels  # noqa: N806
+    Y /= yscale  # noqa: N806
+    cneutral = 128 / 256.0 * bitlevels
+    cscale = (cmax - yblack) / 256.0 * bitlevels
+    pb = Cb - cneutral
+    pb /= cscale
+    pr = Cr - cneutral
+    pr /= cscale
+    return Y, pb, pr
 
 
-def YCbCr2RGB(
-    Y,
-    Cb,
-    Cr,
-    rgb_space="NTSC 1953",
-    bits=8,
-    fullrange=False,
-    scale=1.0,
-    round_=False,
-    clamp=True,
-):
+def YCbCr2RGB(  # noqa: N802
+    Y: float,  # noqa: N803
+    Cb: float,  # noqa: N803
+    Cr: float,  # noqa: N803
+    rgb_space: None | str | list | tuple = "NTSC 1953",
+    bits: int = 8,
+    fullrange: bool = False,
+    scale: float = 1.0,
+    round_: bool = False,
+    clamp: bool = True,
+) -> list[float]:
     """Y'CbCr to R'G'B'.
 
     Args:
         Y (float): The Y value of the color.
         Cb (float): The Cb value of the color.
         Cr (float): The Cr value of the color.
-        rgb_space (None | int | float | str | list | tuple): The RGB space
+        rgb_space (None | str | list | tuple): The RGB space
             to use for conversion. Defaults to sRGB if not set.
             If a string is given, it must be a valid RGB space name.
             If a list or tuple is given, it must be in the format
@@ -2855,20 +3581,29 @@ def YCbCr2RGB(
             Defaults to True.
 
     Returns:
-        tuple: The R'G'B' values.
+        list[float]: The R'G'B' values.
     """
-    Y, Pb, Pr = YCbCr2YPbPr(Y, Cb, Cr, bits, fullrange)
-    return YPbPr2RGB(Y, Pb, Pr, rgb_space, scale, round_, clamp)
+    return YPbPr2RGB(
+        *YCbCr2YPbPr(Y, Cb, Cr, bits, fullrange), rgb_space, scale, round_, clamp
+    )
 
 
-def YPbPr2RGB(Y, Pb, Pr, rgb_space="NTSC 1953", scale=1.0, round_=False, clamp=True):
+def YPbPr2RGB(  # noqa: N802
+    Y: float,  # noqa: N803
+    Pb: float,  # noqa: N803
+    Pr: float,  # noqa: N803
+    rgb_space: None | str | list | tuple = "NTSC 1953",
+    scale: float = 1.0,
+    round_: bool = False,
+    clamp: bool = True,
+) -> list[float]:
     """Y'PbPr to R'G'B'.
 
     Args:
         Y (float): The Y value of the color.
         Pb (float): The Pb value of the color.
         Pr (float): The Pr value of the color.
-        rgb_space (None | int | float | str | list | tuple): The RGB space
+        rgb_space (None | str | list | tuple): The RGB space
             to use for conversion. Defaults to sRGB if not set.
             If a string is given, it must be a valid RGB space name.
             If a list or tuple is given, it must be in the format
@@ -2885,19 +3620,25 @@ def YPbPr2RGB(Y, Pb, Pr, rgb_space="NTSC 1953", scale=1.0, round_=False, clamp=T
             Defaults to True.
 
     Returns:
-        tuple: The R'G'B' values.
+        list[float]: The R'G'B' values.
     """
-    RGB = RGB2YPbPr_matrix(rgb_space).inverted() * (Y, Pb, Pr)
+    rgb = RGB2YPbPr_matrix(rgb_space).inverted() * (Y, Pb, Pr)
     for i in range(3):
         if clamp:
-            RGB[i] = min(1.0, max(0.0, RGB[i]))
-        RGB[i] *= scale
+            rgb[i] = min(1.0, max(0.0, rgb[i]))
+        rgb[i] *= scale
         if round_ is not False:
-            RGB[i] = round(RGB[i], round_)
-    return RGB
+            rgb[i] = round(rgb[i], round_)
+    return rgb
 
 
-def YPbPr2YCbCr(Y, Pb, Pr, bits=8, fullrange=False):
+def YPbPr2YCbCr(  # noqa: N802
+    Y: float,
+    Pb: float,
+    Pr: float,
+    bits: int = 8,
+    fullrange: bool = False,  # noqa: N803
+) -> tuple[float, float, float]:
     """Y'PbPr to Y'CbCr quantized to n bits.
 
     Args:
@@ -2908,30 +3649,35 @@ def YPbPr2YCbCr(Y, Pb, Pr, bits=8, fullrange=False):
         fullrange (bool): Whether to use full range or limited range. Defaults to False.
 
     Returns:
-        tuple: The Y'CbCr values.
+        tuple[float, float, float]: The Y'CbCr values.
     """
     bitlevels = 2**bits
     if not fullrange:
-        Yblack = 16
-        Ywhite = 235
-        Cmax = 240
+        yblack = 16
+        ywhite = 235
+        cmax = 240
     else:
-        Yblack = 0
-        Ywhite = 255
-        Cmax = 255
-    Yscale = (Ywhite - Yblack) / 256.0 * bitlevels
-    Y = Yblack / 256.0 * bitlevels + Yscale * Y
-    Cneutral = 128 / 256.0 * bitlevels
-    Cscale = (Cmax - Yblack) / 256.0 * bitlevels
-    Cb = Cneutral + Cscale * Pb
-    Cr = Cneutral + Cscale * Pr
+        yblack = 0
+        ywhite = 255
+        cmax = 255
+    yscale = (ywhite - yblack) / 256.0 * bitlevels
+    Y = yblack / 256.0 * bitlevels + yscale * Y  # noqa: N806
+    cneutral = 128 / 256.0 * bitlevels
+    cscale = (cmax - yblack) / 256.0 * bitlevels
+    cb = cneutral + cscale * Pb  # noqa: N806
+    cr = cneutral + cscale * Pr  # noqa: N806
     # In fullrange mode, Cb and Cr can reach 255.5, so we need to clamp
     # Follow ITU-T Rec. T.871 (JPEG)
-    Y, Cb, Cr = (min(max(round(v), 0), bitlevels - 1) for v in (Y, Cb, Cr))
-    return Y, Cb, Cr
+    return (min(max(round(v), 0), bitlevels - 1) for v in (Y, cb, cr))
 
 
-def RGBsaturation(R, G, B, saturation, rgb_space=None):
+def RGBsaturation(  # noqa: N802
+    R: float,  # noqa: N803
+    G: float,  # noqa: N803
+    B: float,  # noqa: N803
+    saturation: float,
+    rgb_space: None | str | list | tuple = None,
+) -> tuple[float, float, float]:
     """(De)saturate a RGB color in CIE xy and return the RGB and xyY values.
 
     Args:
@@ -2941,7 +3687,7 @@ def RGBsaturation(R, G, B, saturation, rgb_space=None):
         saturation (float): The saturation factor.
             0.0 = grayscale, 1.0 = original color, >1.0 = oversaturated.
             <0.0 = undersaturated.
-        rgb_space (None | int | float | str | list | tuple): The RGB space
+        rgb_space (None | str | list | tuple): The RGB space
             to use for conversion. Defaults to sRGB if not set.
             If a string is given, it must be a valid RGB space name.
             If a list or tuple is given, it must be in the format
@@ -2957,12 +3703,18 @@ def RGBsaturation(R, G, B, saturation, rgb_space=None):
         tuple: The new xyY values after saturation adjustment.
     """
     whitepoint = RGB2XYZ(1, 1, 1, rgb_space=rgb_space)
-    X, Y, Z = RGB2XYZ(R, G, B, rgb_space=rgb_space)
-    XYZ, xyY = XYZsaturation(X, Y, Z, saturation, whitepoint)
+    X, Y, Z = RGB2XYZ(R, G, B, rgb_space=rgb_space)  # noqa: N806
+    XYZ, xyY = XYZsaturation(X, Y, Z, saturation, whitepoint)  # noqa: N806
     return XYZ2RGB(*XYZ, rgb_space=rgb_space), xyY
 
 
-def XYZsaturation(X, Y, Z, saturation, whitepoint=None):
+def XYZsaturation(  # noqa: N802
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    saturation: float,
+    whitepoint: None | float | str | list | tuple = None,
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
     """(De)saturate a XYZ color in CIE xy and return the RGB and xyY values.
 
     Args:
@@ -2972,19 +3724,27 @@ def XYZsaturation(X, Y, Z, saturation, whitepoint=None):
         saturation (float): The saturation factor.
             0.0 = grayscale, 1.0 = original color, >1.0 = oversaturated.
             <0.0 = undersaturated.
-        whitepoint (None | int | float | str | list | tuple): The white point
+        whitepoint (None | float | str | list | tuple): The white point
             to use for conversion. Defaults to D65 if not set.
 
     Returns:
-        tuple: The new XYZ values after saturation adjustment.
+        tuple[tuple[float, float, float], tuple[float, float, float]]: The new
+            XYZ values after saturation adjustment.
     """
-    wx, wy, wY = XYZ2xyY(*get_whitepoint(whitepoint))
-    x, y, Y = XYZ2xyY(X, Y, Z)
-    x, y, Y = xyYsaturation(x, y, Y, wx, wy, saturation)
+    wx, wy, wY = XYZ2xyY(*get_whitepoint(whitepoint))  # noqa: N806
+    x, y, Y = XYZ2xyY(X, Y, Z)  # noqa: N806
+    x, y, Y = xyYsaturation(x, y, Y, wx, wy, saturation)  # noqa: N806
     return xyY2XYZ(x, y, Y), (x, y, Y)
 
 
-def xyYsaturation(x, y, Y, wx, wy, saturation):
+def xyYsaturation(  # noqa: N802
+    x: float,
+    y: float,
+    Y: float,  # noqa: N803
+    wx: float,
+    wy: float,
+    saturation: float,
+) -> tuple[float, float, float]:
     """(De)saturate a color in CIE xy and return the RGB and xyY values.
 
     Args:
@@ -2998,12 +3758,15 @@ def xyYsaturation(x, y, Y, wx, wy, saturation):
             <0.0 = undersaturated.
 
     Returns:
-        tuple: The new x, y, and Y values after saturation adjustment.
+        tuple[float, float, float]: The new x, y, and Y values after saturation
+            adjustment.
     """
     return wx + (x - wx) * saturation, wy + (y - wy) * saturation, Y
 
 
-def convert_range(v, oldmin=0, oldmax=1, newmin=0, newmax=1):
+def convert_range(
+    v: float, oldmin: float = 0, oldmax: float = 1, newmin: float = 0, newmax: float = 1
+) -> float:
     """Convert a value from one range to another.
 
     Args:
@@ -3021,13 +3784,38 @@ def convert_range(v, oldmin=0, oldmax=1, newmin=0, newmax=1):
     return (((v - oldmin) * newrange) / oldrange) + newmin
 
 
-def rgb_to_xyz_matrix(rx, ry, gx, gy, bx, by, whitepoint=None, scale=1.0):
-    """Create and return an RGB to XYZ matrix."""
+def rgb_to_xyz_matrix(
+    rx: float,
+    ry: float,
+    gx: float,
+    gy: float,
+    bx: float,
+    by: float,
+    whitepoint: None | float | str | list | tuple = None,
+    scale: float = 1.0,
+) -> Matrix3x3:
+    """Create and return an RGB to XYZ matrix.
+
+    Args:
+        rx (float): The x coordinate of the red primary.
+        ry (float): The y coordinate of the red primary.
+        gx (float): The x coordinate of the green primary.
+        gy (float): The y coordinate of the green primary.
+        bx (float): The x coordinate of the blue primary.
+        by (float): The y coordinate of the blue primary.
+        whitepoint (None | float | str | list | tuple): The white point
+            to use for conversion. If None, the default white point will be
+            used.
+        scale (float): The scale factor for the XYZ values. Defaults to 1.0.
+
+    Returns:
+        Matrix3x3: The RGB to XYZ matrix.
+    """
     whitepoint = get_whitepoint(whitepoint, scale)
-    Xr, Yr, Zr = xyY2XYZ(rx, ry, scale)
-    Xg, Yg, Zg = xyY2XYZ(gx, gy, scale)
-    Xb, Yb, Zb = xyY2XYZ(bx, by, scale)
-    Sr, Sg, Sb = (
+    Xr, Yr, Zr = xyY2XYZ(rx, ry, scale)  # noqa: N806
+    Xg, Yg, Zg = xyY2XYZ(gx, gy, scale)  # noqa: N806
+    Xb, Yb, Zb = xyY2XYZ(bx, by, scale)  # noqa: N806
+    Sr, Sg, Sb = (  # noqa: N806
         Matrix3x3(((Xr, Xg, Xb), (Yr, Yg, Yb), (Zr, Zg, Zb))).inverted() * whitepoint
     )
     return Matrix3x3(
@@ -3039,7 +3827,9 @@ def rgb_to_xyz_matrix(rx, ry, gx, gy, bx, by, whitepoint=None, scale=1.0):
     )
 
 
-def find_primaries_wp_xy_rgb_space_name(xy, rgb_space_names=None, digits=4):
+def find_primaries_wp_xy_rgb_space_name(
+    xy: list | tuple, rgb_space_names: None | list | tuple = None, digits: int = 4
+) -> None | str:
     """Find the RGB space name matching given primaries and whitepoint xy.
 
     Args:
@@ -3068,31 +3858,49 @@ def find_primaries_wp_xy_rgb_space_name(xy, rgb_space_names=None, digits=4):
     return None
 
 
-def get_rgb_space(rgb_space=None, scale=1.0):
-    """Return gamma, whitepoint, primaries and RGB -> XYZ matrix."""
+@cache
+def get_rgb_space(
+    rgb_space: None | str | list | tuple = None, scale: float = 1.0
+) -> tuple[float,]:
+    """Return gamma, whitepoint, primaries and RGB -> XYZ matrix.
+
+    Args:
+        rgb_space (None | str | list | tuple): The RGB space
+            to use for conversion. Defaults to sRGB if not set.
+            If a string is given, it must be a valid RGB space name.
+            If a list or tuple is given, it must be in the format
+            (gamma, whitepoint, red, green, blue).
+            The whitepoint can be a string (e.g. "D50"), a tuple of XYZ
+            coordinates, or a color temperature in degrees K (float or int).
+            The gamma should be a float. The RGB primaries red, green,
+            blue should be lists or tuples of xyY coordinates (only x and
+            y will be used, so Y can be zero or None).
+        scale (float): Scale factor for the XYZ values. Defaults to 1.0.
+
+    Returns:
+        tuple: A tuple containing the gamma, whitepoint, red, green, blue
+            primaries in xyY format, and the RGB to XYZ matrix.
+    """
     if not rgb_space:
         rgb_space = "sRGB"
     if isinstance(rgb_space, str):
         rgb_space = rgb_spaces[rgb_space]
-    cachehash = tuple(map(id, rgb_space[:5])), scale
-    if cachehash in get_rgb_space.cache:
-        return get_rgb_space.cache[cachehash]
     gamma = rgb_space[0] or rgb_spaces["sRGB"][0]
     whitepoint = get_whitepoint(rgb_space[1] or rgb_spaces["sRGB"][1], scale)
-    rx, ry, rY = rxyY = rgb_space[2] or rgb_spaces["sRGB"][2]
-    gx, gy, gY = gxyY = rgb_space[3] or rgb_spaces["sRGB"][3]
-    bx, by, bY = bxyY = rgb_space[4] or rgb_spaces["sRGB"][4]
+    rx, ry, rY = rxyY = rgb_space[2] or rgb_spaces["sRGB"][2]  # noqa: N806
+    gx, gy, gY = gxyY = rgb_space[3] or rgb_spaces["sRGB"][3]  # noqa: N806
+    bx, by, bY = bxyY = rgb_space[4] or rgb_spaces["sRGB"][4]  # noqa: N806
     matrix = rgb_to_xyz_matrix(rx, ry, gx, gy, bx, by, whitepoint, scale)
-    rgb_space = gamma, whitepoint, rxyY, gxyY, bxyY, matrix
-    get_rgb_space.cache[cachehash] = rgb_space
-    return rgb_space
+    return gamma, whitepoint, rxyY, gxyY, bxyY, matrix
 
 
-def get_rgb_space_primaries_wp_xy(rgb_space=None, digits=4):
+def get_rgb_space_primaries_wp_xy(
+    rgb_space: None | str | list | tuple = None, digits: int = 4
+) -> list:
     """Return primaries and whitepoint xy for a given RGB space, rounded to n digits.
 
     Args:
-        rgb_space (None | int | float | str | list | tuple): The RGB space
+        rgb_space (None | str | list | tuple): The RGB space
             to use for conversion. Defaults to sRGB if not set.
             If a string is given, it must be a valid RGB space name.
             If a list or tuple is given, it must be in the format
@@ -3103,6 +3911,10 @@ def get_rgb_space_primaries_wp_xy(rgb_space=None, digits=4):
             blue should be lists or tuples of xyY coordinates (only x and
             y will be used, so Y can be zero or None).
         digits (int): The number of digits to round to. Defaults to 4.
+
+    Returns:
+        list: A list of xy coordinates for the RGB primaries and whitepoint,
+            rounded to the specified number of digits.
     """
     rgb_space = get_rgb_space(rgb_space)
     xy = []
@@ -3114,18 +3926,37 @@ def get_rgb_space_primaries_wp_xy(rgb_space=None, digits=4):
     return xy
 
 
-get_rgb_space.cache = {}
-
-
+@cache
 def get_standard_illuminant(
-    illuminant_name="D50",
-    priority=("ISO 11664-2:2007", "ICC", "ASTM E308-01", "Wyszecki & Stiles", None),
-    scale=1.0,
-):
-    """Return a standard illuminant as XYZ coordinates."""
-    cachehash = illuminant_name, tuple(priority), scale
-    if cachehash in get_standard_illuminant.cache:
-        return get_standard_illuminant.cache[cachehash]
+    illuminant_name: str = "D50",
+    priority: tuple = (
+        "ISO 11664-2:2007",
+        "ICC",
+        "ASTM E308-01",
+        "Wyszecki & Stiles",
+        None,
+    ),
+    scale: float = 1.0,
+) -> tuple[float, float, float]:
+    """Return a standard illuminant as XYZ coordinates.
+
+    Args:
+        illuminant_name (str): The name of the standard illuminant to return.
+            Defaults to "D50".
+        priority (tuple): A tuple of standard names to search for the
+            illuminant. The first one found will be returned.
+            Defaults to ("ISO 11664-2:2007", "ICC", "ASTM E308-01",
+            "Wyszecki & Stiles", None).
+        scale (float): Scale factor for the XYZ values. Defaults to 1.0.
+
+    Raises:
+        ValueError: If the illuminant name is not recognized or if no
+            illuminant is found in the given priority list.
+
+    Returns:
+        tuple[float, float, float]: A tuple of XYZ coordinates scaled by the
+            given scale factor.
+    """
     illuminant = None
     for standard_name in priority:
         if standard_name not in standard_illuminants:
@@ -3134,13 +3965,8 @@ def get_standard_illuminant(
             illuminant_name.upper(), None
         )
         if illuminant:
-            illuminant = illuminant["X"] * scale, 1.0 * scale, illuminant["Z"] * scale
-            get_standard_illuminant.cache[cachehash] = illuminant
-            return illuminant
+            return illuminant["X"] * scale, 1.0 * scale, illuminant["Z"] * scale
     raise ValueError(f'Unrecognized illuminant "{illuminant_name}"')
-
-
-get_standard_illuminant.cache = {}
 
 
 @overload
@@ -3148,7 +3974,7 @@ def get_whitepoint(
     whitepoint: list,
     scale: float = 1.0,
     planckian: bool = False,
-) -> list: ...
+) -> list[float]: ...
 
 
 @overload
@@ -3156,9 +3982,10 @@ def get_whitepoint(
     whitepoint: None | float | str | tuple,
     scale: float = 1.0,
     planckian: bool = False,
-) -> tuple: ...
+) -> tuple[float, float, float]: ...
 
 
+@cache
 def get_whitepoint(
     whitepoint: None | float | str | list | tuple = None,
     scale: float = 1.0,
@@ -3181,9 +4008,6 @@ def get_whitepoint(
         return whitepoint
     if not whitepoint:
         whitepoint = "D50"
-    cachehash = whitepoint, scale, planckian
-    if cachehash in get_whitepoint.cache:
-        return get_whitepoint.cache[cachehash]
     if isinstance(whitepoint, str):
         whitepoint = get_standard_illuminant(whitepoint)
     elif isinstance(whitepoint, (float, int)):
@@ -3202,16 +4026,14 @@ def get_whitepoint(
                 )
     if scale > 1.0 and whitepoint[1] == 100:
         scale = 1.0
-    whitepoint = tuple(v * scale for v in whitepoint)
-    get_whitepoint.cache[cachehash] = whitepoint
-    return whitepoint
+    return tuple(v * scale for v in whitepoint)
 
 
-get_whitepoint.cache = {}
-"""Cache for the get_whitepoint function."""
-
-
-def make_monotonically_increasing(iterable, passes=0, window=None):
+def make_monotonically_increasing(
+    iterable: tuple | list | dict,
+    passes: int = 0,
+    window: None | int = None,
+) -> list | dict:
     """Make values in iterable strictly monotonically increasing by linear interpolation.
 
     If iterable is a dict, keep the keys of the original.
@@ -3220,7 +4042,7 @@ def make_monotonically_increasing(iterable, passes=0, window=None):
     before making them monotonically increasing.
 
     Args:
-        iterable (iterable): The input iterable or sequence.
+        iterable (tuple | list | dict): The input iterable or sequence.
         passes (int): The number of smoothing passes to apply.
             Defaults to 0 (no smoothing).
         window (int): The window size for smoothing. Defaults to None.
@@ -3260,21 +4082,26 @@ def make_monotonically_increasing(iterable, passes=0, window=None):
     return values
 
 
-def matmul(XYZ, m1, m2):
+def matmul(
+    XYZ: tuple[float, float, float],
+    m1: Matrix3x3,
+    m2: Matrix3x3,  # noqa: N803
+) -> tuple[float, float, float]:
     """Matrix multiplication of two matrices.
 
     Args:
-        XYZ (tuple): A tuple of XYZ coordinates (X, Y, Z).
+        XYZ (tuple[float, float, float]): A tuple of XYZ coordinates (X, Y, Z).
         m1 (Matrix3x3): The first matrix.
         m2 (Matrix3x3): The second matrix.
 
     Returns:
-        tuple: A tuple of the resulting coordinates (X', Y', Z').
+        tuple[float, float, float]: A tuple of the resulting coordinates
+            (X', Y', Z').
     """
     return m1 * (m2 * XYZ)
 
 
-def planckianCT2XYZ(T, scale=1.0):
+def planckianCT2XYZ(T: float, scale: float = 1.0) -> None | tuple[float, float, float]:  # noqa: N802, N803
     """Convert from planckian temperature to XYZ.
 
     T = temperature in Kelvin.
@@ -3285,13 +4112,14 @@ def planckianCT2XYZ(T, scale=1.0):
             Defaults to 1.0.
 
     Returns:
-        tuple: A tuple of XYZ coordinates (X, Y, Z).
+        None | tuple[float, float, float]: A tuple of XYZ coordinates (X, Y, Z)
+            if xyY is not None, None otherwise.
     """
-    xyY = planckianCT2xyY(T, scale)
+    xyY = planckianCT2xyY(T, scale)  # noqa: N806
     return xyY2XYZ(*xyY) if xyY else None
 
 
-def planckianCT2xyY(T, scale=1.0):
+def planckianCT2xyY(T: float, scale: float = 1.0) -> tuple[float, float, float]:  # noqa: N802, N803
     """Convert from planckian temperature to xyY.
 
     T = temperature in Kelvin.
@@ -3300,11 +4128,11 @@ def planckianCT2xyY(T, scale=1.0):
 
     Args:
         T (float): Temperature in Kelvin.
-        scale (float): Scale factor for the xyY values.
+        scale (float, optional): Scale factor for the xyY values.
             Defaults to 1.0.
 
     Returns:
-        tuple: A tuple of xyY coordinates (x, y, Y).
+        tuple[float, float, float]: A tuple of xyY coordinates (x, y, Y).
     """
     if 1667 <= T <= 4000:
         x = (
@@ -3346,55 +4174,71 @@ def planckianCT2xyY(T, scale=1.0):
     return x, y, scale
 
 
-def xyY2CCT(x, y, Y=1.0):
+def xyY2CCT(x: float, y: float, Y: float = 1.0) -> None | float:  # noqa: N802, N803
     """Convert from xyY to correlated color temperature.
 
     Args:
         x (float): x coordinate in xyY color space.
         y (float): y coordinate in xyY color space.
-        Y (float): Y coordinate in xyY color space.
+        Y (float, optional): Y coordinate in xyY color space.
 
     Returns:
-        float: Correlated color temperature in Kelvin.
+        None | float: Correlated color temperature in Kelvin.
     """
     return XYZ2CCT(*xyY2XYZ(x, y, Y))
 
 
-def xyY2Lab(x, y, Y=1.0, whitepoint=None):
+def xyY2Lab(  # noqa: N802
+    x: float,
+    y: float,
+    Y: float = 1.0,  # noqa: N803
+    whitepoint: None | float | str | tuple | list = None,
+) -> tuple[float, float, float]:
     """Convert from xyY to Lab color space.
 
     Args:
         x (float): x coordinate in xyY color space.
         y (float): y coordinate in xyY color space.
-        Y (float): Y coordinate in xyY color space.
-        whitepoint ( None | int | float | str | tuple | list): Whitepoint to
+        Y (float, optional): Y coordinate in xyY color space.
+        whitepoint ( None | float | str | tuple | list): Whitepoint to
             use for conversion. Defaults to D50 if not set.
 
     Returns:
-        tuple: A tuple of Lab coordinates (L, a, b).
+        tuple[float, float, float]: A tuple of Lab coordinates (L, a, b).
     """
-    X, Y, Z = xyY2XYZ(x, y, Y)
-    return XYZ2Lab(X, Y, Z, whitepoint)
+    return XYZ2Lab(*xyY2XYZ(x, y, Y), whitepoint)
 
 
-def xyY2Lu_v_(x, y, Y=1.0, whitepoint=None):
+def xyY2Lu_v_(  # noqa: N802
+    x: float,
+    y: float,
+    Y: float = 1.0,  # noqa: N803
+    whitepoint: None | float | str | tuple | list = None,
+) -> tuple[float, float, float]:
     """Convert from xyY to Lu'v' color space.
 
     Args:
         x (float): x coordinate in xyY color space.
         y (float): y coordinate in xyY color space.
-        Y (float): Y coordinate in xyY color space.
-        whitepoint ( None | int | float | str | tuple | list): Whitepoint to
+        Y (float, optional): Y coordinate in xyY color space.
+        whitepoint ( None | float | str | tuple | list): Whitepoint to
             use for conversion. Defaults to D50 if not set.
 
     Returns:
-        tuple: A tuple of Lu'v' coordinates (L, u', v').
+        tuple[float, float, float]: A tuple of Lu'v' coordinates (L, u', v').
     """
-    X, Y, Z = xyY2XYZ(x, y, Y)
-    return XYZ2Lu_v_(X, Y, Z, whitepoint)
+    return XYZ2Lu_v_(*xyY2XYZ(x, y, Y), whitepoint)
 
 
-def xyY2RGB(x, y, Y, rgb_space=None, scale=1.0, round_=False, clamp=True):
+def xyY2RGB(  # noqa: N802
+    x: float,  # noqa: N803
+    y: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    rgb_space: None | str | list | tuple = None,
+    scale: float = 1.0,
+    round_: bool = False,
+    clamp: bool = True,
+) -> tuple[float, float, float]:
     """Convert from xyY to RGB.
 
     Args:
@@ -3409,11 +4253,10 @@ def xyY2RGB(x, y, Y, rgb_space=None, scale=1.0, round_=False, clamp=True):
     Returns:
         tuple: A tuple of RGB coordinates (R, G, B).
     """
-    X, Y, Z = xyY2XYZ(x, y, Y)
-    return XYZ2RGB(X, Y, Z, rgb_space, scale, round_, clamp)
+    return XYZ2RGB(*xyY2XYZ(x, y, Y), rgb_space, scale, round_, clamp)
 
 
-def xyY2XYZ(x, y, Y=1.0):
+def xyY2XYZ(x: float, y: float, Y: float = 1.0) -> tuple[float, float, float]:  # noqa: N802, N803
     """Convert from xyY to XYZ.
 
     Based on formula from http://brucelindbloom.com/Eqn_xyY_to_XYZ.html
@@ -3426,19 +4269,17 @@ def xyY2XYZ(x, y, Y=1.0):
     Args:
         x (float): x coordinate in xyY color space.
         y (float): y coordinate in xyY color space.
-        Y (float): Y coordinate in xyY color space.
+        Y (float, optional): Y coordinate in xyY color space. The default is 1.0.
 
     Returns:
-        tuple: A tuple of XYZ coordinates (X, Y, Z).
+        tuple[float, float, float]: A tuple of XYZ coordinates (X, Y, Z).
     """
     if y == 0:
         return 0, 0, 0
-    X = float(x * Y) / y
-    Z = float((1 - x - y) * Y) / y
-    return X, Y, Z
+    return (float(x * Y) / y), Y, (float((1 - x - y) * Y) / y)
 
 
-def LERP(a, b, c):
+def LERP(a: float, b: float, c: float) -> float:  # noqa: N802
     """Linear interpolation macro.
 
     Is 'a' when c == 0.0 and 'b' when c == 1.0
@@ -3454,7 +4295,7 @@ def LERP(a, b, c):
     return (b - a) * c + a
 
 
-def XYZ2CCT(X, Y, Z):
+def XYZ2CCT(X: float, Y: float, Z: float) -> None | float:  # noqa: N802, N803
     """Convert from XYZ to correlated color temperature.
 
     Derived from ANSI C implementation by Bruce Lindbloom
@@ -3572,109 +4413,145 @@ def XYZ2CCT(X, Y, Z):
     return p  # noqa: RET504
 
 
-def XYZ2DIN99(X, Y, Z, whitepoint=None):
+def XYZ2DIN99(  # noqa: N802
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    whitepoint: None | float | str | tuple | list = None,
+) -> tuple[float, float, float]:
     """Convert from XYZ to DIN99.
 
     Args:
         X (float): X value.
         Y (float): Y value.
         Z (float): Z value.
-        whitepoint (None | int | float | str | tuple | list): Whitepoint.
+        whitepoint (None | float | str | tuple | list): Whitepoint.
             Defaults to D50.
 
     Returns:
-        tuple[float]: DIN99 values.
+        tuple[float, float, float]: DIN99 values.
     """
-    X, Y, Z = (max(v, 0) for v in (X, Y, Z))
-    L, a, b = XYZ2Lab(X, Y, Z, whitepoint)
-    return Lab2DIN99(L, a, b)
+    return Lab2DIN99(*XYZ2Lab(*(max(v, 0) for v in (X, Y, Z)), whitepoint))
 
 
-def XYZ2DIN99b(X, Y, Z, whitepoint=None):
+def XYZ2DIN99b(  # noqa: N802
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    whitepoint: None | float | str | tuple | list = None,
+) -> tuple[float, float, float]:
     """Convert from XYZ to DIN99b.
 
     Args:
         X (float): X value.
         Y (float): Y value.
         Z (float): Z value.
-        whitepoint (None | int | float | str | tuple | list): Whitepoint.
+        whitepoint (None | float | str | tuple | list): Whitepoint.
             Defaults to D50.
 
     Returns:
-        tuple[float]: DIN99b values.
+        tuple[float, float, float]: DIN99b values.
     """
-    L, a, b = XYZ2Lab(X, Y, Z, whitepoint)
-    return Lab2DIN99b(L, a, b)
+    return Lab2DIN99b(*XYZ2Lab(X, Y, Z, whitepoint))
 
 
-def XYZ2DIN99o(X, Y, Z, whitepoint=None):
+def XYZ2DIN99o(  # noqa: N802
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    whitepoint: None | float | str | tuple | list = None,
+) -> tuple[float, float, float]:
     """Convert from XYZ to DIN99o.
 
     Args:
         X (float): X value.
         Y (float): Y value.
         Z (float): Z value.
-        whitepoint (None | int | float | str | tuple | list): Whitepoint.
+        whitepoint (None | float | str | tuple | list): Whitepoint.
             Defaults to D50.
 
     Returns:
         tuple[float]: DIN99o values.
     """
-    L, a, b = XYZ2Lab(X, Y, Z, whitepoint)
-    return Lab2DIN99o(L, a, b)
+    return Lab2DIN99o(*XYZ2Lab(X, Y, Z, whitepoint))
 
 
-def XYZ2DIN99bLCH(X, Y, Z, whitepoint=None):
+def XYZ2DIN99bLCH(  # noqa: N802
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    whitepoint: None | float | str | tuple | list = None,
+) -> tuple[float, float, float]:
     """Convert from XYZ to DIN99b LCH.
 
     Args:
         X (float): X value.
         Y (float): Y value.
         Z (float): Z value.
-        whitepoint (None | int | float | str | tuple | list): Whitepoint.
+        whitepoint (None | float | str | tuple | list): Whitepoint.
             Defaults to D50.
 
     Returns:
-        tuple[float]: DIN99b LCH values.
+        tuple[float, float, float]: DIN99b LCH values.
     """
-    L, a, b = XYZ2Lab(X, Y, Z, whitepoint)
-    return Lab2DIN99bLCH(L, a, b)
+    return Lab2DIN99bLCH(*XYZ2Lab(X, Y, Z, whitepoint))
 
 
-def XYZ2DIN99oLCH(X, Y, Z, whitepoint=None):
+def XYZ2DIN99oLCH(  # noqa: N802
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    whitepoint: None | float | str | tuple | list = None,
+) -> tuple[float, float, float]:
     """Convert from XYZ to DIN99o LCH.
 
     Args:
         X (float): X value.
         Y (float): Y value.
         Z (float): Z value.
-        whitepoint (None | int | float | str | tuple | list): Whitepoint.
+        whitepoint (None | float | str | tuple | list): Whitepoint.
             Defaults to D50.
 
     Returns:
-        tuple[float]: DIN99o LCH values.
+        tuple[float, float, float]: DIN99o LCH values.
     """
-    L, a, b = XYZ2Lab(X, Y, Z, whitepoint)
-    return Lab2DIN99oLCH(L, a, b)
+    return Lab2DIN99oLCH(*XYZ2Lab(X, Y, Z, whitepoint))
 
 
-def XYZ2DIN99c(X, Y, Z, whitepoint=None):
+def XYZ2DIN99c(  # noqa: N802
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    whitepoint: None | float | str | tuple | list = None,
+) -> tuple[float, float, float]:
     """Convert from XYZ to DIN99c.
 
     Args:
         X (float): X value.
         Y (float): Y value.
         Z (float): Z value.
-        whitepoint (None | int | float | str | tuple | list): Whitepoint.
+        whitepoint (None | float | str | tuple | list): Whitepoint.
             Defaults to D50.
 
     Returns:
-        list[float]: DIN99c values.
+        tuple[float, float, float]: DIN99c values.
     """
     return XYZ2DIN99cd(X, Y, Z, 0.1, 317.651, 0.0037, 0, 0.94, 23, 0.066, whitepoint)
 
 
-def XYZ2DIN99cd(X, Y, Z, x, l1, l2, deg, f1, c1, c2, whitepoint=None):
+def XYZ2DIN99cd(  # noqa: N802
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    x: float,
+    l1: float,
+    l2: float,
+    deg: float,
+    f1: float,
+    c1: float,
+    c2: float,
+    whitepoint: None | float | str | tuple | list = None,
+) -> tuple[float, float, float]:
     """Convert from XYZ to DIN99cd.
 
     Args:
@@ -3688,18 +4565,30 @@ def XYZ2DIN99cd(X, Y, Z, x, l1, l2, deg, f1, c1, c2, whitepoint=None):
         f1 (float): F1 parameter.
         c1 (float): C1 parameter.
         c2 (float): C2 parameter.
-        whitepoint (None | int | float | str | tuple | list): Whitepoint.
+        whitepoint (None | float | str | tuple | list): Whitepoint.
             Defaults to D50.
 
     Returns:
-        list[float]: DIN99cd values.
+        tuple[float]: DIN99cd values.
     """
-    L99, C99, H99 = XYZ2DIN99cdLCH(X, Y, Z, x, l1, l2, deg, f1, c1, c2, whitepoint)
-    a99, b99 = DIN99familyCH2DIN99ab(C99, H99)
-    return L99, a99, b99
+    l99, c99, h99 = XYZ2DIN99cdLCH(X, Y, Z, x, l1, l2, deg, f1, c1, c2, whitepoint)
+    a99, b99 = DIN99familyCH2DIN99ab(c99, h99)
+    return l99, a99, b99
 
 
-def XYZ2DIN99cdLCH(X, Y, Z, x, l1, l2, deg, f1, c1, c2, whitepoint=None):
+def XYZ2DIN99cdLCH(  # noqa: N802
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    x: float,
+    l1: float,
+    l2: float,
+    deg: float,
+    f1: float,
+    c1: float,
+    c2: float,
+    whitepoint: None | float | str | tuple | list = None,
+) -> tuple[float, float, float]:
     """Convert from XYZ to DIN99cd LCH.
 
     Args:
@@ -3713,19 +4602,24 @@ def XYZ2DIN99cdLCH(X, Y, Z, x, l1, l2, deg, f1, c1, c2, whitepoint=None):
         f1 (float): F1 parameter.
         c1 (float): C1 parameter.
         c2 (float): C2 parameter.
-        whitepoint (None | int | float | str | tuple | list): Whitepoint.
+        whitepoint (None | float | str | tuple | list): Whitepoint.
             Defaults to D50.
 
     Returns:
-        tuple[float]: DIN99cd LCH values.
+        tuple[float, float, float]: DIN99cd LCH values.
     """
-    X, Y, Z = XYZ2DIN99cdXYZ(X, Y, Z, x)
+    X, Y, Z = XYZ2DIN99cdXYZ(X, Y, Z, x)  # noqa: N806
     whitepoint99d = XYZ2DIN99cdXYZ(*get_whitepoint(whitepoint, 100), x=x)
-    L, a, b = XYZ2Lab(X, Y, Z, whitepoint99d)
-    return Lab2DIN99familyLCH(L, a, b, l1, l2, deg, f1, c1, c2)
+    l, a, b = XYZ2Lab(X, Y, Z, whitepoint99d)
+    return Lab2DIN99familyLCH(l, a, b, l1, l2, deg, f1, c1, c2)
 
 
-def XYZ2DIN99cdXYZ(X, Y, Z, x):
+def XYZ2DIN99cdXYZ(  # noqa: N802
+    X: float,
+    Y: float,
+    Z: float,
+    x: float,  # noqa: N803
+) -> tuple[float, float, float]:
     """Convert from XYZ to DIN99cd.
 
     Args:
@@ -3737,34 +4631,44 @@ def XYZ2DIN99cdXYZ(X, Y, Z, x):
     Returns:
         tuple[float]: DIN99cd values.
     """
-    X = (1 + x) * X - x * Z
+    X = (1 + x) * X - x * Z  # noqa: N806
     return X, Y, Z
 
 
-def XYZ2DIN99d(X, Y, Z, whitepoint=None):
+def XYZ2DIN99d(  # noqa: N802
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    whitepoint: None | float | str | tuple | list = None,
+) -> tuple[float, float, float]:
     """Convert from XYZ to DIN99d.
 
     Args:
         X (float): X value.
         Y (float): Y value.
         Z (float): Z value.
-        whitepoint (None | int | float | str | tuple | list): Whitepoint.
+        whitepoint (None | float | str | tuple | list): Whitepoint.
             Defaults to D50.
 
     Returns:
-        list[float]: DIN99d values.
+        tuple[float, float, float]: DIN99d values.
     """
     return XYZ2DIN99cd(X, Y, Z, 0.12, 325.221, 0.0036, 50, 1.14, 22.5, 0.06, whitepoint)
 
 
-def XYZ2DIN99dLCH(X, Y, Z, whitepoint=None):
+def XYZ2DIN99dLCH(  # noqa: N802
+    X: float,
+    Y: float,
+    Z: float,
+    whitepoint: None | float | str | tuple | list = None,  # noqa: N803
+) -> tuple[float]:
     """Convert from XYZ to DIN99d LCH.
 
     Args:
         X (float): X value.
         Y (float): Y value.
         Z (float): Z value.
-        whitepoint (None | int | float | str | tuple | list): Whitepoint.
+        whitepoint (None | float | str | tuple | list): Whitepoint.
             Defaults to D50.
 
     Returns:
@@ -3775,7 +4679,7 @@ def XYZ2DIN99dLCH(X, Y, Z, whitepoint=None):
     )
 
 
-def XYZ2IPT(X, Y, Z):
+def XYZ2IPT(X: float, Y: float, Z: float) -> Matrix3x3:  # noqa: N802, N803
     """Convert from XYZ to IPT.
 
     The input Y value needs to be in the nominal range [0.0, 100.0] and
@@ -3790,17 +4694,17 @@ def XYZ2IPT(X, Y, Z):
     Returns:
         Matrix3x3: IPT values.
     """
-    XYZ2LMS_matrix = get_cat_matrix("IPT")
-    LMS = XYZ2LMS_matrix * (X, Y, Z)
-    for i, component in enumerate(LMS):
+    xyz2lms_matrix = get_cat_matrix("IPT")
+    lms = xyz2lms_matrix * (X, Y, Z)
+    for i, component in enumerate(lms):
         if component >= 0:
-            LMS[i] **= 0.43
+            lms[i] **= 0.43
         else:
-            LMS[i] = -((-component) ** 0.43)
-    return LMS2IPT_matrix * LMS
+            lms[i] = -((-component) ** 0.43)
+    return LMS2IPT_matrix * lms
 
 
-def IPT2XYZ(I: float, P: float, T: float) -> Matrix3x3:
+def IPT2XYZ(I: float, P: float, T: float) -> Matrix3x3:  # noqa: N802, N803
     """Convert from IPT to XYZ.
 
     Args:
@@ -3811,20 +4715,24 @@ def IPT2XYZ(I: float, P: float, T: float) -> Matrix3x3:
     Returns:
         Matrix3x3: XYZ values.
     """
-    XYZ2LMS_matrix = get_cat_matrix("IPT")
-    LMS2XYZ_matrix = XYZ2LMS_matrix.inverted()
-    LMS = IPT2LMS_matrix * (I, P, T)
-    for i, component in enumerate(LMS):
+    xyz2lms_matrix = get_cat_matrix("IPT")
+    lms2xyz_matrix = xyz2lms_matrix.inverted()
+    lms = IPT2LMS_matrix * (I, P, T)
+    for i, component in enumerate(lms):
         if component >= 0:
-            LMS[i] **= 1 / 0.43
+            lms[i] **= 1 / 0.43
         else:
-            LMS[i] = -((-component) ** (1 / 0.43))
-    return LMS2XYZ_matrix * LMS
+            lms[i] = -((-component) ** (1 / 0.43))
+    return lms2xyz_matrix * lms
 
 
-def XYZ2Lab(
-    X: float, Y: float, Z: float, whitepoint: None | float = None, scale: float = 100
-) -> tuple[float]:
+def XYZ2Lab(  # noqa: N802
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    whitepoint: None | float | str | tuple | list = None,
+    scale: float = 100,
+) -> tuple[float, float, float]:
     """Convert from XYZ to Lab.
 
     The input Y value needs to be in the nominal range [0.0, scale] and
@@ -3840,14 +4748,14 @@ def XYZ2Lab(
         X (float): X value.
         Y (float): Y value.
         Z (float): Z value.
-        whitepoint (None | int | float | str | tuple | list): Whitepoint.
+        whitepoint (None | float | str | tuple | list): Whitepoint.
             Defaults to D50.
         scale (float): Scale factor. Defaults to 100.
 
     Returns:
-        tuple[float]: L, a, b values.
+        tuple[float, float, float]: L, a, b values.
     """
-    Xr, Yr, Zr = get_whitepoint(whitepoint, scale)
+    Xr, Yr, Zr = get_whitepoint(whitepoint, scale)  # noqa: N806
 
     xr = X / Xr
     yr = Y / Yr
@@ -3855,14 +4763,19 @@ def XYZ2Lab(
     fx = cbrt(xr) if xr > LSTAR_E else (LSTAR_K * xr + 16) / 116.0
     fy = cbrt(yr) if yr > LSTAR_E else (LSTAR_K * yr + 16) / 116.0
     fz = cbrt(zr) if zr > LSTAR_E else (LSTAR_K * zr + 16) / 116.0
-    L = 116 * fy - 16
+    l = 116 * fy - 16
     a = 500 * (fx - fy)
     b = 200 * (fy - fz)
 
-    return L, a, b
+    return l, a, b
 
 
-def XYZ2Lpt(X, Y, Z, whitepoint=None):
+def XYZ2Lpt(  # noqa: N802
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    whitepoint: None | float | str | tuple | list = None,
+) -> Matrix3x3:
     """Convert from XYZ to Lpt.
 
     This is a modern update to L*a*b*, based on IPT space.
@@ -3886,7 +4799,7 @@ def XYZ2Lpt(X, Y, Z, whitepoint=None):
         X (float): X value.
         Y (float): Y value.
         Z (float): Z value.
-        whitepoint (None | int | float | str | tuple | list): Whitepoint.
+        whitepoint (None | float | str | tuple | list): Whitepoint.
             Defaults to D50.
 
     Returns:
@@ -3917,7 +4830,13 @@ def XYZ2Lpt(X, Y, Z, whitepoint=None):
     return LMS2Lpt_matrix * lms
 
 
-def Lpt2XYZ(L, p, t, whitepoint=None, scale=1.0):
+def Lpt2XYZ(  # noqa: N802
+    L: float,  # noqa: N803
+    p: float,
+    t: float,
+    whitepoint: None | float | str | tuple | list = None,
+    scale: float = 1.0,
+) -> Matrix3x3:
     """Convert from Lpt to XYZ.
 
     This is a modern update to L*a*b*, based on IPT space.
@@ -3937,6 +4856,16 @@ def Lpt2XYZ(L, p, t, whitepoint=None, scale=1.0):
     whitepoint can be string (e.g. "D50"), a tuple of XYZ coordinates or
     color temperature as float or int. Defaults to D50 if not set.
 
+    Args:
+        L (float): L* value.
+        p (float): p value.
+        t (float): t value.
+        whitepoint (None | float | str | tuple | list): Whitepoint.
+            Defaults to D50.
+        scale (float): Scale factor for the XYZ values. Defaults to 1.0.
+
+    Returns:
+        Matrix3x3: XYZ values.
     """
     # Adapted from Argyll/icc/icc.c
 
@@ -3967,39 +4896,71 @@ def Lpt2XYZ(L, p, t, whitepoint=None, scale=1.0):
     return lms2xyz * lms
 
 
-def XYZ2Lu_v_(X, Y, Z, whitepoint=None):
-    """Convert from XYZ to CIE Lu'v'."""
+def XYZ2Lu_v_(  # noqa: N802
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    whitepoint: None | float | str | tuple | list = None,
+) -> tuple[float, float, float]:
+    """Convert from XYZ to CIE Lu'v'.
+
+    Args:
+        X (float): X value.
+        Y (float): Y value.
+        Z (float): Z value.
+        whitepoint (None | float | str | tuple | list): Whitepoint to
+            use for conversion. Defaults to D50 if not set.
+
+    Returns:
+        tuple[float, float, float]: A tuple of Lu'v' coordinates (L, u', v').
+    """
     if X + Y + Z == 0:
         # We can't check for X == Y == Z == 0 because they may actually add up
         # to 0, thus resulting in ZeroDivisionError later
-        L, u_, v_ = XYZ2Lu_v_(*get_whitepoint(whitepoint))
+        l, u_, v_ = XYZ2Lu_v_(*get_whitepoint(whitepoint))
         return 0.0, u_, v_
 
-    Xr, Yr, Zr = get_whitepoint(whitepoint, 100)
+    Xr, Yr, Zr = get_whitepoint(whitepoint, 100)  # noqa: N806
 
     yr = Y / Yr
 
-    L = 116.0 * cbrt(yr) - 16.0 if yr > LSTAR_E else LSTAR_K * yr
+    l = 116.0 * cbrt(yr) - 16.0 if yr > LSTAR_E else LSTAR_K * yr
 
     u_ = (4.0 * X) / (X + 15.0 * Y + 3.0 * Z)
     v_ = (9.0 * Y) / (X + 15.0 * Y + 3.0 * Z)
 
-    return L, u_, v_
+    return l, u_, v_
 
 
-def XYZ2Luv(X, Y, Z, whitepoint=None):
-    """Convert from XYZ to Luv."""
-    if X + Y + Z == 0:
+def XYZ2Luv(  # noqa: N802
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    whitepoint: None | float | str | tuple | list = None,
+) -> tuple[float, float, float]:
+    """Convert from XYZ to Luv.
+
+    Args:
+        X (float): X value.
+        Y (float): Y value.
+        Z (float): Z value.
+        whitepoint (None | float | str | tuple | list): Whitepoint to use
+            for conversion. Defaults to D50 if not set.
+
+    Returns:
+        tuple[float, float, float]: A tuple of Luv coordinates (L, u, v).
+    """
+    if X + Y + Z == 0:  # noqa: N806
         # We can't check for X == Y == Z == 0 because they may actually add up
         # to 0, thus resulting in ZeroDivisionError later
-        L, u, v = XYZ2Luv(*get_whitepoint(whitepoint))
+        l, u, v = XYZ2Luv(*get_whitepoint(whitepoint))
         return 0.0, u, v
 
-    Xr, Yr, Zr = get_whitepoint(whitepoint, 100)
+    Xr, Yr, Zr = get_whitepoint(whitepoint, 100)  # noqa: N806
 
     yr = Y / Yr
 
-    L = 116.0 * cbrt(yr) - 16.0 if yr > LSTAR_E else LSTAR_K * yr
+    l = 116.0 * cbrt(yr) - 16.0 if yr > LSTAR_E else LSTAR_K * yr
 
     u_ = (4.0 * X) / (X + 15.0 * Y + 3.0 * Z)
     v_ = (9.0 * Y) / (X + 15.0 * Y + 3.0 * Z)
@@ -4007,13 +4968,22 @@ def XYZ2Luv(X, Y, Z, whitepoint=None):
     u_r = (4.0 * Xr) / (Xr + 15.0 * Yr + 3.0 * Zr)
     v_r = (9.0 * Yr) / (Xr + 15.0 * Yr + 3.0 * Zr)
 
-    u = 13.0 * L * (u_ - u_r)
-    v = 13.0 * L * (v_ - v_r)
+    u = 13.0 * l * (u_ - u_r)
+    v = 13.0 * l * (v_ - v_r)
 
-    return L, u, v
+    return l, u, v
 
 
-def XYZ2RGB(X, Y, Z, rgb_space=None, scale=1.0, round_=False, clamp=True, oetf=None):
+def XYZ2RGB(  # noqa: N802
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    rgb_space: None | str | list | tuple = None,
+    scale: float = 1.0,
+    round_: bool = False,
+    clamp: bool = True,
+    oetf: None | Callable = None,
+) -> list[float]:
     """Convert from XYZ to RGB.
 
     Use optional RGB colorspace definition, which can be a named colorspace
@@ -4047,16 +5017,33 @@ def XYZ2RGB(X, Y, Z, rgb_space=None, scale=1.0, round_=False, clamp=True, oetf=N
        replaced by a "simplified" version using a straight gamma function with
        gamma = 2.2.
 
+    Args:
+        X (float): X value.
+        Y (float): Y value.
+        Z (float): Z value.
+        rgb_space (None | str | list | tuple): RGB colorspace definition.
+            Defaults to sRGB.
+        scale (float): Scale factor for RGB output. Defaults to 1.0.
+        round_ (int | bool): Number of decimal places to round the output to.
+            If False, no rounding is applied. Defaults to False.
+        clamp (bool): If True, clamps the RGB values to the range [0.0, 1.0].
+            Defaults to True.
+        oetf (None | callable): Optional opto-electronic transfer function
+            to apply to the RGB values. If None, no OETF is applied.
+            Defaults to None.
+
+    Returns:
+        list[float]: RGB values in the range [0.0, scale].
     """
-    trc, whitepoint, rxyY, gxyY, bxyY, matrix = get_rgb_space(rgb_space)
-    RGB = matrix.inverted() * [X, Y, Z]
+    trc, _whitepoint, _rxyY, _gxyY, _bxyY, matrix = get_rgb_space(rgb_space)  # noqa: N806
+    rgb = matrix.inverted() * [X, Y, Z]
     is_trc = isinstance(trc, (list, tuple))
-    for i, v in enumerate(RGB):
+    for i, v in enumerate(rgb):
         gamma = trc[i] if is_trc else trc
         if clamp:
             v = min(1.0, max(0.0, v))
         if oetf:
-            RGB[i] = oetf(v)
+            rgb[i] = oetf(v)
         elif isinstance(gamma, (list, tuple)):
             key = id(gamma)
             if key not in XYZ2RGB.interp:
@@ -4068,19 +5055,24 @@ def XYZ2RGB(X, Y, Z, rgb_space=None, scale=1.0, round_=False, clamp=True, oetf=N
                 XYZ2RGB.interp[key] = ginterp
             else:
                 ginterp = XYZ2RGB.interp[key]
-            RGB[i] = ginterp(v)
+            rgb[i] = ginterp(v)
         else:
-            RGB[i] = specialpow(v, 1.0 / gamma)
-        RGB[i] *= scale
+            rgb[i] = special_pow(v, 1.0 / gamma)
+        rgb[i] *= scale
         if round_ is not False:
-            RGB[i] = round(RGB[i], round_)
-    return RGB
+            rgb[i] = round(rgb[i], round_)
+    return rgb
 
 
 XYZ2RGB.interp = {}
 
 
-def XYZ2xyY(X, Y, Z, whitepoint=None):
+def XYZ2xyY(  # noqa: N802
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    whitepoint: None | float | str | tuple | list = None,
+) -> tuple[float, float, float]:
     """Convert from XYZ to xyY.
 
     Based on formula from http://brucelindbloom.com/Eqn_XYZ_to_xyY.html
@@ -4090,18 +5082,29 @@ def XYZ2xyY(X, Y, Z, whitepoint=None):
        to the chromaticity coordinates of the reference whitepoint.
     2. The output Y value is in the nominal range [0.0, Y[XYZ]].
 
+    Args:
+        X (float): X value.
+        Y (float): Y value.
+        Z (float): Z value.
+        whitepoint (None | float | str | tuple | list): Whitepoint.
+            Defaults to D50.
+
+    Returns:
+        tuple[float, float, float]: x, y, Y values.
     """
     if X + Y + Z == 0:
         # We can't check for X == Y == Z == 0 because they may actually add up
         # to 0, thus resulting in ZeroDivisionError later
-        x, y, Y = XYZ2xyY(*get_whitepoint(whitepoint))
+        x, y, Y = XYZ2xyY(*get_whitepoint(whitepoint))  # noqa: N806
         return x, y, 0.0
     x = X / float(X + Y + Z)
     y = Y / float(X + Y + Z)
     return x, y, Y
 
 
-def xy_CCT_delta(x, y, daylight=True, method=2000):
+def xy_CCT_delta(  # noqa: N802
+    x: float, y: float, daylight: bool = True, method: int = 2000
+) -> tuple[float, float]:
     """Return CCT and delta to locus.
 
     Args:
@@ -4125,8 +5128,8 @@ def xy_CCT_delta(x, y, daylight=True, method=2000):
         elif 1667 <= cct <= 25000:
             locus = planckianCT2XYZ(cct, 100.0)
         if locus:
-            L2, a2, b2 = xyY2Lab(x, y, 100.0, locus)
-            d = delta(L2, 0, 0, L2, a2, b2, method)
+            l2, a2, b2 = xyY2Lab(x, y, 100.0, locus)
+            d = delta(l2, 0, 0, l2, a2, b2, method)
     return cct, d
 
 
@@ -4160,7 +5163,7 @@ def dmatrixz(nrl: int, nrh: int, ncl: int, nch: int) -> dict:
     return m
 
 
-def dvector(nl, nh):
+def dvector(nl: int, nh: int) -> dict:
     """Adapted from ArgyllCMS numlib/numsup.c.
 
     Args:
@@ -4173,10 +5176,17 @@ def dvector(nl, nh):
     return {}
 
 
-def gam_fit(gf, v):
+def gam_fit(gf: GammaFits, v: list[float]) -> float:
     """Gamma + input offset function handed to powell().
 
     Adapted from ArgyllCMS xicc/xicc.c
+
+    Args:
+        gf (GammaFits): Gamma fit object containing parameters.
+        v (list[float]): List of gamma values to fit.
+
+    Returns:
+        float: Squared error value for the fit.
     """
     gamma = v[0]
     rv = 0.0
@@ -4199,28 +5209,39 @@ def gam_fit(gf, v):
     return rv
 
 
-def linmin(cp, xi, di, ftol, func, fdata):
+def linmin(
+    cp: list[float],
+    xi: list[float],
+    di: int,
+    ftol: float,
+    func: Callable,
+    fdata: Any,  # noqa: ANN401
+) -> float:
     """Line bracketing and minimisation routine.
 
     Return value at minimum.
 
     Adapted from ArgyllCMS numlib/powell.c
+
+    Args:
+        cp (list[float]): Start point, and returned value.
+        xi (list[float]): Search vector.
+        di (int): Dimensionality.
+        ftol (float): Tolerance to stop on.
+        func (callable): Error function to evaluate.
+        fdata: Opaque data for func().
+
+    Returns:
+        float: Value at minimum.
     """
-    POWELL_GOLD = 1.618034
-    POWELL_CGOLD = 0.3819660
-    POWELL_MAXIT = 100
-    # cp  # Start point, and returned value
-    # xi[]  # Search vector
-    # di  # Dimensionality
-    # ftol  # Tolerance to stop on
-    # func  # Error function to evaluate
-    # fdata  # Opaque data for func()
+    powell_gold = 1.618034
+    powell_cgold = 0.3819660
+    powell_max_iterations = 100
     # ax, xx, bx  # Search vector multipliers
     # af, xf, bf  # Function values at those points
-    # xt, XT  # Trial point
-    XT = {}
+    # xt  # Trial point
 
-    xt = XT if di <= 10 else dvector(0, di - 1)  # Vector for trial point
+    xt = {} if di <= 10 else dvector(0, di - 1)  # Vector for trial point
 
     # --------------------------
     # First bracket the solution
@@ -4236,7 +5257,7 @@ def linmin(cp, xi, di, ftol, func, fdata):
     af = func(fdata, xt)
 
     # xx being vector offset 0.618
-    xx = 1.0 / POWELL_GOLD
+    xx = 1.0 / powell_gold
     for i in range(di):
         xt[i] = cp[i] + xx * xi[i]
     xf = func(fdata, xt)
@@ -4254,7 +5275,7 @@ def linmin(cp, xi, di, ftol, func, fdata):
 
     logger.debug(f"linmin: Ordered Initial points a:{ax:f}:{af:f} -> b:{xx:f}:{xf:f}")
 
-    bx = xx + POWELL_GOLD * (xx - ax)  # Guess b beyond a -> x
+    bx = xx + powell_gold * (xx - ax)  # Guess b beyond a -> x
     for i in range(di):
         xt[i] = cp[i] + bx * xi[i]
     bf = func(fdata, xt)
@@ -4296,7 +5317,7 @@ def linmin(cp, xi, di, ftol, func, fdata):
                 break
 
             # Parabolic fit didn't work, look further out in direction of b
-            ux = bx + POWELL_GOLD * (bx - xx)
+            ux = bx + powell_gold * (bx - xx)
 
         elif (bx - ux) * (ux - ulim) > 0.0:  # u is between b and limit
             for i in range(di):  # Evaluate u
@@ -4315,12 +5336,12 @@ def linmin(cp, xi, di, ftol, func, fdata):
             xf = bf  # Continue looking
             bx = ux
             bf = uf
-            ux = bx + POWELL_GOLD * (bx - xx)  # Test beyond b
+            ux = bx + powell_gold * (bx - xx)  # Test beyond b
 
         elif (ux - ulim) * (ulim - bx) >= 0.0:  # u is beyond limit
             ux = ulim
         else:  # u is to left side of x ?
-            ux = bx + POWELL_GOLD * (bx - xx)
+            ux = bx + powell_gold * (bx - xx)
         # Evaluate u, and move into place at b
         for i in range(di):
             xt[i] = cp[i] + ux * xi[i]
@@ -4336,163 +5357,177 @@ def linmin(cp, xi, di, ftol, func, fdata):
 
     # ---------------------------------------
     # Now use brent minimiser bewteen a and b
-    if True:
-        # a and b bracket solution
-        # x is best function value so far
-        # w is second best function value so far
-        # v is previous second best, or third best
-        # u is most recently tested point
-        # wx, vx, ux  # Search vector multipliers
-        # wf
-        vf = 0.0
-        # uf  # Function values at those points
-        de = 0.0  # Distance moved on previous step
-        e = 0.0  # Distance moved on 2nd previous step
 
-        # Make sure a and b are in ascending order
-        if ax > bx:
-            tt = ax
-            ax = bx
-            bx = tt
-            tt = af
-            af = bf
-            bf = tt
+    # a and b bracket solution
+    # x is best function value so far
+    # w is second best function value so far
+    # v is previous second best, or third best
+    # u is most recently tested point
+    # wx, vx, ux  # Search vector multipliers
+    # wf
+    vf = 0.0
+    # uf  # Function values at those points
+    de = 0.0  # Distance moved on previous step
+    e = 0.0  # Distance moved on 2nd previous step
 
-        wx = vx = xx  # Initial values of other center points
-        wf = xf = xf
+    # Make sure a and b are in ascending order
+    if ax > bx:
+        tt = ax
+        ax = bx
+        bx = tt
+        tt = af
+        af = bf
+        bf = tt
 
-        for _iter in range(1, POWELL_MAXIT + 1):
-            mx = 0.5 * (ax + bx)  # m is center of bracket values
-            # if ABSTOL:
-            # tol1 = ftol  # Absolute tollerance
-            # else:
-            tol1 = ftol * abs(xx) + 1e-10
-            tol2 = 2.0 * tol1
+    wx = vx = xx  # Initial values of other center points
+    wf = xf = xf
 
+    for _iter in range(1, powell_max_iterations + 1):
+        mx = 0.5 * (ax + bx)  # m is center of bracket values
+        # if ABSTOL:
+        # tol1 = ftol  # Absolute tollerance
+        # else:
+        tol1 = ftol * abs(xx) + 1e-10
+        tol2 = 2.0 * tol1
+
+        logger.debug(
+            f"linmin: Got bracket a:{ax:f}:{af:f} x:{xx:f}:{xf:f} b:{bx:f}:{bf:f}"
+        )
+
+        # See if we're done
+        if abs(xx - mx) <= (tol2 - 0.5 * (bx - ax)):
             logger.debug(
-                f"linmin: Got bracket a:{ax:f}:{af:f} x:{xx:f}:{xf:f} b:{bx:f}:{bf:f}"
+                "linmin: We're done because "
+                f"{abs(xx - mx):f} <= {tol2 - 0.5 * (bx - ax):f}"
             )
+            break
 
-            # See if we're done
-            if abs(xx - mx) <= (tol2 - 0.5 * (bx - ax)):
-                logger.debug(
-                    "linmin: We're done because "
-                    f"{abs(xx - mx):f} <= {tol2 - 0.5 * (bx - ax):f}"
-                )
-                break
-
-            if abs(e) > tol1:  # Do a trial parabolic fit
-                r = (xx - wx) * (xf - vf)
-                q = (xx - vx) * (xf - wf)
-                p = (xx - vx) * q - (xx - wx) * r
-                q = 2.0 * (q - r)
-                if q > 0.0:
-                    p = -p
-                else:
-                    q = -q
-                te = e  # Save previous e value
-                e = de  # Previous steps distance moved
-
-                logger.debug("linmin: Trial parabolic fit")
-
-                if (
-                    abs(p) >= abs(0.5 * q * te)
-                    or p <= q * (ax - xx)
-                    or p >= q * (bx - xx)
-                ):
-                    # Give up on the parabolic fit, and use the golden section search
-                    e = (
-                        ax - xx if xx >= mx else bx - xx
-                    )  # Override previous distance moved */
-                    de = POWELL_CGOLD * e
-                    logger.debug("linmin: Moving to golden section search")
-                else:  # Use parabolic fit
-                    de = p / q  # Change in xb
-                    ux = xx + de  # Trial point according to parabolic fit
-                    if (ux - ax) < tol2 or (bx - ux) < tol2:
-                        # Don't use parabolic, use tol1 if (mx - xx) > 0.0: tol1 is +ve
-                        de = tol1 if (mx - xx) > 0.0 else -tol1
-                    logger.debug("linmin: Using parabolic fit")
-            else:  # Keep using the golden section search
-                e = ax - xx if xx >= mx else bx - xx  # Override previous distance moved
-                de = POWELL_CGOLD * e
-                logger.debug("linmin: Continuing golden section search")
-
-            if abs(de) >= tol1:  # If de moves as much as tol1 would
-                ux = xx + de  # use it
-                logger.debug(f"linmin: ux = {ux:f} = xx {xx:f} + de {de:f}")
-            elif de > 0.0:
-                ux = xx + tol1
-                logger.debug(f"linmin: ux = {ux:f} = xx {xx:f} + tol1 {tol1:f}")
+        if abs(e) > tol1:  # Do a trial parabolic fit
+            r = (xx - wx) * (xf - vf)
+            q = (xx - vx) * (xf - wf)
+            p = (xx - vx) * q - (xx - wx) * r
+            q = 2.0 * (q - r)
+            if q > 0.0:
+                p = -p
             else:
-                ux = xx - tol1
-                logger.debug(f"linmin: ux = {ux:f} = xx {xx:f} - tol1 {tol1:f}")
+                q = -q
+            te = e  # Save previous e value
+            e = de  # Previous steps distance moved
 
-            # Evaluate function
-            for i in range(di):
-                xt[i] = cp[i] + ux * xi[i]
-            uf = func(fdata, xt)
+            logger.debug("linmin: Trial parabolic fit")
 
-            if uf <= xf:  # Found new best solution
-                if ux >= xx:
-                    ax = xx
-                    af = xf  # New lower bracket
-                else:
-                    bx = xx
-                    bf = xf  # New upper bracket
+            if abs(p) >= abs(0.5 * q * te) or p <= q * (ax - xx) or p >= q * (bx - xx):
+                # Give up on the parabolic fit, and use the golden section search
+                e = (
+                    ax - xx if xx >= mx else bx - xx
+                )  # Override previous distance moved */
+                de = powell_cgold * e
+                logger.debug("linmin: Moving to golden section search")
+            else:  # Use parabolic fit
+                de = p / q  # Change in xb
+                ux = xx + de  # Trial point according to parabolic fit
+                if (ux - ax) < tol2 or (bx - ux) < tol2:
+                    # Don't use parabolic, use tol1 if (mx - xx) > 0.0: tol1 is +ve
+                    de = tol1 if (mx - xx) > 0.0 else -tol1
+                logger.debug("linmin: Using parabolic fit")
+        else:  # Keep using the golden section search
+            e = ax - xx if xx >= mx else bx - xx  # Override previous distance moved
+            de = powell_cgold * e
+            logger.debug("linmin: Continuing golden section search")
+
+        if abs(de) >= tol1:  # If de moves as much as tol1 would
+            ux = xx + de  # use it
+            logger.debug(f"linmin: ux = {ux:f} = xx {xx:f} + de {de:f}")
+        elif de > 0.0:
+            ux = xx + tol1
+            logger.debug(f"linmin: ux = {ux:f} = xx {xx:f} + tol1 {tol1:f}")
+        else:
+            ux = xx - tol1
+            logger.debug(f"linmin: ux = {ux:f} = xx {xx:f} - tol1 {tol1:f}")
+
+        # Evaluate function
+        for i in range(di):
+            xt[i] = cp[i] + ux * xi[i]
+        uf = func(fdata, xt)
+
+        if uf <= xf:  # Found new best solution
+            if ux >= xx:
+                ax = xx
+                af = xf  # New lower bracket
+            else:
+                bx = xx
+                bf = xf  # New upper bracket
+            vx = wx
+            vf = wf  # New previous 2nd best solution
+            wx = xx
+            wf = xf  # New 2nd best solution from previous best
+            xx = ux
+            xf = uf  # New best solution from latest
+            logger.debug("linmin: found new best solution")
+        else:  # Found a worse solution
+            if ux < xx:
+                ax = ux
+                af = uf  # New lower bracket
+            else:
+                bx = ux
+                bf = uf  # New upper bracket
+            if uf <= wf or wx == xx:  # New 2nd best solution, or equal best
                 vx = wx
                 vf = wf  # New previous 2nd best solution
-                wx = xx
-                wf = xf  # New 2nd best solution from previous best
-                xx = ux
-                xf = uf  # New best solution from latest
-                logger.debug("linmin: found new best solution")
-            else:  # Found a worse solution
-                if ux < xx:
-                    ax = ux
-                    af = uf  # New lower bracket
-                else:
-                    bx = ux
-                    bf = uf  # New upper bracket
-                if uf <= wf or wx == xx:  # New 2nd best solution, or equal best
-                    vx = wx
-                    vf = wf  # New previous 2nd best solution
-                    wx = ux
-                    wf = uf  # New 2nd best from latest
-                elif uf <= vf or vx in [xx, wx]:  # New 3rd best, or equal 1st & 2nd
-                    vx = ux
-                    vf = uf  # New previous 2nd best from latest
-                logger.debug("linmin: found new worse solution")
-        # !!! should do something if iter > POWELL_MAXIT !!!!
-        # Solution is at xx, xf
+                wx = ux
+                wf = uf  # New 2nd best from latest
+            elif uf <= vf or vx in [xx, wx]:  # New 3rd best, or equal 1st & 2nd
+                vx = ux
+                vf = uf  # New previous 2nd best from latest
+            logger.debug("linmin: found new worse solution")
+    # !!! should do something if iter > POWELL_MAXIT !!!!
+    # Solution is at xx, xf
 
-        # Compute solution vector
-        for i in range(di):
-            cp[i] += xx * xi[i]
+    # Compute solution vector
+    for i in range(di):
+        cp[i] += xx * xi[i]
 
     return xf
 
 
-def powell(di, cp, s, ftol, maxit, func, fdata, prog=None, pdata=None) -> bool:
+def powell(
+    di: int,
+    cp: list[float],
+    s: list[float],
+    ftol: float,
+    maxit: int,
+    func: Callable,
+    fdata: list,
+    prog: None | Callable = None,
+    pdata: None | list = None,
+) -> bool:
     """Standard interface for powell function.
 
     Adapted from ArgyllCMS `powell.c`.
+
+    Args:
+        di (int): Dimensionality of the problem.
+        cp (list[float]): Initial starting point, will be modified to the
+            solution.
+        s (list[float]): Size of initial search area, must be same length as
+            cp.
+        ftol (float): Tolerance of error change to stop on.
+        maxit (int): Maximum iterations allowed.
+        func (Callable): Error function to evaluate.
+        fdata (list): Opaque data needed by function.
+        prog (Callable | None): Optional progress percentage callback.
+        pdata: Opaque data needed by prog().
 
     Returns:
         bool: True on sucess, False on failure due to excessive iterions, result
             will be in cp
     """
-    DBL_EPSILON = 2.2204460492503131e-016
-    # di  # Dimentionality
-    # cp  # Initial starting point
-    # s  # Size of initial search area
-    # ftol  # Tolerance of error change to stop on
-    # maxit  # Maximum iterations allowed
-    # func  # Error function to evaluate
-    # fdata  # Opaque data needed by function
-    # prog  # Optional progress percentage callback
-    # pdata  # Opaque data needed by prog()
+    if prog is None:
 
+        def prog(*args, **kwargs) -> None:
+            """Dummy progress function."""
+
+    dbl_epsilon = 2.2204460492503131e-016
     # dmtx  # Direction vector
     # sp  # Sarting point before exploring all the directions
     # xpt  # Extrapolated point
@@ -4515,8 +5550,8 @@ def powell(di, cp, s, ftol, maxit, func, fdata, prog=None, pdata=None) -> bool:
         # Save the starting point
         spt[i] = cp[i]
 
-    if prog:  # Report initial progress
-        prog(pdata, pc)
+    # Report initial progress
+    prog(pdata, pc)
 
     # Initial function evaluation
     retv = func(fdata, cp)
@@ -4549,7 +5584,7 @@ def powell(di, cp, s, ftol, maxit, func, fdata, prog=None, pdata=None) -> bool:
         # if ABSTOL:
         # stopth = ftol  # Absolute tollerance
         # else
-        stopth = ftol * 0.5 * (abs(pretv) + abs(retv) + DBL_EPSILON)
+        stopth = ftol * 0.5 * (abs(pretv) + abs(retv) + dbl_epsilon)
         curdel = abs(pretv - retv)
         if startdel < 0.0:
             startdel = curdel
@@ -4565,8 +5600,8 @@ def powell(di, cp, s, ftol, maxit, func, fdata, prog=None, pdata=None) -> bool:
             )
             if pc < tt < 100:
                 pc = tt
-                if prog:  # Report initial progress
-                    prog(pdata, pc)
+                # Report initial progress
+                prog(pdata, pc)
 
         # If we have had at least one change of direction and
         # reached a suitable tollerance, then finish
@@ -4597,8 +5632,8 @@ def powell(di, cp, s, ftol, maxit, func, fdata, prog=None, pdata=None) -> bool:
                 for i in range(di):  # Save the new direction
                     dmtx[i][ibig] = svec[i]  # by replacing best previous
 
-    if prog:  # Report final progress
-        prog(pdata, 100)
+    # Report final progress
+    prog(pdata, 100)
 
     if iter_ < maxit:
         return True
@@ -4607,21 +5642,31 @@ def powell(di, cp, s, ftol, maxit, func, fdata, prog=None, pdata=None) -> bool:
     return False  # Failed due to execessive iterations
 
 
-def xicc_tech_gamma(egamma, off, outoffset=0.0):
+def xicc_tech_gamma(
+    egamma: float, input_offset: float, output_offset: float = 0.0
+) -> float:
     """Compute technical gamma for correct 50% response.
 
     Adapted from ArgyllCMS xicc.c
+
+    Args:
+        egamma (float): The effective gamma.
+        input_offset (float): The input offset.
+        output_offset (float, optional): The output offset. Defaults to 0.0.
+
+    Returns:
+        float: The technical gamma.
     """
     gf = GammaFits()
     op = {}
     sa = {}
 
-    if off <= 0.0:
+    if input_offset <= 0.0:
         return egamma
 
     # We set up targets without outo being added
-    outo = off * outoffset  # Offset acounted for in output
-    gf.bp = off - outo  # Black value for 0 % input
+    outo = input_offset * output_offset  # Offset acounted for in output
+    gf.bp = input_offset - outo  # Black value for 0 % input
     gf.wp = 1.0 - outo  # White value for 100% input
     gf.thyr = math.pow(0.5, egamma) - outo  # Advetised 50% target
 
@@ -4629,15 +5674,23 @@ def xicc_tech_gamma(egamma, off, outoffset=0.0):
     sa[0] = 0.1
 
     if not powell(1, op, sa, 1e-6, 500, gam_fit, gf):
-        logger.warning("Computing effective gamma and input offset is inaccurate")
+        logger.warning("Computing effective gamma and input offset is inaccurate!")
 
     return op[0]
 
 
 class GammaFits:
-    """Adapted from ArgyllCMS xicc/xicc.c."""
+    """Gamma fits class for xicc technical gamma computation.
 
-    def __init__(self, wp=1.0, thyr=0.2, bp=0.0):
+    Adapted from ArgyllCMS xicc/xicc.c.
+
+    Args:
+        wp (float): 100% input target.
+        thyr (float): 50% input target.
+        bp (float): 0% input target.
+    """
+
+    def __init__(self, wp: float = 1.0, thyr: float = 0.2, bp: float = 0.0) -> None:
         self.wp = wp  # 100% input target
         self.thyr = thyr  # 50% input target
         self.bp = bp  # 0% input target
@@ -4656,7 +5709,14 @@ class Interp:
         use_numpy (bool, optional): Use numpy for speed. Defaults to False.
     """
 
-    def __init__(self, xp, fp, left=None, right=None, use_numpy=False):
+    def __init__(
+        self,
+        xp: list[float],
+        fp: list[float],
+        left: None | float = None,
+        right: None | float = None,
+        use_numpy: bool = False,
+    ) -> None:
         if use_numpy:
             # Use numpy for speed
             xp = numpy.array(xp)
@@ -4668,7 +5728,7 @@ class Interp:
         self.lookup = {}
         self.use_numpy = use_numpy
 
-    def __call__(self, x):
+    def __call__(self, x: float) -> float:
         """Return the interpolated value for x.
 
         Args:
@@ -4681,7 +5741,15 @@ class Interp:
             self.lookup[x] = self._interp(x)
         return self.lookup[x]
 
-    def _interp(self, x):
+    def _interp(self, x: float) -> float:
+        """Perform the interpolation.
+
+        Args:
+            x (float): The x value to interpolate.
+
+        Returns:
+            float: The interpolated value at x.
+        """
         if self.use_numpy:
             return numpy.interp(x, self.xp, self.fp, self.left, self.right)
         return interp(x, self.xp, self.fp, self.left, self.right)
@@ -4691,9 +5759,23 @@ class BT1886:
     """BT.1886 like transfer function.
 
     Adapted from ArgyllCMS xicc/xicc.c
+
+    Args:
+        matrix (Matrix): Matrix to use for forward and backward transformations.
+        XYZbp (tuple[float, float, float]): Black point in XYZ coordinates.
+        outoffset (float): Output offset. Defaults to 0.0.
+        gamma (float): Gamma value. Defaults to 2.4.
+        apply_trc (bool): Whether to apply the transfer curve. Defaults to True.
     """
 
-    def __init__(self, matrix, XYZbp, outoffset=0.0, gamma=2.4, apply_trc=True):
+    def __init__(
+        self,
+        matrix: Matrix3x3,
+        XYZbp: tuple[float, float, float],  # noqa: N803
+        outoffset: float = 0.0,
+        gamma: float = 2.4,
+        apply_trc: bool = True,
+    ) -> None:
         """Setup BT.1886 for the given target.
 
         If apply_trc is False, apply only the black point blending portion of
@@ -4708,16 +5790,16 @@ class BT1886:
         self.fwd_matrix = matrix
         self.gamma = gamma
 
-        Lab = XYZ2Lab(*[v * 100 for v in XYZbp])
+        lab = XYZ2Lab(*[v * 100 for v in XYZbp])
 
         # For bp blend
-        self.outL = Lab[0]
+        self.outL = lab[0]
         # a* b* correction needed
-        self.tab = list(Lab)
+        self.tab = list(lab)
         self.tab[0] = 0  # 0 because bt1886 maps L to target
 
         if XYZbp[1] < 0:
-            XYZbp = list(XYZbp)
+            XYZbp = list(XYZbp)  # noqa: N806
             XYZbp[1] = 0.0
 
         # Offset acounted for in output
@@ -4735,7 +5817,7 @@ class BT1886:
         self.outsc = pow(wtipow - bkipow, self.gamma)
         self.apply_trc = apply_trc
 
-    def apply(self, X, Y, Z):
+    def apply(self, X: float, Y: float, Z: float) -> tuple[float, float, float]:  # noqa: N803
         """Apply BT.1886 black offset + gamma curve to the XYZ out of the input profile.
 
         Do this in the colorspace defined by the input profile matrix lookup,
@@ -4750,7 +5832,7 @@ class BT1886:
             Z (float): Z value in XYZ
 
         Returns:
-            tuple: Adjusted XYZ values as a tuple (X, Y, Z).
+            tuple[float, float, float]: Adjusted XYZ values as a tuple (X, Y, Z).
         """
         logger.debug(f"bt1886 XYZ in {X:f} {Y:f} {Z:f}")
 
@@ -4823,12 +5905,12 @@ class BT2390:
 
     def __init__(
         self,
-        black_cdm2,
-        white_cdm2,
-        master_black_cdm2=0,
-        master_white_cdm2=10000,
-        use_alternate_master_white_clip=True,
-    ):
+        black_cdm2: float,
+        white_cdm2: float,
+        master_black_cdm2: float = 0,
+        master_white_cdm2: float = 10000,
+        use_alternate_master_white_clip: bool = True,
+    ) -> None:
         """Master black and white level are used to tweak the roll-off and clip.
 
         If use_alternate_master_white_clip is True, do not follow BT.2390 for
@@ -4852,17 +5934,17 @@ class BT2390:
         self.master_white_cdm2 = master_white_cdm2
 
         self.ominv = black_cdm2 / 10000.0  # Lmin
-        self.omini = specialpow(self.ominv, 1.0 / -2084)  # Original minLum
+        self.omini = special_pow(self.ominv, 1.0 / -2084)  # Original minLum
         self.omaxv = white_cdm2 / 10000.0  # Lmax
-        self.omaxi = specialpow(self.omaxv, 1.0 / -2084)  # Original maxLum
+        self.omaxi = special_pow(self.omaxv, 1.0 / -2084)  # Original maxLum
 
         self.oKS = 1.5 * self.omaxi - 0.5
 
         # BT.2390-2
         self.mminv = master_black_cdm2 / 10000.0  # LB
-        self.mmini = specialpow(self.mminv, 1.0 / -2084)
+        self.mmini = special_pow(self.mminv, 1.0 / -2084)
         self.mmaxv = master_white_cdm2 / 10000.0  # LW
-        mmaxi = specialpow(self.mmaxv, 1.0 / -2084)
+        mmaxi = special_pow(self.mmaxv, 1.0 / -2084)
         if use_alternate_master_white_clip:
             self.maxci = (mmaxi - self.mmini) / (1 - self.mmini)
             self.mmaxi = 1.0
@@ -4872,20 +5954,20 @@ class BT2390:
         self.mini = (self.omini - self.mmini) / (
             self.mmaxi - self.mmini
         )  # Normalized minLum
-        self.minv = specialpow(self.mini, -2084)
+        self.minv = special_pow(self.mini, -2084)
         self.maxi = (self.omaxi - self.mmini) / (
             self.mmaxi - self.mmini
         )  # Normalized maxLum
-        self.maxv = specialpow(self.maxi, -2084)
+        self.maxv = special_pow(self.maxi, -2084)
 
         self.KS = 1.5 * self.maxi - 0.5
 
         if self.maxi <= self.maxci < 1:
-            E2 = self.P(self.maxci, self.KS, self.maxi)
-            diff = self.maxci - E2
+            e2 = self.P(self.maxci, self.KS, self.maxi)
+            diff = self.maxci - e2
             self.s = (self.maxci - self.maxi) / diff
 
-    def P(self, B, KS, maxi, maxci=1.0):
+    def P(self, B: float, KS: float, maxi: float, maxci: float = 1.0) -> float:  # noqa: N802, N803
         """Apply the roll-off function P(E1) to the input value E1.
 
         Args:
@@ -4898,31 +5980,31 @@ class BT2390:
         Returns:
             float: The output value after applying the roll-off.
         """  # noqa: D402
-        T = (B - KS) / (1 - KS)
-        E2 = (
-            (2 * T**3 - 3 * T**2 + 1) * KS
-            + (T**3 - 2 * T**2 + T) * (1 - KS)
-            + (-2 * T**3 + 3 * T**2) * maxi
+        t = (B - KS) / (1 - KS)
+        e2 = (
+            (2 * t**3 - 3 * t**2 + 1) * KS
+            + (t**3 - 2 * t**2 + t) * (1 - KS)
+            + (-2 * t**3 + 3 * t**2) * maxi
         )
         if maxci < 1:
             # (Old) Clipping for better target display peak luminance usage
             # XXX: Only kept for backwards compatibility
             s = min(((B - KS) / (maxci - KS)) ** 4, 1)
-            E2 = E2 * (1 - s) + maxi * s
-        return E2
+            e2 = e2 * (1 - s) + maxi * s
+        return e2
 
     def apply(
         self,
-        v,
-        KS=None,
-        maxi=None,
-        maxci=None,
-        mini=None,
-        mmaxi=None,
-        mmini=None,
-        bpc=False,
-        normalize=True,
-    ):
+        v: float,
+        KS: None | float = None,  # noqa: N803
+        maxi: None | float = None,
+        maxci: None | float = None,
+        mini: None | float = None,
+        mmaxi: None | float = None,
+        mmini: None | float = None,
+        bpc: bool = False,
+        normalize: bool = True,
+    ) -> float:
         """Apply roll-off (E' in, E' out) maxci if < 1.0 applies alterante clip.
 
         Args:
@@ -4946,45 +6028,39 @@ class BT2390:
         Returns:
             float: The output value after applying the roll-off.
         """
-        if KS is None:
-            KS = self.KS
-        if maxi is None:
-            maxi = self.maxi
-        if mini is None:
-            mini = self.mini
-        if mmaxi is None:
-            mmaxi = self.mmaxi
-        if mmini is None:
-            mmini = self.mmini
-        if maxci is None:
-            maxci = self.maxci
+        KS = self.KS if KS is None else KS  # noqa: N806
+        maxi = self.maxi if maxi is None else maxi
+        mini = self.mini if mini is None else mini
+        mmaxi = self.mmaxi if mmaxi is None else mmaxi
+        mmini = self.mmini if mmini is None else mmini
+        maxci = self.maxci if maxci is None else maxci
         if normalize and mmini is not None and mmaxi is not None:
             # Normalize PQ values based on mastering display black/white levels
-            E1 = min(max((v - mmini) / (mmaxi - mmini), 0), 1.0)
+            e1 = min(max((v - mmini) / (mmaxi - mmini), 0), 1.0)
         else:
-            E1 = v
+            e1 = v
         # BT.2390-3 suggests P[E1] if KS <= E1 <=1, but this results in
         # division by zero if KS = 1. The correct way is to check for
         # KS < E1 <=1
-        if KS < E1 <= 1:
-            E2 = self.P(E1, KS, maxi)
+        if KS < e1 <= 1:
+            e2 = self.P(e1, KS, maxi)
             if maxi <= maxci < 1:
                 # (New) Clipping for better target display peak luminance usage
                 s = self.s
-                diff = E1 - E2
-                E2 = min(E1 - diff * s, maxi)
+                diff = e1 - e2
+                e2 = min(e1 - diff * s, maxi)
             elif maxci < 1:
-                E2 = min(E1, maxci)
+                e2 = min(e1, maxci)
         else:
-            E2 = E1
+            e2 = e1
         # BT.2390-3 suggests 0 <= E2 <= 1, but this results in a discontinuity
         # if KS < 0 (high LB > Lmin, low Lmax, high LW). To avoid this, check
         # for E2 <= 1 instead
-        if mini and E2 <= 1:
+        if mini and e2 <= 1:
             # Apply black level lift
-            minLum = mini
+            min_lum = mini
             # maxLum = maxi
-            b = minLum
+            b = min_lum
             # BT.2390-3 suggests E2 + b * (1 - E2) ** 4, but this clips, if
             # minLum > 0.25, due to a 'dip' in the function. The solution is to
             # adjust the exponent according to minLum. For minLum <= 0.25
@@ -4992,7 +6068,7 @@ class BT2390:
             # Only for positive b i.e. minLum >= LB if b >= 0,
             # otherwise for negative b i.e. minLum < LB
             p = min(1.0 / b, 4) if b >= 0 else 4
-            E3 = E2 + b * (1 - E2) ** p
+            e3 = e2 + b * (1 - e2) ** p
             # If maxLum < 1, and the input value reaches maxLum, the resulting
             # output value will be higher than maxLum after applying the black
             # level lift (note that this is *not* a side effect of the above
@@ -5001,37 +6077,41 @@ class BT2390:
             if maxi < 1:
                 # Only re-scale if maxLum < 1. Note that maxLum can be > 1
                 # if Lmax > LW despite E2 <= 1
-                E3 = convert_range(E3, b, maxi + b * (1 - maxi) ** p, b, maxi)
+                e3 = convert_range(e3, b, maxi + b * (1 - maxi) ** p, b, maxi)
         else:
-            E3 = E2
+            e3 = e2
         if bpc:
-            E3 = convert_range(E3, mini, maxi, 0, maxi)
+            e3 = convert_range(e3, mini, maxi, 0, maxi)
         if normalize and mmini is not None and mmaxi is not None:
             # Invert the normalization of the PQ values
-            E3 = E3 * (mmaxi - mmini) + mmini
-        return max(E3, 0)
+            e3 = e3 * (mmaxi - mmini) + mmini
+        return max(e3, 0)
 
 
 class Matrix3x3(list):
     """Simple 3x3 matrix.
 
     Args:
-        matrix (list or tuple, optional): A 3x3 matrix to initialize with.
+        matrix (list tuple, optional): A 3x3 matrix to initialize with.
             Defaults to None.
     """
 
-    def __init__(self, matrix=None):
+    def __init__(self, matrix: None | list | tuple = None) -> None:
         super().__init__()
+        self._reset()
+
+        # TODO: Matrix should initialize to identity matrix if None or empty.
+        # if matrix is None or (isinstance(matrix, (list, tuple)) and len(matrix) == 0):
+        #     matrix = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+
         if matrix:
             self.update(matrix)
-        else:
-            self._reset()
 
-    def update(self, matrix):
+    def update(self, matrix: list | tuple) -> None:
         """Update the matrix with a new 3x3 matrix.
 
         Args:
-            matrix (list or tuple): A 3x3 matrix to update with.
+            matrix (list | tuple): A 3x3 matrix to update with.
 
         Raises:
             ValueError: If the matrix is not 3x3.
@@ -5051,7 +6131,7 @@ class Matrix3x3(list):
             for column in row:
                 self[-1].append(column)
 
-    def _reset(self):
+    def _reset(self) -> None:
         self._inverted = None
         self._transposed = None
         self._rounded = {}
@@ -5188,7 +6268,7 @@ class Matrix3x3(list):
         )
         return instance
 
-    def adjoint(self):
+    def adjoint(self) -> Matrix3x3:
         """Return adjoint matrix.
 
         Returns:
@@ -5196,11 +6276,14 @@ class Matrix3x3(list):
         """
         return self.cofactors().transposed()
 
-    def applied(self, fn):
+    def applied(self, fn: Callable) -> Matrix3x3:
         """Apply function to every element, return new matrix.
 
         Args:
             fn (callable): Function to apply to each element of the matrix.
+
+        Returns:
+            Matrix3x3: A new Matrix3x3 with the function applied to each element.
         """
         if fn in self._applied:
             return self._applied[fn]
@@ -5212,8 +6295,12 @@ class Matrix3x3(list):
         self._applied[fn] = matrix
         return matrix
 
-    def cofactors(self):
-        """Return cofactor matrix."""
+    def cofactors(self) -> Matrix3x3:
+        """Return cofactor matrix.
+
+        Returns:
+            Matrix3x3: Cofactor matrix.
+        """
         instance = self.__class__()
         instance.update(
             [
@@ -5236,7 +6323,7 @@ class Matrix3x3(list):
         )
         return instance
 
-    def determinant(self):
+    def determinant(self) -> float:
         """Return determinant of the matrix.
 
         Returns:
@@ -5252,12 +6339,12 @@ class Matrix3x3(list):
             + self[2][1] * self[1][2] * self[0][0]
         )
 
-    def invert(self):
+    def invert(self) -> None:
         """Invert the matrix in place."""
         # inplace
         self.update(self.inverted())
 
-    def inverted(self):
+    def inverted(self) -> Matrix3x3:
         """Return inverted matrix.
 
         Returns:
@@ -5290,7 +6377,7 @@ class Matrix3x3(list):
         self._inverted = instance
         return instance
 
-    def rounded(self, digits=3):
+    def rounded(self, digits: int = 3) -> Matrix3x3:
         """Round each element of the matrix to the specified number of digits.
 
         Args:
@@ -5310,11 +6397,11 @@ class Matrix3x3(list):
         self._rounded[digits] = matrix
         return matrix
 
-    def transpose(self):
+    def transpose(self) -> None:
         """Transpose the matrix in place."""
         self.update(self.transposed())
 
-    def transposed(self):
+    def transposed(self) -> Matrix3x3:
         """Return transposed matrix.
 
         Returns:
@@ -5333,6 +6420,37 @@ class Matrix3x3(list):
         self._transposed = instance
         return instance
 
+    def __hash__(self) -> int:
+        """Make the Matrix3x3 hashable."""
+        return hash(
+            f"{self[0][0]},{self[1][0]},{self[2][0]},"
+            f"{self[0][1]},{self[1][1]},{self[2][1]},"
+            f"{self[0][2]},{self[1][2]},{self[2][2]}"
+        )
+
+    def __eq__(self, other: list | tuple | Matrix3x3) -> bool:
+        """Check if two matrices are equal.
+
+        Args:
+            other (Matrix3x3): The other matrix to compare with.
+
+        Returns:
+            bool: True if the matrices are equal, False otherwise.
+        """
+        if not isinstance(other, (list, tuple, Matrix3x3)):
+            return False
+        return (
+            self[0][0] == other[0][0]
+            and self[0][1] == other[0][1]
+            and self[0][2] == other[0][2]
+            and self[1][0] == other[1][0]
+            and self[1][1] == other[1][1]
+            and self[1][2] == other[1][2]
+            and self[2][0] == other[2][0]
+            and self[2][1] == other[2][1]
+            and self[2][2] == other[2][2]
+        )
+
 
 class NumberTuple(tuple):
     """Simple tuple with a few extra methods."""
@@ -5347,7 +6465,7 @@ class NumberTuple(tuple):
         """
         return "({})".format(", ".join(str(value) for value in self))
 
-    def round(self, digits=4):
+    def round(self, digits: int = 4) -> NumberTuple:
         """Round each element of the tuple to the specified number of digits.
 
         Args:
@@ -5369,7 +6487,7 @@ class NumberTuple(tuple):
 # Cross-verification of the matrix numbers has been done using various sources,
 # most notably 'Chromatic Adaptation Performance of Different RGB Sensors'
 # http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.14.918&rep=rep1&type=pdf
-cat_matrices = {
+CAT_MATRICES = {
     "Bradford": Matrix3x3(
         [
             [0.89510, 0.26640, -0.16140],
@@ -5665,16 +6783,16 @@ OPTIMAL_COLORS_LAB = [
 ]
 
 
-def debug_caches():
+def debug_caches() -> None:
     """Debug caches for duplicate entries."""
-    for cache in (
+    for cache_name in (
         "XYZ2RGB.interp",
         "wp_adaption_matrix.cache",
         "get_rgb_space.cache",
         "get_standard_illuminant.cache",
         "get_whitepoint.cache",
     ):
-        cn, ck = cache.split(".")
+        cn, ck = cache_name.split(".")
         c = getattr(globals()[cn], ck)
         count = 0
         seen = {}
@@ -5686,7 +6804,7 @@ def debug_caches():
                 if k != kk and v == vv and kk not in seen:
                     count += 1
                     seen[kk] = True
-        print(cache, len(c), "entries", max(count - 1, 0), "duplicates")
+        print(cache_name, len(c), "entries", max(count - 1, 0), "duplicates")
         if count > 1:
             for k in c:
                 v = c[k]

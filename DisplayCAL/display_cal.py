@@ -20693,7 +20693,7 @@ class StartupFrame(start_cls):
             self.splash_alpha = self.splash_bmp.ConvertToImage().GetAlphaData()
             minv = 1.0 / self.splash_bmp.Size[0]
             for x in range(numframes):
-                scale = minv + colormath.specialpow(
+                scale = minv + colormath.special_pow(
                     0.35 + x / (numframes - 1.0) * (1 - 0.35), -2084
                 ) * (1 - minv)
                 self.zoom_scales.append(scale)

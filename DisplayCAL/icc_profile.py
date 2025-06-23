@@ -521,8 +521,8 @@ def create_RGB_A2B_XYZ(input_curves, clut, logfn=print):
             bwd.append(colormath.Interp(input_curve, linear, use_numpy=True))
         else:
             # Gamma
-            fwd.append(lambda v, p=input_curve: colormath.specialpow(v, p))
-            bwd.append(lambda v, p=input_curve: colormath.specialpow(v, 1.0 / p))
+            fwd.append(lambda v, p=input_curve: colormath.special_pow(v, p))
+            bwd.append(lambda v, p=input_curve: colormath.special_pow(v, 1.0 / p))
         itable.input.append([])
         itable.output.append([0, 65535])
 
@@ -662,22 +662,22 @@ def create_synthetic_clut_profile(
     if not isinstance(gammas, (list, tuple)):
         gammas = [gammas]
     for i, gamma in enumerate(gammas):
-        maxi = colormath.specialpow(white_Y, 1.0 / gamma)
+        maxi = colormath.special_pow(white_Y, 1.0 / gamma)
         segment = 1.0 / (clutres - 1.0) * maxi
         iv = 0.0
         prevpow = 0.0
-        nextpow = colormath.specialpow(segment, gamma)
+        nextpow = colormath.special_pow(segment, gamma)
         xp = []
         for j in range(steps):
             v = (j / maxv) * maxi
             if v > iv + segment:
                 iv += segment
                 prevpow = nextpow
-                nextpow = colormath.specialpow(iv + segment, gamma)
+                nextpow = colormath.special_pow(iv + segment, gamma)
             prevs = 1.0 - (v - iv) / segment
             nexts = (v - iv) / segment
             vv = prevs * prevpow + nexts * nextpow
-            out = colormath.specialpow(vv, 1.0 / gamma)
+            out = colormath.special_pow(vv, 1.0 / gamma)
             xp.append(out)
         interp = colormath.Interp(xp, list(range(steps)), use_numpy=True)
 
@@ -686,7 +686,7 @@ def create_synthetic_clut_profile(
         otable.input.append([])
         for j in range(4096):
             otable.input[i].append(
-                colormath.specialpow(j / 4095.0 * white_Y, 1.0 / gamma) * 65535
+                colormath.special_pow(j / 4095.0 * white_Y, 1.0 / gamma) * 65535
             )
 
         # Fill input curves from interpolated values
@@ -846,9 +846,9 @@ def create_synthetic_hdr_clut_profile(
         maxv = white_cdm2 / 10000.0
 
         def eotf(v):
-            return colormath.specialpow(v, -2084)
+            return colormath.special_pow(v, -2084)
 
-        _oetf = eotf_inverse = lambda v: colormath.specialpow(v, 1.0 / -2084)
+        _oetf = eotf_inverse = lambda v: colormath.special_pow(v, 1.0 / -2084)
         eetf = bt2390.apply
 
         # Apply a slight power to the segments to optimize encoding
@@ -857,14 +857,14 @@ def create_synthetic_hdr_clut_profile(
         def encf(v):
             if v < bt2390.mmaxi:
                 v = colormath.convert_range(v, 0, bt2390.mmaxi, 0, 1)
-                v = colormath.specialpow(v, 1.0 / encpow, 2)
+                v = colormath.special_pow(v, 1.0 / encpow, 2)
                 return colormath.convert_range(v, 0, 1, 0, bt2390.mmaxi)
             return v
 
         def encf_inverse(v):
             if v < bt2390.mmaxi:
                 v = colormath.convert_range(v, 0, bt2390.mmaxi, 0, 1)
-                v = colormath.specialpow(v, encpow, 2)
+                v = colormath.special_pow(v, encpow, 2)
                 return colormath.convert_range(v, 0, 1, 0, bt2390.mmaxi)
             return v
 
@@ -1197,9 +1197,9 @@ def create_synthetic_hdr_clut_profile(
                 elif mode == "XYZ":
                     X, Y, Z = colormath.RGB2XYZ(*RGB, rgb_space=rgb_space, eotf=eotf)
                     if Y:
-                        I1 = colormath.specialpow(Y, 1.0 / -2084)
+                        I1 = colormath.special_pow(Y, 1.0 / -2084)
                         I2 = eetf(I1)
-                        Y2 = colormath.specialpow(I2, -2084)
+                        Y2 = colormath.special_pow(I2, -2084)
                         X, Y, Z = (v / Y * Y2 for v in (X, Y, Z))
                     else:
                         I1 = I2 = 0
@@ -4883,7 +4883,7 @@ class CurveType(ICCProfileTag, list):
             )
         values = []
         maxv = white_cdm2 / 10000.0
-        maxi = colormath.specialpow(maxv, 1.0 / -2084)
+        maxi = colormath.special_pow(maxv, 1.0 / -2084)
         if rolloff:
             # Rolloff as defined in ITU-R BT.2390
             if not master_white_cdm2:
@@ -4899,7 +4899,7 @@ class CurveType(ICCProfileTag, list):
         else:
             if not master_white_cdm2:
                 master_white_cdm2 = white_cdm2
-            maxi_out = colormath.specialpow(master_white_cdm2 / 10000.0, 1.0 / -2084)
+            maxi_out = colormath.special_pow(master_white_cdm2 / 10000.0, 1.0 / -2084)
         if not size:
             size = len(self)
         if size < 2:
@@ -4908,7 +4908,7 @@ class CurveType(ICCProfileTag, list):
             n = i / (size - 1.0)
             if rolloff:
                 n = bt2390.apply(n)
-            v = colormath.specialpow(n * (maxi / maxi_out), -2084)
+            v = colormath.special_pow(n * (maxi / maxi_out), -2084)
             values.append(min(v / maxv, 1.0))
         self[:] = [min(v * 65535, 65535) for v in values]
         if black_cdm2 and not rolloff:
@@ -4936,7 +4936,7 @@ class CurveType(ICCProfileTag, list):
             exp = power
 
             def power(a):
-                return colormath.specialpow(a, exp)
+                return colormath.special_pow(a, exp)
 
         for i in range(size):
             self.append(vmin + power(float(i) / (size - 1)) * (vmax - vmin))
@@ -6707,8 +6707,8 @@ class ChromaticAdaptionTag(colormath.Matrix3x3, S15Fixed16ArrayType):
         def q(v):
             return s15Fixed16Number(s15Fixed16Number_tohex(v))
 
-        for cat_name in colormath.cat_matrices:
-            cat_matrix = colormath.cat_matrices[cat_name]
+        for cat_name in colormath.CAT_MATRICES:
+            cat_matrix = colormath.CAT_MATRICES[cat_name]
             if colormath.is_similar_matrix(self.applied(q), cat_matrix.applied(q), 4):
                 return cat_name
 

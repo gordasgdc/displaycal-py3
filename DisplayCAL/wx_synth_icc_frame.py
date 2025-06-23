@@ -441,7 +441,7 @@ class SynthICCFrame(BaseFrame, LUT3DMixin):
         else:
             cat_choices = ["Bradford"]
         cat_choices_ab = dict(
-            get_mapping(((k, k) for k in colormath.cat_matrices), cat_choices)
+            get_mapping(((k, k) for k in colormath.CAT_MATRICES), cat_choices)
         )
         cat_choices_ba = {v: k for k, v in cat_choices_ab.items()}
         cat_ctrl = wx.Choice(dlg, -1, choices=list(cat_choices_ab.values()))

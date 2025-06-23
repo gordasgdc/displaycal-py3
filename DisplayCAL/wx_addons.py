@@ -14,7 +14,7 @@ from time import sleep
 from typing import ClassVar
 
 from DisplayCAL import floatspin
-from DisplayCAL.colormath import specialpow
+from DisplayCAL.colormath import special_pow
 from DisplayCAL.lib.agw.gradientbutton import GradientButton
 from DisplayCAL.wx_fixes import GenButton, PlateButton, get_dialogs, wx
 
@@ -71,7 +71,7 @@ def GammaCorrect(self, from_gamma=-2.4, to_gamma=1.8):  # noqa: D417
     buffer = self.GetDataBuffer()
     for i, byte in enumerate(buffer):
         buffer[i] = round(
-            specialpow(byte / 255.0, from_gamma) ** (1.0 / to_gamma) * 255
+            special_pow(byte / 255.0, from_gamma) ** (1.0 / to_gamma) * 255
         )
 
 
@@ -340,7 +340,7 @@ def gamma_encode(R, G, B, alpha=wx.ALPHA_OPAQUE):
         # re-encode to gamma = 1.0 / 1.8 so that when decoded with gamma = 1.8
         # we get the correct sRGB color
         RGBa = [
-            round(specialpow(v / 255.0, -2.4) ** (1.0 / 1.8) * 255) for v in (R, G, B)
+            round(special_pow(v / 255.0, -2.4) ** (1.0 / 1.8) * 255) for v in (R, G, B)
         ]
         RGBa.append(alpha)
         return RGBa

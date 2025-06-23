@@ -178,7 +178,7 @@ class CoordinateType(list):
         """
         self[:] = [[y, x] for y, x in values]
         for i in range(len(self)):
-            self[i][0] = vmin + colormath.specialpow(self[i][1] / 255.0, power) * (
+            self[i][0] = vmin + colormath.special_pow(self[i][1] / 255.0, power) * (
                 vmax - vmin
             )
 

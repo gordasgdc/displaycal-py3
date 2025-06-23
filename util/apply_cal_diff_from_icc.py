@@ -49,7 +49,7 @@ def get_cal(
     idata = []
     for i in range(num_cal_entries):
         XYZ = cm.adapt(
-            *[cm.specialpow(i / maxval, gamma, slope_limit)] * 3,
+            *[cm.special_pow(i / maxval, gamma, slope_limit)] * 3,
             whitepoint_source=(1, 1, 1),
             whitepoint_destination=XYZwp
         )
