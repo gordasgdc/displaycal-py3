@@ -320,7 +320,7 @@ class HLG:
     @overload
     def eotf(
         self,
-        RGB: float, # noqa: N803
+        RGB: float,  # noqa: N803
         inverse: bool = False,
         apply_black_offset: bool = True,
     ) -> float: ...
@@ -5272,7 +5272,7 @@ def linmin(
     )
 
 
-def _linmin_bracket_solution(  # noqa: C901
+def _linmin_bracket_solution(  # noqa: C901
     cp: list[float],
     xi: list[float],
     xt: dict | list[float],  # Vector for trial point
@@ -5407,7 +5407,7 @@ def _linmin_bracket_solution(  # noqa: C901
     return ax, xx, bx, af, xf, bf  # noqa: N806
 
 
-def _linmin_use_brent_minimiser(  # noqa: C901
+def _linmin_use_brent_minimiser(  # noqa: C901
     ax: float,
     xx: float,
     bx: float,
@@ -5579,7 +5579,7 @@ def _linmin_use_brent_minimiser(  # noqa: C901
     return xf  # Return value at minimum
 
 
-def powell(  # noqa: C901
+def powell(  # noqa: C901
     di: int,
     cp: list[float],
     s: list[float],
