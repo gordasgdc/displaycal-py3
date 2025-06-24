@@ -298,7 +298,7 @@ def test_color_space_to_vrml_generate_vrml(
 
 def test_color_space_to_vrml_valid_color_space_names_is_correct():
     """ColorSpaceToVRML.VALID_COLOR_SPACE_NAMES contains correct names."""
-    expected_names = [
+    expected_names = (
         "DIN99",
         "DIN99b",
         "DIN99c",
@@ -316,5 +316,5 @@ def test_color_space_to_vrml_valid_color_space_names_is_correct():
         "Luv",
         "RGB",
         "xyY",
-    ]
+    )
     assert ColorSpaceToVRML.VALID_COLOR_SPACE_NAMES == expected_names

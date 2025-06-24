@@ -92,7 +92,7 @@ class ColorSpace(Enum):
     LuvPrime = "Lu'v'"
     Luv = "Luv"
     RGB = "RGB"
-    xyY = "xyY"
+    xyY = "xyY"  # noqa: N815
 
     def __str__(self) -> str:
         """Get the string representation of the ColorSpace."""
@@ -115,8 +115,8 @@ class ColorSpace(Enum):
         valid_values = sorted(set([c.name for c in cls] + [c.value for c in cls]))
         if not isinstance(colorspace, (str, ColorSpace)):
             raise TypeError(
-                f"colorspace should be a ColorSpace enum value or one of {valid_values}, "
-                f"not {colorspace.__class__.__name__}: '{colorspace}'"
+                "colorspace should be a ColorSpace enum value or one of "
+                f"{valid_values}, not {colorspace.__class__.__name__}: '{colorspace}'"
             )
         if isinstance(colorspace, str):
             colorspace_name_lut = {c.name.lower(): c.name for c in cls}
@@ -124,8 +124,8 @@ class ColorSpace(Enum):
             colorspace_lower_case = colorspace.lower()
             if colorspace_lower_case not in colorspace_name_lut:
                 raise ValueError(
-                    f"colorspace should be a ColorSpace enum value or one of {valid_values}, "
-                    f"not '{colorspace}'"
+                    "colorspace should be a ColorSpace enum value or one of "
+                    f"{valid_values}, not '{colorspace}'"
                 )
 
             return cls.__members__[colorspace_name_lut[colorspace_lower_case]]
@@ -134,7 +134,7 @@ class ColorSpace(Enum):
 
     def __eq__(self, other: object) -> bool:
         """Check equality with another ColorSpace or string.
-        
+
         Args:
             other (object): The object to compare with.
 
@@ -146,7 +146,7 @@ class ColorSpace(Enum):
                 self.value.lower() == other.lower()
                 or self.name.lower() == other.lower()
             )
-        elif isinstance(other, ColorSpace):
+        if isinstance(other, ColorSpace):
             return self.value == other.value
         return False
 
@@ -170,7 +170,7 @@ class ColorSpaceToVRML:
     sqrt3_100 = math.sqrt(3) * 100
     sqrt3_50 = math.sqrt(3) * 50
 
-    VALID_COLOR_SPACE_NAMES = [c.value for c in ColorSpace]
+    VALID_COLOR_SPACE_NAMES = (c.value for c in ColorSpace)
 
     VRML_TEMPLATE = """#VRML V2.0 utf8
 

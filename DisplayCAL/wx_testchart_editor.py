@@ -20,13 +20,13 @@ if sys.platform == "win32":
     from win32 import win32file
 
 from DisplayCAL import (
+    argyll_rgb2xyz,
     colormath,
     config,
     floatspin,
     imfile,
 )
 from DisplayCAL import localization as lang
-from DisplayCAL import argyll_rgb2xyz
 from DisplayCAL.argyll_cgats import ti3_to_ti1, verify_cgats
 from DisplayCAL.cgats import (
     CGATS,
@@ -1282,7 +1282,8 @@ END_DATA"""
                 if len(row) < 7:
                     # Missing XYZ, add via simple sRGB-like model
                     row.extend(
-                        v * 100 for v in argyll_rgb2xyz.rgb2xyz(*[v / 100.0 for v in row[1:]])
+                        v * 100
+                        for v in argyll_rgb2xyz.rgb2xyz(*[v / 100.0 for v in row[1:]])
                     )
                 data.add_data(row)
             # Create temp dir
