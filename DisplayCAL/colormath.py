@@ -115,63 +115,70 @@ def special_pow(a: float, b: float, slope_limit: float = 0) -> float:
         if slope_limit:
             return max(math.pow(a, b), a / slope_limit)
         return math.pow(a, b)
-    if a < 0.0:
-        sign_scale = -1.0
-        a = -a
-    else:
-        sign_scale = 1.0
-    if b in (1.0 / -601, 1.0 / -709):
+
+    sign_scale = -1.0 if a < 0.0 else 1.0
+    a = abs(a)
+
+    v = {
+        1.0 / -601:
         # XYZ -> RGB, Rec. 601/709 TRC
-        if a < REC709_K0 / REC709_P:
-            v = a * REC709_P
-        else:
-            v = 1.099 * math.pow(a, 0.45) - 0.099
-    elif b == 1.0 / -240:
+        (a * REC709_P)
+        if (a < REC709_K0 / REC709_P)
+        else (1.099 * math.pow(a, 0.45) - 0.099),
+        1.0 / -709:
+        # XYZ -> RGB, Rec. 601/709 TRC
+        (a * REC709_P)
+        if (a < REC709_K0 / REC709_P)
+        else (1.099 * math.pow(a, 0.45) - 0.099),
+        1.0 / -240:
         # XYZ -> RGB, SMPTE 240M TRC
-        if a < SMPTE240M_K0 / SMPTE240M_P:
-            v = a * SMPTE240M_P
-        else:
-            v = 1.1115 * math.pow(a, 0.45) - 0.1115
-    elif b == 1.0 / -3.0:
+        (a * SMPTE240M_P)
+        if (a < SMPTE240M_K0 / SMPTE240M_P)
+        else (1.1115 * math.pow(a, 0.45) - 0.1115),
+        1.0 / -3.0:
         # XYZ -> RGB, L* TRC
-        v = 0.01 * a * LSTAR_K if a <= LSTAR_E else 1.16 * math.pow(a, 1.0 / 3.0) - 0.16
-    elif b == 1.0 / -2.4:
+        0.01 * a * LSTAR_K if a <= LSTAR_E else 1.16 * math.pow(a, 1.0 / 3.0) - 0.16,
+        1.0 / -2.4:
         # XYZ -> RGB, sRGB TRC
-        if a <= SRGB_K0 / SRGB_P:
-            v = a * SRGB_P
-        else:
-            v = 1.055 * math.pow(a, 1.0 / 2.4) - 0.055
-    elif b == 1.0 / -2084:
+        (a * SRGB_P)
+        if (a <= SRGB_K0 / SRGB_P)
+        else (1.055 * math.pow(a, 1.0 / 2.4) - 0.055),
+        1.0 / -2084:
         # XYZ -> RGB, SMPTE 2084 (PQ)
-        v = (
-            (2413.0 * (a**SMPTE2084_M1) + 107) / (2392.0 * (a**SMPTE2084_M1) + 128)
-        ) ** SMPTE2084_M2
-    elif b == -2.4:
+        ((2413.0 * (a**SMPTE2084_M1) + 107) / (2392.0 * (a**SMPTE2084_M1) + 128))
+        ** SMPTE2084_M2,
+        -2.4:
         # RGB -> XYZ, sRGB TRC
-        v = a / SRGB_P if a <= SRGB_K0 else math.pow((a + 0.055) / 1.055, 2.4)
-    elif b == -3.0:
+        a / SRGB_P if a <= SRGB_K0 else math.pow((a + 0.055) / 1.055, 2.4),
+        -3.0:
         # RGB -> XYZ, L* TRC
         # E * K * 0.01
-        v = 100.0 * a / LSTAR_K if a <= 0.08 else math.pow((a + 0.16) / 1.16, 3.0)
-    elif b == -240:
+        100.0 * a / LSTAR_K if a <= 0.08 else math.pow((a + 0.16) / 1.16, 3.0),
+        -240:
         # RGB -> XYZ, SMPTE 240M TRC
-        v = (
+        (
             a / SMPTE240M_P
             if a < SMPTE240M_K0
             else math.pow((0.1115 + a) / 1.1115, 1.0 / 0.45)
-        )
-    elif b in (-601, -709):
+        ),
+        -601:
         # RGB -> XYZ, Rec. 601/709 TRC
-        v = a / REC709_P if a < REC709_K0 else math.pow((a + 0.099) / 1.099, 1.0 / 0.45)
-    elif b == -2084:
+        a / REC709_P if a < REC709_K0 else math.pow((a + 0.099) / 1.099, 1.0 / 0.45),
+        -709:
+        # RGB -> XYZ, Rec. 601/709 TRC
+        a / REC709_P if a < REC709_K0 else math.pow((a + 0.099) / 1.099, 1.0 / 0.45),
+        -2084:
         # RGB -> XYZ, SMPTE 2084 (PQ)
         # See https://www.smpte.org/sites/default/files/2014-05-06-EOTF-Miller-1-2-handout.pdf
-        v = (
+        (
             max(a ** (1.0 / SMPTE2084_M2) - SMPTE2084_C1, 0)
             / (SMPTE2084_C2 - SMPTE2084_C3 * a ** (1.0 / SMPTE2084_M2))
-        ) ** (1.0 / SMPTE2084_M1)
-    else:
+        )
+        ** (1.0 / SMPTE2084_M1),
+    }.get(b)
+    if v is None:
         raise ValueError(f"Invalid gamma {b!r}")
+
     return v * sign_scale
 
 
@@ -313,9 +320,9 @@ class HLG:
     @overload
     def eotf(
         self,
-        RGB: float,
+        RGB: float, # noqa: N803
         inverse: bool = False,
-        apply_black_offset: bool = True,  # noqa: N803
+        apply_black_offset: bool = True,
     ) -> float: ...
 
     @overload
@@ -370,9 +377,9 @@ class HLG:
     @overload
     def ootf(
         self,
-        RGB: float,
+        RGB: float,  # noqa: N803
         inverse: bool = False,
-        apply_black_offset: bool = True,  # noqa: N803
+        apply_black_offset: bool = True,
     ) -> float: ...
 
     @overload
@@ -430,10 +437,10 @@ class HLG:
 
     def RGB2XYZ(  # noqa: N802
         self,
-        R: float,
-        G: float,
-        B: float,
-        apply_black_offset: bool = True,  # noqa: N803
+        R: float,  # noqa: N803
+        G: float,  # noqa: N803
+        B: float,  # noqa: N803
+        apply_black_offset: bool = True,
     ) -> tuple[float, float, float]:
         """Non-linear HLG signal to display XYZ.
 
@@ -462,10 +469,10 @@ class HLG:
 
     def XYZ2RGB(  # noqa: N802
         self,
-        X: float,
-        Y: float,
-        Z: float,
-        apply_black_offset: bool = True,  # noqa: N803
+        X: float,  # noqa: N803
+        Y: float,  # noqa: N803
+        Z: float,  # noqa: N803
+        apply_black_offset: bool = True,
     ) -> tuple[float, float, float]:
         """Display XYZ to non-linear HLG signal.
 
@@ -741,10 +748,10 @@ def var(a: list[float]) -> float:
 
 
 def XYZ2LMS(  # noqa: N802
-    X: float,
-    Y: float,
-    Z: float,
-    cat: str = "Bradford",  # noqa: N803
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    cat: str = "Bradford",
 ) -> tuple[float, float, float]:
     """Convert from XYZ to cone response domain.
 
@@ -1937,7 +1944,7 @@ def DIN992Lab(  # noqa: N802
     l99: float,
     a99: float,
     b99: float,
-    kCH: float = 1.0,
+    kCH: float = 1.0,  # noqa: N803
     kE: float = 1.0,  # noqa: N803
 ) -> tuple[float, float, float]:
     """Convert from DIN99 to Lab.
@@ -1977,7 +1984,7 @@ def DIN99o2Lab(  # noqa: N802
     l99: float,
     a99: float,
     b99: float,
-    kCH: float = 1.0,
+    kCH: float = 1.0,  # noqa: N803
     kE: float = 1.0,  # noqa: N803
 ) -> tuple[float, float, float]:
     """Convert from DIN99o to Lab.
@@ -2134,10 +2141,10 @@ def DIN99familyLCH2Lab(  # noqa: N802
 
 
 def DIN99cdXYZ2XYZ(  # noqa: N802
-    X: float,
-    Y: float,
-    Z: float,
-    x: float,  # noqa: N803
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    x: float,
 ) -> tuple[float, float, float]:
     """Convert from DIN99cdXYZ to XYZ.
 
@@ -2231,10 +2238,10 @@ def DIN99familyab2DIN99CH(a99: float, b99: float) -> tuple[float, float]:  # noq
 
 
 def HSI2RGB(  # noqa: N802
-    H: float,
-    S: float,
-    I: float,
-    scale: float = 1.0,  # noqa: N803
+    H: float,  # noqa: N803
+    S: float,  # noqa: N803
+    I: float,  # noqa: N803
+    scale: float = 1.0,
 ) -> tuple[float, float, float]:
     """Convert from HSI to RGB.
 
@@ -2277,10 +2284,10 @@ def HSI2RGB(  # noqa: N802
 
 
 def HSL2RGB(  # noqa: N802
-    H: float,
-    S: float,
-    L: float,
-    scale: float = 1.0,  # noqa: N803
+    H: float,  # noqa: N803
+    S: float,  # noqa: N803
+    L: float,  # noqa: N803
+    scale: float = 1.0,
 ) -> tuple[float, float, float]:
     """Convert from HSL to RGB.
 
@@ -2297,10 +2304,10 @@ def HSL2RGB(  # noqa: N802
 
 
 def HSV2RGB(  # noqa: N802
-    H: float,
-    S: float,
-    V: float,
-    scale: float = 1.0,  # noqa: N803
+    H: float,  # noqa: N803
+    S: float,  # noqa: N803
+    V: float,  # noqa: N803
+    scale: float = 1.0,
 ) -> tuple[float, float, float]:
     """Convert from HSV to RGB.
 
@@ -2365,10 +2372,10 @@ def LCHab2Lab(L: float, C: float, H: float) -> tuple[float, float, float]:  # no
 
 
 def Lab2DIN99(  # noqa: N802
-    L: float,
+    L: float,  # noqa: N803
     a: float,
     b: float,
-    kCH: float = 1.0,
+    kCH: float = 1.0,  # noqa: N803
     kE: float = 1.0,  # noqa: N803
 ) -> tuple[float, float, float]:
     """Convert from Lab to DIN99.
@@ -2389,7 +2396,7 @@ def Lab2DIN99(  # noqa: N802
 
 
 def Lab2DIN99b(  # noqa: N802
-    L: float,
+    L: float,  # noqa: N803
     a: float,
     b: float,
     kE: float = 1.0,  # noqa: N803
@@ -2411,10 +2418,10 @@ def Lab2DIN99b(  # noqa: N802
 
 
 def Lab2DIN99o(  # noqa: N802
-    L: float,
+    L: float,  # noqa: N803
     a: float,
     b: float,
-    kCH: float = 1.0,
+    kCH: float = 1.0,  # noqa: N803
     kE: float = 1.0,  # noqa: N803
 ) -> tuple[float, float, float]:
     """Convert from Lab to DIN99o.
@@ -2482,10 +2489,10 @@ def Lab2DIN99d(  # noqa: N802
 
 
 def Lab2DIN99LCH(  # noqa: N802
-    L: float,
+    L: float,  # noqa: N803
     a: float,
     b: float,
-    kCH: float = 1.0,
+    kCH: float = 1.0,  # noqa: N803
     kE: float = 1.0,  # noqa: N803
 ) -> tuple[float, float, float]:
     """Convert from Lab to DIN99 LCH.
@@ -2506,7 +2513,7 @@ def Lab2DIN99LCH(  # noqa: N802
 
 
 def Lab2DIN99bLCH(  # noqa: N802
-    L: float,
+    L: float,  # noqa: N803
     a: float,
     b: float,
     kE: float = 1.0,  # noqa: N803
@@ -2526,10 +2533,10 @@ def Lab2DIN99bLCH(  # noqa: N802
 
 
 def Lab2DIN99oLCH(  # noqa: N802
-    L: float,
+    L: float,  # noqa: N803
     a: float,
     b: float,
-    kCH: float = 1.0,
+    kCH: float = 1.0,  # noqa: N803
     kE: float = 1.0,  # noqa: N803
 ) -> tuple[float, float, float]:
     """Convert from Lab to DIN99o LCH.
@@ -2589,14 +2596,14 @@ def Lab2DIN99familyLCH(  # noqa: N802
 
 
 def Lab2DIN99familyLGhrad(  # noqa: N802
-    L: float,
+    L: float,  # noqa: N803
     a: float,
     b: float,
-    kE: float,
+    kE: float,  # noqa: N803
     l1: float,
     l2: float,
     deg: float,
-    f1: float,  # noqa: N803
+    f1: float,
 ) -> tuple[float, float, float, float]:
     """Convert from Lab to DIN99 family LCH.
 
@@ -2889,10 +2896,10 @@ def Luv2XYZ(  # noqa: N802
 
 
 def RGB2HSI(  # noqa: N802
-    R: float,
-    G: float,
-    B: float,
-    scale: float = 1.0,  # noqa: N803
+    R: float,  # noqa: N803
+    G: float,  # noqa: N803
+    B: float,  # noqa: N803
+    scale: float = 1.0,
 ) -> tuple[float, float, float]:
     """Convert from RGB to HSI.
 
@@ -2948,10 +2955,10 @@ def RGB2HSL(  # noqa: N802
 
 
 def RGB2HSV(  # noqa: N802
-    R: float,
-    G: float,
-    B: float,
-    scale: float = 1.0,  # noqa: N803
+    R: float,  # noqa: N803
+    G: float,  # noqa: N803
+    B: float,  # noqa: N803
+    scale: float = 1.0,
 ) -> tuple[float, float, float]:
     """Convert from RGB to HSV.
 
@@ -3001,10 +3008,10 @@ def LinearRGB2ICtCp(  # noqa: N802
 
 
 def ICtCp2LinearRGB(  # noqa: N802
-    I: float,
-    Ct: float,
-    Cp: float,
-    eotf: None | Callable = None,  # noqa: N803
+    I: float,  # noqa: N803
+    Ct: float,  # noqa: N803
+    Cp: float,  # noqa: N803
+    eotf: None | Callable = None,
 ) -> tuple[float, float, float]:
     """Non-linear ICtCp to Rec. 2020 linear RGB.
 
@@ -3166,11 +3173,11 @@ def ICtCp2RGB(  # noqa: N802
 
 
 def XYZ2ICtCp(  # noqa: N802
-    X: float,
-    Y: float,
-    Z: float,
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
     clamp: bool = False,
-    oetf: None | Callable = None,  # noqa: N803
+    oetf: None | Callable = None,
 ) -> tuple[float, float, float]:
     """XYZ to ICtCp.
 
@@ -3505,11 +3512,11 @@ def RGB2YPbPr_matrix(rgb_space: None | str | list | tuple = "NTSC 1953") -> Matr
 
 
 def YCbCr2YPbPr(  # noqa: N802
-    Y: float,
-    Cb: float,
-    Cr: float,
+    Y: float,  # noqa: N803
+    Cb: float,  # noqa: N803
+    Cr: float,  # noqa: N803
     bits: int = 8,
-    fullrange: bool = False,  # noqa: N803
+    fullrange: bool = False,
 ) -> tuple[float, float, float]:
     """Y'CbCr to Y'PbPr.
 
@@ -3633,11 +3640,11 @@ def YPbPr2RGB(  # noqa: N802
 
 
 def YPbPr2YCbCr(  # noqa: N802
-    Y: float,
-    Pb: float,
-    Pr: float,
+    Y: float,  # noqa: N803
+    Pb: float,  # noqa: N803
+    Pr: float,  # noqa: N803
     bits: int = 8,
-    fullrange: bool = False,  # noqa: N803
+    fullrange: bool = False,
 ) -> tuple[float, float, float]:
     """Y'PbPr to Y'CbCr quantized to n bits.
 
@@ -4083,9 +4090,9 @@ def make_monotonically_increasing(
 
 
 def matmul(
-    XYZ: tuple[float, float, float],
+    XYZ: tuple[float, float, float],  # noqa: N803
     m1: Matrix3x3,
-    m2: Matrix3x3,  # noqa: N803
+    m2: Matrix3x3,
 ) -> tuple[float, float, float]:
     """Matrix multiplication of two matrices.
 
@@ -4615,10 +4622,10 @@ def XYZ2DIN99cdLCH(  # noqa: N802
 
 
 def XYZ2DIN99cdXYZ(  # noqa: N802
-    X: float,
-    Y: float,
-    Z: float,
-    x: float,  # noqa: N803
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    x: float,
 ) -> tuple[float, float, float]:
     """Convert from XYZ to DIN99cd.
 
@@ -4657,10 +4664,10 @@ def XYZ2DIN99d(  # noqa: N802
 
 
 def XYZ2DIN99dLCH(  # noqa: N802
-    X: float,
-    Y: float,
-    Z: float,
-    whitepoint: None | float | str | tuple | list = None,  # noqa: N803
+    X: float,  # noqa: N803
+    Y: float,  # noqa: N803
+    Z: float,  # noqa: N803
+    whitepoint: None | float | str | tuple | list = None,
 ) -> tuple[float]:
     """Convert from XYZ to DIN99d LCH.
 
@@ -5234,9 +5241,6 @@ def linmin(
     Returns:
         float: Value at minimum.
     """
-    powell_gold = 1.618034
-    powell_cgold = 0.3819660
-    powell_max_iterations = 100
     # ax, xx, bx  # Search vector multipliers
     # af, xf, bf  # Function values at those points
     # xt  # Trial point
@@ -5246,6 +5250,51 @@ def linmin(
     # --------------------------
     # First bracket the solution
 
+    ax, xx, bx, af, xf, bf = _linmin_bracket_solution(cp, xi, xt, di, func, fdata)
+
+    # ---------------------------------------
+    # Now use brent minimiser bewteen a and b
+
+    return _linmin_use_brent_minimiser(
+        ax,
+        xx,
+        bx,
+        af,
+        xf,
+        bf,
+        cp,
+        xi,
+        di,
+        ftol,
+        func,
+        fdata,
+        xt,
+    )
+
+
+def _linmin_bracket_solution(  # noqa: C901
+    cp: list[float],
+    xi: list[float],
+    xt: dict | list[float],  # Vector for trial point
+    di: int,
+    func: Callable,
+    fdata: Any,  # noqa: ANN401
+) -> tuple[float, float, float, float, float, float]:
+    """Bracket the solution for the line minimisation.
+
+    Args:
+        cp (list[float]): Start point, and returned value.
+        xi (list[float]): Search vector.
+        xt (dict | list[float]): Vector for trial point.
+        di (int): Dimensionality.
+        func (callable): Error function to evaluate.
+        fdata: Opaque data for func().
+
+    Returns:
+        tuple[float, float, float, float, float, float]: ax, xx, bx, af, xf,
+            bf - Search vector multipliers and function values at those points.
+    """
+    powell_gold = 1.618034
     logger.debug("linmin: Bracketing solution")
 
     # The line is measured as startpoint + offset * search vector.
@@ -5355,8 +5404,48 @@ def linmin(
     logger.debug(f"linmin: Got bracket a:{ax:f}:{af:f} x:{xx:f}:{xf:f} b:{bx:f}:{bf:f}")
     # Got bracketed minimum between a -> x -> b
 
-    # ---------------------------------------
-    # Now use brent minimiser bewteen a and b
+    return ax, xx, bx, af, xf, bf  # noqa: N806
+
+
+def _linmin_use_brent_minimiser(  # noqa: C901
+    ax: float,
+    xx: float,
+    bx: float,
+    af: float,
+    xf: float,
+    bf: float,
+    cp: list[float],
+    xi: list[float],
+    di: int,
+    ftol: float,
+    func: Callable,
+    fdata: Any,  # noqa: ANN401
+    xt: dict | list[float],  # Vector for trial point
+) -> float:
+    """Use Brent's method to find the minimum between a and b.
+
+    Adapted from ArgyllCMS numlib/powell.c
+
+    Args:
+        ax (float): Lower bound of the bracket.
+        xx (float): Current best point.
+        bx (float): Upper bound of the bracket.
+        af (float): Function value at ax.
+        xf (float): Function value at xx.
+        bf (float): Function value at bx.
+        cp (list[float]): Current point.
+        xi (list[float]): Search vector.
+        di (int): Dimensionality of the problem.
+        ftol (float): Tolerance for convergence.
+        func (Callable): Function to minimize.
+        fdata (Any): Opaque data for func().
+        xt (dict | list[float]): Vector for trial point.
+
+    Returns:
+        float: Value at minimum.
+    """
+    powell_cgold = 0.3819660
+    powell_max_iterations = 100
 
     # a and b bracket solution
     # x is best function value so far
@@ -5487,10 +5576,10 @@ def linmin(
     for i in range(di):
         cp[i] += xx * xi[i]
 
-    return xf
+    return xf  # Return value at minimum
 
 
-def powell(
+def powell(  # noqa: C901
     di: int,
     cp: list[float],
     s: list[float],
@@ -5621,16 +5710,18 @@ def powell(
         # Function value at extrapolated point
         lretv = func(fdata, xpt)
 
-        if lretv < pretv:  # If extrapolation is an improvement
-            t1 = pretv - retv - del_
-            t2 = pretv - lretv
-            t = 2.0 * (pretv - 2.0 * retv + lretv) * t1 * t1 - del_ * t2 * t2
-            if t < 0.0:
-                # Move to the minimum of the new direction
-                retv = linmin(cp, svec, di, ftol, func, fdata)
+        if lretv >= pretv:  # If extrapolation is not an improvement
+            continue
+        t1 = pretv - retv - del_
+        t2 = pretv - lretv
+        t = 2.0 * (pretv - 2.0 * retv + lretv) * t1 * t1 - del_ * t2 * t2
+        if t >= 0.0:
+            continue
+        # Move to the minimum of the new direction
+        retv = linmin(cp, svec, di, ftol, func, fdata)
 
-                for i in range(di):  # Save the new direction
-                    dmtx[i][ibig] = svec[i]  # by replacing best previous
+        for i in range(di):  # Save the new direction
+            dmtx[i][ibig] = svec[i]  # by replacing best previous
 
     # Report final progress
     prog(pdata, 100)

@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 from DisplayCAL.colormath import (
@@ -8,6 +10,16 @@ from DisplayCAL.colormath import (
     smooth_avg_old,
     smooth_avg,
     RGB2XYZ,
+    special_pow,
+    linmin,
+    REC709_P,
+    REC709_K0,
+    SMPTE240M_P,
+    SMPTE240M_K0,
+    SRGB_P,
+    SRGB_K0,
+    LSTAR_K,
+    LSTAR_E,
 )
 from tests.data.display_data import DisplayData
 
@@ -305,3 +317,153 @@ def test_from_module():
                 [str(round(v, 4)) for v in RGB2XYZ(0.0, 0.0, 1.0, spc)],
             )
         print("")
+
+
+@pytest.mark.parametrize(
+    "a, b, expected",
+    [
+        (2.0, 3.0, 8.0),  # simple power
+        (-2.0, 3.0, -8.0),  # negative base, odd exponent
+        (2.0, 0.5, math.sqrt(2.0)),  # square root
+        (0.0, 2.0, 0.0),  # zero base
+        (2.0, 1.0, 2.0),  # identity
+    ],
+)
+def test_special_pow_basic_power(a, b, expected):
+    assert special_pow(a, b) == pytest.approx(expected)
+
+
+def test_special_pow_slope_limit_negative_input():
+    """slope_limit should limit the result for negative input."""
+    a = -0.5
+    b = 2.0
+    slope_limit = 0.1
+    result = special_pow(a, b, slope_limit)
+    assert result == pytest.approx(min(-math.pow(-a, b), a / slope_limit))
+
+
+def test_special_pow_slope_limit_positive_input():
+    """slope_limit should limit the result for positive input."""
+    a = 0.05
+    b = 2.0
+    slope_limit = 0.5
+    result = special_pow(a, b, slope_limit)
+    assert result == pytest.approx(max(math.pow(a, b), a / slope_limit))
+
+
+@pytest.mark.parametrize(
+    "a, b, expected",
+    [
+        # sRGB forward (XYZ -> RGB, sRGB TRC)
+        (0.002, 1.0 / -2.4, 0.002 * SRGB_P),
+        (0.1, 1.0 / -2.4, 1.055 * math.pow(0.1, 1.0 / 2.4) - 0.055),
+        # sRGB reverse (RGB -> XYZ, sRGB TRC)
+        (0.002, -2.4, 0.002 / SRGB_P),
+        (0.1, -2.4, math.pow((0.1 + 0.055) / 1.055, 2.4)),
+        # L* forward (XYZ -> RGB, L* TRC)
+        (0.005, 1.0 / -3.0, 0.01 * 0.005 * LSTAR_K),
+        (0.1, 1.0 / -3.0, 1.16 * math.pow(0.1, 1.0 / 3.0) - 0.16),
+        # L* reverse (RGB -> XYZ, L* TRC)
+        (0.05, -3.0, 100.0 * 0.05 / LSTAR_K),
+        (0.2, -3.0, math.pow((0.2 + 0.16) / 1.16, 3.0)),
+        # Rec. 709 forward (XYZ -> RGB, Rec. 709 TRC)
+        (0.01, 1.0 / -709, 0.01 * REC709_P),
+        (0.2, 1.0 / -709, 1.099 * math.pow(0.2, 0.45) - 0.099),
+        # Rec. 709 reverse (RGB -> XYZ, Rec. 709 TRC)
+        (0.01, -709, 0.01 / REC709_P),
+        (0.2, -709, math.pow((0.2 + 0.099) / 1.099, 1.0 / 0.45)),
+        # SMPTE 240M forward (XYZ -> RGB, SMPTE 240M TRC)
+        (0.01, 1.0 / -240, 0.01 * SMPTE240M_P),
+        (0.2, 1.0 / -240, 1.1115 * math.pow(0.2, 0.45) - 0.1115),
+        # SMPTE 240M reverse (RGB -> XYZ, SMPTE 240M TRC)
+        (0.01, -240, 0.01 / SMPTE240M_P),
+        (0.2, -240, math.pow((0.1115 + 0.2) / 1.1115, 1.0 / 0.45)),
+    ],
+)
+def test_special_pow_transfer_functions(a, b, expected):
+    assert special_pow(a, b) == pytest.approx(expected)
+
+
+def test_special_pow_invalid_gamma():
+    with pytest.raises(ValueError):
+        special_pow(1.0, -9999)
+
+
+def quadratic_func(fdata, xt):
+    # Simple quadratic: f(x) = (x-3)^2, minimum at x=3
+    # xt is a dict or list, use first dimension
+    x = xt[0] if isinstance(xt, (list, tuple)) else xt.get(0, 0)
+    return (x - 3.0) ** 2
+
+def linear_func(fdata, xt):
+    # Linear function: f(x) = 2x + 1, minimum at -infinity
+    x = xt[0] if isinstance(xt, (list, tuple)) else xt.get(0, 0)
+    return 2 * x + 1
+
+def multi_dim_quadratic(fdata, xt):
+    # 2D quadratic: f(x, y) = (x-2)^2 + (y+1)^2, minimum at (2, -1)
+    x = xt[0] if isinstance(xt, (list, tuple)) else xt.get(0, 0)
+    y = xt[1] if isinstance(xt, (list, tuple)) else xt.get(1, 0)
+    return (x - 2.0) ** 2 + (y + 1.0) ** 2
+
+def test_linmin_quadratic_minimization():
+    cp = [0.0]
+    xi = [1.0]
+    di = 1
+    ftol = 1e-6
+    fdata = None
+    result = linmin(cp, xi, di, ftol, quadratic_func, fdata)
+    # Minimum should be at x=3, so cp[0] should be close to 3, result close to 0
+    assert cp[0] == pytest.approx(3.0, abs=1e-3)
+    assert result == pytest.approx(0.0, abs=1e-6)
+
+def test_linmin_linear_function():
+    cp = [0.0]
+    xi = [1.0]
+    di = 1
+    ftol = 1e-6
+    fdata = None
+    result = linmin(cp, xi, di, ftol, linear_func, fdata)
+    # For a linear function, linmin should move cp in the negative direction
+    # as much as possible, but since the bracket is limited, it should not diverge
+    # Just check that the result is less than the starting value
+    assert result < linear_func(None, {0: 0.0})
+
+def test_linmin_multidimensional_quadratic():
+    cp = [0.0, 0.0]
+    xi = [1.0, 1.0]
+    di = 2
+    ftol = 1e-6
+    fdata = None
+    result = linmin(cp, xi, di, ftol, multi_dim_quadratic, fdata)
+    # The minimum along the direction [1,1] from [0,0] is at t where
+    # (t-2)^2 + (t+1)^2 is minimized, i.e., t = 0.5
+    # So cp should be [0.5, 0.5]
+    assert cp[0] == pytest.approx(0.5, abs=1e-3)
+    assert cp[1] == pytest.approx(0.5, abs=1e-3)
+    # The function value at this point
+    expected = multi_dim_quadratic(None, [0.5, 0.5])
+    assert result == pytest.approx(expected, abs=1e-6)
+
+def test_linmin_with_zero_direction():
+    cp = [1.0]
+    xi = [0.0]
+    di = 1
+    ftol = 1e-6
+    fdata = None
+    result = linmin(cp, xi, di, ftol, quadratic_func, fdata)
+    # If direction is zero, cp should not change
+    assert cp[0] == pytest.approx(1.0)
+    # The result should be the function value at cp
+    assert result == pytest.approx(quadratic_func(None, {0: 1.0}))
+
+def test_linmin_handles_dict_xt():
+    # linmin uses dict for xt if di <= 10, so test that path
+    cp = [0.0]
+    xi = [1.0]
+    di = 1
+    ftol = 1e-6
+    fdata = None
+    result = linmin(cp, xi, di, ftol, quadratic_func, fdata)
+    assert cp[0] == pytest.approx(3.0, abs=1e-3)
+    assert result == pytest.approx(0.0, abs=1e-6)
