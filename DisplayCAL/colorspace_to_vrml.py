@@ -170,7 +170,7 @@ class ColorSpaceToVRML:
     sqrt3_100 = math.sqrt(3) * 100
     sqrt3_50 = math.sqrt(3) * 50
 
-    VALID_COLOR_SPACE_NAMES = (c.value for c in ColorSpace)
+    VALID_COLOR_SPACE_NAMES = tuple(c.value for c in ColorSpace)
 
     VRML_TEMPLATE = """#VRML V2.0 utf8
 
