@@ -31,9 +31,9 @@ from DisplayCAL.config import (
     get_default_dpi,
     get_display_name,
     get_icon_bundle,
-    getbitmap,
+    get_bitmap,
     getcfg,
-    geticon,
+    get_icon,
     initcfg,
     setcfg,
 )
@@ -203,10 +203,10 @@ class AuiDarkDockArt(aui.dockart.AuiDefaultDockArt):
             )
         self.SetMetric(aui.AUI_DOCKART_GRADIENT_TYPE, aui.AUI_GRADIENT_NONE)
         self.SetCustomPaneBitmap(
-            geticon(16, "button-pin"), aui.dockart.AUI_BUTTON_CLOSE, False
+            get_icon(16, "button-pin"), aui.dockart.AUI_BUTTON_CLOSE, False
         )
         self.SetCustomPaneBitmap(
-            geticon(16, "button-pin"), aui.dockart.AUI_BUTTON_PIN, False
+            get_icon(16, "button-pin"), aui.dockart.AUI_BUTTON_PIN, False
         )
 
     def DrawBackground(
@@ -875,7 +875,7 @@ class HSVWheel(BasePyControl):
     """
 
     def __init__(self, parent, bgcolour):
-        BasePyControl.__init__(self, parent, bitmap=getbitmap("theme/colorwheel"))
+        BasePyControl.__init__(self, parent, bitmap=get_bitmap("theme/colorwheel"))
         self._bitmap = (
             self._bitmap.ConvertToImage()
             .AdjustChannels(0.8, 0.8, 0.8)
@@ -1526,12 +1526,12 @@ class NumSpin(wx_Panel):
         self.Sizer.Add(self.numctrl, 1, wx.ALIGN_CENTER_VERTICAL | wx.ALL, s(5))
         vsizer = wx.BoxSizer(wx.VERTICAL)
         self.Sizer.Add(vsizer, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT | wx.RIGHT, s(2))
-        self.spinup = BasePyButton(self, geticon(10, "spin_up"))
+        self.spinup = BasePyButton(self, get_icon(10, "spin_up"))
         self.spinup.BackgroundColour = self.BackgroundColour
         self.spinup.Bind(wx.EVT_LEFT_DOWN, self.left_down_handler)
         self.spinup.Bind(wx.EVT_LEFT_UP, self.left_up_handler)
         vsizer.Add(self.spinup, 0, wx.BOTTOM, s(1))
-        self.spindn = BasePyButton(self, geticon(10, "spin_down"))
+        self.spindn = BasePyButton(self, get_icon(10, "spin_down"))
         self.spindn.BackgroundColour = self.BackgroundColour
         self.spindn.Bind(wx.EVT_LEFT_DOWN, self.left_down_handler)
         self.spindn.Bind(wx.EVT_LEFT_UP, self.left_up_handler)
@@ -2059,7 +2059,7 @@ class VisualWhitepointEditor(wx.Frame):
         self.zoomnormalbutton = BitmapButton(
             self.mainPanel,
             -1,
-            geticon(16, "zoom-original-outline"),
+            get_icon(16, "zoom-original-outline"),
             size=size,
             style=wx.NO_BORDER,
         )
@@ -2073,7 +2073,7 @@ class VisualWhitepointEditor(wx.Frame):
         self.center_x_button = BitmapButton(
             self.mainPanel,
             -1,
-            geticon(16, "window-center-outline"),
+            get_icon(16, "window-center-outline"),
             size=size,
             style=wx.NO_BORDER,
         )
@@ -2087,7 +2087,7 @@ class VisualWhitepointEditor(wx.Frame):
         self.center_y_button = BitmapButton(
             self.mainPanel,
             -1,
-            geticon(16, "window-center-outline"),
+            get_icon(16, "window-center-outline"),
             size=size,
             style=wx.NO_BORDER,
         )
@@ -2239,7 +2239,7 @@ class VisualWhitepointEditor(wx.Frame):
         mainSizer = wx.BoxSizer(wx.VERTICAL)
 
         shadow = HStretchStaticBitmap(
-            self.mainPanel, -1, getbitmap("theme/shadow-bordertop")
+            self.mainPanel, -1, get_bitmap("theme/shadow-bordertop")
         )
         mainSizer.Add(shadow, 0, wx.EXPAND)
         label = wx.StaticText(self.mainPanel, -1, lang.getstr("whitepoint"))
@@ -2270,7 +2270,7 @@ class VisualWhitepointEditor(wx.Frame):
         mainSizer.Add(self.reset_btn, 0, wx.ALL | wx.ALIGN_CENTER, margin)
 
         shadow = HStretchStaticBitmap(
-            self.mainPanel, -1, getbitmap("theme/shadow-bordertop")
+            self.mainPanel, -1, get_bitmap("theme/shadow-bordertop")
         )
         mainSizer.Add(shadow, 0, wx.EXPAND, margin)
         area_slider_label = wx.StaticText(
@@ -2353,7 +2353,7 @@ class VisualWhitepointEditor(wx.Frame):
             wx.CallAfter(
                 self.notify,
                 wrap(lang.getstr("fullscreen.osx.warning"), 80),
-                icon=geticon(32, "dialog-warning"),
+                icon=get_icon(32, "dialog-warning"),
                 timeout=0,
             )
         event.Skip()
@@ -2769,7 +2769,7 @@ class VisualWhitepointEditor(wx.Frame):
         if getattr(self, "notification", None):
             self.notification.fade("out")
         self.notification = TaskBarNotification(
-            icon or geticon(32, "dialog-information"),
+            icon or get_icon(32, "dialog-information"),
             title or self.Title,
             msg,
             self.bgPanel,

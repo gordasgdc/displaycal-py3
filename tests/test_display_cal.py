@@ -9,7 +9,7 @@ from wx import AppConsole, Button
 
 from DisplayCAL import display_cal, config
 from DisplayCAL.cgats import CGATS
-from DisplayCAL.config import geticon
+from DisplayCAL.config import get_icon
 from DisplayCAL.dev.mocks import check_call, check_call_str
 from DisplayCAL.display_cal import (
     app_update_check,
@@ -179,7 +179,7 @@ def test_install_scope_handler(mainframe: MainFrame) -> None:
         msg="msg",
         ok="ok",
         cancel="cancel",
-        bitmap=geticon(32, "dialog-information"),
+        bitmap=get_icon(32, "dialog-information"),
         alt="file.select",
     )
     dlg.install_systemwide = wx.RadioButton(dlg, -1, "install_local_system")

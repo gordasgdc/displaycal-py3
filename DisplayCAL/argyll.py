@@ -27,9 +27,9 @@ from DisplayCAL.config import (
     EXE_EXT,
     FS_ENC,
     get_data_path,
+    get_icon,
     get_verified_path,
     getcfg,
-    geticon,
     setcfg,
     writecfg,
 )
@@ -174,7 +174,7 @@ def prompt_argyll_dir(
             ok=lang.getstr("ok"),
             cancel=lang.getstr("cancel"),
             alt=lang.getstr("browse"),
-            bitmap=geticon(32, "dialog-question"),
+            bitmap=get_icon(size=32, name="dialog-question"),
         )
         dlg_result = dlg.ShowModal()
         dlg.Destroy()
@@ -231,7 +231,7 @@ def set_argyll_bin(
             ok=lang.getstr("download"),
             cancel=lang.getstr("cancel"),
             alt=lang.getstr("browse"),
-            bitmap=geticon(32, "dialog-question"),
+            bitmap=get_icon(size=32, name="dialog-question"),
         )
         dlg_result = dlg.ShowModal()
         dlg.Destroy()
@@ -287,7 +287,7 @@ def set_argyll_bin(
                     path, lang.getstr("argyll.dir.invalid", ", ".join(not_found))
                 ),
                 ok=lang.getstr("ok"),
-                bitmap=geticon(32, "dialog-error"),
+                bitmap=get_icon(size=32, name="dialog-error"),
             )
         else:
             break

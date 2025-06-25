@@ -44,9 +44,9 @@ from DisplayCAL.config import (
     get_display_name,
     get_total_patches,
     get_verified_path,
-    getbitmap,
+    get_bitmap,
     getcfg,
-    geticon,
+    get_icon,
     hascfg,
     setcfg,
     writecfg,
@@ -712,7 +712,7 @@ class TestchartEditor(BaseFrame):
         hsizer = wx.BoxSizer(wx.HORIZONTAL)
         self.sizer.Add(hsizer, flag=wx.ALL & ~(wx.BOTTOM | wx.TOP), border=12 + border)
 
-        self.vrml_save_as_btn = wx.BitmapButton(panel, -1, geticon(16, "3D"))
+        self.vrml_save_as_btn = wx.BitmapButton(panel, -1, get_icon(16, "3D"))
         if sys.platform == "darwin":
             # Work-around bitmap cutoff on left and right side
             w = self.vrml_save_as_btn.Size[0] + 4
@@ -730,7 +730,7 @@ class TestchartEditor(BaseFrame):
         )
         hsizer.Add((1, 1))
         self.view_3d_format_btn = wx.BitmapButton(
-            panel, -1, getbitmap("theme/dropdown-arrow")
+            panel, -1, get_bitmap("theme/dropdown-arrow")
         )
         if sys.platform == "darwin":
             # Work-around bitmap cutoff on left and right side
@@ -2250,7 +2250,7 @@ END_DATA"""
                     msg=lang.getstr("gamut"),
                     ok="L*a*b*",
                     alt="RGB",
-                    bitmap=geticon(32, APPNAME + "-testchart-editor"),
+                    bitmap=get_icon(32, APPNAME + "-testchart-editor"),
                 )
                 result = dlg.ShowModal()
                 if result == wx.ID_CANCEL:
@@ -2931,7 +2931,7 @@ END_DATA"""
                 lang.getstr("testchart.separate_fixed_points"),
                 ok=lang.getstr("ok"),
                 cancel=lang.getstr("cancel"),
-                bitmap=geticon(32, APPNAME + "-testchart-editor"),
+                bitmap=get_icon(32, APPNAME + "-testchart-editor"),
             )
             dlg.sizer3.Add((1, 4))
             for name in ("single", "gray", "multidim"):
@@ -3111,7 +3111,7 @@ END_DATA"""
                 msg=lang.getstr("testchart.export.repeat_patch"),
                 ok=lang.getstr("ok"),
                 cancel=lang.getstr("cancel"),
-                bitmap=geticon(32, APPNAME + "-testchart-editor"),
+                bitmap=get_icon(32, APPNAME + "-testchart-editor"),
             )
             sizer = wx.BoxSizer(wx.HORIZONTAL)
             dlg.sizer3.Add(sizer, 0, flag=wx.TOP | wx.ALIGN_LEFT, border=12)
@@ -3400,7 +3400,7 @@ END_DATA"""
                     msg=lang.getstr("dialog.confirm_overwrite", (path)),
                     ok=lang.getstr("overwrite"),
                     cancel=lang.getstr("cancel"),
-                    bitmap=geticon(32, "dialog-warning"),
+                    bitmap=get_icon(32, "dialog-warning"),
                 )
                 result = dlg.ShowModal()
                 dlg.Destroy()
@@ -3434,7 +3434,7 @@ END_DATA"""
                             msg=lang.getstr("testchart.confirm_select"),
                             ok=lang.getstr("testchart.select"),
                             cancel=lang.getstr("testchart.dont_select"),
-                            bitmap=geticon(32, "dialog-question"),
+                            bitmap=get_icon(32, "dialog-question"),
                         )
                         result = dlg.ShowModal()
                         dlg.Destroy()
@@ -3571,7 +3571,7 @@ END_DATA"""
                         msg=lang.getstr("dialog.confirm_overwrite", (path)),
                         ok=lang.getstr("overwrite"),
                         cancel=lang.getstr("cancel"),
-                        bitmap=geticon(32, "dialog-warning"),
+                        bitmap=get_icon(32, "dialog-warning"),
                     )
                     result = dlg.ShowModal()
                     dlg.Destroy()
@@ -3623,7 +3623,7 @@ END_DATA"""
                 msg=lang.getstr("testchart.save_or_discard"),
                 ok=ok,
                 cancel=lang.getstr("cancel"),
-                bitmap=geticon(32, "dialog-warning"),
+                bitmap=get_icon(32, "dialog-warning"),
             )
             if self.IsBeingDeleted():
                 dlg.buttonpanel.Hide(0)

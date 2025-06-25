@@ -11,9 +11,9 @@ from DisplayCAL.config import (
     get_data_path,
     get_default_dpi,
     get_icon_bundle,
-    getbitmap,
+    get_bitmap,
     getcfg,
-    geticon,
+    get_icon,
     setcfg,
 )
 from DisplayCAL.lib.agw import labelbook
@@ -121,7 +121,7 @@ class DisplayAdjustmentImageContainer(labelbook.ImageContainer):
         )
         imagelist = None
         for img in ("tab_hilite", "tab_selected"):
-            bmp = getbitmap(f"theme/{img}")
+            bmp = get_bitmap(f"theme/{img}")
             if not imagelist:
                 img_w, img_h = bmp.Size
                 imagelist = wx.ImageList(img_w, img_h)
@@ -592,7 +592,7 @@ class DisplayAdjustmentPanel(wx_Panel):
                 ("black_point", "black_point"),
             ):
                 bitmap = wx.StaticBitmap(
-                    self, wx.ID_ANY, getbitmap(f"theme/icons/16x16/{name}")
+                    self, wx.ID_ANY, get_bitmap(f"theme/icons/16x16/{name}")
                 )
                 bitmap.SetToolTipString(lang.getstr(lstr))
                 self.add_txt(name, bitmap, 4)
@@ -685,7 +685,7 @@ class DisplayAdjustmentPanel(wx_Panel):
         self.gauges[name].SetValue(0)
         if bitmap_name:
             self.gauges[name].label = wx.StaticBitmap(
-                self, wx.ID_ANY, getbitmap(f"theme/icons/16x16/{bitmap_name}")
+                self, wx.ID_ANY, get_bitmap(f"theme/icons/16x16/{bitmap_name}")
             )
             if tooltip:
                 self.gauges[name].label.SetToolTipString(tooltip)
@@ -709,7 +709,7 @@ class DisplayAdjustmentPanel(wx_Panel):
             wx.StaticBitmap(
                 self,
                 -1,
-                getbitmap(f"theme/marker_{direction}"),
+                get_bitmap(f"theme/marker_{direction}"),
                 size=(round(200 * scale), round(10 * scale)),
             )
         )
@@ -724,7 +724,7 @@ class DisplayAdjustmentPanel(wx_Panel):
             border (int): The border size around the text control.
         """
         checkmark = wx.StaticBitmap(
-            self, wx.ID_ANY, getbitmap("theme/icons/16x16/checkmark")
+            self, wx.ID_ANY, get_bitmap("theme/icons/16x16/checkmark")
         )
         txtsizer = wx.BoxSizer(wx.HORIZONTAL)
         if spacer:
@@ -909,7 +909,7 @@ class DisplayAdjustmentFrame(windowcls):
         self.indicator_ctrl = wx.StaticBitmap(
             self.indicator_panel,
             wx.ID_ANY,
-            geticon(10, "empty", use_mask=True),
+            get_icon(10, "empty", use_mask=True),
             size=(round(10 * scale), round(10 * scale)),
         )
         self.indicator_ctrl.SetForegroundColour(FGCOLOUR)
@@ -930,7 +930,7 @@ class DisplayAdjustmentFrame(windowcls):
         self.sound_on_off_btn.Bind(wx.EVT_BUTTON, self.measurement_play_sound_handler)
         self.btnsizer.Add(get_panel(self, (12, 12)), flag=wx.EXPAND)
         self.calibration_btn = self.create_gradient_button(
-            getbitmap("theme/icons/10x10/skip"), "", name="calibration_btn"
+            get_bitmap("theme/icons/10x10/skip"), "", name="calibration_btn"
         )
         self.calibration_btn.Bind(wx.EVT_BUTTON, self.continue_to_calibration)
         self.calibration_btn.Disable()
@@ -1163,7 +1163,7 @@ class DisplayAdjustmentFrame(windowcls):
             "check_all",
         ):
             img = modes.get(getcfg("measurement_mode") == "c", {}).get(img, img)
-            bmp = getbitmap(f"theme/icons/72x72/{img}")
+            bmp = get_bitmap(f"theme/icons/72x72/{img}")
             if not imagelist:
                 img_w, img_h = bmp.Size
                 imagelist = wx.ImageList(img_w, img_h)
@@ -1250,7 +1250,7 @@ class DisplayAdjustmentFrame(windowcls):
                 for name in bitmaps:
                     bitmap = bitmaps.get(name).get(getcfg("measurement_mode") == "c")
                     page.txt[name].spacer.SetBitmap(
-                        getbitmap("theme/icons/16x16/" + bitmap)
+                        get_bitmap(f"theme/icons/16x16/{bitmap}")
                     )
             else:
                 ctrltype = {"rgb_offset": "black_level", "rgb_gain": "luminance"}.get(
@@ -1258,7 +1258,7 @@ class DisplayAdjustmentFrame(windowcls):
                 )
                 bitmap = bitmaps.get(ctrltype).get(getcfg("measurement_mode") == "c")
                 page.gauges["L"].label.SetBitmap(
-                    getbitmap("theme/icons/16x16/" + bitmap)
+                    get_bitmap(f"theme/icons/16x16/{bitmap}")
                 )
             page.Fit()
             page.Layout()
@@ -1330,14 +1330,14 @@ class DisplayAdjustmentFrame(windowcls):
                 "start" or "stop".
         """
         if getattr(self, "adjustment_btn", None):
-            self.adjustment_btn._bitmap = getbitmap(f"theme/icons/10x10/{icon}")
+            self.adjustment_btn._bitmap = get_bitmap(f"theme/icons/10x10/{icon}")
             self.adjustment_btn.SetLabel(
                 lang.getstr(f"calibration.interactive_display_adjustment.{startstop}")
             )
             self.adjustment_btn.Enable(enable)
             return
         self.adjustment_btn = self.create_gradient_button(
-            getbitmap(f"theme/icons/10x10/{icon}"),
+            get_bitmap(f"theme/icons/10x10/{icon}"),
             lang.getstr(f"calibration.interactive_display_adjustment.{startstop}"),
             name="adjustment_btn",
         )
@@ -1462,9 +1462,9 @@ class DisplayAdjustmentFrame(windowcls):
     def get_sound_on_off_btn_bitmap(self):
         """Get the bitmap for the sound on/off button based on the current setting."""
         if getcfg("measurement.play_sound"):
-            bitmap = geticon(16, "sound_volume_full")
+            bitmap = get_icon(16, "sound_volume_full")
         else:
-            bitmap = geticon(16, "sound_off")
+            bitmap = get_icon(16, "sound_off")
         return bitmap
 
     def set_sound_on_off_btn_bitmap(self):
@@ -1485,9 +1485,9 @@ class DisplayAdjustmentFrame(windowcls):
         self.Pulse(txt)
 
         if "/ Current" in txt:
-            indicator = getbitmap("theme/icons/10x10/record")
+            indicator = get_bitmap("theme/icons/10x10/record")
         else:
-            indicator = getbitmap("theme/icons/10x10/record_outline")
+            indicator = get_bitmap("theme/icons/10x10/record_outline")
 
         target_br = re.search(
             r"Target white brightness = (\d+(?:\.\d+)?)".replace(" ", r"\s+"), txt, re.I
@@ -1789,7 +1789,7 @@ class DisplayAdjustmentFrame(windowcls):
                     self.adjustment_btn.Enable()
                 self.is_busy = False
                 self.is_measuring = False
-                self.indicator_ctrl.SetBitmap(geticon(10, "empty", use_mask=True))
+                self.indicator_ctrl.SetBitmap(get_icon(10, "empty", use_mask=True))
             self.calibration_btn.Enable()
             self.lb.SetFocus()  # Make frame receive EVT_CHAR_HOOK events under Linux
         elif "initial measurements" in txt or "check measurements" in txt:

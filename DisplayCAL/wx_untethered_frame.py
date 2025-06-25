@@ -10,9 +10,9 @@ from DisplayCAL import localization as lang
 from DisplayCAL.config import (
     get_data_path,
     get_icon_bundle,
-    getbitmap,
+    get_bitmap,
     getcfg,
-    geticon,
+    get_icon,
     setcfg,
 )
 from DisplayCAL.log import get_file_logger
@@ -73,15 +73,15 @@ class UntetheredFrame(BaseFrame):
             style = wx.BORDER_SIMPLE
         self.panel_RGB = BitmapBackgroundPanel(self.panel, size=(256, 256), style=style)
         self.panel_RGB.scalebitmap = (True, True)
-        self.panel_RGB.SetBitmap(getbitmap("theme/checkerboard-32x32x5-333-444"))
+        self.panel_RGB.SetBitmap(get_bitmap("theme/checkerboard-32x32x5-333-444"))
         panelsizer.Add(self.panel_RGB, 1, wx.LEFT | wx.EXPAND, border=8)
         self.panel_XYZ = BitmapBackgroundPanel(self.panel, size=(256, 256), style=style)
         self.panel_XYZ.scalebitmap = (True, True)
-        self.panel_XYZ.SetBitmap(getbitmap("theme/checkerboard-32x32x5-333-444"))
+        self.panel_XYZ.SetBitmap(get_bitmap("theme/checkerboard-32x32x5-333-444"))
         panelsizer.Add(self.panel_XYZ, 1, wx.RIGHT | wx.EXPAND, border=8)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.back_btn = FlatShadedButton(
-            self.panel, bitmap=geticon(10, "back"), label="", fgcolour=FGCOLOUR
+            self.panel, bitmap=get_icon(10, "back"), label="", fgcolour=FGCOLOUR
         )
         self.back_btn.Bind(wx.EVT_BUTTON, self.back_btn_handler)
         sizer.Add(self.back_btn, 0, wx.LEFT | wx.RIGHT, border=8)
@@ -89,7 +89,7 @@ class UntetheredFrame(BaseFrame):
         self.label_index.SetForegroundColour(FGCOLOUR)
         sizer.Add(self.label_index, 0, wx.ALIGN_CENTER_VERTICAL)
         self.next_btn = FlatShadedButton(
-            self.panel, bitmap=geticon(10, "play"), label="", fgcolour=FGCOLOUR
+            self.panel, bitmap=get_icon(10, "play"), label="", fgcolour=FGCOLOUR
         )
         self.next_btn.Bind(wx.EVT_BUTTON, self.next_btn_handler)
         sizer.Add(self.next_btn, 0, wx.LEFT, border=8)
@@ -105,7 +105,7 @@ class UntetheredFrame(BaseFrame):
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.measure_btn = FlatShadedButton(
             self.panel,
-            bitmap=geticon(10, "play"),
+            bitmap=get_icon(10, "play"),
             label=lang.getstr("measure"),
             fgcolour=FGCOLOUR,
         )
@@ -365,7 +365,7 @@ class UntetheredFrame(BaseFrame):
         self.is_measuring = not enable and enable_measure_button
         self.back_btn.Enable(enable and self.index > 0)
         self.next_btn.Enable(enable and self.index < self.index_max)
-        self.measure_btn._bitmap = geticon(
+        self.measure_btn._bitmap = get_icon(
             10, {True: "play", False: "pause"}.get(enable)
         )
         self.measure_btn.Enable(enable or enable_measure_button)
@@ -590,9 +590,9 @@ class UntetheredFrame(BaseFrame):
             wx.Bitmap: The bitmap for the sound on/off button.
         """
         if getcfg("measurement.play_sound"):
-            bitmap = geticon(16, "sound_volume_full")
+            bitmap = get_icon(16, "sound_volume_full")
         else:
-            bitmap = geticon(16, "sound_off")
+            bitmap = get_icon(16, "sound_off")
         return bitmap
 
     def set_sound_on_off_btn_bitmap(self):
@@ -862,7 +862,7 @@ class UntetheredFrame(BaseFrame):
         if clear_XYZ:
             self.label_XYZ.SetLabel(" ")
             self.panel_XYZ.SetBackgroundColour(BGCOLOUR)
-            self.panel_XYZ.SetBitmap(getbitmap("theme/checkerboard-32x32x5-333-444"))
+            self.panel_XYZ.SetBitmap(get_bitmap("theme/checkerboard-32x32x5-333-444"))
             self.panel_XYZ.Refresh()
             self.panel_XYZ.Update()
         if mark_current_row:

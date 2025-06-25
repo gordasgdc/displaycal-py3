@@ -22,9 +22,9 @@ from DisplayCAL.config import (
     get_display_profile,
     get_display_rects,
     get_verified_path,
-    getbitmap,
+    get_bitmap,
     getcfg,
-    geticon,
+    get_icon,
     setcfg,
     writecfg,
 )
@@ -694,7 +694,7 @@ class GamutViewOptions(wx_Panel):
 
         # Whitepoint legend
         legendsizer.Add(
-            wx.StaticBitmap(self, -1, getbitmap("theme/cross-2px-12x12-fff")),
+            wx.StaticBitmap(self, -1, get_bitmap("theme/cross-2px-12x12-fff")),
             flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT,
             border=2,
         )
@@ -707,7 +707,7 @@ class GamutViewOptions(wx_Panel):
 
         # Comparison profile whitepoint legend
         self.comparison_whitepoint_bmp = wx.StaticBitmap(
-            self, -1, getbitmap("theme/x-2px-12x12-999")
+            self, -1, get_bitmap("theme/x-2px-12x12-999")
         )
         legendsizer.Add(
             self.comparison_whitepoint_bmp,
@@ -742,7 +742,7 @@ class GamutViewOptions(wx_Panel):
 
         # Colorspace select
         self.colorspace_outline_bmp = wx.StaticBitmap(
-            self, -1, getbitmap("theme/solid-16x2-666")
+            self, -1, get_bitmap("theme/solid-16x2-666")
         )
         self.options_sizer.Add(
             self.colorspace_outline_bmp, flag=wx.ALIGN_CENTER_VERTICAL
@@ -795,7 +795,7 @@ class GamutViewOptions(wx_Panel):
 
         # Colortemperature curve select
         self.whitepoint_bmp = wx.StaticBitmap(
-            self, -1, getbitmap("theme/solid-16x1-fff")
+            self, -1, get_bitmap("theme/solid-16x1-fff")
         )
         self.options_sizer.Add(self.whitepoint_bmp, flag=wx.ALIGN_CENTER_VERTICAL)
         self.whitepoint_label = wx.StaticText(
@@ -823,7 +823,7 @@ class GamutViewOptions(wx_Panel):
 
         # Comparison profile select
         self.comparison_profile_bmp = wx.StaticBitmap(
-            self, -1, getbitmap("theme/dashed-16x2-666")
+            self, -1, get_bitmap("theme/dashed-16x2-666")
         )
         self.options_sizer.Add(
             self.comparison_profile_bmp, flag=wx.ALIGN_CENTER_VERTICAL
@@ -1282,7 +1282,7 @@ class ProfileInfoFrame(LUTFrame):
         self.plot_mode_select.Disable()
 
         self.tooltip_btn = BitmapButton(
-            p1, -1, geticon(16, "question-inverted"), style=wx.NO_BORDER
+            p1, -1, get_icon(16, "question-inverted"), style=wx.NO_BORDER
         )
         self.tooltip_btn.SetBackgroundColour(BGCOLOUR)
         self.tooltip_btn.Bind(wx.EVT_BUTTON, self.tooltip_handler)
@@ -1292,7 +1292,7 @@ class ProfileInfoFrame(LUTFrame):
         )
 
         self.save_plot_btn = BitmapButton(
-            p1, -1, geticon(16, "image-x-generic-inverted"), style=wx.NO_BORDER
+            p1, -1, get_icon(16, "image-x-generic-inverted"), style=wx.NO_BORDER
         )
         self.save_plot_btn.SetBackgroundColour(BGCOLOUR)
         self.save_plot_btn.Bind(wx.EVT_BUTTON, self.SaveFile)
@@ -1304,7 +1304,7 @@ class ProfileInfoFrame(LUTFrame):
             self.save_plot_btn, flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT, border=8
         )
 
-        self.view_3d_btn = BitmapButton(p1, -1, geticon(16, "3D"), style=wx.NO_BORDER)
+        self.view_3d_btn = BitmapButton(p1, -1, get_icon(16, "3D"), style=wx.NO_BORDER)
         self.view_3d_btn.SetBackgroundColour(BGCOLOUR)
         self.view_3d_btn.Bind(wx.EVT_BUTTON, self.view_3d)
         self.view_3d_btn.Bind(wx.EVT_CONTEXT_MENU, self.view_3d_format_popup)
@@ -1314,7 +1314,7 @@ class ProfileInfoFrame(LUTFrame):
             self.view_3d_btn, flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT, border=12
         )
         self.view_3d_format_btn = BitmapButton(
-            p1, -1, getbitmap("theme/dropdown-arrow"), style=wx.NO_BORDER
+            p1, -1, get_bitmap("theme/dropdown-arrow"), style=wx.NO_BORDER
         )
         self.view_3d_format_btn.MinSize = (-1, self.view_3d_btn.Size[1])
         self.view_3d_format_btn.SetBackgroundColour(BGCOLOUR)

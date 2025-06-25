@@ -9,7 +9,7 @@ import os
 import wx
 from wx import xrc
 
-from DisplayCAL.config import getbitmap
+from DisplayCAL.config import get_bitmap
 from DisplayCAL.log import safe_print
 
 
@@ -42,7 +42,7 @@ class BitmapButton(xrc.XmlResourceHandler):
         name = os.path.splitext(self.GetText("bitmap"))[0]
         if name.startswith("../"):
             name = name[3:]
-        bitmap = getbitmap(name)
+        bitmap = get_bitmap(name)
         w = wx.BitmapButton(
             self.GetParentAsWindow(),
             self.GetID(),
@@ -89,7 +89,7 @@ class StaticBitmap(xrc.XmlResourceHandler):
         name = os.path.splitext(self.GetText("bitmap"))[0]
         if name.startswith("../"):
             name = name[3:]
-        bitmap = getbitmap(name)
+        bitmap = get_bitmap(name)
         w = wx.StaticBitmap(
             self.GetParentAsWindow(),
             self.GetID(),

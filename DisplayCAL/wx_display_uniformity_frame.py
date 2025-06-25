@@ -12,7 +12,7 @@ from DisplayCAL.config import (
     get_display_rects,
     get_icon_bundle,
     get_verified_path,
-    getbitmap,
+    get_bitmap,
     getcfg,
     setcfg,
 )
@@ -169,7 +169,7 @@ class DisplayUniformityFrame(BaseFrame):
             button = FlatShadedNumberedButton(
                 panel,
                 label=lang.getstr("measure"),
-                bitmap=getbitmap("theme/icons/10x10/record"),
+                bitmap=get_bitmap("theme/icons/10x10/record"),
                 index=index,
             )
             button.Bind(wx.EVT_BUTTON, self.measure)
@@ -502,7 +502,7 @@ class DisplayUniformityFrame(BaseFrame):
             self.enable_buttons()
             self.buttons[self.index].Show()
             self.buttons[self.index].SetFocus()
-            self.buttons[self.index].SetBitmap(getbitmap("theme/icons/16x16/checkmark"))
+            self.buttons[self.index].SetBitmap(get_bitmap("theme/icons/16x16/checkmark"))
             self.panels[self.index].SetBackgroundColour(BGCOLOUR)
             self.panels[self.index].Refresh()
             self.panels[self.index].Update()
@@ -581,7 +581,7 @@ class DisplayUniformityFrame(BaseFrame):
         for panel in self.panels:
             panel.SetBackgroundColour(BGCOLOUR)
         for button in self.buttons:
-            button.SetBitmap(getbitmap("theme/icons/10x10/record"))
+            button.SetBitmap(get_bitmap("theme/icons/10x10/record"))
             button.Show()
         for index in self.labels:
             self.labels[index].SetLabel("")

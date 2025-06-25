@@ -138,7 +138,7 @@ from DisplayCAL.config import (
     get_data_path,
     get_total_patches,
     getcfg,
-    geticon,
+    get_icon,
     is_ccxx_testchart,
     setcfg,
     setcfg_cond,
@@ -1488,7 +1488,7 @@ def http_request(
                 parent,
                 msg=msg,
                 ok=lang.getstr("ok"),
-                bitmap=geticon(32, "dialog-error"),
+                bitmap=get_icon(32, "dialog-error"),
                 log=False,
             )
         return False
@@ -1527,7 +1527,7 @@ def http_request(
                 msg=msg,
                 html=html,
                 ok=lang.getstr("ok"),
-                bitmap=geticon(32, "dialog-error"),
+                bitmap=get_icon(32, "dialog-error"),
                 log=False,
             )
         return False
@@ -1944,7 +1944,7 @@ class Sudo:
             msg=lang.getstr("dialog.enter_password"),
             ok=lang.getstr("ok"),
             cancel=lang.getstr("cancel"),
-            bitmap=geticon(32, "lock"),
+            bitmap=get_icon(32, "lock"),
         )
         dlg.pwd_txt_ctrl = wx.TextCtrl(
             dlg, -1, pwd, size=(320, -1), style=wx.TE_PASSWORD | wx.TE_PROCESS_ENTER
@@ -3201,7 +3201,7 @@ class Worker(WorkerBase):
                 msg=lang.getstr("instrument.measure_ambient"),
                 ok=lang.getstr("ok"),
                 cancel=lang.getstr("cancel"),
-                bitmap=geticon(32, "dialog-information"),
+                bitmap=get_icon(32, "dialog-information"),
             )
             self.progress_wnd.dlg = dlg
             dlg_result = dlg.ShowModal()
@@ -3736,7 +3736,7 @@ END_DATA
             ),
             ok=lang.getstr("ok"),
             cancel=lang.getstr("cancel"),
-            bitmap=geticon(32, "dialog-information"),
+            bitmap=get_icon(32, "dialog-information"),
         )
         self.progress_wnd.dlg = dlg
         dlg_result = dlg.ShowModal()
@@ -3808,7 +3808,7 @@ END_DATA
                 msg=lang.getstr("dialog.confirm_cancel"),
                 ok=lang.getstr("yes"),
                 cancel=lang.getstr("no"),
-                bitmap=geticon(32, "dialog-warning"),
+                bitmap=get_icon(32, "dialog-warning"),
             )
             self.progress_wnd.dlg = dlg
             dlg_result = dlg.ShowModal()
@@ -3901,7 +3901,7 @@ END_DATA
             ),
             ok=lang.getstr("ok"),
             cancel=lang.getstr("cancel"),
-            bitmap=geticon(32, "dialog-information"),
+            bitmap=get_icon(32, "dialog-information"),
         )
         self.progress_wnd.dlg = dlg
         dlg_result = dlg.ShowModal()
@@ -3953,7 +3953,7 @@ END_DATA
             msg=lang.getstr("instrument.reposition_sensor"),
             ok=lang.getstr("ok"),
             cancel=lang.getstr("cancel"),
-            bitmap=geticon(32, "dialog-warning"),
+            bitmap=get_icon(32, "dialog-warning"),
         )
         self.progress_wnd.dlg = dlg
         dlg_result = dlg.ShowModal()

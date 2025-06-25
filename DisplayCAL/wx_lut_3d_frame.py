@@ -38,7 +38,7 @@ from DisplayCAL.config import (
     PROFILE_EXT,
     get_data_path,
     get_verified_path,
-    geticon,
+    get_icon,
 )
 from DisplayCAL.icc_profile import (
     CurveType,
@@ -508,7 +508,7 @@ class LUT3DMixin:
                 ),
                 ok=lang.getstr("ok"),
                 cancel=lang.getstr("cancel"),
-                bitmap=geticon(32, "dialog-warning"),
+                bitmap=get_icon(32, "dialog-warning"),
             )
             result = dlg.ShowModal()
             dlg.Destroy()
@@ -859,7 +859,7 @@ class LUT3DMixin:
                         msg=lang.getstr("dialog.confirm_overwrite", (path)),
                         ok=lang.getstr("overwrite"),
                         cancel=lang.getstr("cancel"),
-                        bitmap=geticon(32, "dialog-warning"),
+                        bitmap=get_icon(32, "dialog-warning"),
                     )
                     result = dlg.ShowModal()
                     dlg.Destroy()

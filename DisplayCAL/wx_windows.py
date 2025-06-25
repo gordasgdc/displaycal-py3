@@ -40,9 +40,9 @@ from DisplayCAL.config import (
     get_data_path,
     get_default_dpi,
     get_verified_path,
-    getbitmap,
+    get_bitmap,
     getcfg,
-    geticon,
+    get_icon,
     hascfg,
     set_default_app_dpi,
     setcfg,
@@ -2822,9 +2822,9 @@ class BaseInteractiveDialog(wx.Dialog):
             self.sizer1.Add(self.bitmap, flag=flags, border=margin)
             if self.taskbar:
                 state = None
-                if bitmap is geticon(32, "dialog-error"):
+                if bitmap is get_icon(32, "dialog-error"):
                     state = TASKBAR.TBPF_ERROR
-                elif bitmap is geticon(32, "dialog-warning"):
+                elif bitmap is get_icon(32, "dialog-warning"):
                     state = TASKBAR.TBPF_PAUSED
                 if state is not None:
                     if (
@@ -3701,7 +3701,7 @@ class FileBrowseBitmapButtonWithChoiceHistory(filebrowse.FileBrowseButtonWithHis
     def createBrowseButton(self):
         """Create the browse-button control."""
         button = GenBitmapButton(
-            self, -1, geticon(16, "document-open"), style=wx.NO_BORDER
+            self, -1, get_icon(16, "document-open"), style=wx.NO_BORDER
         )
         if sys.platform == "win32":
             button.BackgroundColour = self.BackgroundColour
@@ -3869,7 +3869,7 @@ class FileDrop(_FileDrop):
                 + "\n\n"
                 + "\n".join(self._filenames),
                 ok=lang.getstr("ok"),
-                bitmap=geticon(32, "dialog-error"),
+                bitmap=get_icon(32, "dialog-error"),
             )
 
 
@@ -5562,7 +5562,7 @@ class CustomCellRenderer(wx.grid.PyGridCellRenderer):
 
     def __init__(self, *args, **kwargs):
         wx.grid.PyGridCellRenderer.__init__(self)
-        self.specialbitmap = getbitmap("theme/checkerboard-10x10x2-333-444")
+        self.specialbitmap = get_bitmap("theme/checkerboard-10x10x2-333-444")
         self._selectionbitmaps = {}
 
     def Clone(self):
@@ -5801,8 +5801,8 @@ class CustomCellBoolRenderer(CustomCellRenderer):
 
     def __init__(self, *args, **kwargs):
         CustomCellRenderer.__init__(self)
-        self._bitmap = geticon(16, "checkmark")
-        self._bitmap_unchecked = geticon(16, "x")
+        self._bitmap = get_icon(16, "checkmark")
+        self._bitmap_unchecked = get_icon(16, "x")
 
     def DrawLabel(self, grid, dc, rect, row, col):
         """Draw the checkbox in the cell.
@@ -6804,19 +6804,19 @@ class LogWindow(InvincibleFrame):
         self.btnsizer = wx.BoxSizer(wx.HORIZONTAL)
         self.sizer.Add(self.btnsizer, flag=wx.EXPAND)
         self.save_as_btn = GenBitmapButton(
-            self.panel, -1, geticon(16, "document-save-as"), style=wx.NO_BORDER
+            self.panel, -1, get_icon(16, "document-save-as"), style=wx.NO_BORDER
         )
         self.save_as_btn.Bind(wx.EVT_BUTTON, self.OnSaveAs)
         self.save_as_btn.SetToolTipString(lang.getstr("save_as"))
         self.btnsizer.Add(self.save_as_btn, flag=wx.ALL, border=4)
         self.archive_btn = GenBitmapButton(
-            self.panel, -1, geticon(16, "package-x-generic"), style=wx.NO_BORDER
+            self.panel, -1, get_icon(16, "package-x-generic"), style=wx.NO_BORDER
         )
         self.archive_btn.Bind(wx.EVT_BUTTON, self.create_logs_archive)
         self.archive_btn.SetToolTipString(lang.getstr("archive.create"))
         self.btnsizer.Add(self.archive_btn, flag=wx.ALL, border=4)
         self.clear_btn = GenBitmapButton(
-            self.panel, -1, geticon(16, "edit-delete"), style=wx.NO_BORDER
+            self.panel, -1, get_icon(16, "edit-delete"), style=wx.NO_BORDER
         )
         self.clear_btn.Bind(wx.EVT_BUTTON, self.OnClear)
         self.clear_btn.SetToolTipString(lang.getstr("clear"))
@@ -6979,7 +6979,7 @@ class LogWindow(InvincibleFrame):
                 self,
                 msg=lang.getstr("error.access_denied.write", path),
                 ok=lang.getstr("ok"),
-                bitmap=geticon(32, "dialog-error"),
+                bitmap=get_icon(32, "dialog-error"),
             )
             return
         filename, ext = os.path.splitext(path)
@@ -6991,7 +6991,7 @@ class LogWindow(InvincibleFrame):
                     msg=lang.getstr("dialog.confirm_overwrite", (path)),
                     ok=lang.getstr("overwrite"),
                     cancel=lang.getstr("cancel"),
-                    bitmap=geticon(32, "dialog-warning"),
+                    bitmap=get_icon(32, "dialog-warning"),
                 )
                 result = dlg.ShowModal()
                 dlg.Destroy()
@@ -7006,7 +7006,7 @@ class LogWindow(InvincibleFrame):
                 self,
                 msg=str(exception),
                 ok=lang.getstr("ok"),
-                bitmap=geticon(32, "dialog-error"),
+                bitmap=get_icon(32, "dialog-error"),
             )
 
     def OnSize(self, event=None):
@@ -7052,7 +7052,7 @@ class LogWindow(InvincibleFrame):
                     self,
                     msg=lang.getstr("error.access_denied.write", path),
                     ok=lang.getstr("ok"),
-                    bitmap=geticon(32, "dialog-error"),
+                    bitmap=get_icon(32, "dialog-error"),
                 )
                 return
             filename, ext = os.path.splitext(path)
@@ -7067,7 +7067,7 @@ class LogWindow(InvincibleFrame):
                         msg=lang.getstr("dialog.confirm_overwrite", (path)),
                         ok=lang.getstr("overwrite"),
                         cancel=lang.getstr("cancel"),
-                        bitmap=geticon(32, "dialog-warning"),
+                        bitmap=get_icon(32, "dialog-warning"),
                     )
                     result = dlg.ShowModal()
                     dlg.Destroy()
@@ -7089,7 +7089,7 @@ class LogWindow(InvincibleFrame):
                         self,
                         msg=str(exception),
                         ok=lang.getstr("ok"),
-                        bitmap=geticon(32, "dialog-error"),
+                        bitmap=get_icon(32, "dialog-error"),
                     )
 
 
@@ -7695,7 +7695,7 @@ class ProgressDialog(wx.Dialog):
                 get_data_path("theme/shutter_anim", r"\.png$") or []
             ):
                 if i < 5:
-                    bmp = getbitmap(os.path.splitext(pth)[0])
+                    bmp = get_bitmap(os.path.splitext(pth)[0])
                     bitmaps.insert(0, bmp)
             if bitmaps and len(bitmaps) == 5:
                 bitmaps.extend(reversed(bitmaps[:5]))
@@ -7805,9 +7805,9 @@ class ProgressDialog(wx.Dialog):
     def get_sound_on_off_btn_bitmap(self):
         """Get the bitmap for the sound on/off button."""
         if getcfg("measurement.play_sound"):
-            bitmap = geticon(16, "sound_volume_full")
+            bitmap = get_icon(16, "sound_volume_full")
         else:
-            bitmap = geticon(16, "sound_off")
+            bitmap = get_icon(16, "sound_off")
         im = bitmap.ConvertToImage()
         im.AdjustMinMax(maxvalue=1.5)
         return im.ConvertToBitmap()
@@ -8528,7 +8528,7 @@ class TaskBarNotification(wx.Frame):
         msg.Bind(wx.EVT_LEFT_DOWN, lambda event: self.fade("out"))
         sizer.Add(msg)
         close = wx.BitmapButton(
-            panel, -1, config.getbitmap("theme/x-2px-12x12-999"), style=wx.NO_BORDER
+            panel, -1, config.get_bitmap("theme/x-2px-12x12-999"), style=wx.NO_BORDER
         )
         close.BackgroundColour = panel.BackgroundColour
         close.Bind(wx.EVT_BUTTON, lambda event: self.fade("out"))
@@ -8730,7 +8730,7 @@ class TwoWaySplitter(FourWaySplitter):
     def __init__(self, *args, **kwargs):
         FourWaySplitter.__init__(self, *args, **kwargs)
         self._minimum_pane_size = 0
-        self._sashbitmap = getbitmap("theme/sash")
+        self._sashbitmap = get_bitmap("theme/sash")
         self._splitsize = (800, 400)
         self._expandedsize = (400, 400)
         self._handcursor = wx.StockCursor(wx.CURSOR_HAND)
@@ -8812,11 +8812,11 @@ class TwoWaySplitter(FourWaySplitter):
 
         if self._expanded < 0:
             if splitx <= self._minimum_pane_size:
-                self._sashbitmap = getbitmap("theme/sash-right")
+                self._sashbitmap = get_bitmap("theme/sash-right")
             else:
-                self._sashbitmap = getbitmap("theme/sash")
+                self._sashbitmap = get_bitmap("theme/sash")
         else:
-            self._sashbitmap = getbitmap("theme/sash-left")
+            self._sashbitmap = get_bitmap("theme/sash-left")
         sashwidth, sashheight = self._sashbitmap.GetSize()
 
         dc.DrawRectangle(int(splitx), 0, int(sashwidth), int(height))
@@ -9090,7 +9090,7 @@ def get_gradient_panel(parent, label, x=16):
     bitmap = bitmaps.get("gradient_panel")
     if not bitmap:
         bitmap = (
-            getbitmap("theme/gradient")
+            get_bitmap("theme/gradient")
             .GetSubBitmap((0, 1, 8, 15))
             .ConvertToImage()
             .Mirror(False)
@@ -9367,11 +9367,11 @@ def show_result_dialog(result, parent=None, pos=None, confirm=False, wrap=70):
     if not pos:
         pos = (-1, -1)
     if isinstance(result, Info):
-        bitmap = geticon(32, "dialog-information")
+        bitmap = get_icon(32, "dialog-information")
     elif isinstance(result, (Warning, DownloadError)):
-        bitmap = geticon(32, "dialog-warning")
+        bitmap = get_icon(32, "dialog-warning")
     else:
-        bitmap = geticon(32, "dialog-error")
+        bitmap = get_icon(32, "dialog-error")
     if isinstance(result, DownloadError):
         confirm = lang.getstr("go_to", result.url)
     if confirm:

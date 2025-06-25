@@ -22,7 +22,7 @@ from DisplayCAL.config import (
     get_display_number,
     get_display_rects,
     getcfg,
-    geticon,
+    get_icon,
     setcfg,
     writecfg,
 )
@@ -180,7 +180,7 @@ class MeasureFrame(InvincibleFrame):
         self.zoommaxbutton = BitmapButton(
             self.panel,
             -1,
-            geticon(16, "zoom-best-fit"),
+            get_icon(16, "zoom-best-fit"),
             style=wx.NO_BORDER,
             name="zoommaxbutton",
         )
@@ -198,7 +198,7 @@ class MeasureFrame(InvincibleFrame):
         self.zoominbutton = BitmapButton(
             self.panel,
             -1,
-            geticon(16, "zoom-in"),
+            get_icon(16, "zoom-in"),
             style=wx.NO_BORDER,
             name="zoominbutton",
         )
@@ -214,7 +214,7 @@ class MeasureFrame(InvincibleFrame):
         self.zoomnormalbutton = BitmapButton(
             self.panel,
             -1,
-            geticon(16, "zoom-original"),
+            get_icon(16, "zoom-original"),
             style=wx.NO_BORDER,
             name="zoomnormalbutton",
         )
@@ -230,7 +230,7 @@ class MeasureFrame(InvincibleFrame):
         self.zoomoutbutton = BitmapButton(
             self.panel,
             -1,
-            geticon(16, "zoom-out"),
+            get_icon(16, "zoom-out"),
             style=wx.NO_BORDER,
             name="zoomoutbutton",
         )
@@ -259,7 +259,7 @@ class MeasureFrame(InvincibleFrame):
             self.centerbutton = BitmapButton(
                 self.panel,
                 -1,
-                geticon(16, "window-center"),
+                get_icon(16, "window-center"),
                 style=wx.NO_BORDER,
                 name="centerbutton",
             )
@@ -334,7 +334,7 @@ class MeasureFrame(InvincibleFrame):
                 msg=lang.getstr("measure.darken_background.warning"),
                 ok=lang.getstr("ok"),
                 cancel=lang.getstr("cancel"),
-                bitmap=geticon(32, "dialog-warning"),
+                bitmap=get_icon(32, "dialog-warning"),
             )
             chk = wx.CheckBox(dlg, -1, lang.getstr("dialog.do_not_show_again"))
             dlg.Bind(
@@ -376,7 +376,7 @@ class MeasureFrame(InvincibleFrame):
             self,
             msg=lang.getstr("measureframe.info"),
             ok=lang.getstr("ok"),
-            bitmap=geticon(32, "dialog-information"),
+            bitmap=get_icon(32, "dialog-information"),
             log=False,
         )
 

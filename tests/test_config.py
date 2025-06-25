@@ -1,5 +1,13 @@
+from enum import IntEnum
 import os
 import sys
+
+
+import pytest
+import sys
+import builtins
+
+import DisplayCAL.config as config
 
 
 def test_default_values_1():
@@ -96,3 +104,84 @@ def test_default_values_1():
         "/var/lib/icons/hicolor",
     ]
     assert sorted(config.DATA_DIRS) == sorted(expected_data_dirs)
+
+
+# get_hidpi_scaling_factor
+@pytest.mark.parametrize(
+    "platform,expected", [
+        ("darwin", 1.0),
+        ("win32", 1.0),
+    ]
+)
+def test_get_hidpi_scaling_factor_mac_win(monkeypatch, platform, expected):
+    monkeypatch.setattr(sys, "platform", platform)
+    assert config.get_hidpi_scaling_factor() == expected
+
+
+def test_get_hidpi_scaling_factor_xrdb(monkeypatch):
+    # Simulate Linux, xrdb present, Xft.dpi found
+    monkeypatch.setattr(sys, "platform", "linux")
+    # Patch which to return True for "xrdb"
+    monkeypatch.setattr("DisplayCAL.util_os.which", lambda name: name == "xrdb")
+    # Patch get_default_dpi to return 96
+    monkeypatch.setattr(config, "get_default_dpi", lambda: 96)
+    # Patch subprocess.Popen to simulate xrdb output
+    class DummyPopen:
+        def __init__(self, *a, **k): pass
+        def communicate(self):
+            return (b"Xft.dpi:        192\n", b"")
+    monkeypatch.setattr("subprocess.Popen", DummyPopen)
+    assert config.get_hidpi_scaling_factor() == 2.0
+
+
+def test_get_hidpi_scaling_factor_xrdb_invalid(monkeypatch):
+    # Simulate Linux, xrdb present, Xft.dpi invalid
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr("DisplayCAL.util_os.which", lambda name: name == "xrdb")
+    monkeypatch.setattr(config, "get_default_dpi", lambda: 96)
+    class DummyPopen:
+        def __init__(self, *a, **k): pass
+        def communicate(self):
+            return (b"Xft.dpi:        notanumber\n", b"")
+    monkeypatch.setattr("subprocess.Popen", DummyPopen)
+    # Should fall through and return None
+    assert config.get_hidpi_scaling_factor() is None
+
+
+def test_get_hidpi_scaling_factor_kde(monkeypatch):
+    # Simulate Linux, no xrdb, KDE desktop, QT_SCREEN_SCALE_FACTORS set
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr("DisplayCAL.util_os.which", lambda name: False)
+    monkeypatch.setenv("XDG_CURRENT_DESKTOP", "KDE")
+    monkeypatch.setenv("QT_SCREEN_SCALE_FACTORS", "1.5;2.0")
+    # Patch wx and real_display_size_mm to avoid wx dependency
+    class DummyWx:
+        @staticmethod
+        def GetApp():
+            return None
+    monkeypatch.setitem(sys.modules, "DisplayCAL.wx_addons", type("mod", (), {"wx": DummyWx}))
+    # Should use first factor
+    assert config.get_hidpi_scaling_factor() == 1.5
+
+
+def test_get_hidpi_scaling_factor_gnome(monkeypatch):
+    # Simulate Linux, no xrdb, not KDE, gsettings present
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr("DisplayCAL.util_os.which", lambda name: name == "gsettings")
+    monkeypatch.setenv("XDG_CURRENT_DESKTOP", "GNOME")
+    # Patch subprocess.Popen to simulate gsettings output
+    class DummyPopen:
+        def __init__(self, *a, **k): pass
+        def communicate(self):
+            return (b"uint32 2", b"")
+    monkeypatch.setattr("subprocess.Popen", DummyPopen)
+    assert config.get_hidpi_scaling_factor() == 2.0
+
+
+def test_get_hidpi_scaling_factor_none(monkeypatch):
+    # Simulate Linux, no xrdb, not KDE, no gsettings
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr("DisplayCAL.util_os.which", lambda name: False)
+    monkeypatch.setenv("XDG_CURRENT_DESKTOP", "XFCE")
+    assert config.get_hidpi_scaling_factor() is None
+

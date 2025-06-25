@@ -55,7 +55,7 @@ if gui:
             self.btn = BitmapButton(
                 panel,
                 wx.ID_ANY,
-                config.geticon(256, "3d-primitives"),
+                config.get_icon(256, "3d-primitives"),
                 style=wx.NO_BORDER,
             )
             self.btn.SetToolTipString(lang.getstr("file.select"))

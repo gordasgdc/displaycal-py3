@@ -31,7 +31,7 @@ from DisplayCAL.config import (
     get_default_dpi,
     get_icon_bundle,
     getcfg,
-    geticon,
+    get_icon,
     setcfg,
 )
 from DisplayCAL.debughelpers import Error, UnloggedError, handle_error
@@ -369,7 +369,7 @@ class FixProfileAssociationsDialog(ConfirmDialog):
             msg=lang.getstr("profile_loader.fix_profile_associations_warning"),
             title=pl.get_title(),
             ok=lang.getstr("profile_loader.fix_profile_associations"),
-            bitmap=geticon(32, "dialog-warning"),
+            bitmap=get_icon(32, "dialog-warning"),
             wrap=128,
         )
         dlg = self
@@ -536,14 +536,14 @@ class ProfileLoaderExceptionsDialog(ConfirmDialog):
         # On/off checkbox
         attr = wx.grid.GridCellAttr()
         renderer = CustomCellBoolRenderer()
-        renderer._bitmap_unchecked = config.geticon(16, "empty")
+        renderer._bitmap_unchecked = config.get_icon(16, "empty")
         attr.SetRenderer(renderer)
         grid.SetColAttr(0, attr)
 
         # Profile loader state icon
         attr = wx.grid.GridCellAttr()
         renderer = CustomCellBoolRenderer()
-        renderer._bitmap = config.geticon(16, "apply-profiles-reset")
+        renderer._bitmap = config.get_icon(16, "apply-profiles-reset")
         bitmap = renderer._bitmap
         image = bitmap.ConvertToImage().ConvertToGreyscale(0.75, 0.125, 0.125)
         renderer._bitmap_unchecked = image.ConvertToBitmap()
@@ -765,7 +765,7 @@ class ProfileAssociationsDialog(InfoDialog):
             msg="",
             title=lang.getstr("profile_associations"),
             ok=lang.getstr("close"),
-            bitmap=geticon(32, "display"),
+            bitmap=get_icon(32, "display"),
             show=False,
             log=False,
             wrap=128,
@@ -824,7 +824,7 @@ class ProfileAssociationsDialog(InfoDialog):
                 border=12,
             )
             self.use_my_settings_cb.Disable()
-            dlg.warn_bmp = wx.StaticBitmap(dlg, -1, geticon(16, "dialog-warning"))
+            dlg.warn_bmp = wx.StaticBitmap(dlg, -1, get_icon(16, "dialog-warning"))
             dlg.warning = wx.StaticText(
                 dlg,
                 -1,
@@ -923,7 +923,7 @@ class ProfileAssociationsDialog(InfoDialog):
             title=lang.getstr("add"),
             ok=lang.getstr("ok"),
             cancel=lang.getstr("cancel"),
-            bitmap=geticon(32, APPNAME + "-profile-info"),
+            bitmap=get_icon(32, APPNAME + "-profile-info"),
             wrap=128,
         )
         dlg.SetIcons(get_icon_bundle([256, 48, 32, 16], APPNAME + "-apply-profiles"))
@@ -1892,7 +1892,7 @@ class ProfileLoader:
                     dlg.Destroy()
 
                 def set_icons(self):
-                    bitmap = config.geticon(16, "apply-profiles-tray")
+                    bitmap = config.get_icon(16, "apply-profiles-tray")
                     image = bitmap.ConvertToImage()
                     # Use Rec. 709 luma coefficients to convert to grayscale
                     bitmap = image.ConvertToGreyscale(
@@ -1911,7 +1911,7 @@ class ProfileLoader:
                     for i in range(numframes):
                         if i:
                             rad = i / float(numframes)
-                            bitmap = config.geticon(
+                            bitmap = config.get_icon(
                                 16, f"apply-profiles-tray-{360 * rad:0.0f}"
                             )
                             image = bitmap.ConvertToImage()
@@ -2313,7 +2313,7 @@ class ProfileLoader:
                 msg="\n".join(errors),
                 title=self.get_title(),
                 ok=lang.getstr("ok"),
-                bitmap=config.geticon(32, "dialog-error"),
+                bitmap=config.get_icon(32, "dialog-error"),
                 show=False,
             )
             dlg.SetIcons(
@@ -2445,7 +2445,7 @@ class ProfileLoader:
                 msg=lang.getstr("profile_loader.exit_warning"),
                 title=self.get_title(),
                 ok=lang.getstr("menuitem.quit"),
-                bitmap=config.geticon(32, "dialog-warning"),
+                bitmap=config.get_icon(32, "dialog-warning"),
             )
             dlg.SetIcons(
                 config.get_icon_bundle([256, 48, 32, 16], APPNAME + "-apply-profiles")

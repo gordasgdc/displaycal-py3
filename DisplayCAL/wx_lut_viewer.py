@@ -27,7 +27,7 @@ from DisplayCAL.config import (
     get_display_rects,
     get_verified_path,
     getcfg,
-    geticon,
+    get_icon,
     setcfg,
 )
 from DisplayCAL.icc_profile import (
@@ -927,7 +927,7 @@ class LUTFrame(BaseFrame):
         )
 
         self.tooltip_btn = BitmapButton(
-            panel, -1, geticon(16, "question-inverted"), style=wx.NO_BORDER
+            panel, -1, get_icon(16, "question-inverted"), style=wx.NO_BORDER
         )
         self.tooltip_btn.SetBackgroundColour(BGCOLOUR)
         self.tooltip_btn.Bind(wx.EVT_BUTTON, self.tooltip_handler)
@@ -935,7 +935,7 @@ class LUTFrame(BaseFrame):
         panel.Sizer.Add(self.tooltip_btn, flag=wx.ALIGN_CENTER_VERTICAL)
 
         self.save_plot_btn = BitmapButton(
-            panel, -1, geticon(16, "image-x-generic-inverted"), style=wx.NO_BORDER
+            panel, -1, get_icon(16, "image-x-generic-inverted"), style=wx.NO_BORDER
         )
         self.save_plot_btn.SetBackgroundColour(BGCOLOUR)
         panel.Sizer.Add(self.save_plot_btn, flag=wx.ALIGN_CENTER_VERTICAL)
@@ -1049,7 +1049,7 @@ class LUTFrame(BaseFrame):
         self.reload_vcgt_btn = BitmapButton(
             self.box_panel,
             -1,
-            geticon(16, "stock_refresh-inverted"),
+            get_icon(16, "stock_refresh-inverted"),
             style=wx.NO_BORDER,
         )
         self.reload_vcgt_btn.SetBackgroundColour(BGCOLOUR)
@@ -1066,7 +1066,7 @@ class LUTFrame(BaseFrame):
         self.reload_vcgt_btn.Disable()
 
         self.apply_bpc_btn = BitmapButton(
-            self.box_panel, -1, geticon(16, "color-inverted"), style=wx.NO_BORDER
+            self.box_panel, -1, get_icon(16, "color-inverted"), style=wx.NO_BORDER
         )
         self.apply_bpc_btn.SetBackgroundColour(BGCOLOUR)
         self.cbox_sizer.Add(
@@ -1080,7 +1080,7 @@ class LUTFrame(BaseFrame):
         self.apply_bpc_btn.Disable()
 
         self.install_vcgt_btn = BitmapButton(
-            self.box_panel, -1, geticon(16, "install-inverted"), style=wx.NO_BORDER
+            self.box_panel, -1, get_icon(16, "install-inverted"), style=wx.NO_BORDER
         )
         self.install_vcgt_btn.SetBackgroundColour(BGCOLOUR)
         self.cbox_sizer.Add(
@@ -1096,7 +1096,7 @@ class LUTFrame(BaseFrame):
         self.save_vcgt_btn = BitmapButton(
             self.box_panel,
             -1,
-            geticon(16, "document-save-as-inverted"),
+            get_icon(16, "document-save-as-inverted"),
             style=wx.NO_BORDER,
         )
         self.save_vcgt_btn.SetBackgroundColour(BGCOLOUR)
@@ -1202,7 +1202,7 @@ class LUTFrame(BaseFrame):
                     self,
                     msg=lang.getstr("error.file.open", path),
                     ok=lang.getstr("ok"),
-                    bitmap=geticon(32, "dialog-error"),
+                    bitmap=get_icon(32, "dialog-error"),
                 )
                 profile = None
         else:
@@ -1213,7 +1213,7 @@ class LUTFrame(BaseFrame):
                     self,
                     msg=f"{lang.getstr('profile.invalid')}\n{path}",
                     ok=lang.getstr("ok"),
-                    bitmap=geticon(32, "dialog-error"),
+                    bitmap=get_icon(32, "dialog-error"),
                 )
                 profile = None
         self.show_actual_lut_cb.SetValue(False)
@@ -1367,7 +1367,7 @@ class LUTFrame(BaseFrame):
                 self,
                 msg=event.EventObject.ToolTip.Tip,
                 title=event.EventObject.TopLevelParent.Title,
-                bitmap=geticon(32, "dialog-information"),
+                bitmap=get_icon(32, "dialog-information"),
             )
         else:
             self.tooltip_window.Show()
@@ -2512,7 +2512,7 @@ class LUTFrame(BaseFrame):
                     self,
                     msg=lang.getstr("error.file_type_unsupported"),
                     ok=lang.getstr("ok"),
-                    bitmap=geticon(32, "dialog-error"),
+                    bitmap=get_icon(32, "dialog-error"),
                 )
             else:  # FileDialog doesn't exist: just check one
                 dlg1 = wx.FileDialog(
