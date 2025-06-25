@@ -24,10 +24,10 @@ class Cube3D:
     Args:
         size (int): The size of the cube along each dimension. Default is 65.
         start (int): The starting index for the cube. Default is 0.
-        end (int, optional): The ending index for the cube. If not specified,
-            it defaults to the total number of entries in the cube, which is
-            `size**3`. If specified, it must be greater than or equal to `start`.
-            Default is None.
+        end (None | int, optional): The ending index for the cube. If not
+            specified, it defaults to the total number of entries in the cube,
+            which is `size**3`. If specified, it must be greater than or equal
+            to `start`. Default is None.
 
     Raises:
         TypeError: If `start` or `end` is not an integer.
@@ -35,7 +35,7 @@ class Cube3D:
             than `start`.
     """
 
-    def __init__(self, size=65, start=0, end=None):
+    def __init__(self, size: int = 65, start: int = 0, end: None | int = None) -> None:
         orange = start, end
         numentries = size**3
         if end is None:
@@ -56,16 +56,19 @@ class Cube3D:
         self._start = start
         self._len = end - start
 
-    def get(self, i, default=None):
+    def get(
+        self, i: int, default: None | tuple[int, int, int] = None
+    ) -> None | tuple[int, int, int]:
         """Return the item at the specified index or a default value.
 
         Args:
             i (int): The index of the item to return.
-            default: The value to return if the index is out of range.
+            default (None, optional)): The value to return if the index is out
+                of range.
 
         Returns:
-            tuple[int, int, int] or default: The item at the specified index or
-                the default value if the index is out of range.
+            None | tuple[int, int, int]: The item at the specified index or the
+                default value if the index is out of range.
         """
         if i < 0:
             i = self._len + i
@@ -73,11 +76,11 @@ class Cube3D:
             return default
         return self[i]
 
-    def index(self, item):
+    def index(self, item: tuple[int, int, int]) -> int:
         """Return the index of the specified item in the cube.
 
         Args:
-            item (tuple): The item to find the index of.
+            item (tuple[int, int, int]): The item to find the index of.
 
         Raises:
             ValueError: If the item is not found in the cube.
@@ -91,7 +94,28 @@ class Cube3D:
         i = c0 * self._size**2 + c1 * self._size + c2
         return int(i) - self._start
 
-    def _clamp(self, v, lower=0, upper=None, fallback=None):
+    def _clamp(
+        self,
+        v: int,
+        lower: int = 0,
+        upper: None | int = None,
+        fallback: None | int = None,
+    ) -> int:
+        """Clamp a value to a specified range.
+
+        Args:
+            v (int): The value to clamp.
+            lower (int): The lower bound of the range. Default is 0.
+            upper (None | int, optional): The upper bound of the range. If not
+                specified, it defaults to the length of the cube.
+            fallback (None | int, optional): A fallback value to use if `v` is
+                out of range. If not specified, it defaults to `lower` if `v`
+                is less than `lower`, or `upper` if `v` is greater than
+                `upper`.
+
+        Returns:
+            int: The clamped value.
+        """
         if not upper:
             upper = self._len
         if v < lower:
@@ -120,7 +144,7 @@ class Cube3D:
             < self._len + self._start
         )
 
-    def __getitem__(self, i) -> tuple[int, int, int]:
+    def __getitem__(self, i: int) -> tuple[int, int, int]:
         """Return the item at the specified index.
 
         Args:
@@ -173,7 +197,7 @@ class Cube3DIterator(Cube3D):
     than using iter(<Cube3D instance>).
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         Cube3D.__init__(self, *args, **kwargs)
         self._next = 0
 
@@ -181,14 +205,14 @@ class Cube3DIterator(Cube3D):
         """Return the object itself as an iterator."""
         return self
 
-    def __next__(self):
+    def __next__(self) -> tuple[int, int, int]:
         """Return the next item in the iteration.
 
         Raises:
             StopIteration: If there are no more items to iterate over.
 
         Returns:
-            tuple: The next item in the iteration.
+            tuple[int, int, int]: The next item in the iteration.
         """
         if self._next == self._len:
             raise StopIteration
