@@ -56,204 +56,115 @@ def decode(txt: str, strict: bool = False, encoding: None | str = None, **kw) ->
     if strict:
         return json.loads(txt, strict=strict)
 
-    # Remove comments
-    io = StringIO()
-    escape = False
-    prev = None
-    expect_comment = False
-    in_comment = False
-    comment_multiline = False
-    in_quote = False
-    write = True
-    for c in txt:
-        debug_print(c)
-        write = True
-        (expect_comment, comment_multiline, in_comment, in_quote, escape, write) = (
-            process_character(
-                c,
-                prev,
-                expect_comment,
-                comment_multiline,
-                in_comment,
-                in_quote,
-                escape,
-                write,
-            )
-        )
-        if write and not expect_comment and not in_comment:
-            io.write(c)
-        prev = c
-    txt = io.getvalue()
-    debug_print("\n")
-    if DEBUG:
-        print("JSON:", txt)
+    dem_json_preprocessor = DEMJSONPreprocessor()
+    txt = dem_json_preprocessor.process(txt)
 
-    return json.loads(txt, strict=strict)
+    return json.loads(txt)
 
 
-def process_character(
-    c: str,
-    prev: str,
-    expect_comment: bool,
-    comment_multiline: bool,
-    in_comment: bool,
-    in_quote: bool,
-    escape: bool,
-    write: bool,
-) -> tuple[bool, bool, bool, bool, bool, bool, bool]:
-    """Process a character in the JSON string for comment handling.
+class DEMJSONPreprocessor:
+    """A JSON preprocessor that is compatible with demjson 1.3."""
 
-    Args:
-        c (str): The current character being processed.
-        prev (str): The previous character processed.
-        expect_comment (bool): Whether a comment is expected.
-        comment_multiline (bool): Whether the comment is multiline.
-        in_comment (bool): Current status of being inside a comment.
-        in_quote (bool): Current status of being inside a quote.
-        escape (bool): Whether the current character is escaped.
-        write (bool): Whether to write the character to output.
+    def __init__(self) -> None:
+        self.prev = None
+        self.escape = False
+        self.expect_comment = False
+        self.in_comment = False
+        self.comment_multiline = False
+        self.in_quote = False
+        self.write = True
 
-    Returns:
-        tuple[bool, bool, bool, bool, bool, bool]: Updated status of whether a
-            comment is expected, whether currently in a comment, whether the
-            comment is multiline, whether currently in a quote, whether the
-            current character is escaped, and whether to write the character to
-            output.
-    """
-    if c == "\\":
-        debug_print("<ESCAPE>")
-        escape = True
-    elif escape:
-        debug_print("</ESCAPE>")
-        escape = False
-    else:
-        if not in_quote:
-            if c == "/":
-                (expect_comment, in_comment, comment_multiline, write) = (
-                    handle_forward_slash_char(
-                        prev,
-                        expect_comment,
-                        in_comment,
-                        comment_multiline,
-                        write,
-                    )
-                )
-            elif c == "*":
-                (expect_comment, in_comment, comment_multiline) = (
-                    handle_multiline_comment(
-                        expect_comment,
-                        in_comment,
-                        comment_multiline,
-                    )
-                )
-            elif expect_comment:
-                debug_print("</EXPECT_COMMENT>")
-                expect_comment = False
-        if c == "\n":
-            in_comment, write = handle_newline_char(
-                in_comment, comment_multiline, write
-            )
-        elif c == '"' and not in_comment:
-            in_quote = handle_quote_status(in_quote)
-    return (expect_comment, comment_multiline, in_comment, in_quote, escape, write)
+    def process(self, txt: str) -> Any:  # noqa: ANN401
+        """Process the input JSON string to remove comments.
 
+        Args:
+            txt (str): The JSON string to process.
 
-def handle_forward_slash_char(
-    prev: str,
-    expect_comment: bool,
-    in_comment: bool,
-    comment_multiline: bool,
-    write: bool = True,
-) -> tuple[bool, bool, bool, bool]:
-    """Handle the forward slash character in comment processing.
+        Returns:
+            str: The processed JSON string with comments removed.
+        """
+        # Remove comments
+        io = StringIO()
+        for c in txt:
+            debug_print(c)
+            self.write = True
+            self.process_character(c)
+            if self.write and not self.expect_comment and not self.in_comment:
+                io.write(c)
+            self.prev = c
+        txt = io.getvalue()
+        debug_print("\n")
+        if DEBUG:
+            print("JSON:", txt)
 
-    Args:
-        prev (str): The previous character processed.
-        expect_comment (bool): Whether a comment is expected.
-        in_comment (bool): Current status of being inside a comment.
-        comment_multiline (bool): Whether the comment is multiline.
-        write (bool): Whether to write the character to output.
+        return txt
 
-    Returns:
-        tuple[bool, bool, bool, bool]: Updated status of being inside a comment,
-            whether a multiline comment is expected, and whether to write the
-            character to output.
-    """
-    if expect_comment:
-        debug_print("<COMMENT>")
-        in_comment = True
-        comment_multiline = False
-        expect_comment = False
-    elif in_comment and prev == "*":
-        debug_print("</MULTILINECOMMENT>")
-        in_comment = False
-        comment_multiline = False
-        write = False
-    elif not in_comment:
-        debug_print("<EXPECT_COMMENT>")
-        expect_comment = True
-    return expect_comment, in_comment, comment_multiline, write
+    def process_character(self, c: str) -> None:
+        """Process a character in the JSON string for comment handling.
+
+        Args:
+            c (str): The current character being processed.
+        """
+        if c == "\\":
+            debug_print("<ESCAPE>")
+            self.escape = True
+        elif self.escape:
+            debug_print("</ESCAPE>")
+            self.escape = False
+        else:
+            if not self.in_quote:
+                if c == "/":
+                    self.handle_forward_slash_char()
+                elif c == "*":
+                    self.handle_multiline_comment()
+                elif self.expect_comment:
+                    debug_print("</EXPECT_COMMENT>")
+                    self.expect_comment = False
+            if c == "\n":
+                self.handle_newline_char()
+            elif c == '"' and not self.in_comment:
+                self.handle_quote_status()
+
+    def handle_forward_slash_char(self) -> None:
+        """Handle the forward slash character in comment processing."""
+        if self.expect_comment:
+            debug_print("<COMMENT>")
+            self.in_comment = True
+            self.comment_multiline = False
+            self.expect_comment = False
+        elif self.in_comment and self.prev == "*":
+            debug_print("</MULTILINECOMMENT>")
+            self.in_comment = False
+            self.comment_multiline = False
+            self.write = False
+        elif not self.in_comment:
+            debug_print("<EXPECT_COMMENT>")
+            self.expect_comment = True
 
 
-def handle_multiline_comment(
-    expect_comment: bool, in_comment: bool, comment_multiline: bool
-) -> tuple[bool, bool, bool]:
-    """Handle the start of a multiline comment.
+    def handle_multiline_comment(self) -> None:
+        """Handle the start of a multiline comment."""
+        if self.expect_comment:
+            debug_print("<MULTILINECOMMENT>")
+            self.in_comment = True
+            self.comment_multiline = True
+            self.expect_comment = False
 
-    Args:
-        expect_comment (bool): Whether a comment is expected.
-        in_comment (bool): Current status of being inside a comment.
-        comment_multiline (bool): Whether the comment is multiline.
+    def handle_newline_char(self) -> None:
+        """Handle newline character in comment processing."""
+        if self.in_comment and not self.comment_multiline:
+            debug_print("</COMMENT>")
+            self.in_comment = False
+            self.write = False
 
-    Returns:
-        tuple[bool, bool, bool]: Updated status of whether a comment is expected,
-            whether currently in a comment, and whether the comment is multiline.
-    """
-    if expect_comment:
-        debug_print("<MULTILINECOMMENT>")
-        in_comment = True
-        comment_multiline = True
-        expect_comment = False
-    return expect_comment, in_comment, comment_multiline
-
-
-def handle_newline_char(
-    in_comment: bool, comment_multiline: bool, write: bool
-) -> tuple[bool, bool]:
-    """Handle newline character in comment processing.
-
-    Args:
-        in_comment (bool): Current status of being inside a comment.
-        comment_multiline (bool): Whether the comment is multiline.
-        write (bool): Whether to write the character to output.
-
-    Returns:
-        tuple[bool, bool]: Updated status of being inside a comment and whether
-            to write.
-    """
-    if in_comment and not comment_multiline:
-        debug_print("</COMMENT>")
-        in_comment = False
-        write = False
-    return in_comment, write
-
-
-def handle_quote_status(in_quote: bool) -> bool:
-    """Toggle the in_quote status and print debug information.
-
-    Args:
-        in_quote (bool): Current status of being inside a quote.
-
-    Returns:
-        bool: New status of being inside a quote.
-    """
-    if in_quote:
-        debug_print("</QUOTE>")
-        in_quote = False
-    else:
-        debug_print("<QUOTE>")
-        in_quote = True
-    return in_quote
+    def handle_quote_status(self) -> None:
+        """Toggle the in_quote status and print debug information."""
+        if self.in_quote:
+            debug_print("</QUOTE>")
+            self.in_quote = False
+        else:
+            debug_print("<QUOTE>")
+            self.in_quote = True
 
 
 def encode(
