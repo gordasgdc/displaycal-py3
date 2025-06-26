@@ -106,7 +106,7 @@ def test_default_values_1():
     assert sorted(config.DATA_DIRS) == sorted(expected_data_dirs)
 
 
-# get_hidpi_scaling_factor
+# get_hidpi_scaling_factor
 @pytest.mark.parametrize(
     "platform,expected", [
         ("darwin", 1.0),
