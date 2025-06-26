@@ -54,7 +54,7 @@ def decode(txt: str, strict: bool = False, encoding: None | str = None, **kw) ->
         Any: The decoded Python object.
     """
     if strict:
-        return json.loads(txt, encoding=encoding, strict=strict)
+        return json.loads(txt, strict=strict)
 
     # Remove comments
     io = StringIO()
@@ -70,7 +70,14 @@ def decode(txt: str, strict: bool = False, encoding: None | str = None, **kw) ->
         write = True
         (expect_comment, comment_multiline, in_comment, in_quote, escape, write) = (
             process_character(
-                c, prev, expect_comment, comment_multiline, in_comment, in_quote, escape
+                c,
+                prev,
+                expect_comment,
+                comment_multiline,
+                in_comment,
+                in_quote,
+                escape,
+                write,
             )
         )
         if write and not expect_comment and not in_comment:
@@ -81,7 +88,7 @@ def decode(txt: str, strict: bool = False, encoding: None | str = None, **kw) ->
     if DEBUG:
         print("JSON:", txt)
 
-    return json.loads(txt, encoding=encoding, strict=strict)
+    return json.loads(txt, strict=strict)
 
 
 def process_character(
@@ -92,7 +99,8 @@ def process_character(
     in_comment: bool,
     in_quote: bool,
     escape: bool,
-) -> tuple[bool, bool, bool, bool, bool, bool]:
+    write: bool,
+) -> tuple[bool, bool, bool, bool, bool, bool, bool]:
     """Process a character in the JSON string for comment handling.
 
     Args:
@@ -103,6 +111,7 @@ def process_character(
         in_comment (bool): Current status of being inside a comment.
         in_quote (bool): Current status of being inside a quote.
         escape (bool): Whether the current character is escaped.
+        write (bool): Whether to write the character to output.
 
     Returns:
         tuple[bool, bool, bool, bool, bool, bool]: Updated status of whether a
@@ -122,12 +131,20 @@ def process_character(
             if c == "/":
                 (expect_comment, in_comment, comment_multiline, write) = (
                     handle_forward_slash_char(
-                        prev, expect_comment, in_comment, comment_multiline
+                        prev,
+                        expect_comment,
+                        in_comment,
+                        comment_multiline,
+                        write,
                     )
                 )
             elif c == "*":
                 (expect_comment, in_comment, comment_multiline) = (
-                    handle_multiline_comment(expect_comment)
+                    handle_multiline_comment(
+                        expect_comment,
+                        in_comment,
+                        comment_multiline,
+                    )
                 )
             elif expect_comment:
                 debug_print("</EXPECT_COMMENT>")
@@ -146,6 +163,7 @@ def handle_forward_slash_char(
     expect_comment: bool,
     in_comment: bool,
     comment_multiline: bool,
+    write: bool = True,
 ) -> tuple[bool, bool, bool, bool]:
     """Handle the forward slash character in comment processing.
 
@@ -154,6 +172,7 @@ def handle_forward_slash_char(
         expect_comment (bool): Whether a comment is expected.
         in_comment (bool): Current status of being inside a comment.
         comment_multiline (bool): Whether the comment is multiline.
+        write (bool): Whether to write the character to output.
 
     Returns:
         tuple[bool, bool, bool, bool]: Updated status of being inside a comment,
@@ -176,11 +195,15 @@ def handle_forward_slash_char(
     return expect_comment, in_comment, comment_multiline, write
 
 
-def handle_multiline_comment(expect_comment: bool) -> tuple[bool, bool, bool]:
+def handle_multiline_comment(
+    expect_comment: bool, in_comment: bool, comment_multiline: bool
+) -> tuple[bool, bool, bool]:
     """Handle the start of a multiline comment.
 
     Args:
         expect_comment (bool): Whether a comment is expected.
+        in_comment (bool): Current status of being inside a comment.
+        comment_multiline (bool): Whether the comment is multiline.
 
     Returns:
         tuple[bool, bool, bool]: Updated status of whether a comment is expected,
@@ -289,5 +312,4 @@ def encode(
         ensure_ascii=ensure_ascii,
         indent=indent,
         separators=separators,
-        encoding=encoding or "utf-8",
     )
