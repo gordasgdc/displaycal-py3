@@ -42,7 +42,11 @@ elif sys.platform == "win32":
         ) = (26, 35, 24, 28, 40, 43, 2, 23, 7, 37)
         MAX_PATH = 260
 
-        def SHGetSpecialFolderPath(hwndOwner, nFolder, create=0):
+        def SHGetSpecialFolderPath(  # noqa: N802
+            hwndOwner: int,  # noqa: N803
+            nFolder: int,  # noqa: N803
+            create: bool = False,
+        ) -> str:
             """Ctypes wrapper around shell32.SHGetSpecialFolderPathW."""
             buffer = ctypes.create_unicode_buffer("\0" * MAX_PATH)
             ctypes.windll.shell32.SHGetSpecialFolderPathW(0, buffer, nFolder, create)
