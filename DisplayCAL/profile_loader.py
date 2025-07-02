@@ -467,7 +467,7 @@ class ProfileLoaderExceptionsDialog(ConfirmDialog):
             style = wx.BORDER_SIMPLE
         else:
             style = wx.BORDER_THEME
-        dlg.grid = CustomGrid(dlg, -1, size=(648 * scale, 200 * scale), style=style)
+        dlg.grid = CustomGrid(dlg, -1, size=wx.Size(int(648 * scale), int(200 * scale)), style=style)
         grid = dlg.grid
         grid.DisableDragRowSize()
         grid.SetCellHighlightPenWidth(0)
@@ -505,7 +505,7 @@ class ProfileLoaderExceptionsDialog(ConfirmDialog):
             else:
                 # Directory component
                 size = dc.GetTextExtent("W" * 34)[0]
-            grid.SetColSize(i, size)
+            grid.SetColSize(i, int(size))
         for i, label in enumerate(["", "", "executable", "directory"]):
             grid.SetColLabelValue(i, lang.getstr(label))
 
