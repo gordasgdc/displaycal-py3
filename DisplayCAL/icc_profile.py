@@ -2175,7 +2175,7 @@ def _winreg_get_display_profiles(monkey, current_user=False):
         numsubkeys, numvalues, mtime = winreg.QueryInfoKey(key)
         for i in range(numvalues):
             name, value, type_ = winreg.EnumValue(key, i)
-            if name != "ICMProfile" or not value:
+            if name != "ICMProfileAC" or not value:
                 continue
 
             if type_ == winreg.REG_BINARY:
