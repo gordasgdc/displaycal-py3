@@ -315,7 +315,7 @@ class DisplayIdentificationFrame(wx.Frame):
         text = wx.StaticText(panel_inner, -1, label, style=wx.ALIGN_CENTER)
         text.ForegroundColour = "#FFFFFF"
         font = wx.Font(
-            text.Font.PointSize * size[0] / 12.0 / 16,
+            int(text.Font.PointSize * size[0] / 12.0 / 16),
             wx.FONTFAMILY_DEFAULT,
             wx.FONTSTYLE_NORMAL,
             wx.FONTWEIGHT_LIGHT,
