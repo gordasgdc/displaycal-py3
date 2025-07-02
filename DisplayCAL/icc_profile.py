@@ -102,6 +102,7 @@ COLOR_PROFILE_TYPE = {"ICC": 0, "DMP": 1, "CAMP": 2, "GMMP": 3}
 WCS_PROFILE_MANAGEMENT_SCOPE = {"SYSTEM_WIDE": 0, "CURRENT_USER": 1}
 
 ERROR_PROFILE_NOT_ASSOCIATED_WITH_DEVICE = 2015
+ERROR_SUCCESS = 0
 
 DEBUG = False
 
@@ -2479,11 +2480,13 @@ def _wcs_set_display_profile(
     # also set its video card gamma ramps to linear if Windows calibration
     # management isn't enabled.
     _win10_1903_take_process_handles_snapshot()
-    mscms.WcsDisassociateColorProfileFromDevice(scope, profile_name, devicekey)
-    retv = mscms.WcsAssociateColorProfileWithDevice(scope, profile_name, devicekey)
-    _win10_1903_close_leaked_regkey_handles(devicekey)
-    if not retv:
-        raise util_win.get_windows_error(ctypes.windll.kernel32.GetLastError())
+    try:
+        mscms.WcsDisassociateColorProfileFromDevice(scope, profile_name, devicekey)
+        retv = mscms.WcsAssociateColorProfileWithDevice(scope, profile_name, devicekey)
+        if not retv:
+            raise util_win.get_windows_error(ctypes.windll.kernel32.GetLastError())
+    finally:
+        _win10_1903_close_leaked_regkey_handles(devicekey)
     monkey = devicekey.split("\\")[-2:]
     current_user = scope == WCS_PROFILE_MANAGEMENT_SCOPE["CURRENT_USER"]
     profiles = _winreg_get_display_profiles(monkey, current_user)
@@ -2517,20 +2520,22 @@ def _wcs_unset_display_profile(
     current_user = scope == WCS_PROFILE_MANAGEMENT_SCOPE["CURRENT_USER"]
     profiles = _winreg_get_display_profiles(monkey, current_user)
     _win10_1903_take_process_handles_snapshot()
-    retv = mscms.WcsDisassociateColorProfileFromDevice(scope, profile_name, devicekey)
-    _win10_1903_close_leaked_regkey_handles(devicekey)
-    if not retv:
-        errcode = ctypes.windll.kernel32.GetLastError()
-        if (
-            errcode == ERROR_PROFILE_NOT_ASSOCIATED_WITH_DEVICE
-            and profile_name in profiles
-        ):
-            # Check if profile is still associated
-            profiles = _winreg_get_display_profiles(monkey, current_user)
-            if profile_name not in profiles:
-                # Successfully disassociated
-                return True
-        raise util_win.get_windows_error(errcode)
+    try:
+        retv = mscms.WcsDisassociateColorProfileFromDevice(scope, profile_name, devicekey)
+        if not retv:
+            errcode = ctypes.windll.kernel32.GetLastError()
+            if (
+                errcode in (ERROR_PROFILE_NOT_ASSOCIATED_WITH_DEVICE, ERROR_SUCCESS)
+                and profile_name in profiles
+            ):
+                # Check if profile is still associated
+                profiles = _winreg_get_display_profiles(monkey, current_user)
+                if profile_name not in profiles:
+                    # Successfully disassociated
+                    return True
+            raise util_win.get_windows_error(errcode)
+    finally:
+        _win10_1903_close_leaked_regkey_handles(devicekey)
     return True
 
 
