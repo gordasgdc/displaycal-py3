@@ -6336,7 +6336,7 @@ BEGIN_DATA
                     if not self.madtpg_bw_lvl:
                         self.log("madVR_GetBlackAndWhiteLevel failed")
                     else:
-                        self.log("Output levels: {}-{}".format(self.madtpg_bw_lvl))
+                        self.log("Output levels: {}-{}".format(*self.madtpg_bw_lvl))
                     # Get pattern config
                     patternconfig = self.madtpg.get_pattern_config()
                     if (
