@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import binascii
+import contextlib
 import ctypes
 import datetime
 import json
@@ -2176,7 +2177,7 @@ def _winreg_get_display_profiles(monkey, current_user=False):
         numsubkeys, numvalues, mtime = winreg.QueryInfoKey(key)
         for i in range(numvalues):
             name, value, type_ = winreg.EnumValue(key, i)
-            if name != "ICMProfileAC" or not value:
+            if name not in ["ICMProfile", "ICMProfileAC"] or not value:
                 continue
 
             if type_ == winreg.REG_BINARY:
@@ -2480,13 +2481,17 @@ def _wcs_set_display_profile(
     # also set its video card gamma ramps to linear if Windows calibration
     # management isn't enabled.
     _win10_1903_take_process_handles_snapshot()
-    try:
+    with contextlib.suppress(WindowsError):
+        # Disassociate the profile from the device first
         mscms.WcsDisassociateColorProfileFromDevice(scope, profile_name, devicekey)
+    try:
+        # Associate the profile with the device
         retv = mscms.WcsAssociateColorProfileWithDevice(scope, profile_name, devicekey)
-        if not retv:
-            raise util_win.get_windows_error(ctypes.windll.kernel32.GetLastError())
-    finally:
-        _win10_1903_close_leaked_regkey_handles(devicekey)
+    except WindowsError:
+        retv = None
+    _win10_1903_close_leaked_regkey_handles(devicekey)
+    if not retv:
+        raise util_win.get_windows_error(ctypes.windll.kernel32.GetLastError())
     monkey = devicekey.split("\\")[-2:]
     current_user = scope == WCS_PROFILE_MANAGEMENT_SCOPE["CURRENT_USER"]
     profiles = _winreg_get_display_profiles(monkey, current_user)
@@ -2521,21 +2526,23 @@ def _wcs_unset_display_profile(
     profiles = _winreg_get_display_profiles(monkey, current_user)
     _win10_1903_take_process_handles_snapshot()
     try:
+        # Disassociate the profile from the device
         retv = mscms.WcsDisassociateColorProfileFromDevice(scope, profile_name, devicekey)
-        if not retv:
-            errcode = ctypes.windll.kernel32.GetLastError()
-            if (
-                errcode in (ERROR_PROFILE_NOT_ASSOCIATED_WITH_DEVICE, ERROR_SUCCESS)
-                and profile_name in profiles
-            ):
-                # Check if profile is still associated
-                profiles = _winreg_get_display_profiles(monkey, current_user)
-                if profile_name not in profiles:
-                    # Successfully disassociated
-                    return True
-            raise util_win.get_windows_error(errcode)
-    finally:
-        _win10_1903_close_leaked_regkey_handles(devicekey)
+    except WindowsError:
+        retv = None
+    _win10_1903_close_leaked_regkey_handles(devicekey)
+    if not retv:
+        errcode = ctypes.windll.kernel32.GetLastError()
+        if (
+            errcode in (ERROR_PROFILE_NOT_ASSOCIATED_WITH_DEVICE, ERROR_SUCCESS)
+            and profile_name in profiles
+        ):
+            # Check if profile is still associated
+            profiles = _winreg_get_display_profiles(monkey, current_user)
+            if profile_name not in profiles:
+                # Successfully disassociated
+                return True
+        raise util_win.get_windows_error(errcode)
     return True
 
 
