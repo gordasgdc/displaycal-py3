@@ -79,7 +79,7 @@ TRC = (81, 127)
 PNP_ID_CACHE = {}
 
 
-def combine_hi_8lo(hi, lo):
+def combine_hi_8lo(hi: int, lo: int) -> int:
     """Combine two 8-bit values into a single 16-bit value.
 
     Args:
@@ -124,18 +124,18 @@ def get_edid(
     return {}
 
 
-def get_edid_windows(display_no, device):
+def get_edid_windows(display_no: int, device: str) -> bytes:
     """Get EDID for a Windows display.
 
     Args:
         display_no (int): The display number (zero-based).
         device (str): The device identifier.
 
-    Returns:
-        bytes: The EDID data.
-
     Raises:
         WMIError: If there is an error with WMI.
+
+    Returns:
+        bytes: The EDID data.
     """
     edid = None
 
@@ -166,7 +166,9 @@ def get_edid_windows(display_no, device):
     return edid
 
 
-def get_edid_windows_wmi(device_id, wmi_connection, not_main_thread):
+def get_edid_windows_wmi(
+    device_id: str, wmi_connection: wmi.WMI, not_main_thread: bool
+) -> bytes:
     """Get EDID using WMI for Windows Vista/Win7.
 
     Args:
@@ -174,11 +176,11 @@ def get_edid_windows_wmi(device_id, wmi_connection, not_main_thread):
         wmi_connection (wmi.WMI): The WMI connection.
         not_main_thread (bool): Whether the current thread is not the main thread.
 
-    Returns:
-        bytes: The EDID data.
-
     Raises:
         WMIError: If there is an error with WMI.
+
+    Returns:
+        bytes: The EDID data.
     """
     edid = None
 
@@ -207,7 +209,7 @@ def get_edid_windows_wmi(device_id, wmi_connection, not_main_thread):
     return edid
 
 
-def get_edid_windows_registry(id_, device):
+def get_edid_windows_registry(id_: str, device: str) -> bytes:
     """Get EDID using the Windows registry for Win2k/XP/2003.
 
     Args:
@@ -313,7 +315,7 @@ def get_edid_darwin(display_name: str) -> None | bytes:
     return None
 
 
-def get_edid_from_xrandr(display_no):
+def get_edid_from_xrandr(display_no: int) -> bytes:
     """Get EDID using `xrandr` utility.
 
     Args:
@@ -419,7 +421,7 @@ def load_pnp_id_cache() -> None:
             parse_pnpid_data(lines)
 
 
-def get_pnp_id_paths():
+def get_pnp_id_paths() -> list:
     """Get the list of possible paths for the pnp.ids file.
 
     Returns:
@@ -478,7 +480,7 @@ def parse_pnpid_data(lines: list[str]) -> None:
             PNP_ID_CACHE[id_] = name
 
 
-def edid_get_bit(value, bit):
+def edid_get_bit(value: int, bit: int) -> int:
     """Get the bit value at the specified position.
 
     Args:
@@ -491,7 +493,7 @@ def edid_get_bit(value, bit):
     return (value & (1 << bit)) >> bit
 
 
-def edid_get_bits(value, begin, end):
+def edid_get_bits(value: int, begin: int, end: int) -> int:
     """Get the bits from the specified range.
 
     Args:
@@ -506,7 +508,7 @@ def edid_get_bits(value, begin, end):
     return (value >> begin) & mask
 
 
-def edid_decode_fraction(high, low):
+def edid_decode_fraction(high: int, low: int) -> float:
     """Decode a fraction from high and low bits.
 
     Args:
@@ -523,7 +525,7 @@ def edid_decode_fraction(high, low):
     return result
 
 
-def edid_parse_string(desc):
+def edid_parse_string(desc: bytes) -> bytes:
     """Parse a string from EDID data.
 
     Args:
@@ -562,7 +564,7 @@ def edid_parse_string(desc):
     return None
 
 
-def parse_edid(edid):
+def parse_edid(edid: bytes) -> dict:
     """Parse raw EDID data (binary string) and return dict.
 
     Args:
@@ -583,7 +585,7 @@ def parse_edid(edid):
     return result
 
 
-def fix_edid_encoding(edid):
+def fix_edid_encoding(edid: bytes) -> bytes:
     """Fix the encoding of EDID data.
 
     Args:
@@ -603,7 +605,7 @@ def fix_edid_encoding(edid):
     return edid
 
 
-def parse_edid_header(edid):
+def parse_edid_header(edid: bytes) -> dict:
     """Parse the EDID header.
 
     Args:
@@ -626,7 +628,7 @@ def parse_edid_header(edid):
     return result
 
 
-def parse_edid_basic_display_parameters(edid):
+def parse_edid_basic_display_parameters(edid: bytes) -> dict:
     """Parse the basic display parameters from the EDID data.
 
     Args:
@@ -651,7 +653,7 @@ def parse_edid_basic_display_parameters(edid):
     return result
 
 
-def parse_edid_chromaticity_coordinates(edid):
+def parse_edid_chromaticity_coordinates(edid: bytes) -> dict:
     """Parse the chromaticity coordinates from the EDID data.
 
     Args:
@@ -688,7 +690,7 @@ def parse_edid_chromaticity_coordinates(edid):
     }
 
 
-def parse_edid_descriptor_blocks(edid):
+def parse_edid_descriptor_blocks(edid: bytes) -> dict:
     """Parse the descriptor blocks from the EDID data.
 
     Args:
@@ -724,7 +726,7 @@ def parse_edid_descriptor_blocks(edid):
     return result
 
 
-def parse_color_point_data(block):
+def parse_color_point_data(block: bytes) -> dict:
     """Parse the color point data from the EDID data.
 
     Args:
@@ -757,7 +759,7 @@ def parse_color_point_data(block):
     return result
 
 
-def parse_edid_extension_blocks(edid):
+def parse_edid_extension_blocks(edid: bytes) -> dict:
     """Parse the extension blocks from the EDID data.
 
     Args:
