@@ -46,13 +46,20 @@ class PyEmbeddedImage:
     from a database.  In this case pass False for isBase64 (unless the
     data actually is base64 encoded.)  Any image type that
     wx.ImageFromStream can handle should be okay.
+
+    Args:
+        data (bytes): The image data, which can be base64 encoded or raw binary
+            data.
+        is_base64 (bool): If True, the `data` is expected to be base64 encoded.
+            If False, the `data` is treated as raw binary data. Defaults to
+            True.
     """
 
-    def __init__(self, data, isBase64=True):
+    def __init__(self, data: bytes, is_base64: bool = True) -> None:
         self.data = data
-        self.isBase64 = isBase64
+        self.is_base64 = is_base64
 
-    def GetBitmap(self):
+    def GetBitmap(self) -> wx.Bitmap:  # noqa: N802
         """Return a wx.Bitmap object created from the embedded image data.
 
         Returns:
@@ -60,18 +67,18 @@ class PyEmbeddedImage:
         """
         return wx.BitmapFromImage(self.GetImage())
 
-    def GetData(self):
+    def GetData(self) -> bytes:  # noqa: N802
         """Return the raw image data, decoding it if necessary.
 
         Returns:
             bytes: The raw image data, decoded if it was base64 encoded.
         """
-        if self.isBase64:
+        if self.is_base64:
             data = b64decode(self.data)
         # TODO: what is ``data`` if self.isBase64 is False
         return data
 
-    def GetIcon(self):
+    def GetIcon(self) -> wx.Icon:  # noqa: N802
         """Return a wx.Icon object created from the embedded image data.
 
         Returns:
@@ -81,7 +88,7 @@ class PyEmbeddedImage:
         icon.CopyFromBitmap(self.GetBitmap())
         return icon
 
-    def GetImage(self):
+    def GetImage(self) -> wx.Image:  # noqa: N802
         """Return a wx.Image object created from the embedded image data.
 
         Returns:
