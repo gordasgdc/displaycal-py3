@@ -124,6 +124,7 @@ def init(
     _INITIALIZED = True
     return _SERVER
 
+
 def _init_wx() -> None:
     """Initialize wx audio subsystem."""
     global _SERVER, _LIB, _LIB_VERSION, wx
@@ -177,19 +178,17 @@ def _load_audio_dll(
         _SERVER.Mix_LoadWAV_RW.argtypes = [POINTER(SDL_RWops), c_int]
         _SERVER.Mix_LoadWAV_RW.restype = POINTER(Mix_Chunk)
         _SERVER.Mix_PlayChannelTimed.argtypes = [
-                c_int,
-                POINTER(Mix_Chunk),
-                c_int,
-                c_int,
-            ]
+            c_int,
+            POINTER(Mix_Chunk),
+            c_int,
+            c_int,
+        ]
         _SERVER.Mix_VolumeChunk.argtypes = [POINTER(Mix_Chunk), c_int]
         if _INITIALIZED:
             _SERVER.Mix_Quit()
             sdl.SDL_Quit()
         sdl.SDL_Init(SDL_INIT_AUDIO)
-        _SERVER.Mix_OpenAudio(
-                samplerate, MIX_DEFAULT_FORMAT, channels, buffersize
-            )
+        _SERVER.Mix_OpenAudio(samplerate, MIX_DEFAULT_FORMAT, channels, buffersize)
         _LIB = "SDL"
         _LIB_VERSION = "2.0" if libname.startswith("SDL2") else "1.2"
         return sdl
@@ -274,13 +273,13 @@ def _init_sdl_linux(samplerate: int, channels: int, buffersize: int) -> None:
     sdl = None
     for libname in ("SDL2", "SDL2_mixer", "SDL", "SDL_mixer"):
         handle = None
-            # Hard-code lib names for Linux
+        # Hard-code lib names for Linux
         libfn = f"lib{libname}"
         if libname.startswith("SDL2"):
-                # SDL 2.0
+            # SDL 2.0
             libfn += "-2.0.so.0"
         else:
-                # SDL 1.2
+            # SDL 1.2
             libfn += "-1.2.so.0"
 
         sdl = _load_audio_dll(
@@ -332,24 +331,25 @@ def _init_pyo(samplerate: int, channels: int, buffersize: int) -> None:
     else:
         if isinstance(_SERVER, pyo.Server):
             _SERVER.reinit(
-                    sr=samplerate, nchnls=channels, buffersize=buffersize, duplex=0
-                )
+                sr=samplerate, nchnls=channels, buffersize=buffersize, duplex=0
+            )
         else:
             _SERVER = pyo.Server(
-                    sr=samplerate,
-                    nchnls=channels,
-                    buffersize=buffersize,
-                    duplex=0,
-                    winhost="asio",
-                ).boot()
+                sr=samplerate,
+                nchnls=channels,
+                buffersize=buffersize,
+                duplex=0,
+                winhost="asio",
+            ).boot()
             _SERVER.start()
             _LIB_VERSION = ".".join(str(v) for v in pyo.getVersion())
+
 
 def _init_pyglet() -> None:
     """Initialize pyglet audio subsystem."""
     global _SERVER, _LIB, _LIB_VERSION, pyglet
     if not getattr(sys, "frozen", False):
-            # Use included pyglet
+        # Use included pyglet
         lib_dir = os.path.join(os.path.dirname(__file__), "lib")
         if lib_dir not in sys.path:
             sys.path.insert(0, lib_dir)
@@ -368,10 +368,10 @@ def _init_pyglet() -> None:
     except ImportError:
         _LIB = None
     else:
-            # Work around localization preventing fallback to RIFFSourceLoader
+        # Work around localization preventing fallback to RIFFSourceLoader
         pyglet.lib.LibraryLoader.darwin_not_found_error = ""
         pyglet.lib.LibraryLoader.linux_not_found_error = ""
-            # Set audio driver preference
+        # Set audio driver preference
         pyglet.options["audio"] = ("pulse", "openal", "directsound", "silent")
         _SERVER = pyglet.media
         _LIB_VERSION = pyglet.version
@@ -728,7 +728,6 @@ class Sound:
         if self._lib == "SDL":
             return bool(self._ch is not None and self._server.Mix_Playing(self._ch))
         return self._is_playing
-
 
     def _play_pyglet(self, fade_ms: int = 0, stop_already_playing: bool = True) -> bool:
         """Play the sound using pyglet.

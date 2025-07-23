@@ -140,7 +140,7 @@ class PyGauge(wx.Window):
     def __init__(
         self,
         parent: wx.Window,
-        id: int=wx.ID_ANY,  # noqa: A002
+        id: int = wx.ID_ANY,  # noqa: A002
         range_: int = 100,
         pos: wx.Point = wx.DefaultPosition,
         size: tuple[int, int] = (-1, 30),

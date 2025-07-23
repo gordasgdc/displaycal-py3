@@ -45,7 +45,7 @@ for e in range(3):
 NORMALIZATION_FACTOR["Ynorm"] = 1.0 / NORMALIZATION_FACTOR["Ynorm"]
 
 
-def xyz_denormalize_remove_glare(x: float, y: float, z:float) -> tuple:
+def xyz_denormalize_remove_glare(x: float, y: float, z: float) -> tuple:
     """Convert XYZ to RGB using the inverse of the RGB to XYZ conversion.
 
     Args:

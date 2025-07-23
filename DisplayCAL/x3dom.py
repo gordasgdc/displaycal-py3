@@ -712,7 +712,7 @@ def update_vrml_for_din99(
     offsetx: float,
     offsety: float,
     scale: float,
-    maxz: float
+    maxz: float,
 ) -> str:
     """Update VRML for DIN99 colorspace.
 
@@ -736,9 +736,7 @@ def update_vrml_for_din99(
     vrml = re.sub(r'(string\s*\[")([+\-]?)(b)\*("\])', r"\1\3 \2\0$\4", vrml)
 
     # DisplayCAL tweaked VRML created by worker.Worker.calculate_gamut()
-    vrml = re.sub(
-        r'(string\s*\["a)\*",\s*"([+\-]?)\d+("\])', r'\1", "\2\0$\3', vrml
-    )
+    vrml = re.sub(r'(string\s*\["a)\*",\s*"([+\-]?)\d+("\])', r'\1", "\2\0$\3', vrml)
     vrml = re.sub(r'(string\s*\["b)\*\s+([+\-]?)\d+("\])', r"\1 \2\0$\3", vrml)
 
     vrml = vrml.replace("\0$", f"{round(100.0 / scale)}")
@@ -786,7 +784,7 @@ def update_vrml_for_luv_and_xyy(
     offsety: float,
     scale: float,
     maxxy: float,
-    maxz: float
+    maxz: float,
 ) -> str:
     """Update VRML for Luv and xyY colorspaces.
 
@@ -930,7 +928,6 @@ def update_vrml_for_lpt(vrml: str) -> str:
     # Replace a* b* labels with p* t*
     vrml = re.sub(r'(string\s*\["[+\-]?)a\*?', r"\1p", vrml)
     return re.sub(r'(string\s*\["[+\-]?)b\*?', r"\1t", vrml)
-
 
 
 def update_vrml(vrml: str, colorspace: str) -> str:

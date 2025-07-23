@@ -13,7 +13,7 @@ from DisplayCAL.config import get_icon
 from DisplayCAL.dev.mocks import check_call, check_call_str
 from DisplayCAL.display_cal import (
     app_update_check,
-    app_uptodate,
+    app_up_to_date,
     check_donation,
     colorimeter_correction_check_overwrite,
     donation_message,
@@ -88,10 +88,10 @@ def test_check_donation(mainframe: MainFrame) -> None:
         check_donation(mainframe, False)
 
 
-def test_app_uptodate(mainframe: MainFrame) -> None:
+def test_app_up_to_date(mainframe: MainFrame) -> None:
     """Test if 'up to date' messagebox is shown."""
     with check_call(BaseInteractiveDialog, "ShowModalThenDestroy", call_count=1):
-        app_uptodate(mainframe)
+        app_up_to_date(mainframe)
 
 
 @pytest.mark.parametrize("response", (wx.ID_OK, wx.ID_NO), ids=("Ok", "Cancel"))

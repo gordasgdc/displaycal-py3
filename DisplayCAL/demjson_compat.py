@@ -141,7 +141,6 @@ class DEMJSONPreprocessor:
             debug_print("<EXPECT_COMMENT>")
             self.expect_comment = True
 
-
     def handle_multiline_comment(self) -> None:
         """Handle the start of a multiline comment."""
         if self.expect_comment:

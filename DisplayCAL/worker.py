@@ -47,7 +47,7 @@ from io import BytesIO
 from pathlib import Path
 from threading import current_thread, main_thread
 from time import sleep, strftime, time
-from typing import Any, ClassVar
+from typing import Any, Callable, ClassVar
 
 import distro
 from send2trash import send2trash
@@ -12641,16 +12641,16 @@ BEGIN_DATA
 
     def update_profile(
         self,
-        profile,
-        ti3=None,
-        chrm=None,
-        tags=None,
-        avg=None,
-        peak=None,
-        rms=None,
-        gamut_volume=None,
-        gamut_coverage=None,
-        quality=None,
+        profile: ICCProfile,
+        ti3: None | CGATS = None,
+        chrm: None | ChromaticityType = None,
+        tags: None | bool | dict = None,
+        avg: None | str = None,
+        peak: None | str = None,
+        rms: None | str = None,
+        gamut_volume: None | float = None,
+        gamut_coverage: None | float = None,
+        quality: None | str = None,
     ):
         """Update profile tags and metadata.
 
@@ -12875,7 +12875,7 @@ BEGIN_DATA
             return exception
         return True
 
-    def get_logfiles(self, include_progress_buffers=True):
+    def get_logfiles(self, include_progress_buffers: bool = True) -> LineBufferedStream:
         """Get logfiles for logging.
 
         Args:
@@ -12907,12 +12907,12 @@ BEGIN_DATA
 
     def update_profile_B2A(
         self,
-        profile,
-        generate_perceptual_table=True,
-        clutres=None,
-        smooth=None,
-        rgb_space=None,
-    ):
+        profile: ICCProfile,
+        generate_perceptual_table: bool = True,
+        clutres: None | int = None,
+        smooth: None | bool = None,
+        rgb_space: None | str = None,
+    ) -> list | Exception:
         """Update B2A tables in profile.
 
         Args:
@@ -13061,29 +13061,32 @@ BEGIN_DATA
                     profile.filename = filename
         return rtables
 
-    def is_working(self):
+    def is_working(self) -> bool:
         """Check if any Worker instance is busy.
 
         Returns:
-            bool: Return True or False.
+            bool: Return True if at least one of the Worker instances is busy,
+                False if all are finished.
         """
         return any(not getattr(worker, "finished", True) for worker in workers)
 
     def start_measurement(
         self,
-        consumer,
-        apply_calibration=True,
-        progress_msg="",
-        resume=False,
-        continue_next=False,
-    ):
+        consumer: Callable,
+        apply_calibration: None | bool | str = True,
+        progress_msg: str = "",
+        resume: bool = False,
+        continue_next: bool = False,
+    ) -> None:
         """Start a measurement and use a progress dialog for progress information.
 
         Args:
             consumer (callable): The consumer function to call with progress
                 updates.
-            apply_calibration (bool): If True, apply calibration to the
-                measurements.
+            apply_calibration (None | bool | str): If True, apply calibration
+                to the measurements. If it is None or a str value, it will
+                be passed as the `apply_calibration` argument to the
+                `measure` method.
             progress_msg (str): Message to display in the progress dialog.
             resume (bool): If True, resume from the last measurement point.
             continue_next (bool): If True, continue to the next step after
@@ -13258,15 +13261,19 @@ BEGIN_DATA
             if self.cmdname == "dispcal":
                 self.madtpg.show_progress_bar(6)
 
-    def measure(self, apply_calibration=True):
+    def measure(self, apply_calibration: bool = True) -> bool | Exception:
         """Measure the configured testchart.
 
         Args:
-            apply_calibration (bool): If True, apply calibration to the
-                measurement. If False, use the raw measurement data.
+            apply_calibration (None | bool | str): If True, apply calibration
+                to the measurement. If False, use the raw measurement data. If
+                it is None or a string, it will be passed to the
+                `prepare_dispread` method to prepare the command for
+                measurement.
 
         Returns:
-            True if successful, or an Exception if an error occurred.
+            bool | Exception : True if successful, or an Exception if an error
+                occurred.
         """
         result = self.detect_video_levels()
         if isinstance(result, Exception) or not result:
@@ -14234,6 +14241,12 @@ BEGIN_DATA
         either the previously by dispcal created one by passing in True, by
         passing in a valid path to a .cal file, or by passing in None
         (current video card gamma table).
+
+        Args:
+            apply_calibration (None | bool | str): If True, apply the current
+                calibration (i.e. the one created by dispcal). If a string, it
+                should be a path to a .cal file to apply. If None, use the
+                current video card gamma table.
         """
         self.lastcmdname = get_argyll_utilname("dispread")
         inoutfile = self.setup_inout()

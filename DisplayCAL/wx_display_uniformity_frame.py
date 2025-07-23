@@ -502,7 +502,9 @@ class DisplayUniformityFrame(BaseFrame):
             self.enable_buttons()
             self.buttons[self.index].Show()
             self.buttons[self.index].SetFocus()
-            self.buttons[self.index].SetBitmap(get_bitmap("theme/icons/16x16/checkmark"))
+            self.buttons[self.index].SetBitmap(
+                get_bitmap("theme/icons/16x16/checkmark")
+            )
             self.panels[self.index].SetBackgroundColour(BGCOLOUR)
             self.panels[self.index].Refresh()
             self.panels[self.index].Update()

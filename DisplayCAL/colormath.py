@@ -1588,9 +1588,7 @@ def is_similar_matrix(
         bool: True if the matrices are equal up to the specified number of
             digits, False otherwise.
     """
-    result = matrix1.rounded(digits) == matrix2.rounded(digits)
-    print(f"result: {result}")
-    return result
+    return matrix1.rounded(digits) == matrix2.rounded(digits)
 
 
 def is_equal(

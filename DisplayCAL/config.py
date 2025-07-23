@@ -522,7 +522,6 @@ def load_bitmap(
     from DisplayCAL.wx_addons import wx
 
     bmp = None
-    path = None
     width, height, orig_name, name2x, name4x, color, inverted, size = (
         extract_image_properties(parts)
     )
@@ -544,7 +543,7 @@ def load_bitmap(
         if not bmp.IsOk():
             path = None
     if path:
-        width, height, path = resize_and_adjust_bitmap(
+        width, height, path, bmp = resize_and_adjust_bitmap(
             path,
             parts,
             orig_name,
@@ -864,7 +863,7 @@ def resize_and_adjust_bitmap(
         bmp = img.ConvertToBitmap()
         if not bmp.IsOk():
             path = None
-    return width, height, path
+    return width, height, path, bmp
 
 
 def adjust_bitmap_size(
@@ -2036,7 +2035,7 @@ def getcfg(
         and (name != "testchart.file" or value != "auto")
         and (not os.path.isabs(value) or not os.path.exists(value))
     ):
-        value = get_corrected_colorimeter_path(name, defval, has_default, value)
+        value = get_corrected_colorimeter_path(name, value)
     elif name in ("displays", "instruments"):
         if not value:
             return []

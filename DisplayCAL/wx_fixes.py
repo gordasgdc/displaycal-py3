@@ -492,23 +492,17 @@ if "gtk3" in wx.PlatformInfo:
             self,
             parent,
             id=wx.ID_ANY,  # noqa: A002
-            value=None,
+            value="",
             pos=wx.DefaultPosition,
             size=wx.DefaultSize,
             style=wx.SP_ARROW_KEYS,
             min=0,  # noqa: A002
             max=100,  # noqa: A002
             initial=0,
-            name=None,
+            name="wxSpinCtrl",
         ):
-            if value is None:
-                value = ""
-
-            if name is None:
-                name = "wxSpinCtrl"
-
             if size[0] != -1:
-                # Adjust initial size for GTK3 to accomodate spin buttons
+                # Adjust initial size for GTK3 to accommodate spin buttons
                 if not SpinCtrl._spinwidth:
                     spin = wx.SpinCtrl(parent, -1)
                     text = wx.TextCtrl(parent, -1)
@@ -1618,7 +1612,7 @@ class ThemedGenButton(GenButton, _ThemedGenButton):
             y2 (int): The y-coordinate of the bottom-right corner.
         """
         rect = wx.Rect(x1, y1, x2, y2)
-        state = 0 if self.up else wx.CONTROL_PRESSED | wx.CONTROL_SELECTED
+        state = 0 if self.up else (wx.CONTROL_PRESSED | wx.CONTROL_SELECTED)
         if not self.IsEnabled():
             state = wx.CONTROL_DISABLED
         elif self._default:
