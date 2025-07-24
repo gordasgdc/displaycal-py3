@@ -17,8 +17,15 @@ from py2exe import freeze
 
 
 # Borrowed from setuptools
-def _find_all_simple(path):
-    """Find all files under 'path'."""
+def _find_all_simple(path: str) -> list[str]:
+    """Find all files under 'path'.
+
+    Args:
+        path (str): The directory path to search for files.
+
+    Returns:
+        list[str]: A list of full filenames found under the specified path.
+    """
     results = (
         os.path.join(base, file)
         for base, dirs, files in os.walk(path, followlinks=True)
@@ -27,10 +34,18 @@ def _find_all_simple(path):
     return filter(os.path.isfile, results)
 
 
-def findall(directory=os.curdir):
+def findall(directory: str = os.curdir) -> list[str]:
     """Find all files under 'dir' and return the list of full filenames.
 
     Unless dir is '.', return full filenames with dir prepended.
+
+    Args:
+        directory (str, optional): The directory path to search for files.
+            Defaults to the current directory.
+
+    Returns:
+        list[str]: A list of full filenames found under the specified
+            directory.
     """
     files = _find_all_simple(directory)
     if directory == os.curdir:
@@ -186,12 +201,34 @@ msiversion = ".".join(
 class Target:
     """Target class for py2exe."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         self.__dict__.update(kwargs)
 
 
-def get_data(tgt_dir, key, pkgname=None, subkey=None, excludes=None):
-    """Return configured data files."""
+def get_data(
+    tgt_dir: str,
+    key: str,
+    pkgname: None | str = None,
+    subkey: None | str = None,
+    excludes: None | list[str] = None,
+) -> list[tuple[str, list[str]]]:
+    """Return configured data files.
+
+    Args:
+        tgt_dir (str): Target directory where the files should be placed.
+        key (str): Key in the config dictionary to retrieve the file paths.
+        pkgname (None | str, optional): Package name to filter the files.
+            Default is None.
+        subkey (None | str, optional): Subkey to further filter the files.
+            Default is None.
+        excludes (None | list[str], optional): List of patterns to exclude
+            files. Default is None.
+
+    Returns:
+        list[tuple[str, list[str]]]: List of tuples where each tuple contains
+            the target directory and a list of file paths that match the
+            specified key and package name.
+    """
     files = config[key]
     src_dir = source_dir
     resource_dir = src_dir
@@ -214,7 +251,25 @@ def get_data(tgt_dir, key, pkgname=None, subkey=None, excludes=None):
     return data
 
 
-def get_scripts(excludes=None):
+def sort_by_name(a: str, b: str) -> int:
+    """Compare two script names for sorting.
+
+    Args:
+        a (str): First script name.
+        b (str): Second script name.
+
+    Returns:
+        int: -1 if a < b, 1 if a > b, 0 if a == b.
+    """
+    a, b = [os.path.splitext(v)[0] for v in (a, b)]
+    if a > b:
+        return 1
+    if a < b:
+        return -1
+    return 0
+
+
+def get_scripts(excludes: None | list[str] = None) -> list[tuple[str, str]]:
     """Return a list of scripts with their descriptions.
 
     Args:
@@ -229,17 +284,7 @@ def get_scripts(excludes=None):
     scripts_with_desc = []
     scripts = safe_glob(os.path.join(pydir, "..", "scripts", appname.lower() + "*"))
 
-    def sortbyname(a, b):
-        a, b = [os.path.splitext(v)[0] for v in (a, b)]
-        if a > b:
-            return 1
-        if a < b:
-            return -1
-        return 0
-
-    import functools
-
-    scripts = sorted(scripts, key=functools.cmp_to_key(sortbyname))
+    scripts = sorted(scripts, key=functools.cmp_to_key(sort_by_name))
     for script in scripts:
         script = os.path.basename(script)
         if script == appname.lower() + "-apply-profiles-launcher":
@@ -257,7 +302,7 @@ def get_scripts(excludes=None):
     return scripts_with_desc
 
 
-def build_py2exe():
+def build_py2exe() -> None:
     """py2exe builder that uses the new freeze API."""
     use_sdl = False
     sys.path.insert(1, os.path.join(pydir, "..", "util"))
@@ -272,8 +317,7 @@ def build_py2exe():
     # Use CA file from certifi project
     import certifi
 
-    cacert = certifi.where()
-    if cacert:
+    if cacert := certifi.where():
         shutil.copyfile(cacert, os.path.join(pydir, "cacert.pem"))
         config["package_data"][NAME].append("cacert.pem")
     else:
