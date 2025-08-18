@@ -262,10 +262,9 @@ class Image:
         stream.write(b"\0" * 52)  # Reserved
 
         # Generic image source header (256 bytes)
-        sw, sh = [
-            self.extrainfo.get("original_" + dim, locals()[dim[0]])
-            for dim in ("width", "height")
-        ]
+        sw = self.extrainfo.get("original_width", w)
+        sh = self.extrainfo.get("original_height", h)
+
         # X offset
         stream.write(struct.pack(">I", self.extrainfo.get("offset_x", (sw - w) / 2)))
         # Y offset
