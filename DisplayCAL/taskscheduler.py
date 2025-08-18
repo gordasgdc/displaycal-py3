@@ -255,25 +255,29 @@ class Task(_Dict2XML):
         triggers=None,
         actions=None,
     ):
-        kwargs = locals()
-        idle_keys = ("duration", "wait_timeout", "stop_on_idle_end", "restart_on_idle")
-        idle_settings = {}
-        for key in idle_keys:
-            idle_settings[key] = kwargs[key]
-        for key in (
-            "self",
-            "name",
-            "author",
-            "description",
-            "group_id",
-            "run_level",
-            "triggers",
-            "actions",
-            *idle_keys,
-        ):
-            del kwargs[key]
+        idle_settings = {
+            "duration": duration,
+            "wait_timeout": wait_timeout,
+            "stop_on_idle_end": stop_on_idle_end,
+            "restart_on_idle": restart_on_idle,
+        }
+        kwargs = {
+            'allow_hard_terminate': allow_hard_terminate,
+            'allow_start_on_demand': allow_start_on_demand,
+            'disallow_start_if_on_batteries': disallow_start_if_on_batteries,
+            'enabled': enabled,
+            'execution_time_limit': execution_time_limit,
+            'hidden': hidden,
+            'multiple_instances_policy': multiple_instances_policy,
+            'priority': priority,
+            'run_only_if_idle': run_only_if_idle,
+            'start_when_available': start_when_available,
+            'stop_if_going_on_batteries': stop_if_going_on_batteries,
+            'wake_to_run': wake_to_run,
+        }
         settings = _Dict2XML(kwargs, cls_name="Settings")
         settings["idle_settings"] = _Dict2XML(idle_settings, cls_name="IdleSettings")
+
         kwargs = {}
         kwargs["registration_info"] = _Dict2XML(
             author=author,
@@ -492,12 +496,32 @@ class TaskScheduler:
         Returns:
             Task: The created task object.
         """
-        kwargs = locals()
-        del kwargs["self"]
-        del kwargs["replace_existing"]
-        del kwargs["elevated"]
-        del kwargs["echo"]
-
+        kwargs = {
+            "name": name,
+            "author": author,
+            "description": description,
+            "group_id": group_id,
+            "run_level": run_level,
+            "multiple_instances_policy": multiple_instances_policy,
+            "disallow_start_if_on_batteries": disallow_start_if_on_batteries,
+            "stop_if_going_on_batteries": stop_if_going_on_batteries,
+            "allow_hard_terminate": allow_hard_terminate,
+            "start_when_available": start_when_available,
+            "run_only_if_network_available": run_only_if_network_available,
+            "duration": duration,
+            "wait_timeout": wait_timeout,
+            "stop_on_idle_end": stop_on_idle_end,
+            "restart_on_idle": restart_on_idle,
+            "allow_start_on_demand": allow_start_on_demand,
+            "enabled": enabled,
+            "hidden": hidden,
+            "run_only_if_idle": run_only_if_idle,
+            "wake_to_run": wake_to_run,
+            "execution_time_limit": execution_time_limit,
+            "priority": priority,
+            "triggers": triggers,
+            "actions": actions,
+        }
         if not replace_existing and name in self:
             raise KeyError(f"The task {name} already exists!")
 
@@ -588,13 +612,35 @@ class TaskScheduler:
         Returns:
             Task: The created task object.
         """
-        kwargs = locals()
-        del kwargs["self"]
-        del kwargs["cmd"]
-        del kwargs["args"]
-        kwargs.update(
-            {"triggers": [LogonTrigger()], "actions": [ExecAction(cmd, args)]}
-        )
+        kwargs = {
+            "actions": [ExecAction(cmd, args)],
+            "allow_hard_terminate": allow_hard_terminate,
+            "allow_start_on_demand": allow_start_on_demand,
+            "author": author,
+            "description": description,
+            "disallow_start_if_on_batteries": disallow_start_if_on_batteries,
+            "duration": duration,
+            "echo": echo,
+            "elevated": elevated,
+            "enabled": enabled,
+            "execution_time_limit": execution_time_limit,
+            "group_id": group_id,
+            "hidden": hidden,
+            "multiple_instances_policy": multiple_instances_policy,
+            "name": name,
+            "priority": priority,
+            "replace_existing": replace_existing,
+            "restart_on_idle": restart_on_idle,
+            "run_level": run_level,
+            "run_only_if_idle": run_only_if_idle,
+            "run_only_if_network_available": run_only_if_network_available,
+            "start_when_available": start_when_available,
+            "stop_if_going_on_batteries": stop_if_going_on_batteries,
+            "stop_on_idle_end": stop_on_idle_end,
+            "triggers": [LogonTrigger()],
+            "wait_timeout": wait_timeout,
+            "wake_to_run": wake_to_run,
+        }
         return self.create_task(**kwargs)
 
     def delete(self, name):
