@@ -36,22 +36,29 @@ class Cube3D:
     """
 
     def __init__(self, size: int = 65, start: int = 0, end: None | int = None) -> None:
-        orange = start, end
-        numentries = size**3
+        num_entries = size**3
         if end is None:
-            end = numentries
-        for name in ("start", "end"):
-            v = locals()[name]
-            if not isinstance(v, int):
-                raise TypeError(
-                    f"integer {name} argument expected, got {v.__class__.__name__}"
-                )
-        start = self._clamp(start, 0, numentries, -1)
-        end = self._clamp(end, 0, numentries, -1)
-        for i, name in enumerate(("start", "end")):
-            v = locals()[name]
-            if v == -1:
-                raise ValueError(f"{name} argument {orange[i]:.0f} out of range")
+            end = num_entries
+
+        if not isinstance(start, int):
+            raise TypeError(
+                f"integer start argument expected, got {start.__class__.__name__}"
+            )
+
+        if not isinstance(end, int):
+            raise TypeError(
+                f"integer end argument expected, got {end.__class__.__name__}"
+            )
+
+        start = self._clamp(start, 0, num_entries, -1)
+        end = self._clamp(end, 0, num_entries, -1)
+
+        if start == -1:
+            raise ValueError(f"start argument {start:.0f} out of range")
+
+        if end == -1:
+            raise ValueError(f"end argument {end:.0f} out of range")
+
         self._size = size
         self._start = start
         self._len = end - start
