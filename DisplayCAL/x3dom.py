@@ -504,27 +504,30 @@ def get_vrml_axes(
                 }}
             ]
         }}""".format(
-        **dict(
-            list(locals().items())
-            + list(
-                {
-                    "xaxisx": maxx / 2.0 + offsetx,
-                    "yaxisy": maxy / 2.0 + offsety,
-                    "xyaxisz": offsetz - maxz / 2.0,
-                    "zlabelx": offsetx - 10,
-                    "zlabely": offsety - 10,
-                    "zlabelz": maxz / 2.0 + offsetz + 5,
-                    "xlabelx": maxx + offsetx + 5,
-                    "xlabely": offsety - 5,
-                    "ylabelx": offsetx - 5,
-                    "ylabely": maxy + offsety + 5,
-                    "zerolabel": "0" if zero else "",
-                    "zerox": offsetx - 10,
-                    "zeroy": offsety - 10,
-                    "zeroz": offsetz - maxz / 2.0 - 5,
-                }.items()
-            )
-        )
+        maxx=maxx,
+        maxy=maxy,
+        maxz=maxz,
+        offsetx=offsetx,
+        offsety=offsety,
+        offsetz=offsetz,
+        xaxisx=maxx / 2.0 + offsetx,
+        xlabel=xlabel,
+        xlabelx=maxx + offsetx + 5,
+        xlabely=offsety - 5,
+        xyaxisz=offsetz - maxz / 2.0,
+        yaxisy=maxy / 2.0 + offsety,
+        ylabel=ylabel,
+        ylabelx=offsetx - 5,
+        ylabely=maxy + offsety + 5,
+        zero=zero,
+        zerolabel="0" if zero else "",
+        zerox=offsetx - 10,
+        zeroy=offsety - 10,
+        zeroz=offsetz - maxz / 2.0 - 5,
+        zlabel=zlabel,
+        zlabelx=offsetx - 10,
+        zlabely=offsety - 10,
+        zlabelz=maxz / 2.0 + offsetz + 5,
     )
 
 
