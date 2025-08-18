@@ -9125,9 +9125,10 @@ def get_html_colors(allow_alpha=False):
             linkcolor = wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT)
     vlinkcolor = wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT)
     if not allow_alpha:
-        for key, value in list(locals().items()):
-            if isinstance(value, wx.Colour):
-                locals()[key].Set(*value[:3])
+        bgcolor.Set(*bgcolor[:3])
+        text.Set(*text[:3])
+        linkcolor.Set(*linkcolor[:3])
+        vlinkcolor.Set(*vlinkcolor[:3])
     return bgcolor, text, linkcolor, vlinkcolor
 
 
