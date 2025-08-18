@@ -1289,9 +1289,8 @@ class MadTPGNet(MadTPGBase):
     ):
         """Find or select a madTPG instance on the network and connect to it."""
         listened = self.listening
-        for i in range(1, 5):
-            method = locals()[f"method{i}"]
-            timeout = locals()[f"timeout{i}"] / 1000.0
+        for method, timeout in [(method1, timeout1), (method2, timeout2), (method3, timeout3), (method4, timeout4)]:
+            timeout = timeout / 1000.0
             if method in (CM_ConnectToLanInstance, CM_ShowListDialog):
                 if not self._cast_sockets and not listened:
                     self.listen()
@@ -1899,9 +1898,12 @@ class MadTPGNetSender:
         elif self.command in ("SetPatternConfig", "SetProgressBarPos"):
             params = "|".join(str(v) for v in args)
         elif self.command == "ShowRGB":
-            r, g, b, bgr, bgg, bgb = (None,) * 6
-            for name in ("r", "g", "b", "bgr", "bgg", "bgb"):
-                locals()[name] = kwargs.get(name)
+            r = kwargs.get("r")
+            g = kwargs.get("g")
+            b = kwargs.get("b")
+            bgr = kwargs.get("bgr")
+            bgg = kwargs.get("bgg")
+            bgb = kwargs.get("bgb")
             if len(args) >= 3:
                 r, g, b = args[:3]
             if len(args) > 3:
