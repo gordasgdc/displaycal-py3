@@ -2934,13 +2934,25 @@ END_DATA"""
                 bitmap=get_icon(32, APPNAME + "-testchart-editor"),
             )
             dlg.sizer3.Add((1, 4))
-            for name in ("single", "gray", "multidim"):
-                if locals()[name + "_patches"] > 2 or (
-                    name == "multidim" and multidim_bcc_patches
-                ):
-                    setattr(dlg, name, wx.CheckBox(dlg, -1, lang.getstr("tc." + name)))
-                    dlg.sizer3.Add(getattr(dlg, name), 1, flag=wx.TOP, border=4)
-                    getattr(dlg, name).Value = True
+
+            # single
+            if single_patches > 2:
+                dlg.single = wx.CheckBox(dlg, -1, lang.getstr("tc.single"))
+                dlg.sizer3.Add(dlg.single, 1, flag=wx.TOP, border=4)
+                dlg.single.Value = True
+
+            # gray
+            if gray_patches > 2:
+                dlg.gray_patches = wx.CheckBox(dlg, -1, lang.getstr("tc.gray"))
+                dlg.sizer3.Add(dlg.gray, 1, flag=wx.TOP, border=4)
+                dlg.gray.Value = True
+
+            # multidim
+            if multidim_patches > 2 or multidim_bcc_patches:
+                dlg.multidim = wx.CheckBox(dlg, -1, lang.getstr("tc." + name))
+                dlg.sizer3.Add(dlg.multidim, 1, flag=wx.TOP, border=4)
+                dlg.multidim.Value = True
+
             dlg.sizer0.SetSizeHints(dlg)
             dlg.sizer0.Layout()
             choice = dlg.ShowModal()
