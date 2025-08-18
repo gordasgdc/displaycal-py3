@@ -2949,7 +2949,7 @@ END_DATA"""
 
             # multidim
             if multidim_patches > 2 or multidim_bcc_patches:
-                dlg.multidim = wx.CheckBox(dlg, -1, lang.getstr("tc." + name))
+                dlg.multidim = wx.CheckBox(dlg, -1, lang.getstr("tc.multidim"))
                 dlg.sizer3.Add(dlg.multidim, 1, flag=wx.TOP, border=4)
                 dlg.multidim.Value = True
 
