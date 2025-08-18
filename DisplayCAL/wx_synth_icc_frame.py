@@ -808,12 +808,20 @@ class SynthICCFrame(BaseFrame, LUT3DMixin):
         else:
             tech = self.tech[""]
         self.tech_ctrl.SetStringSelection(tech)
-        for i, component in enumerate("XYZ"):
-            getattr(self, f"white_{component}").SetValue(white[i] * 100)
+
+        self.white_X.SetValue(white[0] * 100)
+        self.white_Y.SetValue(white[1] * 100)
+        self.white_Z.SetValue(white[2] * 100)
+
         self.parse_XYZ("white", True)
-        for color in ("red", "green", "blue"):
-            for i, component in enumerate("xy"):
-                getattr(self, f"{color}_{component}").SetValue(locals()[color][i])
+
+        self.red_x.SetValue(red[0])
+        self.red_y.SetValue(red[1])
+        self.green_x.SetValue(green[0])
+        self.green_y.SetValue(green[1])
+        self.blue_x.SetValue(blue[0])
+        self.blue_y.SetValue(blue[1])
+
         self.parse_xy(None)
         self.set_trc(gamma)
         self.panel.Thaw()
@@ -1285,7 +1293,7 @@ class SynthICCFrame(BaseFrame, LUT3DMixin):
                 ciis = ciis.encode("utf-8")
             profile.tags.ciis = SignatureType(b"sig \0\0\0\0" + ciis, "ciis")
         profile.setDescription(os.path.splitext(os.path.basename(path))[0])
-        profile.calculateID()
+        profile.calculate_id()
         try:
             profile.write(path)
         except Exception as exception:

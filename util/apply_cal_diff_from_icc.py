@@ -507,7 +507,7 @@ def main(icc_profile_filename, target_whitepoint=None, gamma=2.2, skip_cal=False
         out_profile.getDescription()
         + " %s%s" % (target_whitepoint and "%s " % owtpt[1:] or "", ogamma)
     )
-    out_profile.calculateID()
+    out_profile.calculate_id()
     out_profile.write(out_color_profile_filename)
 
 

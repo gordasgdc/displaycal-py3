@@ -1441,7 +1441,7 @@ class LUTFrame(BaseFrame):
             if (
                 not self.profile
                 or self.profile.filename != profile.filename
-                or not self.profile.isSame(profile)
+                or not self.profile.is_same(profile)
             ):
                 self.LoadProfile(profile)
         else:

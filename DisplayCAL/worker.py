@@ -1173,7 +1173,7 @@ def get_current_profile_path(
         profile = config.get_display_profile()
         if profile and not profile.filename and save_profile_if_no_path:
             if profile.ID == "\0" * 16:
-                profile.calculateID()
+                profile.calculate_id()
             profile_cache_path = os.path.join(defaultpaths.CACHE, "icc")
             if check_create_dir(profile_cache_path) is True:
                 profile.filename = os.path.join(
@@ -5163,7 +5163,7 @@ END_DATA
                         ("encoding.output", output_encoding),
                     ]
                 )
-                profile_link.calculateID()
+                profile_link.calculate_id()
                 profile_link.write(f"{filename}{PROFILE_EXT}")
                 profile_link.tags.A2B0.clut_writepng(f"{filename}.A2B0.CLUT.png")
                 del profile_link
@@ -6358,7 +6358,7 @@ END_DATA
                     }
                 )
                 srgb.setDescription(f"{APPNAME} Linear Calibration sRGB Profile")
-                srgb.calculateID()
+                srgb.calculate_id()
                 srgb.write(
                     os.path.join(
                         self.tempdir, f"{APPNAME} Linear Calibration sRGB Profile.icc"
@@ -11059,7 +11059,10 @@ BEGIN_DATA
             working_dir=working_dir,
         )
 
-    def create_gamut_views(self, profile_path):
+    def create_gamut_views(
+        self,
+        profile_path: str
+    ) -> tuple[None | None] | tuple[float | dict]:
         """Generate gamut views (VRML files).
 
         Also show progress in current progress dialog.
@@ -11069,8 +11072,9 @@ BEGIN_DATA
                 gamut views.
 
         Returns:
-            tuple: A tuple containing the VRML file path and the profile path,
-                or (None, None) if gamut view creation is disabled.
+            tuple[None | None] | tuple[float | dict]: A tuple containing the
+                gamut_volume and gamut_coverage or (None, None) if gamut view
+                creation is disabled.
         """
         if getcfg("profile.create_gamut_views"):
             self.log("-" * 80)
@@ -12868,7 +12872,7 @@ BEGIN_DATA
                     else:
                         self.log("Warning - no scaling applied - no calibration data!")
         # Calculate profile ID
-        profile.calculateID()
+        profile.calculate_id()
         try:
             profile.write()
         except Exception as exception:
@@ -15738,7 +15742,8 @@ BEGIN_DATA
                 for the provided profile(s).
 
         Returns:
-            tuple: (gamut_volume, gamut_coverage)
+            tuple[float, dict]: A tuple containing the gamut_volume and
+                gamut_coverage.
         """
         if not isinstance(profile_paths, list):
             profile_paths = [profile_paths]
@@ -16089,7 +16094,7 @@ BEGIN_DATA
                             ):
                                 profile.setDescription(getcfg("profile.name.expanded"))
                             # Calculate profile ID
-                            profile.calculateID()
+                            profile.calculate_id()
                             try:
                                 profile.write()
                             except Exception as exception:
@@ -16376,7 +16381,7 @@ BEGIN_DATA
             profile.setDescription(outname)
             profile.tags.vcgt = cal_to_fake_profile(cal).tags.vcgt
             profile.tags.wtpt.X, profile.tags.wtpt.Y, profile.tags.wtpt.Z = XYZw
-            profile.calculateID()
+            profile.calculate_id()
             profile.write(outfilename)
             self.wrapup(False)
             return True

@@ -643,7 +643,7 @@ class Xicclu(WorkerBase):
                 profile_act = ICCProfile(profile.filename)
                 self.sessionlogfile.write(
                     f"Profile ID {hexlify(profile.ID)} "
-                    f"(actual {hexlify(profile_act.calculateID(False))})"
+                    f"(actual {hexlify(profile_act.calculate_id(False))})"
                 )
             if cwd:
                 self.log(lang.getstr("working_dir"))

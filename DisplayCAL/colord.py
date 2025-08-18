@@ -448,7 +448,7 @@ def get_profile_install_parameters(
         profile.filename = None
 
     if profile.ID == "\0" * 16:
-        profile.calculateID()
+        profile.calculate_id()
         profile.filename = None
     profile_id = "icc-" + hexlify(profile.ID).decode()
     return profile_install_name, profile_exists, profile_id

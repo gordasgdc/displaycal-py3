@@ -92,7 +92,7 @@ def update_preset(name):
     prof.tags.gXYZ = ref.tags.gXYZ
     prof.tags.bXYZ = ref.tags.bXYZ
     print("Updating profile ID...")
-    prof.calculateID()
+    prof.calculate_id()
     prof.write()
     print("")
     return True

@@ -710,7 +710,7 @@ class LUT3DMixin:
         ):
             if (
                 profile_out
-                and profile_in.isSame(profile_out, force_calculation=True)
+                and profile_in.is_same(profile_out, force_calculation=True)
                 and not show_result_dialog(
                     Warning(lang.getstr("error.source_dest_same")),
                     self,

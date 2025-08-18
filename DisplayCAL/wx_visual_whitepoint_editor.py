@@ -1721,7 +1721,7 @@ class ProfileManager:
         self._srgb_profile.setDescription(
             f"{APPNAME} Visual Whitepoint Editor Temporary Profile"
         )
-        self._srgb_profile.calculateID()
+        self._srgb_profile.calculate_id()
         self._window = window
         self._window.Bind(wx.EVT_CLOSE, self.window_close_handler)
         self._window.Bind(wx.EVT_MOVE, self.window_move_handler)

@@ -8630,7 +8630,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         # Set meta prefix
         metadata["prefix"] = ",".join(prefixes)
         # Calculate profile ID
-        profile.calculateID()
+        profile.calculate_id()
         # Save profile
         try:
             profile.write()
@@ -12468,7 +12468,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             id=self.show_profile_info.GetId(),
         )
         dlg.sizer3.Add(self.show_profile_info, flag=wx.TOP | wx.ALIGN_LEFT, border=4)
-        id_ = profile.calculateID(False) if profile.ID == "\0" * 16 else profile.ID
+        id_ = profile.calculate_id(False) if profile.ID == "\0" * 16 else profile.ID
         if id_ in self.profile_info:
             self.show_profile_info.SetValue(self.profile_info[id_].IsShownOnScreen())
         if installable:
@@ -12890,7 +12890,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             )
         if not profile:
             return
-        id_ = profile.calculateID(False) if profile.ID == "\0" * 16 else profile.ID
+        id_ = profile.calculate_id(False) if profile.ID == "\0" * 16 else profile.ID
         show = (
             not getattr(self, "show_profile_info", None)
             or self.show_profile_info.GetValue()
@@ -12905,7 +12905,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 )
             if (
                 not self.profile_info[id_].profile
-                or self.profile_info[id_].profile.calculateID(False) != id_
+                or self.profile_info[id_].profile.calculate_id(False) != id_
             ):
                 # Load profile if info window has no profile or ID is different
                 self.profile_info[id_].profileID = id_
@@ -17597,7 +17597,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                         self,
                     )
                     return
-                profile.calculateID()
+                profile.calculate_id()
                 profile.write(profile_save_path)
                 if profile_save_path == get_current_profile_path():
                     self.lut3d_update_b2a_controls()
@@ -17971,7 +17971,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     profile.tags.meta["MAPPING_device_id"] = device_id
                     prefixes.append("MAPPING_")
                     profile.tags.meta["prefix"] = ",".join(prefixes)
-                profile.calculateID()
+                profile.calculate_id()
                 print("-" * 80)
             try:
                 profile.write()

@@ -147,7 +147,7 @@ def create_rendering_intent_test_profile(
         p.tags.rXYZ = XYZType()  # Map red to black
         p.tags.gXYZ = XYZType()  # Map green to black
         p.tags.bXYZ = srgb_icc.tags.wtpt.pcs  # Map blue to white
-    p.calculateID()
+    p.calculate_id()
     p.write(filename)
 
 

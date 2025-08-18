@@ -476,7 +476,7 @@ class GamutCanvas(LUTCanvas):
             if (
                 check
                 and profile.filename == check.filename
-                and profile.calculateID(False) == check.ID
+                and profile.calculate_id(False) == check.ID
                 and intent == self.intent
                 and direction == self.direction
                 and order == self.order

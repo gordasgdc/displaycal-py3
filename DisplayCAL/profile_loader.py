@@ -1032,7 +1032,7 @@ class ProfileAssociationsDialog(InfoDialog):
                 self,
             )
             return
-        id_ = profile.calculateID(False) if profile.ID == "\0" * 16 else profile.ID
+        id_ = profile.calculate_id(False) if profile.ID == "\0" * 16 else profile.ID
         if id_ not in self.profile_info:
             # Create profile info window and store in hash table
             from DisplayCAL.wx_profile_info import ProfileInfoFrame
@@ -1042,7 +1042,7 @@ class ProfileAssociationsDialog(InfoDialog):
             self.profile_info[id_].Bind(wx.EVT_CLOSE, self.close_profile_info)
         if (
             not self.profile_info[id_].profile
-            or self.profile_info[id_].profile.calculateID(False) != id_
+            or self.profile_info[id_].profile.calculate_id(False) != id_
         ):
             # Load profile if info window has no profile or ID is different
             self.profile_info[id_].profileID = id_

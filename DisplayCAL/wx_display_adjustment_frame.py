@@ -1584,9 +1584,6 @@ class DisplayAdjustmentFrame(windowcls):
         )
         if current_br or current_bl or xy_dE_rgb or white_xy_dE or black_xy_dE:
             self.Freeze()
-        # for t in ("target_br", "target_bl", "initial_br", "current_br", "current_bl"):
-        # if locals()[t]:
-        # print "\n" + t, locals()[t].groups(),
         if current_br:
             initial_br = getattr(self.lb.GetCurrentPage(), "initial_br", None)
             if self.lb.GetCurrentPage().ctrltype in (
