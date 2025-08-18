@@ -4,11 +4,14 @@ Supports 8-bit and 16-bit image data, optimized for single-color or
 specific-dimension images.
 """
 
+from __future__ import annotations
+
 import math
 import os
 import struct
 import time
 import zlib
+from typing import BinaryIO
 
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.meta import VERSION_STRING
@@ -21,7 +24,7 @@ TIFF_TAG_TYPE_DWORD = 4
 TIFF_TAG_TYPE_RATIONAL = 5  # 2 DWORDs
 
 
-def tiff_get_header(w: int, h: int, samples_per_pixel: int, bitdepth: int):
+def tiff_get_header(w: int, h: int, samples_per_pixel: int, bitdepth: int) -> bytes:
     """Return TIFF header for given width, height, samples per pixel and bitdepth.
 
     Args:
@@ -92,46 +95,50 @@ def tiff_get_header(w: int, h: int, samples_per_pixel: int, bitdepth: int):
 
 
 def write(
-    data,
-    stream_or_filename,
-    bitdepth=16,
-    file_format=None,
-    dimensions=None,
-    extrainfo=None,
+    data: list,
+    stream_or_filename: str | BinaryIO,
+    bitdepth: int = 16,
+    file_format: None | str = None,
+    dimensions: None | tuple[int, int] = None,
+    extrainfo: None | dict = None,
 ) -> None:
     """Write image data to a file.
 
     Args:
         data (list): The image data to write.
-        stream_or_filename (str or file-like object): The output file or stream.
-        bitdepth (int): The bit depth of the image (default: 16).
-        file_format (str): The file format to use (default: None, which infers
-            from filename).
-        dimensions (tuple): The dimensions of the image (width, height).
-        extrainfo (dict): Additional information for the image.
+        stream_or_filename (str | BinaryIO): The output filename or stream.
+        bitdepth (int, optional): The bit depth of the image (default: 16).
+        file_format (None | str, optional): The file format to use (default:
+            None, which infers from filename).
+        dimensions (None | tuple[int, int]): The dimensions of the image
+            (width, height).
+        extrainfo (None | dict, optional): Additional information for the image.
     """
     Image(data, bitdepth, extrainfo).write(stream_or_filename, file_format, dimensions)
 
 
 def write_rgb_clut(
-    stream_or_filename, clutres=33, bitdepth=16, file_format=None
+    stream_or_filename: str | BinaryIO,
+    clutres: int = 33,
+    bitdepth: int = 16,
+    file_format: None | str = None,
 ) -> None:
     """Write a color lookup table (CLUT) to a file.
 
     Args:
-        stream_or_filename (str or file-like object): The output file or stream.
-        clutres (int): The resolution of the CLUT (default: 33).
-        bitdepth (int): The bit depth of the CLUT (default: 16).
-        file_format (str): The file format to use (default: None, which infers
-            from filename).
+        stream_or_filename (str | BinaryIO): The output file or stream.
+        clutres (int, optional): The resolution of the CLUT (default: 33).
+        bitdepth (int, optional): The bit depth of the CLUT (default: 16).
+        file_format (str, optional): The file format to use (default: None,
+            which infers from filename).
     """
     clut = []
-    for R in range(clutres):
-        for G in range(clutres):
+    for r in range(clutres):
+        for g in range(clutres):
             clut.append([])
-            for B in range(clutres):
-                RGB = [v * (1.0 / (clutres - 1)) for v in (R, G, B)]
-                clut[-1].append([v * (2**bitdepth - 1) for v in RGB])
+            for b in range(clutres):
+                rgb = [v * (1.0 / (clutres - 1)) for v in (r, g, b)]
+                clut[-1].append([v * (2**bitdepth - 1) for v in rgb])
     write(clut, stream_or_filename, bitdepth, file_format)
 
 
@@ -141,14 +148,33 @@ class Image:
     Writing of single color images is highly optimized when using a single
     pixel as image data and setting dimensions explicitly.
 
+    Args:
+        data (list): The image data to write, structured as a list of scanlines,
+            where each scanline is a list of RGB tuples.
+        bitdepth (int): The bit depth of the image (default: 16).
+        extrainfo (dict): Additional information for the image, such as
+            dimensions, offsets, and metadata.
     """
 
-    def __init__(self, data, bitdepth=16, extrainfo=None):
+    def __init__(
+        self, data: list, bitdepth: int = 16, extrainfo: None | dict = None
+    ) -> None:
         self.bitdepth = bitdepth
         self.data = data
         self.extrainfo = extrainfo or {}
 
-    def _pack(self, n):
+    def _pack(self, n: float) -> bytes:
+        """Pack a single sample value into bytes according to the bit depth.
+
+        Args:
+            n (float): The sample value to pack.
+
+        Raises:
+            ValueError: If the bit depth is unsupported.
+
+        Returns:
+            bytes: The packed sample value as bytes.
+        """
         n = round(n)
         if self.bitdepth == 16:
             data = struct.pack(">H", n)
@@ -158,7 +184,18 @@ class Image:
             raise ValueError(f"Unsupported bitdepth: {self.bitdepth!r}")
         return data
 
-    def _write_dpx(self, stream, dimensions=None):
+    def _write_dpx(
+        self, stream: BinaryIO, dimensions: None | tuple[int, int] = None
+    ) -> None:
+        """Write image data to a DPX file.
+
+        Args:
+            stream (BinaryIO): The output stream to write to.
+            dimensions (None | tuple[int, int], optional): The dimensions of
+                the image (width, height). When `None`, dimensions are inferred
+                from the data. If the data is a single pixel, dimensions should
+                be provided explicitly for optimization.
+        """
         # Very helpful: http://www.fileformat.info/format/dpx/egff.htm
         # http://www.simplesystems.org/users/bfriesen/dpx/S268M_Revised.pdf
 
@@ -178,7 +215,7 @@ class Image:
         for _i, scanline in enumerate(self.data):
             if self.bitdepth == 10:
                 packed = []
-                for RGB in scanline:
+                for RGB in scanline:  # noqa: N806
                     packed_u32 = 0
                     for datum, sample in enumerate(RGB):
                         packed_u32 |= sample << shifts[datum]
@@ -346,7 +383,18 @@ class Image:
         # Write image data
         stream.write(imgdata)
 
-    def _write_png(self, stream, dimensions=None):
+    def _write_png(
+        self, stream: BinaryIO, dimensions: None | tuple[int, int] = None
+    ) -> None:
+        """Write image data to a PNG file.
+
+        Args:
+            stream (BinaryIO): The output stream to write to.
+            dimensions (None | tuple[int, int], optional): The dimensions of
+                the image (width, height). When `None`, dimensions are inferred
+                from the data. If the data is a single pixel, dimensions should
+                be provided explicitly for optimization.
+        """
         # Header
         stream.write(b"\x89PNG\r\n\x1a\n")
         # IHDR image header length
@@ -379,10 +427,10 @@ class Image:
         for _i, scanline in enumerate(self.data):
             # Add a scanline, filter type 0
             imgdata.append(b"\0")
-            for RGB in scanline:
-                RGB = b"".join(self._pack(v) for v in RGB)
+            for RGB in scanline:  # noqa: N806
+                RGB = b"".join(self._pack(v) for v in RGB)  # noqa: N806
                 if optimize:
-                    RGB *= dimensions[0]
+                    RGB *= dimensions[0]  # noqa: N806
                 imgdata.append(RGB)
         imgdata = b"".join(imgdata)
         if optimize:
@@ -399,7 +447,18 @@ class Image:
         stream.write(b"IEND")
         stream.write(struct.pack(">I", zlib.crc32(b"IEND") & 0xFFFFFFFF))
 
-    def _write_tiff(self, stream, dimensions=None):
+    def _write_tiff(
+        self, stream: BinaryIO, dimensions: None | tuple[int, int] = None
+    ) -> None:
+        """Write image data to a TIFF file.
+
+        Args:
+            stream (BinaryIO): The output stream to write to.
+            dimensions (None | tuple[int, int], optional): The dimensions of
+                the image (width, height). When `None`, dimensions are inferred
+                from the data. If the data is a single pixel, dimensions should
+                be provided explicitly for optimization.
+        """
         # Very helpful: http://www.fileformat.info/format/tiff/corion.htm
 
         # Image data
@@ -423,14 +482,20 @@ class Image:
             for sample in scanline:
                 stream.write(b"".join(self._pack(v) for v in sample))
 
-    def write(self, stream_or_filename, file_format=None, dimensions=None):
+    def write(
+        self,
+        stream_or_filename: str | BinaryIO,
+        file_format: None | str = None,
+        dimensions: None | tuple[int, int] = None,
+    ) -> None:
         """Write the image data to a file or stream.
 
         Args:
-            stream_or_filename (str or file-like object): The output file or stream.
-            file_format (str): The file format to use (default: None, which infers
-                from filename).
-            dimensions (tuple): The dimensions of the image (width, height).
+            stream_or_filename (str | BinaryIO): The output file name or stream.
+            file_format (None | str, optional): The file format to use.
+                Defaults to None, which infers from filename).
+            dimensions (None | tuple[int, int], optional): The dimensions of
+                the image (width, height).
 
         Raises:
             ValueError: If the specified file format is unsupported.
