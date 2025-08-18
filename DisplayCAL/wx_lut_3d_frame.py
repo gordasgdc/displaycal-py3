@@ -37,8 +37,8 @@ from DisplayCAL.config import (
     DEFAULTS,
     PROFILE_EXT,
     get_data_path,
-    get_verified_path,
     get_icon,
+    get_verified_path,
 )
 from DisplayCAL.icc_profile import (
     CurveType,

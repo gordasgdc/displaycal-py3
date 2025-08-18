@@ -8,11 +8,11 @@ from time import strftime
 from DisplayCAL import localization as lang
 from DisplayCAL import report
 from DisplayCAL.config import (
+    get_bitmap,
     get_display_number,
     get_display_rects,
     get_icon_bundle,
     get_verified_path,
-    get_bitmap,
     getcfg,
     setcfg,
 )

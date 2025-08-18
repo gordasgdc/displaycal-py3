@@ -21,8 +21,8 @@ from DisplayCAL.config import (
     get_default_dpi,
     get_display_number,
     get_display_rects,
-    getcfg,
     get_icon,
+    getcfg,
     setcfg,
     writecfg,
 )

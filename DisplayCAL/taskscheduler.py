@@ -262,18 +262,18 @@ class Task(_Dict2XML):
             "restart_on_idle": restart_on_idle,
         }
         kwargs = {
-            'allow_hard_terminate': allow_hard_terminate,
-            'allow_start_on_demand': allow_start_on_demand,
-            'disallow_start_if_on_batteries': disallow_start_if_on_batteries,
-            'enabled': enabled,
-            'execution_time_limit': execution_time_limit,
-            'hidden': hidden,
-            'multiple_instances_policy': multiple_instances_policy,
-            'priority': priority,
-            'run_only_if_idle': run_only_if_idle,
-            'start_when_available': start_when_available,
-            'stop_if_going_on_batteries': stop_if_going_on_batteries,
-            'wake_to_run': wake_to_run,
+            "allow_hard_terminate": allow_hard_terminate,
+            "allow_start_on_demand": allow_start_on_demand,
+            "disallow_start_if_on_batteries": disallow_start_if_on_batteries,
+            "enabled": enabled,
+            "execution_time_limit": execution_time_limit,
+            "hidden": hidden,
+            "multiple_instances_policy": multiple_instances_policy,
+            "priority": priority,
+            "run_only_if_idle": run_only_if_idle,
+            "start_when_available": start_when_available,
+            "stop_if_going_on_batteries": stop_if_going_on_batteries,
+            "wake_to_run": wake_to_run,
         }
         settings = _Dict2XML(kwargs, cls_name="Settings")
         settings["idle_settings"] = _Dict2XML(idle_settings, cls_name="IdleSettings")

@@ -25,9 +25,9 @@ from DisplayCAL.config import (
     get_data_path,
     get_display_profile,
     get_display_rects,
+    get_icon,
     get_verified_path,
     getcfg,
-    get_icon,
     setcfg,
 )
 from DisplayCAL.icc_profile import (

@@ -519,7 +519,6 @@ def get_vrml_axes(
         ylabel=ylabel,
         ylabelx=offsetx - 5,
         ylabely=maxy + offsety + 5,
-        zero=zero,
         zerolabel="0" if zero else "",
         zerox=offsetx - 10,
         zeroy=offsety - 10,

@@ -8,12 +8,12 @@ import sys
 from DisplayCAL import audio, config
 from DisplayCAL import localization as lang
 from DisplayCAL.config import (
+    get_bitmap,
     get_data_path,
     get_default_dpi,
-    get_icon_bundle,
-    get_bitmap,
-    getcfg,
     get_icon,
+    get_icon_bundle,
+    getcfg,
     setcfg,
 )
 from DisplayCAL.lib.agw import labelbook

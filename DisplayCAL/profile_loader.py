@@ -29,9 +29,9 @@ from DisplayCAL.config import (
     PYDIR,
     get_data_path,
     get_default_dpi,
+    get_icon,
     get_icon_bundle,
     getcfg,
-    get_icon,
     setcfg,
 )
 from DisplayCAL.debughelpers import Error, UnloggedError, handle_error
@@ -491,7 +491,9 @@ class ProfileLoaderExceptionsDialog(ConfirmDialog):
         dlg.add_btn.Bind(wx.EVT_BUTTON, dlg.browse_handler)
 
         style = wx.BORDER_SIMPLE if "gtk3" in wx.PlatformInfo else wx.BORDER_THEME
-        dlg.grid = CustomGrid(dlg, -1, size=wx.Size(int(648 * scale), int(200 * scale)), style=style)
+        dlg.grid = CustomGrid(
+            dlg, -1, size=wx.Size(int(648 * scale), int(200 * scale)), style=style
+        )
         grid = dlg.grid
         grid.DisableDragRowSize()
         grid.SetCellHighlightPenWidth(0)

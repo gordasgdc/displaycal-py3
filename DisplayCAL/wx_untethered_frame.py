@@ -8,11 +8,11 @@ import time
 from DisplayCAL import audio, colormath, config
 from DisplayCAL import localization as lang
 from DisplayCAL.config import (
-    get_data_path,
-    get_icon_bundle,
     get_bitmap,
-    getcfg,
+    get_data_path,
     get_icon,
+    get_icon_bundle,
+    getcfg,
     setcfg,
 )
 from DisplayCAL.log import get_file_logger

@@ -136,9 +136,9 @@ from DisplayCAL.config import (
     PYDIR,
     SCRIPT_EXT,
     get_data_path,
+    get_icon,
     get_total_patches,
     getcfg,
-    get_icon,
     is_ccxx_testchart,
     setcfg,
     setcfg_cond,
@@ -11062,7 +11062,7 @@ BEGIN_DATA
     def create_gamut_views(
         self,
         profile_path: str
-    ) -> tuple[None | None] | tuple[float | dict]:
+    ) -> tuple[None, None] | tuple[float, dict]:
         """Generate gamut views (VRML files).
 
         Also show progress in current progress dialog.
@@ -11072,7 +11072,7 @@ BEGIN_DATA
                 gamut views.
 
         Returns:
-            tuple[None | None] | tuple[float | dict]: A tuple containing the
+            tuple[None, None] | tuple[float, dict]: A tuple containing the
                 gamut_volume and gamut_coverage or (None, None) if gamut view
                 creation is disabled.
         """

@@ -40,13 +40,13 @@ from DisplayCAL.cgats import (
 )
 from DisplayCAL.config import (
     DEFAULTS,
+    get_bitmap,
     get_data_path,
     get_display_name,
+    get_icon,
     get_total_patches,
     get_verified_path,
-    get_bitmap,
     getcfg,
-    get_icon,
     hascfg,
     setcfg,
     writecfg,

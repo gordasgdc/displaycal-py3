@@ -1289,7 +1289,12 @@ class MadTPGNet(MadTPGBase):
     ):
         """Find or select a madTPG instance on the network and connect to it."""
         listened = self.listening
-        for method, timeout in [(method1, timeout1), (method2, timeout2), (method3, timeout3), (method4, timeout4)]:
+        for method, timeout in [
+            (method1, timeout1),
+            (method2, timeout2),
+            (method3, timeout3),
+            (method4, timeout4),
+        ]:
             timeout = timeout / 1000.0
             if method in (CM_ConnectToLanInstance, CM_ShowListDialog):
                 if not self._cast_sockets and not listened:
