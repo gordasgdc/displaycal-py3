@@ -4,6 +4,8 @@ It handles loading language files, retrieving translated strings, and managing
 language-specific configurations.
 """
 
+from __future__ import annotations
+
 import os
 import re
 
@@ -14,11 +16,13 @@ from DisplayCAL.options import DEBUG_LOCALIZATION as DEBUG
 from DisplayCAL.util_os import expanduseru
 
 
-def init(set_wx_locale=False):
+def init(set_wx_locale: bool = False) -> None:
     """Populate translation dict with found language strings and set locale.
 
     If set_wx_locale is True, set locale also for wxPython.
 
+    Args:
+        set_wx_locale (bool): Whether to set the locale for wxPython.
     """
     langdirs = [os.path.join(dir_, "lang") for dir_ in DATA_DIRS]
     for langdir in langdirs:
@@ -43,7 +47,7 @@ def init(set_wx_locale=False):
         )
 
 
-def update_defaults():
+def update_defaults() -> None:
     """Update default paths in the DEFAULTS dictionary."""
     DEFAULTS.update(
         {
@@ -69,8 +73,12 @@ def update_defaults():
     )
 
 
-def getcode():
-    """Get language code from config."""
+def getcode() -> str:
+    """Get language code from config.
+
+    Returns:
+        str: The language code, falling back to defaults if not set or found.
+    """
     lcode = getcfg("lang")
     if lcode not in LDICT:
         # fall back to default
@@ -81,10 +89,28 @@ def getcode():
     return lcode
 
 
-def getstr(id_str, strvars=None, lcode=None, default=None):
-    """Get a translated string from the dictionary."""
-    if not lcode:
-        lcode = getcode()
+def getstr(
+    id_str: str,
+    strvars: None | str | list | tuple = None,
+    lcode: None | str = None,
+    default: None | str = None,
+) -> str:
+    """Get a translated string from the dictionary.
+
+    Args:
+        id_str (str): The identifier for the string to be translated.
+        strvars (None | str | list | tuple, optional): Variables to format the
+            string with.
+        lcode (None | str, optional): Language code to use for translation. If
+            None, uses the current language code from config.
+        default (None | str, optional): Default string to return if translation
+            is not found.
+
+    Returns:
+        str: The translated string if found, otherwise the default or
+            identifier.
+    """
+    lcode = lcode if lcode else getcode()
     if lcode not in LDICT or id_str not in LDICT[lcode]:
         # fall back to english
         lcode = "en"
@@ -96,12 +122,10 @@ def getstr(id_str, strvars=None, lcode=None, default=None):
             else:
                 usage[id_str] += 1
         if strvars is not None:
-            if not isinstance(strvars, (list, tuple)):
-                strvars = [strvars]
+            strvars = [strvars] if not isinstance(strvars, (list, tuple)) else strvars
             fmt = re.findall(r"%\d?(?:\.\d+)?[deEfFgGiorsxX]", lstr)
             if len(fmt) == len(strvars):
-                if not isinstance(strvars, list):
-                    strvars = list(strvars)
+                strvars = list(strvars) if not isinstance(strvars, list) else strvars
                 for i, s in enumerate(strvars):
                     if fmt[i].endswith("s"):
                         s = str(s)
@@ -153,7 +177,7 @@ if DEBUG:
     if os.path.isfile(usage_path):
         usage.path = usage_path
 
-    def write_usage():
+    def write_usage() -> None:
         """Write localization usage to file on exit."""
         global usage
         if not usage:
