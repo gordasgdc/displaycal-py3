@@ -5102,10 +5102,9 @@ END_DATA
             lut.append([f"LUT_3D_SIZE {size:d}"])
             lut.append(["DOMAIN_MIN 0.0 0.0 0.0"])
             fp_offset = str(maxval).find(".")
-            domain_max = "DOMAIN_MAX {} {} {}".format(
-                ("{{:.{:d}f}}".format(len(str(maxval)[fp_offset + 1 :])),) * 3
-            )
-            lut.append([domain_max.format((maxval,) * 3)])
+            fmt = "{{:.{:d}f}}".format(len(str(maxval)[fp_offset + 1:]))
+            domain_max = "DOMAIN_MAX {} {} {}".format(*([fmt] * 3))
+            lut.append([domain_max.format(maxval, maxval, maxval)])
             lut.append([])
             for RGB_triplet in RGB_out:
                 lut.append([])
