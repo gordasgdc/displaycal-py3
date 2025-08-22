@@ -13155,9 +13155,9 @@ BEGIN_DATA
         if self.madtpg.connect(method3=madvr.CM_StartLocalInstance, timeout3=3000):
             # Check madVR version
             madvr_version = self.madtpg.get_version()
-            if not madvr_version or madvr_version < madvr.min_version:
+            if not madvr_version or madvr_version < madvr.MIN_VERSION:
                 self.madtpg_disconnect(False)
-                raise Error(lang.getstr("madvr.outdated", madvr.min_version))
+                raise Error(lang.getstr("madvr.outdated", madvr.MIN_VERSION))
             self.log(
                 "Connected to madVR version {:d}.{:d}.{:d}.{:d} ({})".format(
                     *(*madvr_version, self.madtpg.uri)

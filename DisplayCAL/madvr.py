@@ -3,9 +3,12 @@
 It supports both local and network-based communication with madVR instances,
 enabling features such as 3D LUT creation, device gamma ramp manipulation, and
 test pattern display.
+
+See developers/interfaces/madTPG.h in the madVR package
 """
 
-# See developers/interfaces/madTPG.h in the madVR package
+from __future__ import annotations
+
 import contextlib
 import ctypes
 import errno
@@ -19,6 +22,7 @@ import threading
 from binascii import unhexlify
 from io import BytesIO, StringIO
 from time import sleep, time
+from typing import Any, BinaryIO, Callable, TextIO
 from zlib import crc32
 
 if sys.platform == "win32":
@@ -63,7 +67,7 @@ H3D_HEADER = (
     b"\x06\x00\x00\x00\x06"
 )
 
-min_version = (0, 88, 20, 0)
+MIN_VERSION = (0, 88, 20, 0)
 
 # Search for madTPG on the local PC, connect to the first found instance
 CM_ConnectToLocalInstance = 0
@@ -78,7 +82,7 @@ CM_ShowIpAddrDialog = 4
 # fail immediately
 CM_Fail = 5
 
-_methodnames = (
+_METHOD_NAMES = (
     "ConnectEx",
     "Disable3dlut",
     "Enable3dlut",
@@ -113,57 +117,127 @@ _methodnames = (
     "LoadHdr3dlutFromArray256",
 )
 
-_autonet_methodnames = ("AddConnectionCallback", "Listen", "Announce")
+_AUTONET_METHOD_NAMES = ("AddConnectionCallback", "Listen", "Announce")
 
-_lock = threading.RLock()
+_LOCK = threading.RLock()
 
 
-def safe_print(*args):
+def safe_print(*args) -> None:
     """Thread-safe print function."""
-    with _lock:
+    with _LOCK:
         print(*args)
 
 
 def icc_device_link_to_madvr(
-    icc_device_link_filename,
-    unity=False,
-    colorspace=None,
-    hdr=None,
-    logfile=sys.stdout,
-    convert_video_rgb_to_clut65=False,
-    append_linear_cal=True,
-):
+    icc_device_link_filename: str,
+    unity: bool = False,
+    colorspace: None | str | list[float] = None,
+    hdr: None | int = None,
+    logfile: TextIO = sys.stdout,
+    convert_video_rgb_to_clut65: bool = False,
+    append_linear_cal: bool = True,
+) -> bool:
     """Convert ICC device link profile to madVR 256^3 3D LUT using interpolation.
 
     madvr 3D LUT will be written to:
     <device link filename without extension> + '.3dlut'
 
+    Args:
+        icc_device_link_filename (str): Path to the ICC device link profile.
+        unity (bool): If True, write a unity madVR 3D LUT.
+        colorspace (None | str | list[float]): The target color space for the
+            3D LUT. If None, the color space will be inferred from the
+            filename.
+        hdr (None | int): If 2, write a madVR HDR 3D LUT. If 1, write a madVR
+            HDR2SDR 3D LUT. If None, write a madVR SDR 3D LUT.
+        logfile (TextIO): The log file to write progress messages to.
+        convert_video_rgb_to_clut65 (bool): If True, convert video RGB to
+            CLUT65 format when writing the 3D LUT. This is useful for madVR's
+            video RGB to CLUT65 conversion.
+        append_linear_cal (bool): If True, append a madVR cal1 table to the 3D
+            LUT.
+
+    Returns:
+        bool: True if the conversion was successful, False otherwise.
     """
-    t = time()
-
-    filename, ext = os.path.splitext(icc_device_link_filename)
-
+    start_time = time()
+    filename = os.path.splitext(icc_device_link_filename)[0]
     h3d_params = {}
+    name = get_transfer_function_and_name(hdr, filename, h3d_params)
+    colorspace = process_colorspace(colorspace, name)
+    if not colorspace:
+        return False
 
+    h3d_params["Input_Primaries"] = colorspace
+    h3d_params["Input_Range"] = (16, 235)
+    h3d_params["Output_Range"] = (16, 235)
+
+    # Create madVR 3D LUT
+    h3d_stream = BytesIO(H3D_HEADER)
+    h3dlut = H3DLUT(h3d_stream, check_lut_size=False)
+    h3dlut.parametersData = h3d_params
+    h3dlut.write(f"{filename}.3dlut")
+    raw = open(f"{filename}.3dlut", "r+b")  # noqa: SIM115
+    raw.seek(h3dlut.lutFileOffset)
+    # Make sure no longer needed h3DLUT instance can be garbage collected
+    del h3dlut
+
+    fill_madvr_3dlut_with_icc_device_link(
+        unity,
+        logfile,
+        raw,
+        icc_device_link_filename,
+        convert_video_rgb_to_clut65,
+    )
+
+    if append_linear_cal:
+        append_calibration_table(raw)
+    raw.close()
+
+    print_lut_generation_summary(unity, colorspace, start_time, filename)
+    return True
+
+
+def get_transfer_function_and_name(
+    hdr: None | int, filename: str, h3d_params: dict
+) -> str:
+    """Determine transfer function and base name for madVR 3D LUT.
+
+    Args:
+        hdr (None | int): If 2, write a madVR HDR 3D LUT. If 1, write a madVR
+            HDR2SDR 3D LUT. If None, write a madVR SDR 3D LUT.
+        filename (str): The base filename to use for the 3D LUT.
+        h3d_params (dict): The dictionary to populate with transfer function
+            parameters.
+
+    Returns:
+        str: The base name for the 3D LUT.
+    """
     if filename.endswith(".HDR") or hdr == 2:
         name = os.path.splitext(filename)[0]
-        h3d_params.update(
-            [("Input_Transfer_Function", "PQ"), ("Output_Transfer_Function", "PQ")]
-        )
+        h3d_params["Input_Transfer_Function"] = "PQ"
+        h3d_params["Output_Transfer_Function"] = "PQ"
     elif filename.endswith(".HDR2SDR") or hdr == 1:
         name = os.path.splitext(filename)[0]
         h3d_params["Input_Transfer_Function"] = "PQ"
     else:
         name = filename
+    return name
 
-    h3d_params.update(
-        [
-            ("Input_Primaries", []),
-            ("Input_Range", (16, 235)),
-            ("Output_Range", (16, 235)),
-        ]
-    )
 
+def process_colorspace(colorspace: None | str | list[float], name: str) -> list[float]:
+    """Process and validate the target color space for madVR 3D LUT.
+
+    Args:
+        colorspace (None | str | list[float]): The target color space for the
+            3D LUT. If None, the color space will be inferred from the
+            filename.
+        name (str): The base filename to use for the 3D LUT.
+
+    Returns:
+        list[float]: The processed color space primaries and whitepoint. If the
+            color space is invalid, returns the original colorspace value.
+    """
     if not colorspace:
         colorspace = os.path.splitext(name)[1]
         colorspace = colorspace[1:]
@@ -185,12 +259,10 @@ def icc_device_link_to_madvr(
                 "Possible target color spaces:",
                 "BT709, SMPTE_C, EBU_PAL, BT2020, DCI_P3",
             )
-            return False
+            return colorspace
 
         rgb_space = colormath.get_rgb_space(key)
-
         colorspace = colormath.get_rgb_space_primaries_wp_xy(rgb_space)
-
     colorspace = list(colorspace)
 
     # Use a D65 white for the 3D LUT Input_Primaries as
@@ -198,32 +270,40 @@ def icc_device_link_to_madvr(
     # Use the same D65 xy values as written by madVR
     # 3D LUT install API (ASTM E308-01)
     colorspace[6:] = [0.31273, 0.32902]
+    return colorspace
 
-    h3d_params["Input_Primaries"] = colorspace
 
-    # Create madVR 3D LUT
-    h3d_stream = BytesIO(H3D_HEADER)
-    h3dlut = H3DLUT(h3d_stream, check_lut_size=False)
-    h3dlut.parametersData = h3d_params
-    h3dlut.write(f"{filename}.3dlut")
-    raw = open(f"{filename}.3dlut", "r+b")  # noqa: SIM115
-    raw.seek(h3dlut.lutFileOffset)
-    # Make sure no longer needed h3DLUT instance can be garbage collected
-    del h3dlut
+def fill_madvr_3dlut_with_icc_device_link(
+    unity: bool,
+    logfile: TextIO,
+    raw: BinaryIO,
+    icc_device_link_filename: str,
+    convert_video_rgb_to_clut65: bool,
+) -> None:
+    """Fill madVR 3D LUT with values from ICC device link profile.
 
+    Args:
+        unity (bool): If True, write a unity madVR 3D LUT.
+        logfile (TextIO): The log file to write progress messages to.
+        raw (BinaryIO): The binary stream to write the 3D LUT data to.
+        icc_device_link_filename (str): Path to the ICC device link profile.
+        convert_video_rgb_to_clut65 (bool): If True, convert video RGB to
+            CLUT65 format when writing the 3D LUT. This is useful for madVR's
+            video RGB to CLUT65 conversion.
+    """
     # Lookup 256^3 values through device link and fill madVR cLUT
     clutres = 256
     clutmax = clutres - 1.0
     if unity:
         logfile.write("Writing unity madVR 3D LUT...\n")
         prevperc = -1
-        for a in range(clutres):
-            for b in range(clutres):
-                for c in range(clutres):
+        for i in range(clutres):
+            for j in range(clutres):
+                for k in range(clutres):
                     # Optimize for speed
-                    B, G, R = chr(c), chr(b), chr(a)
-                    raw.write(B + B + G + G + R + R).encode()
-            perc = round(a / clutmax * 100)
+                    b, g, r = chr(k), chr(j), chr(i)
+                    raw.write(b + b + g + g + r + r).encode()
+            perc = round(i / clutmax * 100)
             if perc > prevperc:
                 logfile.write(f"\r{perc}%")
                 prevperc = perc
@@ -252,38 +332,53 @@ def icc_device_link_to_madvr(
         xicclu.exit()
         xicclu.get()
 
-    if append_linear_cal:
-        # Append a MadVR cal1 table to the 3dlut.
-        # This can be used to ensure that the Graphics Card VideoLuts
-        # are correctly setup to match what the 3dLut is expecting.
-        #
-        # Note that the calibration curves are full range,
-        # never TV encoded output values.
-        #
-        # Format is (little endian):
-        #    4 byte magic number 'cal1'
-        #    4 byte version = 1
-        #    4 byte number per channel entries = 256
-        #    4 byte bytes per entry = 2
-        #    [3][256] 2 byte entry values. Tables are in RGB order
 
-        raw.write(b"cal1")
-        raw.write(struct.pack("<I", 1))
-        raw.write(struct.pack("<I", 256))
-        raw.write(struct.pack("<I", 2))
-        # Linear (unity) calibration
-        for _ in range(3):
-            for j in range(256):
-                raw.write(struct.pack("<H", j * 257))
+def append_calibration_table(raw: BinaryIO) -> None:
+    """Append a madVR cal1 table to the 3D LUT.
 
-    raw.close()
+    Args:
+        raw (BinaryIO): The binary stream to write the calibration table to.
+    """
+    # Append a MadVR cal1 table to the 3dlut.
+    # This can be used to ensure that the Graphics Card VideoLuts
+    # are correctly setup to match what the 3dLut is expecting.
+    #
+    # Note that the calibration curves are full range,
+    # never TV encoded output values.
+    #
+    # Format is (little endian):
+    #    4 byte magic number 'cal1'
+    #    4 byte version = 1
+    #    4 byte number per channel entries = 256
+    #    4 byte bytes per entry = 2
+    #    [3][256] 2 byte entry values. Tables are in RGB order
+    raw.write(b"cal1")
+    raw.write(struct.pack("<I", 1))
+    raw.write(struct.pack("<I", 256))
+    raw.write(struct.pack("<I", 2))
+    # Linear (unity) calibration
+    for _ in range(3):
+        for j in range(256):
+            raw.write(struct.pack("<H", j * 257))
 
+
+def print_lut_generation_summary(
+    unity: bool, colorspace: list[float], start_time: float, filename: str
+) -> None:
+    """Print summary after LUT generation.
+
+    Args:
+        unity (bool): Whether a unity LUT was generated.
+        colorspace (list[float]): The colorspace primaries and whitepoint.
+        start_time (float): The start time of the LUT generation.
+        filename (str): The filename of the generated LUT.
+    """
     safe_print("")
     if unity:
         msg = "Finished writing unity madVR 3D LUT in"
     else:
         msg = "Finished up-interpolating device link and writing madVR 3D LUT in"
-    safe_print(msg, time() - t, "seconds")
+    safe_print(msg, time() - start_time, "seconds")
     if filename.endswith(".HDR"):
         safe_print(
             "Gamut (rx ry gx gy bx by wx wy):",
@@ -291,14 +386,19 @@ def icc_device_link_to_madvr(
                 *tuple(colorspace)
             ),
         )
-    return True
 
 
-def inet_pton(ip_string):
+def inet_pton(ip_string: str) -> str:
     """Convert ip_string to packed IP representation.
 
     Convert an IP address in string format to the packed binary format used in
     low-level network functions.
+
+    Args:
+        ip_string (str): The IP address in string format, either IPv4 or IPv6.
+
+    Returns:
+        str: The packed binary representation of the IP address.
     """
     if ":" in ip_string:
         # IPv6
@@ -309,8 +409,17 @@ def inet_pton(ip_string):
     return "".join([chr(int(block)) for block in ip_string.split(".")])
 
 
-def trunc(value, length):
-    """For string types, return value truncated to length."""
+def trunc(value: str, length: int) -> str:
+    """For string types, return value truncated to length.
+
+    Args:
+        value (str): The value to be truncated.
+        length (int): The maximum length of the string.
+
+    Returns:
+        str: The truncated string, or the original value if it is shorter than
+            or equal to the specified length.
+    """
     if isinstance(value, str) and len(repr(value)) > length:
         value = value[: length - 3 - len(str(length)) - len(repr(value)) + len(value)]
         return f"{value!r}[{length:d}]"
@@ -318,11 +427,22 @@ def trunc(value, length):
 
 
 class H3DLUT:
-    """3D LUT file format used by madVR."""
+    """3D LUT file format used by madVR.
+
+    Args:
+        stream_or_filename (None | str | BinaryIO, optional): The file path or
+            a binary stream containing the 3D LUT data.
+        check_lut_size (bool): Whether to check the size of the LUT data
+            against the expected size.
+    """
 
     # https://sourceforge.net/projects/thr3dlut
 
-    def __init__(self, stream_or_filename=None, check_lut_size=True):
+    def __init__(
+        self,
+        stream_or_filename: None | str | BinaryIO = None,
+        check_lut_size: bool = True,
+    ) -> None:
         if not stream_or_filename:
             return
         if isinstance(stream_or_filename, str):
@@ -341,7 +461,7 @@ class H3DLUT:
         self.outputBitDepth = struct.unpack("<l", data[64:68])[0]
         self.outputColorEncoding = struct.unpack("<l", data[68:72])[0]
         self.parametersFileOffset = struct.unpack("<l", data[72:76])[0]
-        parametersSize = struct.unpack("<l", data[76:80])[0]
+        parameters_size = struct.unpack("<l", data[76:80])[0]
         self.lutFileOffset = struct.unpack("<l", data[80:84])[0]
         self.lutCompressionMethod = struct.unpack("<l", data[84:88])[0]
         if self.lutCompressionMethod != 0:
@@ -352,7 +472,9 @@ class H3DLUT:
         self.lutUncompressedSize = struct.unpack("<l", data[92:96])[0]
         self.parametersData = {}
         for line in (
-            data[self.parametersFileOffset : self.parametersFileOffset + parametersSize]
+            data[
+                self.parametersFileOffset : self.parametersFileOffset + parameters_size
+            ]
             .rstrip(b"\0")
             .splitlines()
         ):
@@ -387,7 +509,7 @@ class H3DLUT:
             ]
 
     @property
-    def data(self):
+    def data(self) -> bytes:
         """Return the raw 3D LUT data as bytes.
 
         Returns:
@@ -434,8 +556,14 @@ class H3DLUT:
         )
 
     @property
-    def source_colorspace(self):
-        """Return the 3D LUT source colorspace slot and name as 2-tuple."""
+    def source_colorspace(self) -> tuple[int, str]:
+        """Return the 3D LUT source colorspace slot and name as 2-tuple.
+
+        Returns:
+            tuple[int, str]: A tuple containing the source colorspace slot
+                (0 for Rec. 709, 1 for SMPTE-C, etc.) and the name of the
+                colorspace (e.g., "Rec. 709", "SMPTE-C", etc.).
+        """
         # Determine gamut slot only based on primaries (omit whitepoint)
         xy = list(self.parametersData.get("Input_Primaries", [])[:6])
         rgb_space_name = colormath.find_primaries_wp_xy_rgb_space_name(xy)
@@ -448,7 +576,20 @@ class H3DLUT:
             "DCI P3 D65": 4,
         }.get(rgb_space_name), rgb_space_name
 
-    def _get_stream(self, stream_or_filename=None, ext=None):
+    def _get_stream(
+        self, stream_or_filename: None | str | BinaryIO = None, ext: None | str = None
+    ) -> BinaryIO:
+        """Get a writable stream for the 3D LUT data.
+
+        Args:
+            stream_or_filename (None | str | BinaryIO, optional): The file path
+                or a binary stream to write the 3D LUT data to.
+            ext (str, optional): The file extension to use if a filename is
+                provided. Defaults to None.
+
+        Returns:
+            BinaryIO: A writable stream for the 3D LUT data.
+        """
         if not stream_or_filename:
             stream_or_filename = self.filename
             if ext:
@@ -459,8 +600,15 @@ class H3DLUT:
             stream = stream_or_filename
         return stream
 
-    def write(self, stream_or_filename=None):
-        """Write 3D LUT to stream or filename."""
+    def write(self, stream_or_filename: None | str | BinaryIO = None) -> None:
+        """Write 3D LUT to stream or filename.
+
+        Args:
+            stream_or_filename (None | str | BinaryIO, optional): The file path
+                or a binary stream to write the 3D LUT data to. If None, uses
+                the filename from the instance. If a string is provided, it
+                will be used as the filename with a ".3dlut" extension.
+        """
         stream = self._get_stream(stream_or_filename)
         stream.write(self.data)
         if isinstance(stream_or_filename, str):
@@ -468,8 +616,17 @@ class H3DLUT:
                 self.filename = stream_or_filename
             stream.close()
 
-    def write_devicelink(self, stream_or_filename=None):
-        """Write 3D LUT to ICC device link."""
+    def write_devicelink(
+        self, stream_or_filename: None | str | BinaryIO = None
+    ) -> None:
+        """Write 3D LUT to ICC device link.
+
+        Args:
+            stream_or_filename (None | str | BinaryIO, optional): The file path
+                or a binary stream to write the ICC device link data to. If None,
+                uses the filename from the instance. If a string is provided, it
+                will be used as the filename with a ".icc" extension.
+        """
         stream = self._get_stream(stream_or_filename, ".icc")
 
         link = ICCProfile()
@@ -493,54 +650,54 @@ class H3DLUT:
         # the LUT16Type cLUT and only use tag data of offsets/sizes and shaper
         # curves while writing the raw cLUT data directly without going through
         # decoding/re-encoding roundtrip
-        A2B0 = LUT16Type()
-        A2B0.matrix = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
-        A2B0.input = []
+        a2b0 = LUT16Type()
+        a2b0.matrix = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+        a2b0.input = []
         for _ in range(3):
-            A2B0.input.append([])
+            a2b0.input.append([])
             for j in range(4096):
-                A2B0.input[-1].append(
+                a2b0.input[-1].append(
                     min(max(j / 4095.0 * (256 / 255.0) - (256 / 255.0 - 1), 0), 1)
                     * 65535
                 )
-        input_bytes = len(A2B0.input) * len(A2B0.input[0]) * 2
-        A2B0.clut = [[[0] * 3 for i in range(clut_grid_steps)]]  # Fake cLUT
-        A2B0.output = []
+        input_bytes = len(a2b0.input) * len(a2b0.input[0]) * 2
+        a2b0.clut = [[[0] * 3 for i in range(clut_grid_steps)]]  # Fake cLUT
+        a2b0.output = []
         for _ in range(3):
-            A2B0.output.append([])
+            a2b0.output.append([])
             for j in range(4096):
-                A2B0.output[-1].append(
+                a2b0.output[-1].append(
                     min(max(j / 4095.0 * (256 / 255.0), 0), 1) * 65535
                 )
-        output_bytes = len(A2B0.output) * len(A2B0.output[0]) * 2
-        tagData = A2B0.tagData[: 52 + input_bytes]  # Exclude cLUT and output curves
+        output_bytes = len(a2b0.output) * len(a2b0.output[0]) * 2
+        tag_data = a2b0.tagData[: 52 + input_bytes]  # Exclude cLUT and output curves
 
         # Write actual cLUT
         # XXX Currently only 16 bit RGB data is supported
         samples_per_pixel = 3  # RGB
         bytes_per_sample = self.outputBitDepth / 8
         bytes_per_pixel = samples_per_pixel * bytes_per_sample
-        io = BytesIO(tagData)
+        io = BytesIO(tag_data)
         io.seek(0, 2)  # Position cursor at end
         i = 0
-        for R in range(input_grid_steps):
-            if not R:
+        for r in range(input_grid_steps):
+            if not r:
                 i += input_grid_steps * input_grid_steps
                 continue
-            for G in range(input_grid_steps):
-                if not G:
+            for g in range(input_grid_steps):
+                if not g:
                     i += input_grid_steps
                     continue
-                for B in range(input_grid_steps):
-                    if not B:
+                for b in range(input_grid_steps):
+                    if not b:
                         i += 1
                         continue
                     index = i * samples_per_pixel * bytes_per_sample
-                    BGR = self.LUTDATA[index : index + bytes_per_pixel]
-                    RGB = BGR[::-1]  # BGR little-endian to RGB big-endian byte order
-                    io.write(RGB)
+                    bgr = self.LUTDATA[index : index + bytes_per_pixel]
+                    rgb = bgr[::-1]  # BGR little-endian to RGB big-endian byte order
+                    io.write(rgb)
                     i += 1
-        io.write(A2B0.tagData[-output_bytes:])  # Append output curves
+        io.write(a2b0.tagData[-output_bytes:])  # Append output curves
         io.seek(0)
         link.tags.A2B0 = ICCProfileTag(io.read(), "A2B0")
 
@@ -549,8 +706,15 @@ class H3DLUT:
         if isinstance(stream_or_filename, str):
             stream.close()
 
-    def write_tiff(self, stream_or_filename=None):
-        """Write 3D LUT to TIFF file."""
+    def write_tiff(self, stream_or_filename: None | str | BinaryIO = None) -> None:
+        """Write 3D LUT to TIFF file.
+
+        Args:
+            stream_or_filename (None | str | BinaryIO, optional): The file path
+                or a binary stream to write the TIFF data to. If None, uses the
+                filename from the instance. If a string is provided, it will be
+                used as the filename with a ".tif" extension.
+        """
         stream = self._get_stream(stream_or_filename, ".tif")
 
         # Write image data
@@ -564,9 +728,9 @@ class H3DLUT:
         entries = self.lutUncompressedSize / samples_per_pixel / bytes_per_sample
         for i in range(entries):
             index = i * samples_per_pixel * bytes_per_sample
-            BGR = self.LUTDATA[index : index + bytes_per_pixel]
-            RGB = BGR[::-1]  # BGR little-endian to RGB big-endian byte order
-            stream.write(RGB)
+            bgr = self.LUTDATA[index : index + bytes_per_pixel]
+            rgb = bgr[::-1]  # BGR little-endian to RGB big-endian byte order
+            stream.write(rgb)
 
         if isinstance(stream_or_filename, str):
             stream.close()
@@ -575,36 +739,40 @@ class H3DLUT:
 class MadTPGBase:
     """Generic pattern generator compatibility layer."""
 
-    def wait(self):
+    def wait(self) -> None:
         """Wait for madTPG to be ready."""
         self.connect(method2=CM_StartLocalInstance)
 
-    def disconnect_client(self):
+    def disconnect_client(self) -> None:
         """Disconnect the client from madTPG."""
         self.disconnect()
 
     def send(
         self,
-        rgb=(0, 0, 0),
-        bgrgb=(0, 0, 0),
-        bits=None,
-        use_video_levels=None,
-        x=0,
-        y=0,
-        w=1,
-        h=1,
-    ):
+        rgb: tuple[float, float, float] = (0, 0, 0),
+        bgrgb: tuple[float, float, float] = (0, 0, 0),
+        bits: None | int = None,
+        use_video_levels: None | bool = None,
+        x: int = 0,
+        y: int = 0,
+        w: int = 1,
+        h: int = 1,
+    ) -> None:
         """Send RGB values to madTPG.
 
         Args:
-            rgb (tuple): RGB values to display, each in the range 0-255.
-            bgrgb (tuple): BGR values to display, each in the range 0-255.
-            bits (int): Bit depth of the RGB values (default: 8).
-            use_video_levels (bool): Whether to use video levels (default: False).
-            x (int): X position on screen to display the pattern.
-            y (int): Y position on screen to display the pattern.
-            w (int): Width of the pattern area.
-            h (int): Height of the pattern area.
+            rgb (tuple[float, float, float], optional): RGB values to display,
+                each in the range 0-255.
+            bgrgb (tuple[float, float, float], optional): BGR values to
+                display, each in the range 0-255.
+            bits (None | int, optional): Bit depth of the RGB values. Defaults to
+                None, which means the default bit depth will be used.
+            use_video_levels (None | bool): Whether to use video levels.
+                Defaults to None.
+            x (int, optional): X position on screen to display the pattern.
+            y (int, optional): Y position on screen to display the pattern.
+            w (int, optional): Width of the pattern area.
+            h (int, optional): Height of the pattern area.
         """
         cfg = self.get_pattern_config()
         if cfg:
@@ -620,7 +788,7 @@ class MadTPGBase:
 class MadTPG(MadTPGBase):
     """Minimal madTPG controller class."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         MadTPGBase.__init__(self)
         self._connection_callbacks = []
 
@@ -646,10 +814,10 @@ class MadTPG(MadTPGBase):
 
         try:
             # Set expected return value types
-            for methodname in _methodnames + _autonet_methodnames:
+            for methodname in _METHOD_NAMES + _AUTONET_METHOD_NAMES:
                 if methodname == "AddConnectionCallback":
                     continue
-                prefix = "AutoNet" if methodname in _autonet_methodnames else "madVR"
+                prefix = "AutoNet" if methodname in _AUTONET_METHOD_NAMES else "madVR"
                 method = getattr(self.mad, prefix + "_" + methodname, None)
                 if not method and not methodname.startswith("LoadHdr3dlut"):
                     raise AttributeError(prefix + "_" + methodname)
@@ -669,7 +837,7 @@ class MadTPG(MadTPGBase):
             raise RuntimeError(
                 lang.getstr(
                     "madhcnet.outdated",
-                    tuple(reversed(os.path.split(self.dllpath))) + min_version,
+                    tuple(reversed(os.path.split(self.dllpath))) + MIN_VERSION,
                 )
             ) from e
 
@@ -678,7 +846,7 @@ class MadTPG(MadTPGBase):
         if hasattr(self, "mad"):
             self.disconnect()
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Callable:
         """Handle madVR method calls.
 
         This is a generic method to handle madVR method calls. It allows
@@ -700,7 +868,7 @@ class MadTPG(MadTPGBase):
                 valid madVR method.
 
         Returns:
-            callable: The madVR method corresponding to the provided name.
+            Callable: The madVR method corresponding to the provided name.
         """
         # Instead of writing individual method wrappers, we use Python's magic
         # to handle this for us. Note that we're sticking to pythonic method
@@ -710,16 +878,21 @@ class MadTPG(MadTPGBase):
         methodname = "".join(part.capitalize() for part in name.split("_"))
 
         # Check if this is a madVR method we support
-        if methodname not in _methodnames + _autonet_methodnames:
+        if methodname not in _METHOD_NAMES + _AUTONET_METHOD_NAMES:
             raise AttributeError(
                 f"{self.__class__.__name__!r} object has no attribute {name!r}"
             )
 
         # Return the method
-        prefix = "AutoNet" if methodname in _autonet_methodnames else "madVR"
+        prefix = "AutoNet" if methodname in _AUTONET_METHOD_NAMES else "madVR"
         return getattr(self.mad, f"{prefix}_{methodname}")
 
-    def add_connection_callback(self, callback, param, component):
+    def add_connection_callback(
+        self,
+        callback: Callable,
+        param: Any,  # noqa: ANN401
+        component: str,
+    ) -> None:
         """Handle callbacks for added/closed connections to playback components.
 
         Leave "component" empty to get notification about all components.
@@ -727,6 +900,12 @@ class MadTPG(MadTPGBase):
         The callback function has to take eight arguments:
         param, connection, ip, pid, module, component, instance, is_new_instance
 
+        Args:
+            callback (Callable): The callback function to be called when a
+                connection is added or closed.
+            param (Any): Additional parameter to be passed to the callback.
+            component (str): The name of the component to monitor for
+                connections.
         """
         callback = CALLBACK(callback)
         self.mad.AutoNet_AddConnectionCallback(callback, param, component)
@@ -734,17 +913,32 @@ class MadTPG(MadTPGBase):
 
     def connect(
         self,
-        method1=CM_ConnectToLocalInstance,
-        timeout1=1000,
-        method2=CM_ConnectToLanInstance,
-        timeout2=3000,
-        method3=CM_ShowListDialog,
-        timeout3=0,
-        method4=CM_Fail,
-        timeout4=0,
-        parentwindow=None,
-    ):
-        """Find, select or launch a madTPG instance and connect to it."""
+        method1: int = CM_ConnectToLocalInstance,
+        timeout1: int = 1000,
+        method2: int = CM_ConnectToLanInstance,
+        timeout2: int = 3000,
+        method3: int = CM_ShowListDialog,
+        timeout3: int = 0,
+        method4: int = CM_Fail,
+        timeout4: int = 0,
+        parentwindow: None | int = None,
+    ) -> bool:
+        """Find, select or launch a madTPG instance and connect to it.
+
+        Args:
+            method1 (int): Connection method for the first attempt.
+            timeout1 (int): Timeout in milliseconds for the first attempt.
+            method2 (int): Connection method for the second attempt.
+            timeout2 (int): Timeout in milliseconds for the second attempt.
+            method3 (int): Connection method for the third attempt.
+            timeout3 (int): Timeout in milliseconds for the third attempt.
+            method4 (int): Connection method for the fourth attempt.
+            timeout4 (int): Timeout in milliseconds for the fourth attempt.
+            parentwindow (None | int): Parent window handle for dialogs.
+
+        Returns:
+            bool: True if the connection was successful, False otherwise.
+        """
         return self.mad.madVR_ConnectEx(
             method1,
             timeout1,
@@ -757,21 +951,32 @@ class MadTPG(MadTPGBase):
             parentwindow,
         )
 
-    def get_black_and_white_level(self):
-        """Return madVR output level setup."""
+    def get_black_and_white_level(self) -> bool | tuple[int, int]:
+        """Return madVR output level setup.
+
+        Returns:
+            bool | tuple[int, int]: A tuple containing the black and white
+                levels. If the call fails, returns False.
+        """
         blacklvl, whitelvl = ctypes.c_long(), ctypes.c_long()
         result = self.mad.madVR_GetBlackAndWhiteLevel(
             *[ctypes.byref(v) for v in (blacklvl, whitelvl)]
         )
         return result and (blacklvl.value, whitelvl.value)
 
-    def get_device_gamma_ramp(self):
-        """Call the win32 API 'GetDeviceGammaRamp'."""
+    def get_device_gamma_ramp(self) -> bool | ctypes.Array:
+        """Call the win32 API 'GetDeviceGammaRamp'.
+
+        Returns:
+            bool | ctypes.Array: A ctypes array containing the gamma ramp
+                values for red, green, and blue channels. Each channel has 256
+                entries. If the call fails, returns False.
+        """
         ramp = ((ctypes.c_ushort * 256) * 3)()
         result = self.mad.madVR_GetDeviceGammaRamp(ramp)
         return result and ramp
 
-    def get_pattern_config(self):
+    def get_pattern_config(self) -> bool | tuple[int, int, int, int]:
         """Return the pattern config as 4-tuple.
 
         Pattern area in percent        1-100
@@ -780,6 +985,11 @@ class MadTPG(MadTPGBase):
                                        1 = APL - gamma light
                                        2 = APL - linear light
         Black border width in pixels   0-100
+
+        Returns:
+            bool | tuple[int, int, int, int]: A tuple containing the pattern
+                area, background level, background mode, and black border
+                width. If the call fails, returns False.
         """
         area, bglvl, bgmode, border = [ctypes.c_long() for i in range(4)]
         result = self.mad.madVR_GetPatternConfig(
@@ -787,36 +997,60 @@ class MadTPG(MadTPGBase):
         )
         return result and (area.value, bglvl.value, bgmode.value, border.value)
 
-    def get_selected_3dlut(self):
+    def get_selected_3dlut(self) -> bool | int:
         """Return the currently selected 3D LUT ID.
 
         Returns:
-            int: The ID of the selected 3D LUT, or None if no LUT is selected.
+            bool | int: The ID of the selected 3D LUT, or None if no LUT is
+                selected.
         """
         thr3dlut = ctypes.c_ulong()
         result = self.mad.madVR_GetSelected3dlut(ctypes.byref(thr3dlut))
         return result and thr3dlut.value
 
-    def get_version(self):
+    def get_version(self) -> bool | tuple[str, str, str, str]:
         """Return the madVR version as 4-tuple.
 
         Returns:
-            tuple[str, str, str, str]: The madVR version as a tuple of four strings
-                representing the major, minor, patch, and build numbers.
+            bool | tuple[str, str, str, str]: The madVR version as a tuple of
+                four strings representing the major, minor, patch, and build
+                numbers.
         """
         version = ctypes.c_ulong()
         result = self.mad.madVR_GetVersion(ctypes.byref(version))
-        version = tuple(c for c in struct.pack(">I", version.value))
-        return result and version
+        return result and tuple(c for c in struct.pack(">I", version.value))
 
-    def show_rgb(self, r, g, b, bgr=None, bgg=None, bgb=None):
-        """Show a specific RGB color test pattern."""
+    def show_rgb(
+        self,
+        r: float,
+        g: float,
+        b: float,
+        bgr: None | float = None,
+        bgg: None | float = None,
+        bgb: None | float = None,
+    ) -> bool:
+        """Show a specific RGB color test pattern.
+
+        Args:
+            r (float): Red component in the range 0.0-255.0.
+            g (float): Green component in the range 0.0-255.0.
+            b (float): Blue component in the range 0.0-255.0.
+            bgr (None | float, optional): Red component for the background
+                color.
+            bgg (None | float, optional): Green component for the background
+                color.
+            bgb (None | float, optional): Blue component for the background
+                color.
+
+        Returns:
+            bool: True if the operation was successful, False otherwise.
+        """
         if None not in (bgr, bgg, bgb):
             return self.mad.madVR_ShowRGBEx(r, g, b, bgr, bgg, bgb)
         return self.mad.madVR_ShowRGB(r, g, b)
 
     @property
-    def uri(self):
+    def uri(self) -> str:
         """Return the URI of the madTPG instance.
 
         Returns:
@@ -826,15 +1060,17 @@ class MadTPG(MadTPGBase):
 
 
 class MadTPGNet(MadTPGBase):
-    """Implementation of madVR network protocol in pure python."""
+    """Implementation of madVR network protocol in pure python.
 
-    # Wireshark filter to help ananlyze traffic:
-    # (tcp.dstport != 1900 and tcp.dstport != 443) or
-    # (udp.dstport != 1900 and udp.dstport != 137 and
-    # udp.dstport != 138 and udp.dstport != 5355 and
-    # udp.dstport != 547 and udp.dstport != 10111)
+    Wireshark filter to help ananlyze traffic:
 
-    def __init__(self):
+        (tcp.dstport != 1900 and tcp.dstport != 443) or
+        (udp.dstport != 1900 and udp.dstport != 137 and
+        udp.dstport != 138 and udp.dstport != 5355 and
+        udp.dstport != 547 and udp.dstport != 10111)
+    """
+
+    def __init__(self) -> None:
         MadTPGBase.__init__(self)
         self._cast_sockets = {}
         self._casts = []
@@ -869,7 +1105,7 @@ class MadTPGNet(MadTPGBase):
         self.broadcast_ip = ".".join(ip)
         self.multicast_ip = "235.117.220.191"
 
-    def listen(self):
+    def listen(self) -> None:
         """Start listening for incoming connections and broadcasts."""
         self.listening = True
         # Connection listen sockets
@@ -937,16 +1173,31 @@ class MadTPGNet(MadTPGBase):
             except OSError as exception:
                 safe_print(f"MadTPG_Net: UDP Port {port}: {exception}")
 
-    def bind(self, event_name, handler):
-        """Bind a handler to an event."""
+    def bind(self, event_name: str, handler: Callable) -> None:
+        """Bind a handler to an event.
+
+        Args:
+            event_name (str): The name of the event to bind to.
+            handler (Callable): The handler function to bind to the event.
+        """
         if event_name not in self._event_handlers:
             self._event_handlers[event_name] = []
         self._event_handlers[event_name].append(handler)
 
-    def unbind(self, event_name, handler=None):
+    def unbind(
+        self, event_name: str, handler: None | Callable = None
+    ) -> None | Callable:
         """Unbind (remove) a handler from an event.
 
-        If handler is None, remove all handlers for the event.
+        Args:
+            event_name (str): The name of the event to unbind from.
+            handler (None | Callable, optional): The handler to remove.
+                If None, all handlers for the event will be removed.
+
+        Returns:
+            None | Callable: If handler is specified and found, it is returned.
+                If handler is None, all handlers for the event are removed.
+                If the event has no handlers, None is returned.
         """
         if event_name not in self._event_handlers:
             return None
@@ -957,17 +1208,30 @@ class MadTPGNet(MadTPGBase):
 
         return self._event_handlers.pop(event_name)
 
-    def _dispatch_event(self, event_name, event_data=None):
-        """Dispatch events."""
+    def _dispatch_event(self, event_name: str, event_data: None | Any = None) -> None:  # noqa: ANN401
+        """Dispatch events.
+
+        Args:
+            event_name (str): The name of the event to dispatch.
+            event_data (None | Any, optional): Data associated with the event.
+                Defaults to None.
+        """
         if self.debug:
             safe_print("MadTPG_Net: Dispatching", event_name)
         for handler in self._event_handlers.get(event_name, []):
             handler(event_data)
 
-    def _reset(self):
+    def _reset(self) -> None:
         self._client_socket = None
 
-    def _conn_accept_handler(self, sock, host, port):
+    def _conn_accept_handler(self, sock: socket.socket, host: str, port: int) -> None:
+        """Handle incoming connections on a TCP socket.
+
+        Args:
+            sock (socket.socket): The socket to accept connections on.
+            host (str): The host address to bind to.
+            port (int): The port to bind to.
+        """
         if self.debug:
             safe_print("MadTPG_Net: Entering incoming connection thread for port", port)
         self._server_sockets[(host, port)] = sock
@@ -993,7 +1257,7 @@ class MadTPGNet(MadTPGBase):
                 )
                 break
             conn.settimeout(0)
-            with _lock:
+            with _LOCK:
                 if self.debug:
                     socket_name = conn.getsockname()
                     safe_print(
@@ -1025,7 +1289,13 @@ class MadTPGNet(MadTPGBase):
         if self.debug:
             safe_print("MadTPG_Net: Exiting incoming connection thread for port", port)
 
-    def _receive_handler(self, addr, conn):
+    def _receive_handler(self, addr: tuple, conn: socket.socket) -> None:
+        """Handle incoming messages from a client connection.
+
+        Args:
+            addr (tuple): The address of the client (IP, port).
+            conn (socket.socket): The socket connection to the client.
+        """
         if self.debug:
             safe_print(f"MadTPG_Net: Entering receiver thread for {addr[0]}:{addr[1]}")
         self._incoming[addr] = []
@@ -1057,35 +1327,12 @@ class MadTPGNet(MadTPGBase):
                 send_bye = False
                 break
             else:
-                with _lock:
-                    if not incoming:
-                        # Connection broken
-                        if self.debug:
-                            safe_print(
-                                f"MadTPG_Net: Client {addr[0]}:{addr[1]} "
-                                "stopped sending"
-                            )
-                        send_bye = False
-                        break
-                    blob += incoming
-                    if self.debug:
-                        safe_print("MadTPG_Net: Received from {}:{}:".format(*addr[:2]))
-                    while blob and addr in self._client_sockets:
-                        try:
-                            record, blob = self._parse(blob)
-                        except ValueError as exception:
-                            safe_print("MadTPG_Net:", exception)
-                            # Invalid, discard
-                            blob = ""
-                        else:
-                            if record is None:
-                                # Need more data
-                                break
-                            try:
-                                self._process(record, conn)
-                            except OSError as exception:
-                                safe_print("MadTPG_Net:", exception)
-        with _lock:
+                send_bye, break_early = self._process_client_message(
+                    addr, conn, incoming, send_bye, blob
+                )
+                if break_early:
+                    break
+        with _LOCK:
             self._remove_client(
                 addr, send_bye=addr in self._client_sockets and send_bye
             )
@@ -1095,26 +1342,95 @@ class MadTPGNet(MadTPGBase):
                 "MadTPG_Net: Exiting receiver thread for {}:{}".format(*addr[:2])
             )
 
-    def _remove_client(self, addr, send_bye=True):
-        """Remove client from list of connected clients."""
-        if addr in self._client_sockets:
-            conn = self._client_sockets.pop(addr)
-            if send_bye:
-                self._send(
-                    conn,
-                    "bye",
-                    component=self.clients.get(addr, {}).get("component", b""),
-                )
-            if addr in self.clients:
-                client = self.clients.pop(addr)
-                if self.debug:
-                    safe_print(f"MadTPG_Net: Removed client {addr[0]}:{addr[1]}")
-                self._dispatch_event("on_client_removed", (addr, client))
-            if self._client_socket and self._client_socket == conn:
-                self._reset()
-            self._shutdown(conn, addr)
+    def _process_client_message(
+        self,
+        addr: tuple,
+        conn: socket.socket,
+        incoming: bytes,
+        send_bye: bool,
+        blob: bytes,
+    ) -> tuple[bool, bool]:
+        """Process incoming message from a client.
 
-    def _cast_receive_handler(self, sock, host, port):
+        Args:
+            addr (tuple): The address of the client (IP, port).
+            conn (socket.socket): The socket connection to the client.
+            incoming (bytes): The incoming data from the client.
+            send_bye (bool): Whether to send a "bye" message on disconnection.
+            blob (bytes): The accumulated data blob for processing.
+
+        Returns:
+            tuple: A tuple containing the updated send_bye flag and a boolean
+                indicating whether to break early from the processing loop.
+        """
+        with _LOCK:
+            if not incoming:
+                # Connection broken
+                if self.debug:
+                    safe_print(
+                        f"MadTPG_Net: Client {addr[0]}:{addr[1]} stopped sending"
+                    )
+                send_bye = False
+                return send_bye, True
+            blob += incoming
+            if self.debug:
+                safe_print("MadTPG_Net: Received from {}:{}:".format(*addr[:2]))
+            while blob and addr in self._client_sockets:
+                try:
+                    record, blob = self._parse(blob)
+                except ValueError as exception:
+                    safe_print("MadTPG_Net:", exception)
+                    # Invalid, discard
+                    blob = ""
+                else:
+                    if record is None:
+                        # Need more data
+                        break
+                    try:
+                        self._process(record, conn)
+                    except OSError as exception:
+                        safe_print("MadTPG_Net:", exception)
+        return send_bye, False
+
+    def _remove_client(self, addr: tuple, send_bye: bool = True) -> None:
+        """Remove client from list of connected clients.
+
+        Args:
+            addr (tuple): The address of the client to be removed.
+            send_bye (bool, optional): Whether to send a "bye" message before
+                removing. Defaults to True.
+        """
+        if addr not in self._client_sockets:
+            return
+        conn = self._client_sockets.pop(addr)
+        if send_bye:
+            self._send(
+                conn,
+                "bye",
+                component=self.clients.get(addr, {}).get("component", b""),
+            )
+        if addr in self.clients:
+            client = self.clients.pop(addr)
+            if self.debug:
+                safe_print(f"MadTPG_Net: Removed client {addr[0]}:{addr[1]}")
+            self._dispatch_event("on_client_removed", (addr, client))
+        if self._client_socket and self._client_socket == conn:
+            self._reset()
+        self._shutdown(conn, addr)
+
+    def _cast_receive_handler(
+        self,
+        sock: socket.socket,
+        host: str,
+        port: int,
+    ) -> None:
+        """Handle incoming broadcasts and multicasts.
+
+        Args:
+            sock (socket.socket): The socket to listen for broadcasts or multicasts.
+            host (str): The host address for the broadcast or multicast.
+            port (int): The port number for the broadcast or multicast.
+        """
         if host == self.broadcast_ip:
             cast = "broadcast"
         elif host == self.multicast_ip:
@@ -1144,52 +1460,62 @@ class MadTPGNet(MadTPGBase):
                     )
                 break
             else:
-                with _lock:
-                    if self.debug:
-                        safe_print(
-                            f"MadTPG_Net: Received {cast} from "
-                            f"{addr[0]}:{addr[1]}: {data!r}"
-                        )
-                    if addr not in self._casts:
-                        for c_port in self.server_ports:
-                            if (addr[0], c_port) in self._client_sockets:
-                                if self.debug:
-                                    safe_print(
-                                        "MadTPG_Net: Already connected to "
-                                        f"{addr[0]}:{c_port}"
-                                    )
-                            elif ("", c_port) in self._server_sockets and addr[
-                                0
-                            ] in self._ips:
-                                if self.debug:
-                                    safe_print(
-                                        "MadTPG_Net: Don't connect to self "
-                                        f"{addr[0]}:{c_port}"
-                                    )
-                            else:
-                                conn = self._get_client_socket(addr[0], c_port)
-                                threading.Thread(
-                                    target=self._connect,
-                                    name=f"madVR.ConnectToInstance[{addr[0]}:{c_port}]",
-                                    args=(conn, addr[0], c_port),
-                                ).start()
-                    else:
-                        self._casts.remove(addr)
-                        if self.debug:
-                            safe_print(
-                                f"MadTPG_Net: Ignoring own {cast} from "
-                                f"{addr[0]}:{addr[1]}"
-                            )
+                self._process_incoming_cast(cast, data, addr)
         self._cast_sockets.pop((host, port))
         self._shutdown(sock, (host, port))
         if self.debug:
             safe_print(f"MadTPG_Net: Exiting {cast} receiver thread for port {port}")
 
+    def _process_incoming_cast(self, cast: str, data: bytes, addr: tuple) -> None:
+        """Process incoming broadcast or multicast message.
+
+        Args:
+            cast (str): Type of the cast ("broadcast" or "multicast").
+            data (bytes): The received data.
+            addr (tuple): The address of the sender (IP, port).
+        """
+        with _LOCK:
+            if self.debug:
+                safe_print(
+                    f"MadTPG_Net: Received {cast} from {addr[0]}:{addr[1]}: {data!r}"
+                )
+            if addr not in self._casts:
+                for c_port in self.server_ports:
+                    if (addr[0], c_port) in self._client_sockets:
+                        if self.debug:
+                            safe_print(
+                                f"MadTPG_Net: Already connected to {addr[0]}:{c_port}"
+                            )
+                    elif ("", c_port) in self._server_sockets and addr[0] in self._ips:
+                        if self.debug:
+                            safe_print(
+                                f"MadTPG_Net: Don't connect to self {addr[0]}:{c_port}"
+                            )
+                    else:
+                        conn = self._get_client_socket(addr[0], c_port)
+                        threading.Thread(
+                            target=self._connect,
+                            name=f"madVR.ConnectToInstance[{addr[0]}:{c_port}]",
+                            args=(conn, addr[0], c_port),
+                        ).start()
+            else:
+                self._casts.remove(addr)
+                if self.debug:
+                    safe_print(
+                        f"MadTPG_Net: Ignoring own {cast} from {addr[0]}:{addr[1]}"
+                    )
+
     def __del__(self) -> None:
         """Clean up resources on deletion."""
         self.shutdown()
 
-    def _shutdown(self, sock, addr):
+    def _shutdown(self, sock: socket.socket, addr: tuple) -> None:
+        """Shutdown and close the socket.
+
+        Args:
+            sock (socket.socket): The socket to be shut down and closed.
+            addr (tuple): The address of the socket, used for logging.
+        """
         try:
             # Will fail if the socket isn't connected, i.e. if there
             # was an error during the call to connect()
@@ -1202,7 +1528,7 @@ class MadTPGNet(MadTPGBase):
                 )
         sock.close()
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         """Shutdown the madTPG network connection."""
         self.disconnect()
         self.listening = False
@@ -1211,7 +1537,7 @@ class MadTPGNet(MadTPGBase):
             if thread.is_alive():
                 thread.join()
 
-    def __getattr__(self, name) -> "MadTPGNetSender":
+    def __getattr__(self, name: str) -> MadTPGNetSender:
         """Get attribute from madVR DLL.
 
         Args:
@@ -1235,7 +1561,7 @@ class MadTPGNet(MadTPGBase):
             methodname = "ShowRGB"
 
         # Check if this is a madVR method we support
-        if methodname not in _methodnames:
+        if methodname not in _METHOD_NAMES:
             raise AttributeError(
                 f"{self.__class__.__name__!r} object has no attribute {name!r}"
             )
@@ -1243,7 +1569,7 @@ class MadTPGNet(MadTPGBase):
         # Call the method and return the result
         return MadTPGNetSender(self, self._client_socket, methodname)
 
-    def announce(self):
+    def announce(self) -> None:
         """Anounce ourselves."""
         for port in self.multicast_ports:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -1277,17 +1603,41 @@ class MadTPGNet(MadTPGBase):
 
     def connect(
         self,
-        method1=CM_ConnectToLanInstance,
-        timeout1=4000,
-        method2=CM_ShowListDialog,
-        timeout2=0,
-        method3=CM_Fail,
-        timeout3=0,
-        method4=CM_Fail,
-        timeout4=0,
-        parentwindow=None,
-    ):
-        """Find or select a madTPG instance on the network and connect to it."""
+        method1: int = CM_ConnectToLanInstance,
+        timeout1: int = 4000,
+        method2: int = CM_ShowListDialog,
+        timeout2: int = 0,
+        method3: int = CM_Fail,
+        timeout3: int = 0,
+        method4: int = CM_Fail,
+        timeout4: int = 0,
+        parentwindow: None | int = None,
+    ) -> bool:
+        """Find or select a madTPG instance on the network and connect to it.
+
+        Args:
+            method1 (int, optional): The first connection method to try.
+                Defaults to CM_ConnectToLanInstance.
+            timeout1 (int, optional): Timeout for the first connection method
+                in milliseconds. Defaults to 4000.
+            method2 (int, optional): The second connection method to try.
+                Defaults to CM_ShowListDialog.
+            timeout2 (int, optional): Timeout for the second connection method
+                in milliseconds. Defaults to 0.
+            method3 (int, optional): The third connection method to try.
+                Defaults to CM_Fail.
+            timeout3 (int, optional): Timeout for the third connection method
+                in milliseconds. Defaults to 0.
+            method4 (int, optional): The fourth connection method to try.
+                Defaults to CM_Fail.
+            timeout4 (int, optional): Timeout for the fourth connection method
+                in milliseconds. Defaults to 0.
+            parentwindow (None | int): The parent window for any dialogs that
+                may be shown.
+
+        Returns:
+            bool: True if the connection was successful, False otherwise.
+        """
         listened = self.listening
         for method, timeout in [
             (method1, timeout1),
@@ -1319,8 +1669,17 @@ class MadTPGNet(MadTPGBase):
                 pass
         return False
 
-    def connect_to_ip(self, ip, timeout=1000):
-        """Connect to madTPG running under a known IP address."""
+    def connect_to_ip(self, ip: str, timeout: int = 1000) -> bool:
+        """Connect to madTPG running under a known IP address.
+
+        Args:
+            ip (str): The IP address of the madTPG instance.
+            timeout (int, optional): Timeout for the connection attempt in
+                milliseconds. Defaults to 1000.
+
+        Returns:
+            bool: True if the connection was successful, False otherwise.
+        """
         ip = socket.gethostbyname(ip)
         for port in self.server_ports:
             conn = self._get_client_socket(ip, port)
@@ -1331,8 +1690,19 @@ class MadTPGNet(MadTPGBase):
             ).start()
         return self._wait_for_client((ip, port), timeout / 1000.0)
 
-    def _get_client_socket(self, host, port, timeout=1):
-        """Return a new or existing client socket."""
+    def _get_client_socket(
+        self, host: str, port: int, timeout: float = 1
+    ) -> socket.socket:
+        """Return a new or existing client socket.
+
+        Args:
+            host (str): The host IP address.
+            port (int): The port number to connect to.
+            timeout (float): Timeout for the connection attempt in seconds.
+
+        Returns:
+            socket.socket: The client socket for the specified host and port.
+        """
         if (host, port) in self._client_sockets:
             return self._client_sockets[(host, port)]
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -1340,8 +1710,20 @@ class MadTPGNet(MadTPGBase):
         self._client_sockets[(host, port)] = sock
         return sock
 
-    def _connect(self, sock, host, port, timeout=1):
-        """Connect to IP:PORT, return socket."""
+    def _connect(
+        self, sock: socket.socket, host: str, port: int, timeout: float = 1
+    ) -> None:
+        """Connect to IP:PORT, return socket.
+
+        Args:
+            sock (socket.socket): The socket to connect.
+            host (str): The host IP address.
+            port (int): The port number to connect to.
+            timeout (float): Timeout for the connection attempt in seconds.
+
+        Raises:
+            OSError: If the connection fails.
+        """
         if self.debug:
             safe_print(f"MadTPG_Net: Connecting to {host}:{port}...")
         try:
@@ -1351,7 +1733,7 @@ class MadTPGNet(MadTPGBase):
                 safe_print(
                     f"MadTPG_Net: Connecting to {host}:{port} failed:", exception
                 )
-            with _lock:
+            with _LOCK:
                 self._remove_client((host, port), False)
         else:
             if self.debug:
@@ -1368,7 +1750,7 @@ class MadTPGNet(MadTPGBase):
             self._threads.append(thread)
             thread.start()
 
-    def disconnect(self, stop=True):
+    def disconnect(self, stop: bool = True) -> bool:
         """Disconnect from madTPG instance.
 
         Args:
@@ -1387,8 +1769,14 @@ class MadTPGNet(MadTPGBase):
         self._reset()
         return returnvalue
 
-    def _process(self, record, conn):
-        """Process madVR packet."""
+    def _process(self, record: dict, conn: socket.socket) -> None:
+        """Process madVR packet.
+
+        Args:
+            record (dict): The parsed record from the madVR packet.
+            conn (socket.socket): The socket connection from which the packet
+                was received.
+        """
         command = record["command"]
         if command not in ("bye", "confirm", "hello", "reply"):
             # Ignore
@@ -1414,62 +1802,97 @@ class MadTPGNet(MadTPGBase):
             self.clients[addr]["confirmed"] = True
             self._dispatch_event("on_client_confirmed", (addr, self.clients[addr]))
         elif command == "hello":
-            client.update(params)
-            if addr not in self.clients:
-                self.clients[addr] = client
-                if self._is_master(conn):
-                    # Prevent duplicate connections
-                    for c_addr in self.clients:
-                        c_client = self.clients[c_addr]
-                        if (
-                            c_client.get("confirmed")
-                            and c_client["processId"] == client["processId"]
-                            and c_client["module"] == client["module"]
-                        ):
-                            if self.debug:
-                                safe_print(
-                                    "MadTPG_Net: Preventing duplicate connection "
-                                    f"{addr[0]}:{addr[1]}"
-                                )
-                            self._remove_client(addr, False)
-                            return
-                self._dispatch_event("on_client_added", (addr, client))
-            else:
-                client_copy = self.clients[addr].copy()
-                self.clients[addr].update(client)
-                if self.clients[addr] != client_copy:
-                    self._dispatch_event(
-                        "on_client_updated", (addr, self.clients[addr])
-                    )
-            if (
-                not self.clients[addr].get("confirmed")
-                and self._is_master(conn)
-                and self._send(conn, "confirm", component=b"")
-            ):
-                # We are master, sent confirm packet
-                self.clients[addr]["confirmed"] = True
-                self._dispatch_event("on_client_confirmed", (addr, self.clients[addr]))
-                # Close duplicate connections
-                for c_addr in self.clients:
-                    c_client = self.clients[c_addr]
-                    if (
-                        c_addr != addr
-                        and c_client["processId"] == client["processId"]
-                        and c_client["module"] == client["module"]
-                    ):
-                        if self.debug:
-                            safe_print(
-                                "MadTPG_Net: Closing duplicate connection "
-                                f"{c_addr[0]}:{c_addr[1]}"
-                            )
-                        self._remove_client(c_addr)
+            is_duplicate_connection = self._process_new_client(
+                conn, addr, params, client
+            )
+            if is_duplicate_connection:
+                # Duplicate connection, ignore
+                return
         elif command == "bye":
             if self.debug:
                 safe_print(f"MadTPG_Net: Client {addr[0]}:{addr[1]} disconnected")
             self._remove_client(addr)
         self._incoming[addr].append((commandno, command, params, component))
 
-    def get_black_and_white_level(self):
+    def _process_new_client(
+        self,
+        conn: socket.socket,
+        addr: tuple,
+        params: str,
+        client: dict,
+    ) -> bool:
+        """Process new client connection.
+
+        Args:
+            conn (socket.socket): The socket connection from which the packet
+                was received.
+            addr (tuple): The address of the client (IP, port).
+            params (str): The parameters from the 'hello' packet.
+            client (dict): The client information extracted from the packet.
+
+        Returns:
+            bool: True if the connection is a duplicate and should be ignored,
+                False otherwise.
+        """
+        client.update(params)
+        if addr not in self.clients:
+            self.clients[addr] = client
+            if self._is_master(conn):
+                # Prevent duplicate connections
+                for c_addr in self.clients:
+                    c_client = self.clients[c_addr]
+                    if (
+                        c_client.get("confirmed")
+                        and c_client["processId"] == client["processId"]
+                        and c_client["module"] == client["module"]
+                    ):
+                        if self.debug:
+                            safe_print(
+                                "MadTPG_Net: Preventing duplicate connection "
+                                f"{addr[0]}:{addr[1]}"
+                            )
+                        self._remove_client(addr, False)
+                        return True
+            self._dispatch_event("on_client_added", (addr, client))
+        else:
+            client_copy = self.clients[addr].copy()
+            self.clients[addr].update(client)
+            if self.clients[addr] != client_copy:
+                self._dispatch_event("on_client_updated", (addr, self.clients[addr]))
+        if (
+            not self.clients[addr].get("confirmed")
+            and self._is_master(conn)
+            and self._send(conn, "confirm", component=b"")
+        ):
+            self._sent_confirm_packet_for_master(addr, client)
+        return False
+
+    def _sent_confirm_packet_for_master(self, addr: tuple, client: dict) -> None:
+        """Handle actions after sending confirm packet as master.
+
+        Args:
+            addr (tuple): The address of the client (IP, port).
+            client (dict): The client information extracted from the packet.
+        """
+        # We are master, sent confirm packet
+        self.clients[addr]["confirmed"] = True
+        self._dispatch_event("on_client_confirmed", (addr, self.clients[addr]))
+        # Close duplicate connections
+        for c_addr in self.clients:
+            c_client = self.clients[c_addr]
+            if (
+                c_addr != addr
+                and c_client["processId"] == client["processId"]
+                and c_client["module"] == client["module"]
+            ):
+                if self.debug:
+                    safe_print(
+                        "MadTPG_Net: Closing duplicate connection "
+                        f"{c_addr[0]}:{c_addr[1]}"
+                    )
+                self._remove_client(c_addr)
+
+    def get_black_and_white_level(self) -> bool | str | tuple[int, int]:
         """Return madVR output level setup.
 
         Returns:
@@ -1480,8 +1903,14 @@ class MadTPGNet(MadTPGBase):
         # GetBlackWhiteLevel (without the "And")!
         return MadTPGNetSender(self, self._client_socket, "GetBlackWhiteLevel")()
 
-    def get_version(self):
-        """Return madVR version."""
+    def get_version(self) -> bool | tuple[str, str, str, str]:
+        """Return madVR version.
+
+        Returns:
+            bool | tuple[str, str, str, str]: The madVR version as a tuple of
+                four strings representing the major, minor, patch, and build
+                numbers, or False if the version could not be determined.
+        """
         try:
             return (
                 self._client_socket
@@ -1494,8 +1923,12 @@ class MadTPGNet(MadTPGBase):
                 safe_print("MadTPG_Net:", exception)
             return False
 
-    def _assemble_hello_params(self):
-        """Assemble 'hello' packet parameters."""
+    def _assemble_hello_params(self) -> str:
+        """Assemble 'hello' packet parameters.
+
+        Returns:
+            str: The assembled parameters for the 'hello' packet.
+        """
         info = [
             ("computerName", str(socket.gethostname().upper())),
             ("userName", str(getpass.getuser())),
@@ -1510,13 +1943,29 @@ class MadTPGNet(MadTPGBase):
             params += f"{key}={value}\t"
         return params
 
-    def _hello(self, conn):
-        """Send 'hello' packet. Return boolean wether send succeeded or not."""
+    def _hello(self, conn: socket.socket) -> bool:
+        """Send 'hello' packet. Return boolean wether send succeeded or not.
+
+        Args:
+            conn (socket.socket): The socket connection to send the hello
+                packet.
+
+        Returns:
+            bool: True if the hello packet was sent successfully, False
+                otherwise.
+        """
         params = self._assemble_hello_params()
         return self._send(conn, "hello", params, b"")
 
-    def _is_master(self, conn):
-        """Return wether our end of the connection is the master or not."""
+    def _is_master(self, conn: socket.socket) -> bool:
+        """Return wether our end of the connection is the master or not.
+
+        Args:
+            conn (socket.socket): The socket connection to check.
+
+        Returns:
+            bool: True if our end is the master, False otherwise.
+        """
         local = conn.getsockname()
         remote = conn.getpeername()
         return inet_pton(local[0]) > inet_pton(remote[0]) or (
@@ -1525,9 +1974,29 @@ class MadTPGNet(MadTPGBase):
         )
 
     def _expect(
-        self, conn, commandno=-1, command=None, params=(), component="", timeout=3
-    ):
-        """Wait until expected reply or timeout. Return reply params or False."""
+        self,
+        conn: socket.socket,
+        commandno: int = -1,
+        command: None | str = None,
+        params: list | tuple = (),
+        component: str = "",
+        timeout: float = 3,
+    ) -> bool:
+        """Wait until expected reply or timeout. Return reply params or False.
+
+        Args:
+            conn (socket.socket): The socket connection to wait for replies.
+            commandno (int): The command number to wait for, -1 for any.
+            command (None | str, optional): The command to wait for, None for
+                any.
+            params (list | tuple): The parameters to wait for, empty for any.
+            component (str): The component to wait for, None for any.
+            timeout (float): Timeout in seconds to wait for the reply.
+
+        Returns:
+            bool: The reply parameters if found, False if timeout exceeded or
+                no reply found.
+        """
         if not isinstance(params, (list, tuple)):
             params = (params,)
         try:
@@ -1552,8 +2021,22 @@ class MadTPGNet(MadTPGBase):
             safe_print("MadTPG_Net: Timeout exceeded while waiting for reply")
         return False
 
-    def _wait_for_client(self, addr=None, timeout=1):
-        """Wait for (first) madTPG client connection and handshake."""
+    def _wait_for_client(
+        self,
+        addr: None | tuple = None,
+        timeout: float = 1,
+    ) -> bool:
+        """Wait for (first) madTPG client connection and handshake.
+
+        Args:
+            addr (tuple): Optional address to wait for, if None, wait for any
+                client.
+            timeout (float): Timeout in seconds to wait for the client.
+
+        Returns:
+            bool: True if a madTPG client was found and the StartTestPattern
+                command was successfully sent, False otherwise.
+        """
         start = end = time()
         while self.listening and end - start < timeout:
             clients = self.clients.copy()
@@ -1593,18 +2076,18 @@ class MadTPGNet(MadTPGBase):
             end = time()
         return False
 
-    def _parse(self, blob=b""):
-        """Consume blob, return record + remaining blob."""
+    def _parse(self, blob: bytes = b"") -> tuple:
+        """Consume blob, return record + remaining blob.
+
+        Args:
+            blob (bytes): The byte string to parse.
+
+        Returns:
+            tuple: A tuple containing the parsed record and the remaining blob.
+        """
         if len(blob) < 12:
             return None, blob
-        crc = struct.unpack("<I", blob[8:12])[0]
-        # Check CRC
-        check = crc32(blob[:8]) & 0xFFFFFFFF
-        if check != crc:
-            raise ValueError(
-                "MadTPG_Net: Invalid madVR packet: CRC check "
-                f"failed: Expected {crc}, got {check}"
-            )
+        self._validate_crc(blob)
         datalen = struct.unpack("<i", blob[4:8])[0]
         if len(blob) < datalen + 12:
             return None, blob
@@ -1619,131 +2102,294 @@ class MadTPGNet(MadTPGBase):
         }
         a = 32
         b = a + record["sizeOfComponent"]
+        self._validate_component_size(blob, a, b)
+        record["component"] = blob[a:b]
+        a = b + 8
+        self._validate_instance_size(blob, a, b)
+        record["instance"] = struct.unpack("<q", blob[b:a])[0]
+        b = a + 4
+        self._validate_size_of_command(blob, a, b)
+        record["sizeOfCommand"] = struct.unpack("<i", blob[a:b])[0]
+        a = b + record["sizeOfCommand"]
+        self._validate_command_size(blob, a, b)
+        record["command"] = command = blob[b:a].decode()
+        b = a + 4
+        self._validate_param_sizes(blob, a, b)
+        record["sizeOfParams"] = struct.unpack("<i", blob[a:b])[0]
+        a = b + record["sizeOfParams"]
+        self._validate_packet_params(blob, record, a, b)
+        params = blob[b:a]
+        if self.debug > 1:
+            record["rawParams"] = params
+        if command == "hello":
+            params = self._add_version_info_to_params(params)
+        elif command == "reply":
+            params = self._process_command_reply(record, params)
+        record["params"] = params
+        if self.debug:
+            self._log_record_info(record)
+        blob = blob[a:]
+        return record, blob
+
+    def _validate_crc(self, blob: bytes) -> None:
+        """Validate CRC of the madVR packet.
+
+        Args:
+            blob (bytes): The byte string to validate.
+
+        Raises:
+            ValueError: If the CRC check fails.
+        """
+        crc = struct.unpack("<I", blob[8:12])[0]
+        # Check CRC
+        check = crc32(blob[:8]) & 0xFFFFFFFF
+        if check != crc:
+            raise ValueError(
+                "MadTPG_Net: Invalid madVR packet: CRC check "
+                f"failed: Expected {crc}, got {check}"
+            )
+
+    def _validate_component_size(self, blob: bytes, a: int, b: int) -> None:
+        """Validate component size.
+
+        Args:
+            blob (bytes): The byte string to validate.
+            a (int): The end index of the component in the blob.
+            b (int): The start index of the component in the blob.
+
+        Raises:
+            ValueError: If the component size is corrupt or does not match the
+                expected length.
+        """
         if b > len(blob):
             raise ValueError(
                 "Corrupt madVR packet: Expected component "
                 f"len {b - a}, got {len(blob[a:b])}"
             )
-        record["component"] = blob[a:b]
-        a = b + 8
+
+    def _validate_instance_size(self, blob: bytes, a: int, b: int) -> None:
+        """Validate instance size.
+
+        Args:
+            blob (bytes): The byte string to validate.
+            a (int): The end index of the instance in the blob.
+            b (int): The start index of the instance in the blob.
+
+        Raises:
+            ValueError: If the instance size is corrupt or does not match the
+                expected length.
+        """
         if a > len(blob):
             raise ValueError(
                 "Corrupt madVR packet: Expected instance "
                 f"len {a - b}, got {len(blob[b:a])}"
             )
-        record["instance"] = struct.unpack("<q", blob[b:a])[0]
-        b = a + 4
+
+    def _validate_size_of_command(self, blob: bytes, a: int, b: int) -> None:
+        """Validate size of command.
+
+        Args:
+            blob (bytes): The byte string to validate.
+            a (int): The end index of the command size in the blob.
+            b (int): The start index of the command size in the blob.
+
+        Raises:
+            ValueError: If the size of the command is corrupt or does not match
+                the expected length.
+        """
         if b > len(blob):
             raise ValueError(
                 "Corrupt madVR packet: Expected sizeOfCommand "
                 f"len {b - a}, got {len(blob[a:b])}"
             )
-        record["sizeOfCommand"] = struct.unpack("<i", blob[a:b])[0]
-        a = b + record["sizeOfCommand"]
+
+    def _validate_command_size(self, blob: bytes, a: int, b: int) -> None:
+        """Validate command size.
+
+        Args:
+            blob (bytes): The byte string to validate.
+            a (int): The end index of the command in the blob.
+            b (int): The start index of the command in the blob.
+
+        Raises:
+            ValueError: If the command size is corrupt or does not match the
+                expected length.
+        """
         if a > len(blob):
             raise ValueError(
                 "Corrupt madVR packet: Expected command "
                 f"len {a - b}, got {len(blob[b:a])}"
             )
-        record["command"] = command = blob[b:a].decode()
-        b = a + 4
+
+    def _validate_param_sizes(self, blob: bytes, a: int, b: int) -> None:
+        """Validate parameter sizes.
+
+        Args:
+            blob (bytes): The byte string to validate.
+            a (int): The end index of the parameters in the blob.
+            b (int): The start index of the parameters in the blob.
+
+        Raises:
+            ValueError: If the parameter sizes are corrupt or do not match the
+                expected length.
+        """
         if b > len(blob):
             raise ValueError(
                 "Corrupt madVR packet: Expected sizeOfParams "
                 f"len {b - a}, got {len(blob[a:b])}"
             )
-        record["sizeOfParams"] = struct.unpack("<i", blob[a:b])[0]
-        a = b + record["sizeOfParams"]
+
+    def _validate_packet_params(
+        self, blob: bytes, record: dict, a: int, b: int
+    ) -> None:
+        """Validate packet parameters.
+
+        Args:
+            blob (bytes): The byte string to validate.
+            record (dict): The parsed record from the madVR packet.
+            a (int): The end index of the parameters in the blob.
+            b (int): The start index of the parameters in the blob.
+
+        Raises:
+            ValueError: If the parameters are corrupt or do not match the
+                expected length.
+        """
         if a > record["len"] + 12:
             raise ValueError(
                 "Corrupt madVR packet: Expected params "
                 f"len {a - b}, got {len(blob[b:a])}"
             )
-        params = blob[b:a]
-        if self.debug > 1:
-            record["rawParams"] = params
-        if command == "hello":
-            io = StringIO(
-                "[Default]\n"
-                + "\n".join(params.decode("UTF-16-LE").strip().split("\t"))
-            )
-            cfg = CaseSensitiveConfigParser()
-            # cfg.readfp(io)
-            cfg.read_file(io)
-            params = dict(cfg.items("Default"))
-            # Convert version strings to tuples with integers
-            for param in ("mvr", "exe"):
-                param += "Version"
-                if param in params:
-                    values = params[param].split(".")
-                    for i, value in enumerate(values):
-                        with contextlib.suppress(ValueError):
-                            values[i] = int(value)
-                    params[param] = tuple(values)
-        elif command == "reply":
-            commandno = record["commandNo"]
-            repliedcommand = self._commands.get(commandno)
-            if repliedcommand:
-                self._commands.pop(commandno)
-                # XXX: madHcNetXX.dll exports madVR_GetBlackAndWhiteLevel,
-                # but the equivalent madVR network protocol command is
-                # GetBlackWhiteLevel (without the "And")!
-                if repliedcommand == "GetBlackWhiteLevel":
-                    params = struct.unpack("<ii", params) if len(params) == 8 else False
-                elif repliedcommand == "GetDeviceGammaRamp":
-                    # Convert to ushort_Array_256_Array_3
-                    ramp = ((ctypes.c_ushort * 256) * 3)()
-                    if len(params) == 1536:
-                        for j in range(3):
-                            for i in range(256):
-                                ramp[j][i] = round(struct.unpack("<H", params[:2])[0])
-                                params = params[2:]
-                        params = ramp
-                    else:
-                        params = False
-                elif repliedcommand == "GetPatternConfig":
-                    if len(params) == 16:
-                        params = struct.unpack("<iiii", params)
-                    else:
-                        params = False
-                elif repliedcommand in ("GetSelected3dlut",):
-                    if len(params) == 4:
-                        params = struct.unpack("<i", params[0:4])[0]
-                    else:
-                        params = False
-            # Got a reply for a command we never issued?
-            elif self.debug:
-                safe_print(f"MadTPG_Net: Got reply {commandno} for unknown command")
-        record["params"] = params
-        if self.debug:
-            with _lock:
-                safe_print(
-                    record["processId"],
-                    record["module"],
-                    record["commandNo"],
-                    record["component"],
-                    record["instance"],
-                    record["command"],
-                )
-                for key in record:
-                    value = record[key]
-                    if key == "params" or self.debug > 2:
-                        if isinstance(value, dict):
-                            safe_print(f"  {key}:")
-                            for subkey in value:
-                                subvalue = value[subkey]
-                                if self.debug < 2 and subkey != "exeFile":
-                                    continue
-                                safe_print(
-                                    f"    {subkey.ljust(16)} = {trunc(subvalue, 56)}"
-                                )
-                        elif self.debug > 1:
-                            safe_print(f"  {key.ljust(16)} = {trunc(value, 58)}")
-        blob = blob[a:]
-        return record, blob
 
-    def _assemble(self, conn, commandno=1, command="", params="", component=b"madTPG"):
-        """Assemble packet."""
+    def _add_version_info_to_params(self, params: bytes) -> dict:
+        """Add madVR version info to 'hello' packet parameters.
+
+        Args:
+            params (bytes): The raw parameters from the 'hello' packet.
+
+        Returns:
+            dict: A dictionary containing the parsed parameters including
+                madVR version information.
+        """
+        io = StringIO(
+            "[Default]\n" + "\n".join(params.decode("UTF-16-LE").strip().split("\t"))
+        )
+        cfg = CaseSensitiveConfigParser()
+        # cfg.readfp(io)
+        cfg.read_file(io)
+        params = dict(cfg.items("Default"))
+        # Convert version strings to tuples with integers
+        for param in ("mvr", "exe"):
+            param += "Version"
+            if param in params:
+                values = params[param].split(".")
+                for i, value in enumerate(values):
+                    with contextlib.suppress(ValueError):
+                        values[i] = int(value)
+                params[param] = tuple(values)
+        return params
+
+    def _process_command_reply(
+        self,
+        record: dict,
+        params: bytes,
+    ) -> bool | int | tuple | ctypes.Array:
+        """Process command reply parameters.
+
+        Args:
+            record (dict): The parsed record from the madVR packet.
+            params (bytes): The raw parameters from the madVR packet.
+
+        Returns:
+            bool | int | tuple | ctypes.Array: The processed parameters based
+                on the command that was replied to, or False if the parameters
+                could not be processed.
+        """
+        commandno = record["commandNo"]
+        replied_command = self._commands.get(commandno)
+        if replied_command:
+            self._commands.pop(commandno)
+            # XXX: madHcNetXX.dll exports madVR_GetBlackAndWhiteLevel,
+            # but the equivalent madVR network protocol command is
+            # GetBlackWhiteLevel (without the "And")!
+            if replied_command == "GetBlackWhiteLevel":
+                params = struct.unpack("<ii", params) if len(params) == 8 else False
+            elif replied_command == "GetDeviceGammaRamp":
+                # Convert to ushort_Array_256_Array_3
+                ramp = ((ctypes.c_ushort * 256) * 3)()
+                if len(params) == 1536:
+                    for j in range(3):
+                        for i in range(256):
+                            ramp[j][i] = round(struct.unpack("<H", params[:2])[0])
+                            params = params[2:]
+                    params = ramp
+                else:
+                    params = False
+            elif replied_command == "GetPatternConfig":
+                params = struct.unpack("<iiii", params) if len(params) == 16 else False
+            elif replied_command in ("GetSelected3dlut",):
+                params = (
+                    struct.unpack("<i", params[0:4])[0] if len(params) == 4 else False
+                )
+        elif self.debug:
+            # Got a reply for a command we never issued?
+            safe_print(f"MadTPG_Net: Got reply {commandno} for unknown command")
+        return params
+
+    def _log_record_info(self, record: dict) -> None:
+        """Log madVR packet record information.
+
+        Args:
+            record (dict): The parsed record from the madVR packet.
+        """
+        with _LOCK:
+            safe_print(
+                record["processId"],
+                record["module"],
+                record["commandNo"],
+                record["component"],
+                record["instance"],
+                record["command"],
+            )
+            for key in record:
+                value = record[key]
+                if key != "params" and self.debug <= 2:
+                    continue
+                if isinstance(value, dict):
+                    safe_print(f"  {key}:")
+                    for subkey in value:
+                        subvalue = value[subkey]
+                        if self.debug < 2 and subkey != "exeFile":
+                            continue
+                        safe_print(f"    {subkey.ljust(16)} = {trunc(subvalue, 56)}")
+                elif self.debug > 1:
+                    safe_print(f"  {key.ljust(16)} = {trunc(value, 58)}")
+
+    def _assemble(
+        self,
+        conn: socket.socket,
+        commandno: int = 1,
+        command: str = "",
+        params: bytes | str = "",
+        component: bytes = b"madTPG",
+    ) -> bytes:
+        """Assemble packet.
+
+        Args:
+            conn (socket.socket): The connection socket to send the command
+                through.
+            commandno (int): The command number, defaults to 1.
+            command (str, optional): The command to send, e.g. "SetOsdText",
+                "ShowRGB", etc.
+            params (bytes | str): Parameters for the command, can be a string
+                or bytes.
+            component (bytes): The component name, defaults to b"madTPG".
+
+        Raises:
+            OSError: If assembling the command fails.
+
+        Returns:
+            bytes: The assembled packet ready to be sent.
+        """
         magic = b"mad."
         data = struct.pack("<i", os.getpid())  # processId : 4
         data += struct.pack("<q", id(sys.modules[__name__]))  # module/DLL handle : 8
@@ -1764,13 +2410,35 @@ class MadTPGNet(MadTPGBase):
         packet += struct.pack("<I", crc32(packet) & 0xFFFFFFFF)  # 4
         packet += data
         if self.debug > 1:
-            with _lock:
+            with _LOCK:
                 safe_print("MadTPG_Net: Assembled madVR packet:")
                 self._parse(packet)
         return packet
 
-    def _send(self, conn, command="", params="", component=b"madTPG"):
-        """Send madTPG command and return reply."""
+    def _send(
+        self,
+        conn: socket.socket,
+        command: str = "",
+        params: bytes | str = "",
+        component: bytes = b"madTPG",
+    ) -> bool:
+        """Send madTPG command and return reply.
+
+        Args:
+            conn (socket.socket): The connection socket to send the command
+                through.
+            command (str, optional): The command to send, e.g. "SetOsdText",
+                "ShowRGB", etc.
+            params (bytes | str): Parameters for the command, can be a string
+                or bytes.
+            component (bytes): The component name, defaults to b"madTPG".
+
+        Raises:
+            OSError: If sending the command fails.
+
+        Returns:
+            bool: True if the command was sent successfully, False otherwise.
+        """
         if not conn:
             return False
         self._commandno += 1
@@ -1828,7 +2496,7 @@ class MadTPGNet(MadTPGBase):
         return True
 
     @property
-    def uri(self):
+    def uri(self) -> str:
         """Return the URI of the connected madTPG instance.
 
         Returns:
@@ -1851,14 +2519,14 @@ class MadTPGNetSender:
         command (str): The command to send, e.g. "SetOsdText", "ShowRGB", etc.
     """
 
-    def __init__(self, madtpg, conn, command):
+    def __init__(self, madtpg: MadTPGNet, conn: socket.socket, command: str) -> None:
         self.madtpg = madtpg
         self._conn = conn
         if command == "Quit":
             command = "Exit"
         self.command = command
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs) -> bool | str | tuple:
         """Send command to madTPG instance and return reply.
 
         Args:
@@ -1878,6 +2546,7 @@ class MadTPGNetSender:
         elif self.command in ("Load3dlutFromArray256", "LoadHdr3dlutFromArray256"):
             lutdata = args[0]
             self.command = self.command[:-12]  # Strip 'File' from command name
+
         if self.command in ("Load3dlut", "LoadHdr3dlut"):
             params = struct.pack("<i", args[1])  # Save to settings?
             params += struct.pack("<i", args[2])  # 3D LUT slot
@@ -1885,13 +2554,7 @@ class MadTPGNetSender:
             if self.command == "LoadHdr3dlut":
                 params += struct.pack("<i", args[3])  # HDR to SDR?
         elif self.command == "SetDeviceGammaRamp":
-            params = b""
-            for j in range(3):
-                for i in range(256):
-                    # Clear device gamma ramp if args[0] is None
-                    # else convert ushort_Array_256_Array_3 to string
-                    v = i * 257 if args[0] is None else args[0][j][i]
-                    params += struct.pack("<H", v)
+            self._process_set_device_gamma_ramp_param(args)
         elif self.command in (
             "SetDisableOsdButton",
             "SetStayOnTopButton",
@@ -1903,37 +2566,64 @@ class MadTPGNetSender:
         elif self.command in ("SetPatternConfig", "SetProgressBarPos"):
             params = "|".join(str(v) for v in args)
         elif self.command == "ShowRGB":
-            r = kwargs.get("r")
-            g = kwargs.get("g")
-            b = kwargs.get("b")
-            bgr = kwargs.get("bgr")
-            bgg = kwargs.get("bgg")
-            bgb = kwargs.get("bgb")
-            if len(args) >= 3:
-                r, g, b = args[:3]
-            if len(args) > 3:
-                bgr = args[3]
-            if len(args) > 4:
-                bgg = args[4]
-            if len(args) > 5:
-                bgb = args[5]
-            rgb = r, g, b
-            if None not in (bgr, bgg, bgb):
-                self.command += "Ex"
-                rgb += (bgr, bgg, bgb)
-            if None in (r, g, b):
-                raise TypeError(
-                    "show_rgb() takes at least 4 arguments "
-                    f"({len([v for v in rgb if v])} given)"
-                )
-            params = "|".join(str(v) for v in rgb)
+            params = self._process_show_rgb_param(args, kwargs)
         else:
             params = str(*args)
+
         return self.madtpg._send(
             self._conn,
             self.command,
             params if isinstance(params, bytes) else params.encode(),
         )
+
+    def _process_set_device_gamma_ramp_param(self, args: list | tuple) -> None:
+        """Process SetDeviceGammaRamp parameters.
+
+        Args:
+            args (list | tuple): Positional arguments for the
+                SetDeviceGammaRamp command.
+        """
+        params = b""
+        for j in range(3):
+            for i in range(256):
+                # Clear device gamma ramp if args[0] is None
+                # else convert ushort_Array_256_Array_3 to string
+                v = i * 257 if args[0] is None else args[0][j][i]
+                params += struct.pack("<H", v)
+
+    def _process_show_rgb_param(self, args: list | tuple, kwargs: dict) -> str:
+        """Process ShowRGB parameters and return formatted string.
+
+        Args:
+            args (list | tuple): Positional arguments for the ShowRGB command.
+            kwargs (dict): Keyword arguments for the ShowRGB command.
+
+        Raises:
+            TypeError: If required RGB values are not provided.
+
+        Returns:
+            str: Formatted string of RGB values for the ShowRGB command.
+        """
+        r = kwargs.get("r")
+        g = kwargs.get("g")
+        b = kwargs.get("b")
+        bgr = kwargs.get("bgr")
+        bgg = kwargs.get("bgg")
+        bgb = kwargs.get("bgb")
+        r, g, b = args[:3] if len(args) >= 3 else (r, g, b)
+        bgr = args[3] if len(args) > 3 else bgr
+        bgg = args[4] if len(args) > 4 else bgg
+        bgb = args[5] if len(args) > 5 else bgb
+        rgb = r, g, b
+        if None not in (bgr, bgg, bgb):
+            self.command += "Ex"
+            rgb += (bgr, bgg, bgb)
+        if None in (r, g, b):
+            raise TypeError(
+                "show_rgb() takes at least 4 arguments "
+                f"({len([v for v in rgb if v])} given)"
+            )
+        return "|".join(str(v) for v in rgb)
 
 
 if __name__ == "__main__":
