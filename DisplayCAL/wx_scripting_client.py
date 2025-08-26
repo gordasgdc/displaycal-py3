@@ -15,9 +15,7 @@ from wx.lib import delayedresult
 from DisplayCAL import (
     config,
 )
-from DisplayCAL import (
-    localization as lang,
-)
+from DisplayCAL import localization as lang
 from DisplayCAL.config import CONFIG_HOME, getcfg, setcfg, writecfg
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.util_str import safe_str, universal_newlines

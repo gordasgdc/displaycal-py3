@@ -20,9 +20,7 @@ from typing import Any, ClassVar
 from wx.lib.agw import aui
 from wx.lib.intctrl import IntCtrl
 
-from DisplayCAL import (
-    localization as lang,
-)
+from DisplayCAL import localization as lang
 from DisplayCAL.config import (
     DEFAULTS,
     FS_ENC,
