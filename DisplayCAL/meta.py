@@ -1,4 +1,5 @@
 """Meta information."""
+from __future__ import annotations
 
 import re
 
@@ -65,8 +66,15 @@ WX_MINVERSION = (4, 0, 0)
 WX_RECVERSION = (4, 2, 0)
 
 
-def get_latest_changelog_entry(readme):
-    """Get changelog entry for latest version from ReadMe HTML."""
+def get_latest_changelog_entry(readme: str) -> None | str:
+    """Get changelog entry for latest version from ReadMe HTML.
+
+    Args:
+        readme (str): ReadMe HTML content.
+
+    Returns:
+        None | str: Changelog entry or None if not found.
+    """
     changelog = re.search(
         r'<div id="(?:changelog|history)">.+?<h2>.+?</h2>.+?<dl>.+?</dd>', readme, re.S
     )
