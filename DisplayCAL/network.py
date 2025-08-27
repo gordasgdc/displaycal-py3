@@ -11,6 +11,7 @@ import socket
 import sys
 import urllib.error
 import urllib.request
+from typing import TYPE_CHECKING, BinaryIO
 
 if sys.version_info >= (3, 11):
     from typing import Self
@@ -20,8 +21,17 @@ else:
 from DisplayCAL import localization as lang
 from DisplayCAL.util_str import safe_str
 
+if TYPE_CHECKING:
+    from types import TracebackType
 
-def get_network_addr():
+
+DNS_SERVER_IP_ADDR = "8.8.8.8"
+"""Google's public DNS server IP address."""
+DNS_SERVER_PORT = 53
+"""Port number for DNS server."""
+
+
+def get_network_addr() -> str:
     """Try to get the local machine's network address."""
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     # Opening a connection on a UDP socket does nothing except give the socket
@@ -29,7 +39,7 @@ def get_network_addr():
     # as remote address, but could use any valid non-local address (doesn't
     # matter if it is actually reachable)
     try:
-        s.connect(("8.8.8.8", 53))
+        s.connect((DNS_SERVER_IP_ADDR, DNS_SERVER_PORT))
         return s.getsockname()[0]  # Return network address
     finally:
         s.close()
@@ -81,12 +91,19 @@ class LoggingHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
     # assuming we're in a loop
     max_redirections = 10
 
-    def http_error_302(self, req, fp, code, msg, headers):
+    def http_error_302(
+        self,
+        req: urllib.request.Request,
+        fp: BinaryIO,
+        code: int,
+        msg: str,
+        headers: dict,
+    ) -> None | urllib.request.HTTPRedirectHandler:
         """Handle HTTP 302 redirection error.
 
         Args:
             req (urllib.request.Request): The request object.
-            fp (file-like object): The file-like object containing the
+            fp (BinaryIO): The file-like object containing the
                 response.
             code (int): The HTTP status code.
             msg (str): The HTTP status message.
@@ -133,12 +150,19 @@ class NoHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
         headers (dict): The response headers.
     """
 
-    def http_error_302(self, req, fp, code, msg, headers):
+    def http_error_302(
+        self,
+        req: urllib.request.Request,
+        fp: BinaryIO,
+        code: int,
+        msg: str,
+        headers: dict,
+    ) -> None:
         """Handle HTTP 302 redirection error.
 
         Args:
             req (urllib.request.Request): The request object.
-            fp (file-like object): The file-like object containing the
+            fp (BinaryIO): The file-like object containing the
                 response.
             code (int): The HTTP status code.
             msg (str): The HTTP status message.
@@ -171,6 +195,10 @@ class NoHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
 class ScriptingClientSocket(socket.socket):
     """A socket class for handling scripting client connections."""
 
+    def __init__(self) -> None:
+        socket.socket.__init__(self)
+        self.recv_buffer = b""
+
     def __del__(self) -> None:
         """Destructor for the ScriptingClientSocket class."""
         self.disconnect()
@@ -183,24 +211,25 @@ class ScriptingClientSocket(socket.socket):
         """
         return self
 
-    def __exit__(self, exc_type, exc_value, tb) -> None:
+    def __exit__(
+        self,
+        exc_type: None | type[BaseException],
+        exc_value: None | BaseException,
+        tb: None | TracebackType,
+    ) -> None:
         """Exit method for context manager.
 
         Args:
             exc_type (type): The type of the exception raised, if any.
-            exc_value (Exception): The exception instance, if any.
-            tb (traceback): The traceback object, if any.
+            exc_value (None | BaseException): The exception instance, if any.
+            tb (None | TracebackType): The traceback object, if any.
 
         Returns:
             None
         """
         self.disconnect()
 
-    def __init__(self):
-        socket.socket.__init__(self)
-        self.recv_buffer = b""
-
-    def disconnect(self):
+    def disconnect(self) -> None:
         """Disconnect the socket and clean up resources."""
         try:
             # Will fail if the socket isn't connected, i.e. if there was an
@@ -211,7 +240,7 @@ class ScriptingClientSocket(socket.socket):
                 print(exception)
         self.close()
 
-    def get_single_response(self):
+    def get_single_response(self) -> bytes:
         """Receive a single response from the socket.
 
         Returns:
@@ -229,7 +258,7 @@ class ScriptingClientSocket(socket.socket):
         self.recv_buffer = self.recv_buffer[end + 1 :]
         return single_response
 
-    def send_command(self, command):
+    def send_command(self, command: str) -> None:
         """Send a command to the socket.
 
         Args:
