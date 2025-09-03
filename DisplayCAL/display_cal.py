@@ -4636,7 +4636,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     continue
                 if desc == lstr:
                     desc = cgats.get_descriptor()  # this is bytes
-                    desc = desc.decode("utf-8")
+                    desc = desc.decode("utf-8", "replace")
                 # If the description is not the same as the 'sane'
                 # filename, add the filename after the description
                 # (max 31 chars)
