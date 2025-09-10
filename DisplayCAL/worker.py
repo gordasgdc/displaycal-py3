@@ -5313,8 +5313,12 @@ END_DATA
                             defaults["calibration.black_point_hack"] = 1
 
                         if self.argyll_version >= [1, 9, 4]:
-                            # Add CIE 2012 observers
-                            valid_observers = natsort(observers + ["2012_2", "2012_10"])
+                            if self.argyll_version < [3, 4, 0]:
+                                # Add CIE 2012 observers
+                                valid_observers = natsort(observers + ["2012_2", "2012_10"])
+                            else:
+                                # Add CIE 2015 observers
+                                valid_observers = natsort(observers + ["2015_2", "2015_10"])
                         else:
                             valid_observers = observers
                         for key in [
