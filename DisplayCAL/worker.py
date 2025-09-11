@@ -13408,9 +13408,7 @@ usage: spotread [-options] [logfile]
                 # above zero device input if set up correctly. Using this option
                 # with a display that is not well behaved may result in a loss
                 # of shadow detail.
-                self.log("skipping -b parameter")
-                # args.append("-b")
-                pass
+                args.append("-b")
             if verify:
                 if calibrate and isinstance(verify, int):
                     args.append(f"-e{verify}")  # Verify final computed curves
