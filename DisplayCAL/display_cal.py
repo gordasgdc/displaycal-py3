@@ -151,6 +151,7 @@ from DisplayCAL.icc_profile import (
     TextType,
     XYZType,
     VideoCardGammaType,
+    VideoCardGammaTableType,
 )
 from DisplayCAL.log import log, logbuffer
 from DisplayCAL.meta import (
