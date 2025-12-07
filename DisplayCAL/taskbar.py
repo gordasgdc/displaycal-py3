@@ -68,6 +68,8 @@ Here is the code for future reference:
 
 """
 
+# Third Party Imports
+import wx
 from comtypes import client
 from comtypes.gen import TaskbarLib
 
@@ -91,11 +93,11 @@ class Taskbar:
         maxv (int): The maximum value for the progress bar, default is 100.
     """
 
-    def __init__(self, frame, maxv=100):
+    def __init__(self, frame: wx.Frame, maxv: int = 100) -> None:
         self.frame = frame
         self.maxv = maxv
 
-    def set_progress_value(self, value):
+    def set_progress_value(self, value: int) -> None:
         """Set the taskbar progress value.
 
         Args:
@@ -104,7 +106,7 @@ class Taskbar:
         if self.frame:
             taskbar.SetProgressValue(self.frame.GetHandle(), value, self.maxv)
 
-    def set_progress_state(self, state):
+    def set_progress_state(self, state: int) -> None:
         """Set the taskbar progress state.
 
         Args:
