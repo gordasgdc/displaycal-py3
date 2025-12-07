@@ -36,19 +36,30 @@ Create a new task to be run under the current user account at logon:
 
 """
 
+# Standard Library Imports
+from __future__ import annotations
+
 import codecs
 import os
 import subprocess as sp
 import tempfile
-from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any
 
+# Third Party Imports
 import pywintypes
 import winerror
 
+# Local Imports
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.safe_print import ENC
 from DisplayCAL.util_str import indent, universal_newlines
 from DisplayCAL.util_win import run_as_admin
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from win32com.taskscheduler import ITaskScheduler
+
 
 RUNLEVEL_HIGHESTAVAILABLE = "HighestAvailable"
 RUNLEVEL_LEASTPRIVILEGE = "LeastPrivilege"
@@ -58,16 +69,26 @@ MULTIPLEINSTANCES_STOPEXISTING = "StopExisting"
 
 
 class _Dict2XML(dict):
-    # Subclass this
+    """Base class for dictionary to XML conversion.
 
-    def __init__(self, *args, **kwargs):
+    Uses the dictionary keys as XML element names and the values as
+    element values. Special keys 'cls_name' and 'cls_attr' are used to set
+    the class name and attributes of the root element.
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
         dict.__init__(self, *args, **kwargs)
         if "cls_name" not in self:
             self["cls_name"] = self.__class__.__name__
         if "cls_attr" not in self:
             self["cls_attr"] = ""
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """Convert the dict to a string representation in XML format.
+
+        Returns:
+            str: The string representation of the dict in XML format.
+        """
         items = []
         for name in self:
             value = self[name]
@@ -94,11 +115,24 @@ class _Dict2XML(dict):
 
 
 class _Trigger(_Dict2XML):
-    # Subclass this
+    """Base class for triggers.
+
+    Args:
+        interval (str): The interval between repetitions in ISO 8601 format.
+        duration (str): The duration for which the trigger should repeat in
+            ISO 8601 format.
+        stop_at_duration_end (bool): Whether to stop the trigger at the end of
+            the duration.
+        enabled (bool): Whether the trigger is enabled.
+    """
 
     def __init__(
-        self, interval=None, duration=None, stop_at_duration_end=False, enabled=True
-    ):
+        self,
+        interval: None | str = None,
+        duration: None | str = None,
+        stop_at_duration_end: bool = False,
+        enabled: bool = True,
+    ) -> None:
         repetition = (
             interval
             and _Dict2XML(
@@ -112,18 +146,29 @@ class _Trigger(_Dict2XML):
 
 
 class CalendarTrigger(_Trigger):
-    """Trigger for a calendar event."""
+    """Trigger for a calendar event.
+
+    Args:
+        start_boundary (str): The start boundary in ISO 8601 format.
+        days_interval (int): The interval in days for the trigger.
+        weeks_interval (int): The interval in weeks for the trigger.
+        days_of_week (list[int]): The days of the week for the trigger (1=
+            Sunday, 2=Monday, ..., 7=Saturday).
+        months (list[int]): The months for the trigger (1=January, 2=February,
+            ..., 12=December).
+        days_of_month (list[int]): The days of the month for the trigger (1-31).
+    """
 
     def __init__(
         self,
-        start_boundary="2019-09-17T00:00:00",
-        days_interval=1,
-        weeks_interval=0,
-        days_of_week=None,
-        months=None,
-        days_of_month=None,
+        start_boundary: str = "2019-09-17T00:00:00",
+        days_interval: int = 1,
+        weeks_interval: int = 0,
+        days_of_week: None | list[int] = None,
+        months: None | list[int] = None,
+        days_of_month: None | list[int] = None,
         **kwargs,
-    ):
+    ) -> None:
         _Trigger.__init__(self, **kwargs)
         self["start_boundary"] = start_boundary
         self["schedule_by_day"] = (
@@ -155,7 +200,7 @@ class LogonTrigger(_Trigger):
 class ResumeFromSleepTrigger(_Trigger):
     """Trigger for when the system resumes from sleep."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         _Trigger.__init__(self, *args, **kwargs)
         self["subscription"] = (
             """&lt;QueryList&gt;&lt;Query Id="0" Path="System"&gt;&lt;"""
@@ -176,7 +221,7 @@ class ExecAction(_Dict2XML):
             which means no arguments.
     """
 
-    def __init__(self, cmd, args=None):
+    def __init__(self, cmd: str, args: None | list[str] = None) -> None:
         # Filter any None values
         args = [arg for arg in args if arg is not None]
         _Dict2XML.__init__(
@@ -222,39 +267,39 @@ class Task(_Dict2XML):
         wake_to_run (bool): Whether to wake the system to run the task.
         execution_time_limit (str): The execution time limit for the task.
         priority (int): The priority of the task.
-        triggers (list[Trigger]): List of triggers for this task, e.g.:
+        triggers (list[_Trigger]): List of triggers for this task, e.g.:
             [LogonTrigger(), CalendarTrigger(), ResumeFromSleepTrigger()].
-        actions (list[Action]): List of actions for this task, e.g.:
+        actions (list[ExecAction]): List of actions for this task, e.g.:
             [ExecAction("program.exe", ["arg1", "arg2"])].
     """
 
     def __init__(
         self,
-        name="",
-        author="",
-        description="",
-        group_id="S-1-5-4",
-        run_level=RUNLEVEL_LEASTPRIVILEGE,
-        multiple_instances_policy=MULTIPLEINSTANCES_IGNORENEW,
-        disallow_start_if_on_batteries=False,
-        stop_if_going_on_batteries=False,
-        allow_hard_terminate=True,
-        start_when_available=False,
-        run_only_if_network_available=False,
-        duration=None,
-        wait_timeout=None,
-        stop_on_idle_end=False,
-        restart_on_idle=False,
-        allow_start_on_demand=True,
-        enabled=True,
-        hidden=False,
-        run_only_if_idle=False,
-        wake_to_run=False,
-        execution_time_limit="PT72H",
-        priority=5,
-        triggers=None,
-        actions=None,
-    ):
+        name: str = "",
+        author: str = "",
+        description: str = "",
+        group_id: str = "S-1-5-4",
+        run_level: str = RUNLEVEL_LEASTPRIVILEGE,
+        multiple_instances_policy: str = MULTIPLEINSTANCES_IGNORENEW,
+        disallow_start_if_on_batteries: bool = False,
+        stop_if_going_on_batteries: bool = False,
+        allow_hard_terminate: bool = True,
+        start_when_available: bool = False,
+        run_only_if_network_available: bool = False,
+        duration: None | str = None,
+        wait_timeout: None | str = None,
+        stop_on_idle_end: bool = False,
+        restart_on_idle: bool = False,
+        allow_start_on_demand: bool = True,
+        enabled: bool = True,
+        hidden: bool = False,
+        run_only_if_idle: bool = False,
+        wake_to_run: bool = False,
+        execution_time_limit: str = "PT72H",
+        priority: int = 5,
+        triggers: None | list[_Trigger] = None,
+        actions: None | list[ExecAction] = None,
+    ) -> None:
         idle_settings = {
             "duration": duration,
             "wait_timeout": wait_timeout,
@@ -306,7 +351,7 @@ class Task(_Dict2XML):
         )
         _Dict2XML.__init__(self, kwargs)
 
-    def add_exec_action(self, cmd, args=None):
+    def add_exec_action(self, cmd: str, args: None | list[str] = None) -> None:
         """Add an exec action to the task.
 
         Args:
@@ -316,7 +361,7 @@ class Task(_Dict2XML):
         """
         self["actions"]["items"].append(ExecAction(cmd, args))
 
-    def add_logon_trigger(self, enabled=True):
+    def add_logon_trigger(self, enabled: bool = True) -> None:
         """Add a logon trigger to the task.
 
         Args:
@@ -325,7 +370,7 @@ class Task(_Dict2XML):
         """
         self["triggers"]["items"].append(LogonTrigger(enabled))
 
-    def write_xml(self, xmlfilename):
+    def write_xml(self, xmlfilename: str) -> None:
         """Write the task to an XML file.
 
         Args:
@@ -355,13 +400,13 @@ class TaskScheduler:
     Currently only implemented for Windows (Vista and up).
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.__ts = None
         self.stdout = b""
         self.lastreturncode = None
 
     @property
-    def _ts(self):
+    def _ts(self) -> ITaskScheduler:
         if not self.__ts:
             import pythoncom
             from win32com.taskscheduler.taskscheduler import (
@@ -388,7 +433,7 @@ class TaskScheduler:
         """
         return f"{name}.job" in self._ts.Enum()
 
-    def __getitem__(self, name: str) -> "Task":
+    def __getitem__(self, name: str) -> Task:
         """Get existing task by name.
 
         Args:
@@ -409,34 +454,34 @@ class TaskScheduler:
 
     def create_task(
         self,
-        name,
-        author="",
-        description="",
-        group_id="S-1-5-4",
-        run_level=RUNLEVEL_LEASTPRIVILEGE,
-        multiple_instances_policy=MULTIPLEINSTANCES_IGNORENEW,
-        disallow_start_if_on_batteries=False,
-        stop_if_going_on_batteries=False,
-        allow_hard_terminate=True,
-        start_when_available=False,
-        run_only_if_network_available=False,
-        duration=None,
-        wait_timeout=None,
-        stop_on_idle_end=False,
-        restart_on_idle=False,
-        allow_start_on_demand=True,
-        enabled=True,
-        hidden=False,
-        run_only_if_idle=False,
-        wake_to_run=False,
-        execution_time_limit="PT72H",
-        priority=5,
-        triggers=None,
-        actions=None,
-        replace_existing=False,
-        elevated=False,
-        echo=False,
-    ):
+        name: str,
+        author: str = "",
+        description: str = "",
+        group_id: str = "S-1-5-4",
+        run_level: str = RUNLEVEL_LEASTPRIVILEGE,
+        multiple_instances_policy: str = MULTIPLEINSTANCES_IGNORENEW,
+        disallow_start_if_on_batteries: bool = False,
+        stop_if_going_on_batteries: bool = False,
+        allow_hard_terminate: bool = True,
+        start_when_available: bool = False,
+        run_only_if_network_available: bool = False,
+        duration: None | str = None,
+        wait_timeout: None | int = None,
+        stop_on_idle_end: bool = False,
+        restart_on_idle: bool = False,
+        allow_start_on_demand: bool = True,
+        enabled: bool = True,
+        hidden: bool = False,
+        run_only_if_idle: bool = False,
+        wake_to_run: bool = False,
+        execution_time_limit: str = "PT72H",
+        priority: int = 5,
+        triggers: None | list[_Trigger] = None,
+        actions: None | list[ExecAction] = None,
+        replace_existing: bool = False,
+        elevated: bool = False,
+        echo: bool = False,
+    ) -> bool:
         """Create a new task.
 
         If replace_existing evaluates to True, delete any existing task with
@@ -494,7 +539,7 @@ class TaskScheduler:
                 temporary files.
 
         Returns:
-            Task: The created task object.
+            bool: True if the task was created successfully, False otherwise.
         """
         kwargs = {
             "name": name,
@@ -539,34 +584,34 @@ class TaskScheduler:
 
     def create_logon_task(
         self,
-        name,
-        cmd,
-        args=None,
-        author="",
-        description="",
-        group_id="S-1-5-4",
-        run_level=RUNLEVEL_LEASTPRIVILEGE,
-        multiple_instances_policy=MULTIPLEINSTANCES_IGNORENEW,
-        disallow_start_if_on_batteries=False,
-        stop_if_going_on_batteries=False,
-        allow_hard_terminate=True,
-        start_when_available=False,
-        run_only_if_network_available=False,
-        duration=None,
-        wait_timeout=None,
-        stop_on_idle_end=False,
-        restart_on_idle=False,
-        allow_start_on_demand=True,
-        enabled=True,
-        hidden=False,
-        run_only_if_idle=False,
-        wake_to_run=False,
-        execution_time_limit="PT72H",
-        priority=5,
-        replace_existing=False,
-        elevated=False,
-        echo=False,
-    ):
+        name: str,
+        cmd: str,
+        args: None | list[str] = None,
+        author: str = "",
+        description: str = "",
+        group_id: str = "S-1-5-4",
+        run_level: str = RUNLEVEL_LEASTPRIVILEGE,
+        multiple_instances_policy: str = MULTIPLEINSTANCES_IGNORENEW,
+        disallow_start_if_on_batteries: bool = False,
+        stop_if_going_on_batteries: bool = False,
+        allow_hard_terminate: bool = True,
+        start_when_available: bool = False,
+        run_only_if_network_available: bool = False,
+        duration: None | str = None,
+        wait_timeout: None | str = None,
+        stop_on_idle_end: bool = False,
+        restart_on_idle: bool = False,
+        allow_start_on_demand: bool = True,
+        enabled: bool = True,
+        hidden: bool = False,
+        run_only_if_idle: bool = False,
+        wake_to_run: bool = False,
+        execution_time_limit: str = "PT72H",
+        priority: int = 5,
+        replace_existing: bool = False,
+        elevated: bool = False,
+        echo: bool = False,
+    ) -> Task:
         """Create a new task to be run under the current user account at logon.
 
         Args:
@@ -588,7 +633,7 @@ class TaskScheduler:
                 available.
             run_only_if_network_available (bool): Whether to run the task only
                 if the network is available.
-            duration (str): The duration for which the task should run.
+            duration (None | str): The duration for which the task should run.
             wait_timeout (str): The timeout for waiting for the task to finish.
             stop_on_idle_end (bool): Whether to stop the task when the system
                 goes idle.
@@ -643,33 +688,49 @@ class TaskScheduler:
         }
         return self.create_task(**kwargs)
 
-    def delete(self, name):
-        """Delete existing task."""
+    def delete(self, name: str) -> None:
+        """Delete existing task.
+
+        Args:
+            name (str): The name of the task to delete.
+        """
         self._ts.Delete(name)
 
-    def disable(self, name, echo=False):
-        """Disable (deactivate) existing task."""
+    def disable(self, name: str, echo: bool = False) -> None:
+        """Disable (deactivate) existing task.
+
+        Args:
+            name (str): The name of the task to disable.
+            echo (bool): Whether to print the command output to stdout.
+        """
         self._schtasks(["/Change", "/TN", name, "/DISABLE"], echo=echo)
 
-    def enable(self, name, echo=False):
-        """Enable (activate) existing task."""
+    def enable(self, name: str, echo: bool = False) -> None:
+        """Enable (activate) existing task.
+
+        Args:
+            name (str): The name of the task to enable.
+            echo (bool): Whether to print the command output to stdout.
+        """
         self._schtasks(["/Change", "/TN", name, "/ENABLE"], echo=echo)
 
-    def get(self, name, default=None):
+    def get(self, name: str, default: None | Any = None) -> None | Task:  # noqa: ANN401
         """Get existing task.
 
         Args:
             name (str): The name of the task to retrieve.
-            default: The value to return if the task does not exist.
+            default (None | Any): The value to return if the task does not
+                exist.
 
         Returns:
-            Task: The task object if it exists, otherwise the default value.
+            None | Task: The task object if it exists, otherwise the default
+                value.
         """
         if name in self:
             return self[name]
         return default
 
-    def get_exit_code(self, task):
+    def get_exit_code(self, task: Task) -> tuple[int, int]:
         """Shorthand for task.GetExitCode().
 
         Return a 2-tuple exitcode, startup_error_code.
@@ -682,7 +743,7 @@ class TaskScheduler:
         """
         return task.GetExitCode()
 
-    def items(self):
+    def items(self) -> list[tuple[str, Task]]:
         """Iterate over existing tasks and their names.
 
         Returns:
@@ -691,7 +752,7 @@ class TaskScheduler:
         """
         return list(zip(self, self.tasks()))
 
-    def iteritems(self):
+    def iteritems(self) -> Iterator[tuple[str, Task]]:
         """Iterate over existing tasks and their names.
 
         Returns:
@@ -700,7 +761,7 @@ class TaskScheduler:
         """
         return zip(self, self.itertasks())
 
-    def itertasks(self):
+    def itertasks(self) -> Iterator[Task]:
         """Iterate over existing tasks.
 
         Returns:
@@ -709,7 +770,7 @@ class TaskScheduler:
         """
         return map(self.get, self)
 
-    def run(self, name, elevated=False, echo=False):
+    def run(self, name: str, elevated: bool = False, echo: bool = False) -> bool:
         """Run existing task.
 
         Args:
@@ -722,7 +783,7 @@ class TaskScheduler:
         """
         return self._schtasks(["/Run", "/TN", name], elevated, echo)
 
-    def has_task(self, name):
+    def has_task(self, name: str) -> bool:
         """Same as name in self.
 
         Args:
@@ -733,19 +794,22 @@ class TaskScheduler:
         """
         return name in self
 
-    def query_task(self, name, echo=False):
+    def query_task(self, name: str, echo: bool = False) -> bool:
         """Query task.
 
         Args:
             name (str): The name of the task to query.
-            echo (bool): Whether to print the command output to stdout.
+            echo (bool, optional): Whether to print the command output to
+                stdout. Default is False.
 
         Returns:
             bool: True if the task exists, False otherwise.
         """
         return self._schtasks(["/Query", "/TN", name], False, echo)
 
-    def _schtasks(self, args, elevated=False, echo=False):
+    def _schtasks(
+        self, args: list[str], elevated: bool = False, echo: bool = False
+    ) -> bool:
         """Run schtasks.exe with the given arguments.
 
         Args:
@@ -787,7 +851,7 @@ class TaskScheduler:
             self.lastreturncode = p.returncode
         return self.lastreturncode == 0
 
-    def tasks(self):
+    def tasks(self) -> list[Task]:
         """Get existing tasks.
 
         Returns:
@@ -798,8 +862,15 @@ class TaskScheduler:
 
 if __name__ == "__main__":
 
-    def print_task_attr(name, attr, *args):
-        """Print task attribute."""
+    def print_task_attr(name: str, attr: Any, *args: list[Any]) -> None:  # noqa: ANN401
+        """Print task attribute.
+
+        Args:
+            name (str): The name of the attribute.
+            attr (Any): The attribute value.
+            *args: Additional arguments to pass to the attribute if it is
+                callable.
+        """
         print(f"{name:18s}:", end=" ")
         if callable(attr):
             try:
