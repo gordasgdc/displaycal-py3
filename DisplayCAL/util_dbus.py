@@ -3,6 +3,9 @@
 Provides object access, method calls, properties, and introspection.
 """
 
+# Standard library imports
+from __future__ import annotations
+
 import sys
 
 USE_GI = True
@@ -41,14 +44,27 @@ BUSTYPE_SYSTEM = 2
 
 
 class DBusObjectInterfaceMethod:
-    """A class representing a D-Bus object interface method."""
+    """A class representing a D-Bus object interface method.
 
-    def __init__(self, iface, method_name):
+    Args:
+        iface (object): The D-Bus interface object.
+        method_name (str): The name of the D-Bus method.
+    """
+
+    def __init__(self, iface: object, method_name: str) -> None:
         self._iface = iface
         self._method_name = method_name
 
-    def __call__(self, *args, **kwargs):
-        """Call the D-Bus method with the given arguments."""
+    def __call__(self, *args, **kwargs) -> object:
+        """Call the D-Bus method with the given arguments.
+
+        Args:
+            *args: Positional arguments to pass to the D-Bus method.
+            **kwargs: Keyword arguments to pass to the D-Bus method.
+
+        Returns:
+            object: The result of the D-Bus method call.
+        """
         if USE_GI:
             format_string = ""
             value = []
@@ -73,9 +89,25 @@ class DBusObjectInterfaceMethod:
 
 
 class DBusObject:
-    """A class representing a D-Bus object."""
+    """A class representing a D-Bus object.
 
-    def __init__(self, bus_type, bus_name, object_path=None, iface_name=None):
+    Args:
+        bus_type (int): The type of D-Bus bus (BUSTYPE_SESSION or
+            BUSTYPE_SYSTEM).
+        bus_name (str): The D-Bus bus name.
+        object_path (None | str): The D-Bus object path. If None, it is
+            derived from the bus name.
+        iface_name (None | str): The D-Bus interface name. If None, the
+            bus name is used as the interface name.
+    """
+
+    def __init__(
+        self,
+        bus_type: int,
+        bus_name: str,
+        object_path: None | str = None,
+        iface_name: None | str = None,
+    ) -> None:
         self._bus_type = bus_type
         self._bus_name = bus_name
         if object_path is None:
@@ -109,7 +141,7 @@ class DBusObject:
                 raise DBusObjectError(exception, self._bus_name) from exception
         self._introspectable = None
 
-    def __getattr__(self, name: str) -> "DBusObjectInterfaceMethod":
+    def __getattr__(self, name: str) -> DBusObjectInterfaceMethod:
         """Get an attribute of the D-Bus object.
 
         Args:
@@ -128,7 +160,7 @@ class DBusObject:
             raise DBusObjectError(exception, self._bus_name) from exception
 
     @property
-    def properties(self):
+    def properties(self) -> dict:
         """Get all properties of the D-Bus object.
 
         Raises:
@@ -141,7 +173,7 @@ class DBusObject:
             return {}
         interface = self._bus_name
         if self._iface_name:
-            interface += "." + self._iface_name
+            interface += f".{self._iface_name}"
         try:
             if USE_GI:
                 iface = Gio.DBusProxy.new_sync(
@@ -159,7 +191,7 @@ class DBusObject:
         except (TypeError, ValueError, DBusException) as exception:
             raise DBusObjectError(exception, self._bus_name) from exception
 
-    def introspect(self):
+    def introspect(self) -> XMLDict:
         """Introspect the D-Bus object to get its XML representation.
 
         Raises:
@@ -180,18 +212,23 @@ class DBusObject:
 
 
 class DBusObjectError(DBusException):
-    """Custom exception class for D-Bus object errors."""
+    """Custom exception class for D-Bus object errors.
 
-    def __init__(self, exception, bus_name=None):
+    Args:
+        exception (Exception): The original exception that occurred.
+        bus_name (str | None): The D-Bus bus name associated with the error.
+    """
+
+    def __init__(self, exception: Exception, bus_name: None | str = None) -> None:
         self._dbus_error_name = getattr(exception, "get_dbus_name", lambda: None)()
         if self._dbus_error_name == "org.freedesktop.DBus.Error.ServiceUnknown":
             exception = f"{exception}: {bus_name}"
         DBusException.__init__(self, safe_str(exception))
 
-    def get_dbus_name(self):
+    def get_dbus_name(self) -> None | str:
         """Get the D-Bus error name.
 
         Returns:
-            str: The D-Bus error name, or None if not available.
+            None | str: The D-Bus error name, or None if not available.
         """
         return self._dbus_error_name
