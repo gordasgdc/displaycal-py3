@@ -22,7 +22,7 @@ from DisplayCAL.wx_addons import IdFactory, wx
 class Menu(wx.EvtHandler):
     """A class that represents a system tray icon menu."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         wx.EvtHandler.__init__(self)
         self.hmenu = win32gui.CreatePopupMenu()
         self.MenuItems = []
@@ -33,7 +33,13 @@ class Menu(wx.EvtHandler):
         # functionality
         self._destroyed = False
 
-    def Append(self, id, text, help="", kind=wx.ITEM_NORMAL):  # noqa: A002
+    def Append(  # noqa: N802
+        self,
+        id: int,  # noqa: A002
+        text: str,
+        help: str = "",  # noqa: A002
+        kind: int = wx.ITEM_NORMAL,
+    ) -> MenuItem:
         """Append a menu item to the menu.
 
         Args:
@@ -50,7 +56,7 @@ class Menu(wx.EvtHandler):
         """
         return self.AppendItem(MenuItem(self, id, text, help, kind))
 
-    def AppendCheckItem(self, id, text, help=""):  # noqa: A002
+    def AppendCheckItem(self, id: int, text: str, help: str = "") -> MenuItem:  # noqa: A002, N802
         """Append a checkable menu item to the menu.
 
         Args:
@@ -65,7 +71,7 @@ class Menu(wx.EvtHandler):
         """
         return self.Append(id, text, help, wx.ITEM_CHECK)
 
-    def AppendItem(self, item):
+    def AppendItem(self, item: MenuItem) -> MenuItem:  # noqa: N802
         """Append a menu item to the menu.
 
         Args:
@@ -90,7 +96,7 @@ class Menu(wx.EvtHandler):
             self.Check(item.Id)
         return item
 
-    def AppendSubMenu(self, submenu, text, help=""):  # noqa: A002
+    def AppendSubMenu(self, submenu: Menu, text: str, help: str = "") -> MenuItem:  # noqa: A002, N802
         """Append a submenu to the menu.
 
         Args:
@@ -105,7 +111,7 @@ class Menu(wx.EvtHandler):
         item = MenuItem(self, submenu.hmenu, text, help, wx.ITEM_NORMAL, submenu)
         return self.AppendItem(item)
 
-    def AppendRadioItem(self, id, text, help=""):  # noqa: A002
+    def AppendRadioItem(self, id: int, text: str, help: str = "") -> MenuItem:  # noqa: A002, N802
         """Append a radio item to the menu.
 
         Args:
@@ -120,7 +126,7 @@ class Menu(wx.EvtHandler):
         """
         return self.Append(id, text, help, wx.ITEM_RADIO)
 
-    def AppendSeparator(self):
+    def AppendSeparator(self) -> MenuItem:  # noqa: N802
         """Append a separator to the menu.
 
         Returns:
@@ -128,7 +134,7 @@ class Menu(wx.EvtHandler):
         """
         return self.Append(-1, "", kind=wx.ITEM_SEPARATOR)
 
-    def Check(self, id, check=True):  # noqa: A002
+    def Check(self, id: int, check: bool = True) -> None:  # noqa: A002, N802
         """Check or uncheck a menu item by its ID.
 
         Args:
@@ -169,7 +175,7 @@ class Menu(wx.EvtHandler):
             win32gui.CheckMenuItem(self.hmenu, item_check.Id, flags)
         item_check.Checked = check
 
-    def Destroy(self):
+    def Destroy(self) -> None:  # noqa: N802
         """Destroy the Menu instance and all its menu items."""
         for menuitem in self.MenuItems:
             menuitem.Destroy()
@@ -190,12 +196,13 @@ class Menu(wx.EvtHandler):
         """
         return not self._destroyed
 
-    def Enable(self, id, enable=True):  # noqa: A002
+    def Enable(self, id: int, enable: bool = True) -> None:  # noqa: A002, N802
         """Enable or disable a menu item by its ID.
 
         Args:
             id (int): The ID of the menu item to enable or disable.
-            enable (bool): True to enable the menu item, False to disable it.
+            enable (bool, optional): True to enable the menu item, False to
+                disable it.
         """
         flags = win32con.MF_BYCOMMAND
         if not enable:
@@ -210,25 +217,26 @@ class MenuItem:
 
     Args:
         menu (Menu): The parent menu to which this item belongs.
-        id_ (int): The ID of the menu item. Defaults to -1, which generates a
-            new ID.
-        text (str): The label text for the menu item.
-        help (str): Help text for the menu item, not used in this
+        id_ (int, optional): The ID of the menu item. Defaults to -1, which
+            generates a new ID.
+        text (str, optional): The label text for the menu item.
+        help (str, optional): Help text for the menu item, not used in this
             implementation.
-        kind (int): The type of the menu item, e.g., wx.ITEM_NORMAL,
+        kind (int, optional): The type of the menu item, e.g., wx.ITEM_NORMAL,
             wx.ITEM_CHECK, etc.
-        subMenu (Menu): An optional submenu associated with this menu item.
+        subMenu (None | Menu, optional): An optional submenu associated with
+            this menu item.
     """
 
     def __init__(
         self,
-        menu,
-        id_=-1,
-        text="",
-        help="",  # noqa: A002
-        kind=wx.ITEM_NORMAL,
-        subMenu=None,
-    ):
+        menu: Menu,
+        id_: int = -1,
+        text: str = "",
+        help: str = "",  # noqa: A002
+        kind: int = wx.ITEM_NORMAL,
+        subMenu: None | Menu = None,  # noqa: N803
+    ) -> None:
         if id_ == -1:
             id_ = IdFactory.NewId()
         self.Menu = menu
@@ -242,13 +250,17 @@ class MenuItem:
         if subMenu:
             self.subMenu.Parent = menu
 
-    def Check(self, check=True):
-        """Check or uncheck the menu item."""
+    def Check(self, check: bool = True) -> None:  # noqa: N802
+        """Check or uncheck the menu item.
+
+        Args:
+            check (bool): True to check the menu item, False to uncheck it.
+        """
         self.Checked = check
         if self.Id in self.Menu._menuitems:
             self.Menu.Check(self.Id, check)
 
-    def Destroy(self):
+    def Destroy(self) -> None:  # noqa: N802
         """Destroy the menu item and its associated submenu if it exists."""
         if self.subMenu:
             self.subMenu.Destroy()
@@ -263,7 +275,7 @@ class MenuItem:
         if self.Id in IdFactory.ReservedIds:
             IdFactory.UnreserveId(self.Id)
 
-    def Enable(self, enable=True):
+    def Enable(self, enable: bool = True) -> None:  # noqa: N802
         """Enable or disable the menu item.
 
         Args:
@@ -273,7 +285,7 @@ class MenuItem:
         if self.Id in self.Menu._menuitems:
             self.Menu.Enable(self.Id, enable)
 
-    def GetId(self):
+    def GetId(self) -> int:  # noqa: N802
         """Get the ID of the menu item.
 
         Returns:
@@ -285,11 +297,11 @@ class MenuItem:
 class SysTrayIcon(wx.EvtHandler):
     """A class that creates a system tray icon with a context menu."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         wx.EvtHandler.__init__(self)
-        msg_TaskbarCreated = win32gui.RegisterWindowMessage("TaskbarCreated")
+        msg_taskbar_created = win32gui.RegisterWindowMessage("TaskbarCreated")
         message_map = {
-            msg_TaskbarCreated: self.OnTaskbarCreated,
+            msg_taskbar_created: self.OnTaskbarCreated,
             win32con.WM_DESTROY: self.OnDestroy,
             win32con.WM_COMMAND: self.OnCommand,
             win32con.WM_USER + 20: self.OnTaskbarNotify,
@@ -303,7 +315,7 @@ class SysTrayIcon(wx.EvtHandler):
         wc.hbrBackground = win32con.COLOR_WINDOW
         wc.lpfnWndProc = message_map
 
-        _classAtom = win32gui.RegisterClass(wc)
+        _class_atom = win32gui.RegisterClass(wc)
 
         style = win32con.WS_OVERLAPPED | win32con.WS_SYSMENU
         self.hwnd = win32gui.CreateWindow(
@@ -329,7 +341,7 @@ class SysTrayIcon(wx.EvtHandler):
         # functionality
         self._destroyed = False
 
-    def CreatePopupMenu(self):
+    def CreatePopupMenu(self) -> Menu:  # noqa: N802
         """Override this method in derived classes.
 
         Returns:
@@ -387,7 +399,7 @@ class SysTrayIcon(wx.EvtHandler):
         )
         return menu
 
-    def OnCommand(self, hwnd, msg, wparam, lparam):
+    def OnCommand(self, hwnd: int, msg: int, wparam: int, lparam: int) -> int:  # noqa: N802
         """Handle the command event when a menu item is selected.
 
         Args:
@@ -430,7 +442,7 @@ class SysTrayIcon(wx.EvtHandler):
         item.Menu.ProcessEvent(event)
         return 0
 
-    def OnDestroy(self, hwnd, msg, wparam, lparam):
+    def OnDestroy(self, hwnd: int, msg: int, wparam: int, lparam: int) -> int:  # noqa: N802
         """Handle the window destroy event.
 
         Args:
@@ -447,7 +459,7 @@ class SysTrayIcon(wx.EvtHandler):
             win32gui.PostQuitMessage(0)
         return 0
 
-    def Destroy(self):
+    def Destroy(self) -> None:  # noqa: N802
         """Destroy the SysTrayIcon instance and remove the icon from the system tray."""
         if self.menu:
             self.menu.Destroy()
@@ -463,7 +475,7 @@ class SysTrayIcon(wx.EvtHandler):
         """
         return not self._destroyed
 
-    def OnRightUp(self, event):
+    def OnRightUp(self, event: wx.Event) -> None:  # noqa: N802
         """Handle the right mouse button up event.
 
         Args:
@@ -472,7 +484,7 @@ class SysTrayIcon(wx.EvtHandler):
         """
         self.PopupMenu(self.CreatePopupMenu())
 
-    def OnTaskbarCreated(self, hwnd, msg, wparam, lparam):
+    def OnTaskbarCreated(self, hwnd: int, msg: int, wparam: int, lparam: int) -> int:  # noqa: N802
         """Handle the taskbar created event.
 
         Args:
@@ -480,14 +492,21 @@ class SysTrayIcon(wx.EvtHandler):
             msg (int): Message identifier.
             wparam (int): Additional message information.
             lparam (int): Additional message information.
+
+        Returns:
+            int: Always returns 1 to indicate the message was processed.
         """
         if not self._nid:
-            return
+            return 1
         hicon, tooltip = self._nid[4:6]
         self._nid = None
         self.SetIcon(hicon, tooltip)
 
-    def OnTaskbarNotify(self, hwnd, msg, wparam, lparam):
+        return 1
+
+    def OnTaskbarNotify(  # noqa: N802
+        self, hwnd: int, msg: int, wparam: int, lparam: int
+    ) -> int:
         """Handle taskbar notifications.
 
         Args:
@@ -512,7 +531,7 @@ class SysTrayIcon(wx.EvtHandler):
             self.ProcessEvent(wx.CommandEvent(wx.wxEVT_TASKBAR_RIGHT_UP))
         return 1
 
-    def PopupMenu(self, menu):
+    def PopupMenu(self, menu: Menu) -> None:  # noqa: N802
         """Display a context menu at the current cursor position.
 
         Args:
@@ -537,7 +556,7 @@ class SysTrayIcon(wx.EvtHandler):
         finally:
             self.in_popup = False
 
-    def RemoveIcon(self):
+    def RemoveIcon(self) -> bool:  # noqa: N802
         """Remove the system tray icon.
 
         Returns:
@@ -552,11 +571,11 @@ class SysTrayIcon(wx.EvtHandler):
             return False
         return True
 
-    def SetIcon(self, hicon, tooltip=""):
+    def SetIcon(self, hicon: int | wx.Icon, tooltip: str = "") -> bool:  # noqa: N802
         """Set the icon and tooltip for the system tray icon.
 
         Args:
-            hicon (wx.Icon or int): The icon to set, can be a wx.Icon instance
+            hicon (int | wx.Icon): The icon to set, can be a wx.Icon instance
                 or an icon handle.
             tooltip (str): The tooltip text to display when hovering over the
                 icon.
@@ -576,7 +595,12 @@ class SysTrayIcon(wx.EvtHandler):
         return True
 
 
-def _get_kind_str(kind):
+def _get_kind_str(kind: str) -> str:
+    """Get a string representation of the menu item kind.
+
+    Returns:
+        str: The string representation of the menu item kind.
+    """
     return {
         wx.ITEM_SEPARATOR: "ITEM_SEPARATOR",
         wx.ITEM_NORMAL: "ITEM_NORMAL",
@@ -610,7 +634,7 @@ def _get_selected_menu_item(id: int, menu: Menu) -> None | MenuItem:  # noqa: A0
     return None
 
 
-def main():
+def main() -> None:
     """Main function to create and run the system tray icon."""
     _app = wx.App(0)
     hinst = win32gui.GetModuleHandle(None)
