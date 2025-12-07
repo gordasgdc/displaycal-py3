@@ -1,14 +1,24 @@
 """Temporary helper functions to ease OrderedDict removal."""
 
+# Standard Library Imports
+from __future__ import annotations
 
-def dict_slice(obj, start=None, stop=None, step=None):
+from typing import Callable
+
+
+def dict_slice(
+    obj: dict,
+    start: None | int = None,
+    stop: None | int = None,
+    step: None | int = None,
+) -> dict:
     """Slice the given dict.
 
     Args:
         obj (dict): The dictionary to work on.
-        start (int, None): The start index.
-        stop (int, None): The stop index.
-        step (int, None): The step (currently not used).
+        start (None | int): The start index.
+        stop (None | int): The stop index.
+        step (None | int): The step (currently not used).
 
     Returns:
         dict: The sliced dictionary.
@@ -27,12 +37,12 @@ def dict_slice(obj, start=None, stop=None, step=None):
     return dict(zip(all_keys[start:stop], [obj[key] for key in all_keys[start:stop]]))
 
 
-def dict_sort(obj, key=None):
+def dict_sort(obj: dict, key: None | Callable = None) -> dict:
     """Return a sorted dict.
 
     Args:
         obj (dict): The dictionary to work on.
-        key (callable): A callable to generate the key.
+        key (None | Callable): A callable to generate the key.
 
     Returns:
         dict: The sorted dictionary.
@@ -43,6 +53,13 @@ def dict_sort(obj, key=None):
     return new_dict
 
 
-def swap_dict_keys_values(mydict):
-    """Swap dictionary keys and values."""
-    return {v: k for k, v in mydict.items()}
+def swap_dict_keys_values(dict_in: dict) -> dict:
+    """Swap dictionary keys and values.
+
+    Args:
+        dict_in (dict): The dictionary to swap.
+
+    Returns:
+        dict: The swapped dictionary.
+    """
+    return {v: k for k, v in dict_in.items()}
