@@ -12,7 +12,13 @@ import mimetypes
 import uuid
 
 
-def post_multipart(host, selector, fields, files, charset="UTF-8"):
+def post_multipart(
+    host: str,
+    selector: str,
+    fields: list | tuple,
+    files: list | tuple,
+    charset: str = "utf-8",
+) -> bytes:
     """Post fields and files to an http host as multipart/form-data.
 
     Args:
@@ -24,7 +30,7 @@ def post_multipart(host, selector, fields, files, charset="UTF-8"):
         charset: The character set to use for encoding the fields and files.
 
     Returns:
-        : the server's response page.
+        bytes: The server's response page.
     """
     content_type, body = encode_multipart_formdata(fields, files, charset)
     h = http.client.HTTPConnection(host)
@@ -37,7 +43,9 @@ def post_multipart(host, selector, fields, files, charset="UTF-8"):
     return resp.read()
 
 
-def encode_multipart_formdata(fields, files, charset="UTF-8"):
+def encode_multipart_formdata(
+    fields: tuple | list, files: tuple | list, charset: str = "utf-8"
+) -> tuple[bytes, bytes]:
     """Encode fields and files for multipart/form-data.
 
     Args:
@@ -49,22 +57,23 @@ def encode_multipart_formdata(fields, files, charset="UTF-8"):
             files.
 
     Returns:
-        tuple[content_type, body]: Ready for httplib.HTTP instance.
+        tuple[bytes, bytes]: The content type and the body. Ready for
+            http.client.HTTP instance.
     """
-    BOUNDARY = b"----=_NextPart_" + uuid.uuid1().bytes
-    CRLF = b"\r\n"
-    L = []
+    boundary = b"----=_NextPart_" + uuid.uuid1().bytes
+    crlf = b"\r\n"
+    l = []
     for key, value in fields:
         if isinstance(key, str):
             key = key.encode(charset)
         if isinstance(value, str):
             value = value.encode(charset)
 
-        L.append(b"--" + BOUNDARY)
-        L.append(b'Content-Disposition: form-data; name="' + key + b'"')
-        L.append(b"Content-Type: text/plain; charset=" + charset.encode(charset))
-        L.append(b"")
-        L.append(value)
+        l.append(b"--" + boundary)
+        l.append(b'Content-Disposition: form-data; name="' + key + b'"')
+        l.append(b"Content-Type: text/plain; charset=" + charset.encode(charset))
+        l.append(b"")
+        l.append(value)
 
     for key, filename, value in files:
         if isinstance(key, str):
@@ -74,22 +83,22 @@ def encode_multipart_formdata(fields, files, charset="UTF-8"):
         if isinstance(value, str):
             value = value.encode(charset)
 
-        L.append(b"--" + BOUNDARY)
-        L.append(
+        l.append(b"--" + boundary)
+        l.append(
             b'Content-Disposition: form-data; name="'
             + key
             + b'"; filename="'
             + filename
             + b'"'
         )
-        L.append(b"Content-Type: " + get_content_type(filename).encode(charset))
-        L.append(b"")
-        L.append(value)
+        l.append(b"Content-Type: " + get_content_type(filename).encode(charset))
+        l.append(b"")
+        l.append(value)
 
-    L.append(b"--" + BOUNDARY + b"--")
-    L.append(b"")
-    body = CRLF.join(L)
-    content_type = b"multipart/form-data; boundary=" + BOUNDARY
+    l.append(b"--" + boundary + b"--")
+    l.append(b"")
+    body = crlf.join(l)
+    content_type = b"multipart/form-data; boundary=" + boundary
 
     return content_type, body
 
