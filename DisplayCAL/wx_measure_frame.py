@@ -51,7 +51,7 @@ def get_default_size():
     """Get and return the default size for the window in pixels.
 
     The default size is always equivalent to 100 x 100 mm according
-    to the display's size as returned by the RealDisplaySizeMM function,
+    to the display's size as returned by the real_display_size_mm() function,
     which uses the same code as Argyll to determine that size.
 
     This function is used internally.
@@ -64,10 +64,10 @@ def get_default_size():
         display_size_mm = []
         if real_display_size_mm:
             try:
-                display_size_mm = real_display_size_mm.RealDisplaySizeMM(display_no)
+                display_size_mm = real_display_size_mm.real_display_size_mm(display_no)
             except Exception as exception:
                 handle_error(
-                    f"Error - RealDisplaySizeMM() failed: {exception}", silent=True
+                    f"Error - real_display_size_mm() failed: {exception}", silent=True
                 )
             else:
                 display_size_mm = floatlist(display_size_mm)

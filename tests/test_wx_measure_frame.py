@@ -36,7 +36,7 @@ def test_get_default_size_1(real_display: bool, size_in_mm: tuple[int, int]) -> 
                 if real_display:
                     with check_call(
                         real_display_size_mm,
-                        "RealDisplaySizeMM",
+                        "real_display_size_mm",
                         DisplayData.DISPLAY_DATA_1["size"],
                     ):
                         result = get_default_size()

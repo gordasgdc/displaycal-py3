@@ -2826,7 +2826,7 @@ class VisualWhitepointEditor(wx.Frame):
             geometry = self.GetDisplay().Geometry.Get()
             display_no = get_argyll_display_number(geometry)
             if display_no is not None:
-                size_mm = real_display_size_mm.RealDisplaySizeMM(display_no)
+                size_mm = real_display_size_mm.real_display_size_mm(display_no)
                 if 0 not in size_mm:
                     self.display_size_mm[geometry] = [float(v) for v in size_mm]
                     maxv = round(max(size_mm) / 100.0 * 100)

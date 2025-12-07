@@ -19,14 +19,14 @@ from DisplayCAL.util_x import get_display as _get_x_display
 _displays = None
 
 
-def GetXRandROutputXID(display_no=0):
+def get_xrandr_output_xid(display_no: int = 0) -> int:
     """Return the XRandR output X11 ID of a given display.
 
     Args:
         display_no (int): Display number.
 
     Returns:
-        dict:
+        int: The XRandR output X11 ID or 0 if not found.
     """
     display = get_display(display_no)
     if display:
@@ -34,7 +34,7 @@ def GetXRandROutputXID(display_no=0):
     return 0
 
 
-def RealDisplaySizeMM(display_no=0):
+def real_display_size_mm(display_no: int = 0) -> tuple[int, int]:
     """Return the size (in mm) of a given display.
 
     Args:
@@ -51,7 +51,7 @@ def RealDisplaySizeMM(display_no=0):
 class Display:
     """Store information about display."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.name = None
         """Display name."""
         self.description = None  # USED
@@ -70,13 +70,13 @@ class Display:
         """Display width and height in pixels."""
 
         # WINDOWS / NT
-        self.monid = None
+        self.monitor_id = None
         """Monitor ID."""
         self.prim = None
         """ NZ if primary display monitor."""
 
         # APPLE
-        self.ddid = None
+        self.display_device_id = None
 
         # UNIX
         self.screen = None
@@ -100,7 +100,7 @@ class Display:
         self.icc_out_atom = None
         """ICC profile atom for this output."""
 
-    def from_dispwin_data(self, display_info_line):
+    def from_dispwin_data(self, display_info_line: str) -> None:
         """Parse from dispwin display list data.
 
         Args:
@@ -125,7 +125,7 @@ class Display:
         if not match:
             raise ValueError(dispwin_error_message)
         groups_dict = match.groupdict()
-        self.monid = int(groups_dict["id"])
+        self.monitor_id = int(groups_dict["id"])
         self.name = groups_dict["name"]
         # fix the name ending with "," for ArgyllCMS<3.3.0
         if self.name.endswith(b","):
@@ -137,15 +137,16 @@ class Display:
         height = int(groups_dict["height"])
         self.size = (width, height)
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         """Return a dictionary.
 
         Returns:
-            dict: The display data as dictionary, matching the previous implementation.
+            dict: The display data as dictionary, matching the previous
+                implementation.
         """
         display_dict = {}
-        if self.monid is not None:
-            display_dict["monid"] = self.monid
+        if self.monitor_id is not None:
+            display_dict["monid"] = self.monitor_id
         if self.description is not None:
             display_dict["description"] = self.description
         if self.name is not None:
@@ -211,8 +212,12 @@ def _enumerate_displays() -> list[dict]:
     return displays
 
 
-def enumerate_displays():
-    """Enumerate and return a list of displays."""
+def enumerate_displays() -> list[dict]:
+    """Enumerate and return a list of displays.
+
+    Returns:
+        list[dict]: A list of dictionary containing display data.
+    """
     global _displays
     _displays = _enumerate_displays()
 
@@ -291,10 +296,19 @@ def get_display(display_no: int = 0) -> None | dict:
     return None
 
 
-def get_wayland_display(x, y, w, h):
+def get_wayland_display(x: int, y: int, w: int, h: int) -> None | dict:
     """Find matching Wayland display.
 
     Given x, y, width and height of display geometry, find matching Wayland display.
+
+    Args:
+        x (int): X position.
+        y (int): Y position.
+        w (int): Width.
+        h (int): Height.
+
+    Returns:
+        None | dict: The Wayland display data.
     """
     # Note that we apparently CANNOT use width and height because the reported
     # values from Argyll code and Mutter can be slightly different,

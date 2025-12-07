@@ -29,7 +29,7 @@ def test_real_display_size_mm(clear_displays):
         real_display_size_mm, "_enumerate_displays", DisplayData.enumerate_displays()
     ):
         with check_call(config, "getcfg", DisplayData.CFG_DATA, call_count=2):
-            display_size = real_display_size_mm.RealDisplaySizeMM(0)
+            display_size = real_display_size_mm.real_display_size_mm(0)
     assert display_size != (0, 0)
     assert display_size[0] > 1
     assert display_size[1] > 1
@@ -41,7 +41,7 @@ def test_xrandr_output_x_id_1(clear_displays):
         real_display_size_mm, "_enumerate_displays", DisplayData.enumerate_displays()
     ):
         with check_call(config, "getcfg", DisplayData.CFG_DATA, call_count=2):
-            result = real_display_size_mm.GetXRandROutputXID(0)
+            result = real_display_size_mm.get_xrandr_output_xid(0)
     assert result != 0
 
 

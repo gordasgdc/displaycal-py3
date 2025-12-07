@@ -2815,7 +2815,7 @@ def get_display_profile_linux(
                         continue
                     if i == 0:
                         meth = display.get_output_property
-                        what = real_display_size_mm.GetXRandROutputXID(display_no)
+                        what = real_display_size_mm.get_xrandr_output_xid(display_no)
                     else:
                         meth = display.get_window_property
                         what = display.root_window(0)
