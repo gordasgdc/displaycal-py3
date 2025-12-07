@@ -3,6 +3,8 @@
 It includes functions for converting floats to decimals with precision handling
 and for stripping trailing zeros from numeric representations.
 """
+# Standard library imports
+from __future__ import annotations
 
 import contextlib
 import decimal
@@ -36,12 +38,17 @@ def float2dec(f: float, digits: int = 10) -> decimal.Decimal:
     return decimal.Decimal(str(f))
 
 
-def stripzeros(n):
+def stripzeros(n: float | str | decimal.Decimal) -> decimal.Decimal:
     """Strip zeros and convert to decimal.
 
     Will always return the shortest decimal representation
     (1.0 becomes 1, 1.234567890 becomes 1.23456789).
 
+    Args:
+        n (float | str | decimal.Decimal): The number to strip.
+
+    Returns:
+        decimal.Decimal: The stripped number.
     """
     n = f"{n:.10f}" if isinstance(n, (float, int)) else str(n)
     if "." in n:
