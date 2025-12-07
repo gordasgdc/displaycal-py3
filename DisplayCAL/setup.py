@@ -20,6 +20,7 @@ the wrapper script in the root directory of the source tar.gz/zip
 
 """
 
+# Standard Library Imports
 from __future__ import annotations
 
 import codecs
@@ -36,23 +37,34 @@ from distutils.command.install import install
 from distutils.util import change_root, get_platform
 from fnmatch import fnmatch
 from time import strftime
+from typing import TYPE_CHECKING, Callable
+
+if TYPE_CHECKING:
+    from modulegraph.modulegraph import Package
 
 
 # Borrowed from setuptools
-def _find_all_simple(path):
-    """Find all files under 'path'."""
+def _find_all_simple(path: str) -> list[str]:
+    """Find all files under 'path'.
+
+    Returns:
+        list[str]: A list of all file paths found under 'path'.
+    """
     results = (
         os.path.join(base, file)
         for base, dirs, files in os.walk(path, followlinks=True)
         for file in files
     )
-    return filter(os.path.isfile, results)
+    return list(filter(os.path.isfile, results))
 
 
-def findall(directory=os.curdir):
+def findall(directory: str = os.curdir) -> list[str]:
     """Find all files under 'dir' and return the list of full filenames.
 
     Unless dir is '.', return full filenames with dir prepended.
+
+    Args:
+        directory (str): The directory to search. Default is os.curdir.
     """
     files = _find_all_simple(directory)
     if directory == os.curdir:
@@ -219,7 +231,7 @@ plist_dict = {
 class Target:
     """A class representing a target for installation."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         self.__dict__.update(kwargs)
 
 
@@ -301,7 +313,7 @@ def create_app_symlinks(dist_dir: str, scripts: list[tuple[str, str]]) -> None:
                         with open(tgt, "wb") as main_out:
                             main_out.write(py.encode())
                         continue
-                    if subentry == NAME + ".icns":
+                    if subentry == f"{NAME}.icns":
                         shutil.copy(
                             os.path.join(pydir, "theme", "icons", f"{script}.icns"),
                             os.path.join(toolcontents, entry, f"{script}.icns"),
@@ -351,18 +363,26 @@ def create_app_symlinks(dist_dir: str, scripts: list[tuple[str, str]]) -> None:
                 )
 
 
-def get_data(tgt_dir, key, pkgname=None, subkey=None, excludes=None):
+def get_data(
+    tgt_dir: str,
+    key: str,
+    pkgname: None | str = None,
+    subkey: None | str = None,
+    excludes: None | list[str] = None
+) -> list[tuple[str, list[str]]]:
     """Return configured data files.
 
     Args:
         tgt_dir (str): The target directory.
         key (str): The config key.
-        pkgname (Union[None, str]): Name of the package. Default is None.
-        subkey (Union[None, str]): Name of the subkey. Default is None.
-        excludes (Union[None, list[str]]): List of files to exclude. Default is None.
+        pkgname (None | str): Name of the package. Default is None.
+        subkey (None | str): Name of the subkey. Default is None.
+        excludes (None | list[str]): List of files to exclude. Default is None.
 
     Returns:
-        list[str]: List of strings showing the paths of the data files.
+        list[tuple[str, list[str]]]: A list of tuples which contains the
+            normalized path of the data files and the list of paths of the
+            data files.
     """
     files = config[key]
     src_dir = source_dir
@@ -392,7 +412,7 @@ def get_data(tgt_dir, key, pkgname=None, subkey=None, excludes=None):
     return data
 
 
-def get_scripts(excludes=None):
+def get_scripts(excludes: None | list[str] = None) -> list[tuple[str, str]]:
     """Return a list of scripts with their descriptions.
 
     Args:
@@ -407,7 +427,8 @@ def get_scripts(excludes=None):
     scripts_with_desc = []
     scripts = safe_glob(os.path.join(pydir, "..", "scripts", appname.lower() + "*"))
 
-    def sortbyname(a, b):
+    def sortbyname(a: str, b: str) -> int:
+        """Sort two script names by their base names."""
         a, b = [os.path.splitext(v)[0] for v in (a, b)]
         if a > b:
             return 1
@@ -435,7 +456,7 @@ def get_scripts(excludes=None):
     return scripts_with_desc
 
 
-def setup():
+def setup() -> None:
     """Setup function for DisplayCAL."""
     print("***", os.path.abspath(sys.argv[0]), " ".join(sys.argv[1:]))
 
@@ -495,11 +516,24 @@ def setup():
     if distutils.filelist.findall is current_findall:
         # Fix traversing unneeded dirs which can take a long time (minutes)
         def findall(
-            directory=os.curdir,
-            original=distutils.filelist.findall,
-            listdir=os.listdir,
-            basename=os.path.basename,
-        ):
+            directory: str = os.curdir,
+            original: Callable = distutils.filelist.findall,
+            listdir: Callable = os.listdir,
+            basename: str = os.path.basename,
+        ) -> list[str]:
+            """Find all files under 'dir' and return the list of full filenames.
+
+            Unless dir is '.', return full filenames with dir prepended.
+
+            Args:
+                directory (str): The directory to search. Default is os.curdir.
+                original (Callable): The original findall function.
+                listdir (Callable): The os.listdir function.
+                basename (str): The os.path.basename function.
+
+            Returns:
+                list[str]: List of full filenames found under 'dir'.
+            """
             os.listdir = lambda path: [
                 entry
                 for entry in listdir(path)
@@ -519,7 +553,7 @@ def setup():
 
     if do_uninstall:
         i = sys.argv.index("uninstall")
-        sys.argv = sys.argv[:i] + ["install"] + sys.argv[i + 1 :]
+        sys.argv = [*sys.argv[:i], "install", *sys.argv[i + 1 :]]
         install.create_home_path = lambda self: None
 
     if (
@@ -1039,7 +1073,23 @@ def setup():
 
         py2app_cls._copy_package_data = py2app_cls.copy_package_data
 
-        def copy_package_data(self, package, target_dir):
+        def copy_package_data(
+            self: py2app_cls,
+            package: Package,
+            target_dir: str
+        ) -> None:
+            """Override copy_package_data to skip package data from other packages.
+
+            Copy any package data in a python package into the target_dir.
+
+            This is a bit of a hack, it would be better to identify python eggs
+            and copy those in whole.
+
+            Args:
+                self (py2app_cls): The py2app class instance.
+                package (Package): The package to copy data from.
+                target_dir (str): The target directory to copy data to.
+            """
             # Skip package data which is already included as data files
             if package.identifier.split(".")[0] != NAME:
                 self._copy_package_data(package, target_dir)
