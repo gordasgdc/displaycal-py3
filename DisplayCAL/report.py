@@ -18,13 +18,25 @@ from DisplayCAL.config import get_data_path, initcfg
 from DisplayCAL.meta import VERSION_SHORT
 
 
-def create(report_path, placeholders2data, pack=True, templatename="report"):
-    """Create a report with all placeholders substituted by data."""
+def create(
+    report_path: str,
+    placeholders_to_data: dict,
+    pack: bool = True,
+    template_name: str = "report",
+) -> None:
+    """Create a report with all placeholders substituted by data.
+
+    Args:
+        report_path (str): Path to the report file to create.
+        placeholders_to_data (dict): Dictionary mapping placeholders to their data.
+        pack (bool): Whether to pack JavaScript code.
+        template_name (str): Name of the report template to use.
+    """
     # read report template
-    templatefilename = f"{templatename}.html"
-    report_html_template_path = get_data_path(os.path.join("report", templatefilename))
+    template_filename = f"{template_name}.html"
+    report_html_template_path = get_data_path(os.path.join("report", template_filename))
     if not report_html_template_path:
-        raise OSError(lang.getstr("file.missing", templatefilename))
+        raise OSError(lang.getstr("file.missing", template_filename))
     try:
         with codecs.open(
             report_html_template_path, "r", "UTF-8"
@@ -36,8 +48,8 @@ def create(report_path, placeholders2data, pack=True, templatename="report"):
         ) from exception
 
     # create report
-    for placeholder in placeholders2data:
-        data = placeholders2data[placeholder]
+    for placeholder in placeholders_to_data:
+        data = placeholders_to_data[placeholder]
         report_html = report_html.replace(placeholder, data)
 
     for include in (
@@ -84,11 +96,14 @@ def create(report_path, placeholders2data, pack=True, templatename="report"):
         ) from exception
 
 
-def update(report_path, pack=True):
+def update(report_path: str, pack: bool = True) -> None:
     """Update existing report with current template files.
 
     Also creates a backup copy of the old report.
 
+    Args:
+        report_path (str): Path to the existing report file.
+        pack (bool): Whether to pack JavaScript code.
     """
     # read original report
     try:
@@ -164,7 +179,7 @@ def update(report_path, pack=True):
         "${WHITEPOINT_SIMULATION_RELATIVE}": "false",
     }
 
-    templatename = "report"
+    template_name = "report"
     for placeholder, pattern, flags in data:
         result = re.search(pattern, orig_report_html, flags)
         if result or not placeholders2data.get(placeholder):
@@ -178,14 +193,14 @@ def update(report_path, pack=True):
                 default = ""
             placeholders2data[placeholder] = result.groups()[0] if result else default
         if result and placeholder == "${COLS}":
-            templatename = "uniformity"
+            template_name = "uniformity"
 
     # backup original report
     shutil.copy2(
         report_path, "{}.{}".format(report_path, strftime("%Y-%m-%d_%H-%M-%S"))
     )
 
-    create(report_path, placeholders2data, pack, templatename)
+    create(report_path, placeholders2data, pack, template_name)
 
 
 if __name__ == "__main__":
