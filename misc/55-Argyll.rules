@@ -111,6 +111,9 @@ ATTRS{idVendor}=="085c", ATTRS{idProduct}=="0500", ENV{COLORD_SENSOR_KIND}="spyd
 # Spyder X
 ATTRS{idVendor}=="085c", ATTRS{idProduct}=="0a00", ENV{COLORD_SENSOR_KIND}="spyderX" ENV{COLORD_SENSOR_CAPS}="lcd crt ambient"
 
+# Spyder X2
+ATTRS{idVendor}=="085c", ATTRS{idProduct}=="0a0b", ENV{COLORD_SENSOR_KIND}="spyderX2" ENV{COLORD_SENSOR_CAPS}="lcd crt ambient"
+
 # JETI & KLEIN serial port (not used)
 #KERNEL=="ttyUSB[0-9]*", TAG+="udev-acl", TAG+="uaccess"
 
