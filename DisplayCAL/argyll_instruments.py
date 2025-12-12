@@ -355,6 +355,28 @@ instruments = {
         "integration_time": [1.6, 1.6],
         "refresh": False,
     },
+    "SpyderX2": {
+        "usb_ids": [{"vid": 0x085C, "pid": 0x0A0B, "hid": False}],
+        "spectral": False,
+        "adaptive_mode": False,
+        "highres_mode": False,
+        "projector_mode": False,
+        "sensor_cal": True,
+        "skip_sensor_cal": True,
+        "integration_time": [1.6, 1.6],  # Using SpyderX values until measured
+        "refresh": False,
+    },
+    "Spyder 2024": {
+        "usb_ids": [{"vid": 0x085C, "pid": 0x0A0B, "hid": False}],
+        "spectral": False,
+        "adaptive_mode": False,
+        "highres_mode": False,
+        "projector_mode": False,
+        "sensor_cal": True,
+        "skip_sensor_cal": True,
+        "integration_time": [1.6, 1.6],  # Using SpyderX values until measured
+        "refresh": False,
+    },
     "Huey": {
         "usb_ids": [
             {"vid": 0x0971, "pid": 0x2005, "hid": True},

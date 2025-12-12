@@ -4325,11 +4325,11 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             else:
                 measurement_modes_ab[instrument_type].extend(["3", "4", "5", "6", "7"])
         elif instrument_name == "SpyderX":
-            # Argyll 2.0.2b 2019-03-25
-            # l SpyderX: General [Default,CB1]
-            # e SpyderX: Standard LED
-            # b SpyderX: Wide Gamut LED
-            # i SpyderX: GB LED
+            # Argyll SpyderX modes:
+            # l General [Default,CB1] (LCD/CCFL)
+            # e Standard LED (LCD/white LED)
+            # b Wide Gamut LED (LCD/RGB LED)
+            # i GB LED (LCD/GB-R Phosphor LED)
             measurement_modes[instrument_type] = [
                 lang.getstr("measurement_mode.generic"),
                 lang.getstr("measurement_mode.lcd.white_led"),
@@ -4337,6 +4337,28 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 lang.getstr("measurement_mode.lcd.wide_gamut.gb_led"),
             ]
             measurement_modes_ab[instrument_type] = ["l", "e", "b", "i"]
+        elif instrument_name == "SpyderX2":
+            # Argyll SpyderX2 modes: SpyderX plus high brightness
+            measurement_modes[instrument_type] = [
+                lang.getstr("measurement_mode.generic"),
+                lang.getstr("measurement_mode.lcd.white_led"),
+                lang.getstr("measurement_mode.lcd.wide_gamut.led"),
+                lang.getstr("measurement_mode.lcd.wide_gamut.gb_led"),
+                lang.getstr("measurement_mode.lcd.high_brightness", "High brightness"),
+            ]
+            measurement_modes_ab[instrument_type] = ["l", "e", "b", "i", "h"]
+        elif instrument_name == "Spyder 2024":
+            # Argyll Spyder/SpyderPro 2024 modes: SpyderX2 plus OLED and Mini-LED
+            measurement_modes[instrument_type] = [
+                lang.getstr("measurement_mode.generic"),
+                lang.getstr("measurement_mode.lcd.white_led"),
+                lang.getstr("measurement_mode.lcd.wide_gamut.led"),
+                lang.getstr("measurement_mode.lcd.wide_gamut.gb_led"),
+                lang.getstr("measurement_mode.lcd.high_brightness", "High brightness"),
+                lang.getstr("measurement_mode.lcd.oled", "OLED"),
+                lang.getstr("measurement_mode.lcd.mini_led", "Mini-LED"),
+            ]
+            measurement_modes_ab[instrument_type] = ["l", "e", "b", "i", "h", "o", "m"]
         elif instrument_name in ("ColorHug", "ColorHug2"):
             # Argyll CMS 1.3.6, spectro/colorhug.c, colorhug_disptypesel
             # Note: projector mode (-yp) is not the same as ColorMunki
@@ -10440,7 +10462,28 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             "ColorMunki Smile": {"f": lang.getstr("measurement_mode.lcd.ccfl")},
             "Colorimtre HCFR": {"R": lang.getstr("measurement_mode.raw")},
             "K-10": {"F": lang.getstr("measurement_mode.factory")},
-            "SpyderX": {"l": lang.getstr("measurement_mode.lcd")},
+            "SpyderX": {
+                "l": lang.getstr("measurement_mode.lcd"),
+                "e": lang.getstr("measurement_mode.lcd.white_led"),
+                "b": lang.getstr("measurement_mode.lcd.wide_gamut.led"),
+                "i": lang.getstr("measurement_mode.lcd.wide_gamut.gb_led"),
+            },
+            "SpyderX2": {
+                "l": lang.getstr("measurement_mode.lcd"),
+                "e": lang.getstr("measurement_mode.lcd.white_led"),
+                "b": lang.getstr("measurement_mode.lcd.wide_gamut.led"),
+                "i": lang.getstr("measurement_mode.lcd.wide_gamut.gb_led"),
+                "h": lang.getstr("measurement_mode.lcd.high_brightness", "High brightness"),
+            },
+            "Spyder 2024": {
+                "l": lang.getstr("measurement_mode.lcd"),
+                "e": lang.getstr("measurement_mode.lcd.white_led"),
+                "b": lang.getstr("measurement_mode.lcd.wide_gamut.led"),
+                "i": lang.getstr("measurement_mode.lcd.wide_gamut.gb_led"),
+                "h": lang.getstr("measurement_mode.lcd.high_brightness", "High brightness"),
+                "o": lang.getstr("measurement_mode.lcd.oled", "OLED"),
+                "m": lang.getstr("measurement_mode.lcd.mini_led", "Mini-LED"),
+            },
         }.get(
             instrument_name,
             {

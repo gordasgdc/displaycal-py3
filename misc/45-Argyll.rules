@@ -55,6 +55,9 @@ SYSFS{idVendor}=="085c", SYSFS{idProduct}=="0500", PROGRAM="/bin/sh -c 'K=%k; K=
 # Spyder X
 SYSFS{idVendor}=="085c", SYSFS{idProduct}=="0a00", PROGRAM="/bin/sh -c 'K=%k; K=$${K#usbdev}; printf bus/usb/%%03i/%%03i $${K%%%%.*} $${K#*.}'", NAME="%c", MODE="660", GROUP="colord"
 
+# Spyder X2
+SYSFS{idVendor}=="085c", SYSFS{idProduct}=="0a0b", PROGRAM="/bin/sh -c 'K=%k; K=$${K#usbdev}; printf bus/usb/%%03i/%%03i $${K%%%%.*} $${K#*.}'", NAME="%c", MODE="660", GROUP="colord"
+
 # i1Pro
 SYSFS{idVendor}=="0971", SYSFS{idProduct}=="2000", PROGRAM="/bin/sh -c 'K=%k; K=$${K#usbdev}; printf bus/usb/%%03i/%%03i $${K%%%%.*} $${K#*.}'", NAME="%c", MODE="660", GROUP="colord"
 
