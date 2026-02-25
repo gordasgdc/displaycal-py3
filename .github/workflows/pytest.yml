@@ -19,41 +19,100 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version:
-          - "3.9"
-          - "3.10"
-          - "3.11"
-          - "3.12"
-          - "3.13"
-          - "3.14"
-        wx-version:
-          - "4.2.0"
-          - "4.2.1"
-          - "4.2.2"
-          - "4.2.3"
-          - "4.2.4"
-          - "4.2.5"
-        exclude:
-          - wx-version: "4.2.0"
-            python-version: "3.11"
-          - wx-version: "4.2.0"
-            python-version: "3.12"
-          - wx-version: "4.2.0"
-            python-version: "3.13"
-          - wx-version: "4.2.0"
-            python-version: "3.14"
-          - wx-version: "4.2.1"
-            python-version: "3.12"
-          - wx-version: "4.2.1"
-            python-version: "3.13"
-          - wx-version: "4.2.1"
-            python-version: "3.14"
-          - wx-version: "4.2.2"
-            python-version: "3.14"
-          - wx-version: "4.2.3"
-            python-version: "3.14"
-          - wx-version: "4.2.5"
-            python-version: "3.9"
+        include:
+          # tedious but easier... As we do not have all wxPython version for
+          # all other Python versions, and more so the wxPython package name
+          # changes from "wxPython" to "wxpython" for 4.2.3 and up...
+
+          # Python 3.9
+          - python-version: "3.9"
+            wx-version: "4.2.0"
+            wx_name: "wxPython"
+          - python-version: "3.9"
+            wx-version: "4.2.1"
+            wx_name: "wxPython"
+          - python-version: "3.9"
+            wx-version: "4.2.2"
+            wx_name: "wxPython"
+          - python-version: "3.9"
+            wx-version: "4.2.3"
+            wx_name: "wxpython"
+          - python-version: "3.9"
+            wx-version: "4.2.4"
+            wx_name: "wxpython"
+
+          # Python 3.10
+          - python-version: "3.10"
+            wx-version: "4.2.0"
+            wx_name: "wxPython"
+          - python-version: "3.10"
+            wx-version: "4.2.1"
+            wx_name: "wxPython"
+          - python-version: "3.10"
+            wx-version: "4.2.2"
+            wx_name: "wxPython"
+          - python-version: "3.10"
+            wx-version: "4.2.3"
+            wx_name: "wxpython"
+          - python-version: "3.10"
+            wx-version: "4.2.4"
+            wx_name: "wxpython"
+          - python-version: "3.10"
+            wx-version: "4.2.5"
+            wx_name: "wxpython"
+
+          # Python 3.11
+          - python-version: "3.11"
+            wx-version: "4.2.1"
+            wx_name: "wxPython"
+          - python-version: "3.11"
+            wx-version: "4.2.2"
+            wx_name: "wxPython"
+          - python-version: "3.11"
+            wx-version: "4.2.3"
+            wx_name: "wxpython"
+          - python-version: "3.11"
+            wx-version: "4.2.4"
+            wx_name: "wxpython"
+          - python-version: "3.11"
+            wx-version: "4.2.5"
+            wx_name: "wxpython"
+
+          # Python 3.12
+          - python-version: "3.12"
+            wx-version: "4.2.2"
+            wx_name: "wxPython"
+          - python-version: "3.12"
+            wx-version: "4.2.3"
+            wx_name: "wxpython"
+          - python-version: "3.12"
+            wx-version: "4.2.4"
+            wx_name: "wxpython"
+          - python-version: "3.12"
+            wx-version: "4.2.5"
+            wx_name: "wxpython"
+
+          # Python 3.13
+          - python-version: "3.13"
+            wx-version: "4.2.2"
+            wx_name: "wxPython"
+          - python-version: "3.13"
+            wx-version: "4.2.3"
+            wx_name: "wxpython"
+          - python-version: "3.13"
+            wx-version: "4.2.4"
+            wx_name: "wxpython"
+          - python-version: "3.13"
+            wx-version: "4.2.5"
+            wx_name: "wxpython"
+
+          # Python 3.14
+          - python-version: "3.14"
+            wx-version: "4.2.4"
+            wx_name: "wxpython"
+          - python-version: "3.14"
+            wx-version: "4.2.5"
+            wx_name: "wxpython"
 
     steps:
     - uses: actions/checkout@v4
@@ -111,10 +170,7 @@ jobs:
       run: |
         py_version="${{ matrix.python-version }}"
         py_version="${py_version//./}"
-        wx_name="wxPython"
-        if [ "${{ matrix.wx-version }}" == "4.2.3" ] || [ "${{ matrix.wx-version }}" == "4.2.4" ] || [ "${{ matrix.wx-version }}" == "4.2.5" ]; then
-          wx_name="wxpython"
-        fi
+        wx_name="${{ matrix.wx_name}}"
         uv pip install --system "https://extras.wxpython.org/wxPython4/extras/linux/gtk3/ubuntu-22.04/${wx_name}-${{ matrix.wx-version }}-cp${py_version}-cp${py_version}-linux_x86_64.whl"
 
     - name: Install Python dependencies
@@ -162,22 +218,6 @@ jobs:
         exclude:
           - wx-version: "4.2.0"
             python-version: "3.11"
-          - wx-version: "4.2.0"
-            python-version: "3.12"
-          - wx-version: "4.2.0"
-            python-version: "3.13"
-          - wx-version: "4.2.0"
-            python-version: "3.14"
-          - wx-version: "4.2.1"
-            python-version: "3.12"
-          - wx-version: "4.2.1"
-            python-version: "3.13"
-          - wx-version: "4.2.1"
-            python-version: "3.14"
-          - wx-version: "4.2.2"
-            python-version: "3.14"
-          - wx-version: "4.2.3"
-            python-version: "3.14"
           - wx-version: "4.2.5"
             python-version: "3.9"
 
@@ -240,6 +280,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # for now we just care about the Python version.
+        # After the workflow stabilizes we introduce different wxPython versions
+        # too...
         python-version:
           - "3.11"
           - "3.12"
