@@ -17379,7 +17379,8 @@ BEGIN_DATA
                 fd, download_path = mksfile(download_path)
                 tmp_fd, tmp_download_path = mksfile(download_path + ".download")
             except OSError as mksfile_exception:
-                response.close()
+                if response:
+                    response.close()
                 for fd_, _ in [(fd, download_path), (tmp_fd, tmp_download_path)]:
                     if not fd_:
                         continue
@@ -17397,10 +17398,10 @@ BEGIN_DATA
             prev_bytes_so_far = 0
             unit = "Bytes"
             unit_size = 1.0
-            if total_size > 1048576:
+            if total_size and total_size > 1048576:
                 unit = "MiB"
                 unit_size = 1048576.0
-            elif total_size > 1024:
+            elif total_size and total_size > 1024:
                 unit = "KiB"
                 unit_size = 1024.0
 

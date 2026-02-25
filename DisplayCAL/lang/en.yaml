@@ -227,6 +227,8 @@
 "argyll.dir.invalid": |-
   ArgyllCMS executables not found!
   Please select the directory which contains the executable files (maybe prefixed or suffixed “argyll-” / “-argyll”): %s
+"argyll.use_homebrew": |-
+  Use Homebrew installation (%s)
 "argyll.error.detail": |-
   Detailed ArgyllCMS error message:
 "argyll.instrument.configuration_files.install": |-
@@ -1618,6 +1620,10 @@
   Override minimum display update delay
 "measure.testchart": |-
   Measure testchart
+"specplot.choose": |-
+  Please choose a file for specplot
+"specplot.run": |-
+  Run specplot...
 "measureframe.center": |-
   Center
 "measureframe.center.manual": |-

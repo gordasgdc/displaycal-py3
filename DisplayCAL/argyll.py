@@ -24,6 +24,7 @@ from DisplayCAL.argyll_names import ALTNAMES as ARGYLL_ALTNAMES
 from DisplayCAL.argyll_names import NAMES as ARGYLL_NAMES
 from DisplayCAL.argyll_names import OPTIONAL as ARGYLL_OPTIONAL
 from DisplayCAL.config import (
+    APPNAME,
     EXE_EXT,
     FS_ENC,
     get_data_path,
@@ -193,6 +194,35 @@ def prompt_argyll_dir(
     return argyll_dir
 
 
+def get_homebrew_argyll_bin() -> None | str:
+    """Return Homebrew ArgyllCMS bin directory on macOS if available."""
+    if sys.platform != "darwin":
+        return None
+    brew = which("brew") or which("brew", ["/opt/homebrew/bin", "/usr/local/bin"])
+    if not brew:
+        return None
+    for formula in ("argyll-cms", "argyllcms"):
+        try:
+            result = sp.run(
+                [brew, "--prefix", formula],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except (OSError, ValueError, sp.SubprocessError):
+            continue
+        if result.returncode != 0:
+            continue
+        prefix = (result.stdout or "").strip()
+        if not prefix:
+            continue
+        bin_dir = os.path.join(prefix, "bin")
+        if check_argyll_bin([bin_dir]):
+            return bin_dir
+    return None
+
+
 def set_argyll_bin(
     parent: wx.Window = None,
     silent: bool = False,
@@ -214,7 +244,7 @@ def set_argyll_bin(
     # TODO: This function contains UI stuff, please refactor it so that it is
     #       split into a separate function that can be called from the UI.
     from DisplayCAL.wx_addons import wx
-    from DisplayCAL.wx_windows import ConfirmDialog, InfoDialog
+    from DisplayCAL.wx_windows import InfoDialog
 
     # Tests fails if wx.App is not initialized...
     _ = wx.GetApp() or wx.App()
@@ -225,26 +255,60 @@ def set_argyll_bin(
     parent = None if parent and not parent.IsShownOnScreen() else parent
     argyll_dir = prompt_argyll_dir(parent, callafter, callafter_args)
     if parent and not check_argyll_bin():
-        dlg = ConfirmDialog(
+        choices = [("download", lang.getstr("download")), ("browse", lang.getstr("browse"))]
+        brew_argyll_bin = get_homebrew_argyll_bin()
+        if brew_argyll_bin:
+            choices.append(
+                (
+                    "homebrew",
+                    lang.getstr(
+                        "argyll.use_homebrew",
+                        brew_argyll_bin,
+                    ),
+                )
+            )
+        dlg = wx.SingleChoiceDialog(
             parent,
-            msg=lang.getstr("dialog.argyll.notfound.choice"),
-            ok=lang.getstr("download"),
-            cancel=lang.getstr("cancel"),
-            alt=lang.getstr("browse"),
-            bitmap=get_icon(size=32, name="dialog-question"),
+            lang.getstr("dialog.argyll.notfound.choice"),
+            APPNAME,
+            [label for _, label in choices],
+            style=wx.CHOICEDLG_STYLE,
         )
+        dlg.SetSelection(0)
         dlg_result = dlg.ShowModal()
+        selected = dlg.GetSelection()
         dlg.Destroy()
-        if dlg_result == wx.ID_OK:
-            # Download Argyll CMS
-            from DisplayCAL.display_cal import app_update_check
-
-            app_update_check(parent, silent, argyll=True)
-            return False
-        if dlg_result == wx.ID_CANCEL:
+        if dlg_result != wx.ID_OK:
             if callafter:
                 callafter(*callafter_args)
             return False
+        action = choices[selected][0] if selected >= 0 else "browse"
+        if action == "download":
+            # Download Argyll CMS
+            from DisplayCAL.display_cal import app_update_check
+
+            try:
+                app_update_check(parent, silent, argyll=True)
+            except Exception as exception:
+                InfoDialog(
+                    parent,
+                    msg=f"{lang.getstr('download.fail')}\n{exception}",
+                    ok=lang.getstr("ok"),
+                    bitmap=get_icon(size=32, name="dialog-error"),
+                )
+            return False
+        if action == "homebrew" and brew_argyll_bin:
+            verbose_print(
+                "Using Homebrew Argyll binary directory:",
+                brew_argyll_bin,
+                verbose_level=3,
+            )
+            setcfg("argyll.dir", brew_argyll_bin)
+            # Always write cfg directly after setting Argyll directory so
+            # subprocesses that read the configuration will use the right
+            # executables
+            writecfg()
+            return True
     dlg = wx.DirDialog(
         parent,
         lang.getstr("dialog.set_argyll_bin"),
@@ -500,22 +564,25 @@ def get_argyll_latest_version() -> str:
         str: The latest version number. Returns
     """
     argyll_domain = config.DEFAULTS.get("argyll.domain", "")
+    default_version = config.DEFAULTS.get("argyll.version")
     try:
-        changelog = re.search(
-            r"(?<=Version ).{5}",
-            urllib.request.urlopen(f"{argyll_domain}/log.txt")  # noqa: S310
-            .read(100)
-            .decode("utf-8"),
+        response = urllib.request.urlopen(f"{argyll_domain}/log.txt", timeout=20)  # noqa: S310
+        data = response.read(512).decode("utf-8", "replace")
+    except (urllib.error.URLError, OSError, TimeoutError) as exception:
+        print(f"Could not fetch ArgyllCMS latest version: {exception}")
+        return default_version
+    changelog = re.search(r"Version\s+([0-9][0-9A-Za-z.\-_]*)", data)
+    if not changelog:
+        print(
+            "Could not parse ArgyllCMS latest version from "
+            f"{argyll_domain}/log.txt, falling back to {default_version}"
         )
-    except urllib.error.URLError:
-        # no internet connection
-        # return the default version
-        return config.DEFAULTS.get("argyll.version")
-    result = changelog.group()
+        return default_version
+    result = changelog.group(1)
     print(f"Latest ArgyllCMS version: {result} (from {argyll_domain}/log.txt)")
     if not result:
         # no version found
-        return config.DEFAULTS.get("argyll.version")
+        return default_version
     return result
 
 

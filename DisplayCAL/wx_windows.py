@@ -120,6 +120,7 @@ from wx.lib.agw import hyperlink
 from wx.lib.statbmp import GenStaticBitmap
 
 TASKBAR = None
+SAFE_WX_UI = os.getenv("DISPLAYCAL_UNSAFE_WX_UI", "").strip() != "1"
 if sys.platform == "win32" and sys.getwindowsversion() >= (6, 1):
     try:
         pass
@@ -3128,15 +3129,25 @@ class HtmlWindow(wx.html.HtmlWindow):
         """Set displayed page with system default colors."""
         html = str(source)
         bgcolor, text, linkcolor, vlinkcolor = get_html_colors()
+        try:
+            bgcolor_html = f"#{int(bgcolor.Red()):02x}{int(bgcolor.Green()):02x}{int(bgcolor.Blue()):02x}"
+            text_html = f"#{int(text.Red()):02x}{int(text.Green()):02x}{int(text.Blue()):02x}"
+            link_html = f"#{int(linkcolor.Red()):02x}{int(linkcolor.Green()):02x}{int(linkcolor.Blue()):02x}"
+            vlink_html = f"#{int(vlinkcolor.Red()):02x}{int(vlinkcolor.Green()):02x}{int(vlinkcolor.Blue()):02x}"
+        except Exception:
+            bgcolor_html = "#ffffff"
+            text_html = "#000000"
+            link_html = "#2c5dcd"
+            vlink_html = "#6f6f6f"
         if "<body" not in html:
             html = f"<body>{html}</body>"
         html = re.sub(
             r"<body[^>]*",
-            f'<body bgcolor="{bgcolor.GetAsString(wx.C2S_HTML_SYNTAX)}" '
-            f'text="{text.GetAsString(wx.C2S_HTML_SYNTAX)}" '
-            f'link="{linkcolor.GetAsString(wx.C2S_HTML_SYNTAX)}" '
-            f'alink="{linkcolor.GetAsString(wx.C2S_HTML_SYNTAX)}" '
-            f'vlink="{vlinkcolor.GetAsString(wx.C2S_HTML_SYNTAX)}"',
+            f'<body bgcolor="{bgcolor_html}" '
+            f'text="{text_html}" '
+            f'link="{link_html}" '
+            f'alink="{link_html}" '
+            f'vlink="{vlink_html}"',
             html,
         )
         wx.html.HtmlWindow.SetPage(self, html)
@@ -9114,10 +9125,18 @@ def get_gradient_panel(parent, label, x=16):
 
 def get_html_colors(allow_alpha=False):
     """Get background, text, link and visited link colors based on system colors."""
+    if SAFE_WX_UI:
+        return (
+            wx.Colour(255, 255, 255),
+            wx.Colour(0, 0, 0),
+            wx.Colour(44, 93, 205),
+            wx.Colour(111, 111, 111),
+        )
+
     bgcolor = wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)
     text = wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOWTEXT)
     linkcolor = wx.SystemSettings.GetColour(wx.SYS_COLOUR_HOTLIGHT)
-    if max(linkcolor[:3]) == 0:
+    if max((linkcolor.Red(), linkcolor.Green(), linkcolor.Blue())) == 0:
         if sys.platform == "darwin":
             # Use Mavericks-like color scheme
             linkcolor = wx.Colour(44, 93, 205)
@@ -9125,10 +9144,10 @@ def get_html_colors(allow_alpha=False):
             linkcolor = wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT)
     vlinkcolor = wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT)
     if not allow_alpha:
-        bgcolor.Set(*bgcolor[:3])
-        text.Set(*text[:3])
-        linkcolor.Set(*linkcolor[:3])
-        vlinkcolor.Set(*vlinkcolor[:3])
+        bgcolor = wx.Colour(bgcolor.Red(), bgcolor.Green(), bgcolor.Blue())
+        text = wx.Colour(text.Red(), text.Green(), text.Blue())
+        linkcolor = wx.Colour(linkcolor.Red(), linkcolor.Green(), linkcolor.Blue())
+        vlinkcolor = wx.Colour(vlinkcolor.Red(), vlinkcolor.Green(), vlinkcolor.Blue())
     return bgcolor, text, linkcolor, vlinkcolor
 
 

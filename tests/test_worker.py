@@ -542,7 +542,7 @@ def test_get_argyll_latest_version_returns_str():
 def test_get_argyll_latest_version_returns_latest_argyll_cms_version():
     """get_argyll_latest_version() returns the latest argyll cms version."""
     result = get_argyll_latest_version()
-    assert result == "3.4.1"
+    assert result == "3.5.0"
 
 
 def test_get_argyll_latest_version_returns_the_default_version_if_no_internet_connect(
@@ -667,3 +667,26 @@ def test_get_technology_strings_with_argyll_returns_expected_data(setup_argyll):
         "u": "Unknown",
     }
     assert result == expected
+
+
+def test_get_technology_strings_parses_ccxxmake_output(monkeypatch):
+    """Technology parser should extract -t entries from ccxxmake output."""
+    worker = Worker()
+    worker.argyll_version = [3, 5, 0]
+
+    def patched_exec_cmd(*args, **kwargs):
+        worker.output = [
+            "-t c CRT",
+            "-t q LCD PFS Phosphor TFT",
+            "-t o LED OLED",
+            "-Y ignored option section",
+        ]
+        return True
+
+    monkeypatch.setattr(worker, "exec_cmd", patched_exec_cmd)
+    result = worker.get_technology_strings()
+    assert result == {
+        "c": "CRT",
+        "q": "LCD PFS Phosphor TFT",
+        "o": "LED OLED",
+    }

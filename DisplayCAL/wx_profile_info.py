@@ -53,7 +53,7 @@ from DisplayCAL.worker import (
     show_result_dialog,
 )
 from DisplayCAL.wx_addons import get_platform_window_decoration_size, wx
-from DisplayCAL.wx_fixes import GenBitmapButton as BitmapButton
+from DisplayCAL.wx_fixes import GenBitmapButton as _GenBitmapButton
 from DisplayCAL.wx_fixes import set_maxsize, wx_Panel
 from DisplayCAL.wx_lut_viewer import LUTCanvas, LUTFrame
 from DisplayCAL.wx_vrml_2_x3d import vrmlfile2x3dfile
@@ -73,6 +73,9 @@ from DisplayCAL.wx_windows import (
 BGCOLOUR = "#333333"
 FGCOLOUR = "#999999"
 TEXTCOLOUR = "#333333"
+# Use conservative controls by default because some wx/SIP/native combinations
+# can crash during widget construction across platforms.
+SAFE_WX_UI = os.getenv("DISPLAYCAL_UNSAFE_WX_UI", "").strip() != "1"
 
 if sys.platform == "darwin":
     FONTSIZE_SMALL = 10
@@ -682,6 +685,12 @@ class GamutViewOptions(wx_Panel):
 
         super().__init__(*args, **kwargs)
         self.SetBackgroundColour(BGCOLOUR)
+        def _create_checkbox(parent, label):
+            # Avoid custom checkbox subclasses in safe mode where SIP/wx object
+            # conversion can crash while adding controls to sizers.
+            if SAFE_WX_UI:
+                return wx.CheckBox(parent, -1, label)
+            return CustomCheckBox(parent=parent, id=-1, label=label)
         self.sizer = wx.FlexGridSizer(0, 3, 4, 0)
         self.sizer.AddGrowableCol(0)
         self.sizer.AddGrowableCol(1)
@@ -692,9 +701,17 @@ class GamutViewOptions(wx_Panel):
         legendsizer = wx.BoxSizer(wx.HORIZONTAL)
         self.sizer.Add(legendsizer)
 
+        # Avoid file-backed wx.Bitmap construction in safe mode.
+        def _create_marker(name, fallback_label):
+            if SAFE_WX_UI:
+                marker = wx.StaticText(self, -1, fallback_label)
+                marker.SetForegroundColour(FGCOLOUR)
+                return marker
+            return wx.StaticBitmap(self, -1, get_bitmap(name))
+
         # Whitepoint legend
         legendsizer.Add(
-            wx.StaticBitmap(self, -1, get_bitmap("theme/cross-2px-12x12-fff")),
+            _create_marker("theme/cross-2px-12x12-fff", "+"),
             flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT,
             border=2,
         )
@@ -706,9 +723,7 @@ class GamutViewOptions(wx_Panel):
         )
 
         # Comparison profile whitepoint legend
-        self.comparison_whitepoint_bmp = wx.StaticBitmap(
-            self, -1, get_bitmap("theme/x-2px-12x12-999")
-        )
+        self.comparison_whitepoint_bmp = _create_marker("theme/x-2px-12x12-999", "x")
         legendsizer.Add(
             self.comparison_whitepoint_bmp,
             flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT,
@@ -741,9 +756,7 @@ class GamutViewOptions(wx_Panel):
         self.sizer.Add(self.options_sizer, flag=wx.EXPAND)
 
         # Colorspace select
-        self.colorspace_outline_bmp = wx.StaticBitmap(
-            self, -1, get_bitmap("theme/solid-16x2-666")
-        )
+        self.colorspace_outline_bmp = _create_marker("theme/solid-16x2-666", "-")
         self.options_sizer.Add(
             self.colorspace_outline_bmp, flag=wx.ALIGN_CENTER_VERTICAL
         )
@@ -778,13 +791,14 @@ class GamutViewOptions(wx_Panel):
         # Colorspace outline
         self.options_sizer.Add((0, 0))
         self.options_sizer.Add((0, 0))
-        self.draw_gamut_outline_cb = CustomCheckBox(
-            parent=self, id=-1, label=lang.getstr("colorspace.show_outline")
+        self.draw_gamut_outline_cb = _create_checkbox(
+            self, lang.getstr("colorspace.show_outline")
         )
         self.draw_gamut_outline_cb.Bind(
             wx.EVT_CHECKBOX, self.draw_gamut_outline_handler
         )
-        self.draw_gamut_outline_cb.SetMaxFontSize(11)
+        if hasattr(self.draw_gamut_outline_cb, "SetMaxFontSize"):
+            self.draw_gamut_outline_cb.SetMaxFontSize(11)
         self.draw_gamut_outline_cb.SetForegroundColour(FGCOLOUR)
         self.draw_gamut_outline_cb.SetValue(True)
         self.options_sizer.Add(
@@ -794,9 +808,7 @@ class GamutViewOptions(wx_Panel):
         )
 
         # Colortemperature curve select
-        self.whitepoint_bmp = wx.StaticBitmap(
-            self, -1, get_bitmap("theme/solid-16x1-fff")
-        )
+        self.whitepoint_bmp = _create_marker("theme/solid-16x1-fff", "-")
         self.options_sizer.Add(self.whitepoint_bmp, flag=wx.ALIGN_CENTER_VERTICAL)
         self.whitepoint_label = wx.StaticText(
             self, -1, lang.getstr("whitepoint.colortemp.locus.curve")
@@ -822,9 +834,7 @@ class GamutViewOptions(wx_Panel):
         self.whitepoint_bmp.Hide()
 
         # Comparison profile select
-        self.comparison_profile_bmp = wx.StaticBitmap(
-            self, -1, get_bitmap("theme/dashed-16x2-666")
-        )
+        self.comparison_profile_bmp = _create_marker("theme/dashed-16x2-666", "=")
         self.options_sizer.Add(
             self.comparison_profile_bmp, flag=wx.ALIGN_CENTER_VERTICAL
         )
@@ -904,9 +914,10 @@ class GamutViewOptions(wx_Panel):
         self.options_sizer.Add((0, 0))
 
         # LUT toggle
-        self.toggle_clut = CustomCheckBox(self, -1, "LUT")
+        self.toggle_clut = _create_checkbox(self, "LUT")
         self.toggle_clut.SetForegroundColour(FGCOLOUR)
-        self.toggle_clut.SetMaxFontSize(11)
+        if hasattr(self.toggle_clut, "SetMaxFontSize"):
+            self.toggle_clut.SetMaxFontSize(11)
         self.options_sizer.Add(self.toggle_clut, flag=wx.ALIGN_CENTER_VERTICAL)
         self.toggle_clut.Bind(wx.EVT_CHECKBOX, self.toggle_clut_handler)
         self.toggle_clut.Hide()
@@ -1230,6 +1241,33 @@ class PIFrame2WaySplitter(TwoWaySplitter):
 class ProfileInfoFrame(LUTFrame):
     """Profile info frame."""
 
+    def _create_plot_toolbar_button(
+        self,
+        parent,
+        bitmap_provider,
+        label,
+        tooltip,
+        border,
+        handler,
+        context_handler=None,
+    ):
+        """Create a safe toolbar button for the plot controls."""
+        # Use plain text buttons in safe mode to avoid bitmap-related crashes.
+        if SAFE_WX_UI:
+            button = wx.Button(parent, -1, label=label, style=wx.BU_EXACTFIT)
+        else:
+            bitmap = bitmap_provider()
+            button = _GenBitmapButton(parent, -1, bitmap, style=wx.NO_BORDER)
+            button.SetBackgroundColour(BGCOLOUR)
+        button.Bind(wx.EVT_BUTTON, handler)
+        if context_handler:
+            button.Bind(wx.EVT_CONTEXT_MENU, context_handler)
+        button.SetToolTip(tooltip)
+        self.plot_mode_sizer.Add(
+            button, flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT, border=border
+        )
+        return button
+
     def __init__(self, *args, **kwargs):
         if len(args) < 3 and "title" not in kwargs:
             kwargs["title"] = lang.getstr("profile.info")
@@ -1237,10 +1275,10 @@ class ProfileInfoFrame(LUTFrame):
             kwargs["name"] = "profile_info"
 
         BaseFrame.__init__(self, *args, **kwargs)
-
-        self.SetIcons(
-            config.get_icon_bundle([256, 48, 32, 16], f"{APPNAME}-profile-info")
-        )
+        if not SAFE_WX_UI:
+            self.SetIcons(
+                config.get_icon_bundle([256, 48, 32, 16], f"{APPNAME}-profile-info")
+            )
 
         self.profile = None
         self.xLabel = lang.getstr("in")
@@ -1248,7 +1286,6 @@ class ProfileInfoFrame(LUTFrame):
 
         self.sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(self.sizer)
-
         self.splitter = PIFrame2WaySplitter(
             self, -1, agw_style=wx.SP_LIVE_UPDATE | wx.SP_NOSASH
         )
@@ -1281,50 +1318,47 @@ class ProfileInfoFrame(LUTFrame):
         self.plot_mode_select.Bind(wx.EVT_CHOICE, self.plot_mode_select_handler)
         self.plot_mode_select.Disable()
 
-        self.tooltip_btn = BitmapButton(
-            p1, -1, get_icon(16, "question-inverted"), style=wx.NO_BORDER
-        )
-        self.tooltip_btn.SetBackgroundColour(BGCOLOUR)
-        self.tooltip_btn.Bind(wx.EVT_BUTTON, self.tooltip_handler)
-        self.tooltip_btn.SetToolTipString(lang.getstr("gamut_plot.tooltip"))
-        self.plot_mode_sizer.Add(
-            self.tooltip_btn, flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT, border=8
+        self.tooltip_btn = self._create_plot_toolbar_button(
+            p1,
+            lambda: get_icon(16, "question-inverted"),
+            "?",
+            lang.getstr("gamut_plot.tooltip"),
+            8,
+            self.tooltip_handler,
         )
 
-        self.save_plot_btn = BitmapButton(
-            p1, -1, get_icon(16, "image-x-generic-inverted"), style=wx.NO_BORDER
-        )
-        self.save_plot_btn.SetBackgroundColour(BGCOLOUR)
-        self.save_plot_btn.Bind(wx.EVT_BUTTON, self.SaveFile)
-        self.save_plot_btn.SetToolTipString(
-            f"{lang.getstr('save_as')} (*.bmp, *.xbm, *.xpm, *.jpg, *.png)"
+        self.save_plot_btn = self._create_plot_toolbar_button(
+            p1,
+            lambda: get_icon(16, "image-x-generic-inverted"),
+            "Save",
+            f"{lang.getstr('save_as')} (*.bmp, *.xbm, *.xpm, *.jpg, *.png)",
+            8,
+            self.SaveFile,
         )
         self.save_plot_btn.Disable()
-        self.plot_mode_sizer.Add(
-            self.save_plot_btn, flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT, border=8
-        )
 
-        self.view_3d_btn = BitmapButton(p1, -1, get_icon(16, "3D"), style=wx.NO_BORDER)
-        self.view_3d_btn.SetBackgroundColour(BGCOLOUR)
-        self.view_3d_btn.Bind(wx.EVT_BUTTON, self.view_3d)
-        self.view_3d_btn.Bind(wx.EVT_CONTEXT_MENU, self.view_3d_format_popup)
-        self.view_3d_btn.SetToolTipString(lang.getstr("view.3d"))
-        self.view_3d_btn.Disable()
-        self.plot_mode_sizer.Add(
-            self.view_3d_btn, flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT, border=12
+        self.view_3d_btn = self._create_plot_toolbar_button(
+            p1,
+            lambda: get_icon(16, "3D"),
+            "3D",
+            lang.getstr("view.3d"),
+            12,
+            self.view_3d,
+            self.view_3d_format_popup,
         )
-        self.view_3d_format_btn = BitmapButton(
-            p1, -1, get_bitmap("theme/dropdown-arrow"), style=wx.NO_BORDER
+        self.view_3d_btn.Disable()
+
+        self.view_3d_format_btn = self._create_plot_toolbar_button(
+            p1,
+            lambda: get_bitmap("theme/dropdown-arrow"),
+            "v",
+            lang.getstr("view.3d"),
+            4,
+            self.view_3d_format_popup,
+            self.view_3d_format_popup,
         )
         self.view_3d_format_btn.MinSize = (-1, self.view_3d_btn.Size[1])
-        self.view_3d_format_btn.SetBackgroundColour(BGCOLOUR)
-        self.view_3d_format_btn.Bind(wx.EVT_BUTTON, self.view_3d_format_popup)
-        self.view_3d_format_btn.Bind(wx.EVT_CONTEXT_MENU, self.view_3d_format_popup)
-        self.view_3d_format_btn.SetToolTipString(lang.getstr("view.3d"))
         self.view_3d_format_btn.Disable()
-        self.plot_mode_sizer.Add(
-            self.view_3d_format_btn, flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT, border=4
-        )
 
         self.client = GamutCanvas(p1)
         p1.sizer.Add(
@@ -1333,7 +1367,6 @@ class ProfileInfoFrame(LUTFrame):
             flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP | wx.BOTTOM,
             border=4,
         )
-
         self.options_panel = SimpleBook(p1)
         self.options_panel.SetBackgroundColour(BGCOLOUR)
         p1.sizer.Add(self.options_panel, flag=wx.EXPAND | wx.BOTTOM, border=8)
@@ -1347,7 +1380,6 @@ class ProfileInfoFrame(LUTFrame):
         h = self.status.GetTextExtent("Ig")[1]
         self.status.SetMinSize((0, h * 2 + 10))
         p1.sizer.Add(self.status, flag=wx.EXPAND)
-
         self.gamut_status = BitmapBackgroundPanelTextGamut(p1)
         self.gamut_status.SetMaxFontSize(11)
         self.gamut_status.label_y = 0
@@ -1357,7 +1389,6 @@ class ProfileInfoFrame(LUTFrame):
         h = self.gamut_status.GetTextExtent("Ig")[1]
         self.gamut_status.SetMinSize((0, h * 2 + 10))
         p1.sizer.Add(self.gamut_status, flag=wx.EXPAND)
-
         # Gamut view options
         self.gamut_view_options = GamutViewOptions(p1)
         self.options_panel.AddPage(self.gamut_view_options, "")
@@ -1420,7 +1451,10 @@ class ProfileInfoFrame(LUTFrame):
 
         hsizer.Add((16, 0))
 
-        self.show_as_L = CustomCheckBox(self.lut_view_options, -1, "L* \u2192")
+        if SAFE_WX_UI:
+            self.show_as_L = wx.CheckBox(self.lut_view_options, -1, "L* \u2192")
+        else:
+            self.show_as_L = CustomCheckBox(self.lut_view_options, -1, "L* \u2192")
         self.show_as_L.SetForegroundColour(FGCOLOUR)
         self.show_as_L.SetValue(True)
         hsizer.Add(self.show_as_L, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=4)
@@ -1428,7 +1462,10 @@ class ProfileInfoFrame(LUTFrame):
 
         self.add_toggles(self.lut_view_options, hsizer)
 
-        self.toggle_clut = CustomCheckBox(self.lut_view_options, -1, "LUT")
+        if SAFE_WX_UI:
+            self.toggle_clut = wx.CheckBox(self.lut_view_options, -1, "LUT")
+        else:
+            self.toggle_clut = CustomCheckBox(self.lut_view_options, -1, "LUT")
         self.toggle_clut.SetForegroundColour(FGCOLOUR)
         hsizer.Add(self.toggle_clut, flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT, border=16)
         self.toggle_clut.Bind(wx.EVT_CHECKBOX, self.toggle_clut_handler)
@@ -1440,26 +1477,33 @@ class ProfileInfoFrame(LUTFrame):
         p2.SetSizer(p2.sizer)
         self.splitter.AppendWindow(p2)
 
-        self.grid = CustomGrid(p2, -1)
-        self.grid.alternate_row_label_background_color = wx.Colour(230, 230, 230)
-        self.grid.alternate_cell_background_color = (
-            self.grid.alternate_row_label_background_color
-        )
-        self.grid.draw_horizontal_grid_lines = False
-        self.grid.draw_vertical_grid_lines = False
-        self.grid.draw_row_labels = False
-        self.grid.show_cursor_outline = False
-        self.grid.style = ""
+        # Avoid CustomGrid subclassing path on macOS + Python 3.14 where
+        # frame initialization still traps in native code.
+        if SAFE_WX_UI:
+            self.grid = wx.grid.Grid(p2, -1)
+        else:
+            self.grid = CustomGrid(p2, -1)
+            self.grid.alternate_row_label_background_color = wx.Colour(230, 230, 230)
+            self.grid.alternate_cell_background_color = (
+                self.grid.alternate_row_label_background_color
+            )
+            self.grid.draw_horizontal_grid_lines = False
+            self.grid.draw_vertical_grid_lines = False
+            self.grid.draw_row_labels = False
+            self.grid.show_cursor_outline = False
+            self.grid.style = ""
         self.grid.CreateGrid(0, 2)
         self.grid.SetCellHighlightPenWidth(0)
         self.grid.SetCellHighlightROPenWidth(0)
         self.grid.SetDefaultCellBackgroundColour(self.grid.GetLabelBackgroundColour())
-        font = self.grid.GetDefaultCellFont()
-        if font.PointSize > 11:
-            font.PointSize = 11
-            self.grid.SetDefaultCellFont(font)
+        if not SAFE_WX_UI:
+            font = self.grid.GetDefaultCellFont()
+            if font.PointSize > 11:
+                font.PointSize = 11
+                self.grid.SetDefaultCellFont(font)
         self.grid.SetSelectionMode(wx.grid.Grid.wxGridSelectRows)
-        self.grid.SetRowLabelSize(self.grid.GetDefaultRowSize())
+        if not SAFE_WX_UI:
+            self.grid.SetRowLabelSize(self.grid.GetDefaultRowSize())
         self.grid.SetColLabelSize(0)
         self.grid.DisableDragRowSize()
         self.grid.EnableDragColSize()
@@ -1777,7 +1821,8 @@ class ProfileInfoFrame(LUTFrame):
                 rowlabelrenderer = CustomRowLabelRenderer(labelbgcolor)
             else:
                 rowlabelrenderer = None
-            self.grid.SetRowLabelRenderer(i, rowlabelrenderer)
+            if not SAFE_WX_UI:
+                self.grid.SetRowLabelRenderer(i, rowlabelrenderer)
             self.grid.SetCellTextColour(i, 0, textcolor)
             self.grid.SetCellValue(i, 1, value)
 

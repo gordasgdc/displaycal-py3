@@ -135,22 +135,13 @@ config = {
     # numpy.lib.utils imports pydoc, which imports Tkinter, but
     # numpy.lib.utils is not even used by DisplayCAL, so omit all
     # Tk stuff
-    # Use pyglet with OpenAL as audio backend. We only need
-    # pyglet, pyglet.app and pyglet.media
+    # Use pyglet with OpenAL as audio backend. pyglet 2.x media import paths
+    # pull in additional submodules dynamically, so don't exclude pyglet.*
     "excludes": {
         "all": [
             "Tkconstants",
             "Tkinter",
             "pygame",
-            "pyglet.canvas",
-            "pyglet.extlibs",
-            "pyglet.font",
-            "pyglet.gl",
-            "pyglet.graphics",
-            "pyglet.image",
-            "pyglet.input",
-            "pyglet.text",
-            "pyglet.window",
             "pyo",
             "setuptools",
             "tcl",
@@ -988,6 +979,7 @@ def setup() -> None:
             "Programming Language :: Python :: 3.11",
             "Programming Language :: Python :: 3.12",
             "Programming Language :: Python :: 3.13",
+            "Programming Language :: Python :: 3.14",
             "Topic :: Multimedia :: Graphics",
         ],
         "data_files": data_files,
@@ -1037,8 +1029,11 @@ def setup() -> None:
         attrs["include_package_data"] = (
             sys.platform in ("darwin", "win32") and not do_py2app
         )
-        install_requires = [req.replace("(", "").replace(")", "") for req in requires]
-        attrs["install_requires"] = install_requires
+        # Modern py2app build flow errors out when install_requires is present.
+        # Keep runtime metadata for normal installs, but skip it for app/exe bundling.
+        if not do_py2app and not do_py2exe:
+            install_requires = [req.replace("(", "").replace(")", "") for req in requires]
+            attrs["install_requires"] = install_requires
         attrs["zip_safe"] = False
     else:
         attrs["scripts"].extend(
@@ -1069,7 +1064,27 @@ def setup() -> None:
             f"py2app.{get_platform()}-py{sys.version_info[0]}.{sys.version_info[1]}",
             f"{NAME}-{VERSION_STRING}",
         )
+        import py2app.build_app as py2app_build_app
         from py2app.build_app import py2app as py2app_cls
+        from py2app import util as py2app_util
+
+        def _skip_codesign_adhoc(bundle: str) -> None:
+            print(f"Skipping ad-hoc codesign for bundle: {bundle}")
+
+        py2app_util.codesign_adhoc = _skip_codesign_adhoc
+        py2app_build_app.codesign_adhoc = _skip_codesign_adhoc
+
+        class DisplayCALPy2App(py2app_cls):
+            """py2app wrapper that tolerates PEP 621 dependencies metadata."""
+
+            def finalize_options(self) -> None:
+                # py2app 0.28+ errors out when install_requires is populated.
+                # Under setuptools+pyproject, install_requires can be injected
+                # from project.dependencies even if setup.py does not set it.
+                self.distribution.install_requires = []
+                if hasattr(self.distribution.metadata, "requires_dist"):
+                    self.distribution.metadata.requires_dist = []
+                super().finalize_options()
 
         py2app_cls._copy_package_data = py2app_cls.copy_package_data
 
@@ -1095,12 +1110,15 @@ def setup() -> None:
                 self._copy_package_data(package, target_dir)
 
         py2app_cls.copy_package_data = copy_package_data
+        attrs.setdefault("cmdclass", {})
+        attrs["cmdclass"]["py2app"] = DisplayCALPy2App
         attrs["options"] = {
             "py2app": {
                 "argv_emulation": False,
                 "dist_dir": dist_dir,
                 "excludes": config["excludes"]["all"] + config["excludes"]["darwin"],
                 "iconfile": os.path.join(pydir, "theme", "icons", f"{NAME}.icns"),
+                "no_strip": True,
                 "optimize": 0,
                 "plist": plist_dict,
             }
@@ -1533,6 +1551,8 @@ def setup() -> None:
         manifest_in.extend(
             [
                 "include LICENSE.txt",
+                "include VERSION",
+                "include VERSION_BASE",
                 "include MANIFEST",
                 "include MANIFEST.in",
                 "include README.html",

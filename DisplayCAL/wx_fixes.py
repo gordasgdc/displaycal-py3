@@ -580,7 +580,7 @@ wx.AnyButton._SetBitmapLabel = wx.AnyButton.SetBitmapLabel
 def SetBitmapLabel(self, bitmap):
     """Override the SetBitmapLabel to avoid flickering."""
     if self.GetBitmapLabel() != bitmap:
-        self._SetBitmapLabel(self, bitmap)
+        self._SetBitmapLabel(bitmap)
 
 
 wx.AnyButton.SetBitmapLabel = SetBitmapLabel
@@ -1418,7 +1418,7 @@ class GenBitmapButton(GenButton, _GenBitmapButton):
         Args:
             bitmap (wx.Bitmap): The bitmap to set for the focus state.
         """
-        self.SetBitmapFocus(self, bitmap)
+        self.SetBitmapFocus(bitmap)
 
     @property
     def BitmapDisabled(self):
@@ -1436,7 +1436,7 @@ class GenBitmapButton(GenButton, _GenBitmapButton):
         Args:
             bitmap (wx.Bitmap): The bitmap to set for the disabled state.
         """
-        self.SetBitmapDisabled(self, bitmap)
+        self.SetBitmapDisabled(bitmap)
 
     @property
     def BitmapHover(self):
@@ -1454,7 +1454,7 @@ class GenBitmapButton(GenButton, _GenBitmapButton):
         Args:
             bitmap (wx.Bitmap): The bitmap to set for the hover state.
         """
-        self.SetBitmapHover(self, bitmap)
+        self.SetBitmapHover(bitmap)
 
     @property
     def BitmapSelected(self):
@@ -1472,7 +1472,7 @@ class GenBitmapButton(GenButton, _GenBitmapButton):
         Args:
             bitmap (wx.Bitmap): The bitmap to set for the selected state.
         """
-        self.SetBitmapSelected(self, bitmap)
+        self.SetBitmapSelected(bitmap)
 
     @property
     def BitmapLabel(self):
@@ -1490,7 +1490,7 @@ class GenBitmapButton(GenButton, _GenBitmapButton):
         Args:
             bitmap (wx.Bitmap): The bitmap to set as the label.
         """
-        self.SetBitmapLabel(self, bitmap)
+        self.SetBitmapLabel(bitmap)
 
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
         """Draw the bitmap label in the button.

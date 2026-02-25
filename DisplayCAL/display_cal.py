@@ -75,6 +75,7 @@ from DisplayCAL.argyll import (
     check_set_argyll_bin,
     get_argyll_instrument_config,
     get_argyll_latest_version,
+    get_argyll_util,
     get_argyll_version,
     make_argyll_compatible_path,
     set_argyll_bin,
@@ -327,6 +328,8 @@ webbrowser.PROCESS_CREATION_DELAY = 0
 APP_IS_UP_TO_DATE = True
 COMPRESSED_FILE_EXTENSIONS = (".7z", ".tar.gz", ".tgz", ".zip")
 ICCPROFILE_FILE_EXTENSIONS = (".icc", ".icm")
+# Use conservative UI paths by default unless explicitly disabled.
+SAFE_WX_UI = os.getenv("DISPLAYCAL_UNSAFE_WX_UI", "").strip() != "1"
 
 
 def debug_print(*args, **kwargs) -> None:
@@ -339,6 +342,18 @@ def verbose_print(*args, **kwargs) -> None:
     """Print verbose messages if VERBOSE is enabled."""
     if kwargs.pop("level", 1) <= VERBOSE:
         print(*args, **kwargs)
+
+
+def set_platebutton_bitmaps(button: PlateButton, icon_name: str, size: int = 16) -> None:
+    """Set normal/hover/disabled bitmaps with crash-safe hover color lookup."""
+    hover_suffix = ""
+    if not SAFE_WX_UI:
+        try:
+            hover_suffix = button._color["htxt"].GetAsString(wx.C2S_HTML_SYNTAX)
+        except Exception:
+            hover_suffix = ""
+    button.SetBitmapHover(get_icon(size, icon_name + hover_suffix))
+    button.SetBitmapDisabled(get_bitmap_disabled(get_icon(size, icon_name)))
 
 
 def show_ccxx_error_dialog(exception: Exception, path: str, parent: wx.Window) -> None:
@@ -585,7 +600,12 @@ def app_update_confirm(
     newversion = ".".join(str(n) for n in new_version_tuple)
     if argyll:
         newversion_desc = "ArgyllCMS"
-        newversion = get_argyll_latest_version()
+        try:
+            newversion = get_argyll_latest_version()
+        except Exception as exception:
+            # Keep update flow alive even if version lookup/parsing fails.
+            print(f"Could not determine latest ArgyllCMS version: {exception}")
+            newversion = config.DEFAULTS.get("argyll.version", "unknown")
     else:
         newversion_desc = APPNAME
     newversion_desc += f" {newversion}"
@@ -622,7 +642,7 @@ def app_update_confirm(
         warning.ForegroundColour = "#F07F00"
         sizer.Add(warning, flag=wx.LEFT, border=8)
         warning.Wrap((500 - 16 - 8) * scale)
-    if chglog:
+    if chglog and not SAFE_WX_UI:
         htmlwnd = HtmlWindow(
             dlg, -1, size=(500 * scale, 300 * scale), style=wx.BORDER_THEME
         )
@@ -680,6 +700,7 @@ def app_update_confirm(
                 domain = config.DEFAULTS.get("argyll.domain").split("/")[-1]
                 dlname = "Argyll"
                 sep = "_V"
+                machine = platform.machine().lower()
                 if sys.platform == "win32":
                     # Determine 32 or 64 bit OS
                     key = winreg.OpenKey(
@@ -693,16 +714,22 @@ def app_update_confirm(
                         value = "x86"
                     finally:
                         winreg.CloseKey(key)
-                    if value.lower() == "amd64":
+                    arch = value.lower()
+                    if arch in ("arm64", "aarch64"):
+                        suffix = "_win_arm64_exe.zip"
+                    elif arch in ("amd64", "x86_64"):
                         suffix = "_win64_exe.zip"
                     else:
                         # Assume win32
                         suffix = "_win32_exe.zip"
                 elif sys.platform == "darwin":
-                    # We only support OS X 10.5+
-                    suffix = "_osx10.6_x86_64_bin.tgz"
+                    if machine in ("arm64", "aarch64"):
+                        suffix = "_macOS11_arm64_bin.tgz"
+                    else:
+                        # Keep x86_64 as fallback on Intel and unknown machine ids.
+                        suffix = "_osx10.6_x86_64_bin.tgz"
                 # Linux
-                elif platform.architecture()[0] == "64bit":
+                elif machine in ("x86_64", "amd64") or platform.architecture()[0] == "64bit":
                     # Assume x86_64
                     suffix = "_linux_x86_64_bin.tgz"
                 else:
@@ -717,7 +744,7 @@ def app_update_confirm(
             worker.start(
                 consumer,
                 worker.download,
-                ckwargs={"exit": dlname == APPNAME},
+                ckwargs={"exit_": dlname == APPNAME},
                 wargs=(f"https://{domain}/{folder}/{dlname}{sep}{newversion}{suffix}",),
                 progress_msg=lang.getstr("downloading"),
                 fancy=False,
@@ -846,9 +873,7 @@ def colorimeter_correction_web_check_choose(
         lang.getstr("colorimeter_correction.info"),
         get_icon(16, "info"),
     )
-    hover_color = dlg.info._color["htxt"].GetAsString(wx.C2S_HTML_SYNTAX)
-    dlg.info.SetBitmapHover(get_icon(16, "info" + hover_color))
-    dlg.info.SetBitmapDisabled(get_bitmap_disabled(get_icon(16, "info")))
+    set_platebutton_bitmaps(dlg.info, "info")
     dlg.sizer2.Insert(0, dlg.info, flag=wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, border=12)
     dlg.sizer2.Insert(0, (32 + 7, 1))
     scale = getcfg("app.dpi") / config.get_default_dpi()
@@ -1457,6 +1482,11 @@ class ExtraArgsFrame(BaseFrame):
         self.Bind(
             wx.EVT_TEXT,
             self.extra_args_handler,
+            id=self.extra_args_specplot_ctrl.GetId(),
+        )
+        self.Bind(
+            wx.EVT_TEXT,
+            self.extra_args_handler,
             id=self.extra_args_colprof_ctrl.GetId(),
         )
         self.Bind(
@@ -1489,6 +1519,7 @@ class ExtraArgsFrame(BaseFrame):
             self.extra_args_dispcal_ctrl.GetId(): "extra_args.dispcal",
             self.extra_args_dispread_ctrl.GetId(): "extra_args.dispread",
             self.extra_args_spotread_ctrl.GetId(): "extra_args.spotread",
+            self.extra_args_specplot_ctrl.GetId(): "extra_args.specplot",
             self.extra_args_colprof_ctrl.GetId(): "extra_args.colprof",
             self.extra_args_collink_ctrl.GetId(): "extra_args.collink",
             self.extra_args_targen_ctrl.GetId(): "extra_args.targen",
@@ -1504,6 +1535,7 @@ class ExtraArgsFrame(BaseFrame):
         self.extra_args_dispcal_ctrl.ChangeValue(getcfg("extra_args.dispcal"))
         self.extra_args_dispread_ctrl.ChangeValue(getcfg("extra_args.dispread"))
         self.extra_args_spotread_ctrl.ChangeValue(getcfg("extra_args.spotread"))
+        self.extra_args_specplot_ctrl.ChangeValue(getcfg("extra_args.specplot"))
         self.extra_args_colprof_ctrl.ChangeValue(getcfg("extra_args.colprof"))
         self.extra_args_collink_ctrl.ChangeValue(getcfg("extra_args.collink"))
         self.extra_args_targen_ctrl.ChangeValue(getcfg("extra_args.targen"))
@@ -2318,9 +2350,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             "info.display_tech.show",
             get_icon(16, "info"),
         )
-        hovercolor = btn._color["htxt"].GetAsString(wx.C2S_HTML_SYNTAX)
-        btn.SetBitmapHover(get_icon(16, "info" + hovercolor))
-        btn.SetBitmapDisabled(get_bitmap_disabled(get_icon(16, "info")))
+        set_platebutton_bitmaps(btn, "info")
         self.display_instrument_info_panel.Sizer.Add((0, int(14 * scale)))
         self.display_instrument_info_panel.Sizer.Add(
             btn, flag=wx.LEFT, border=int((16 + 32 + 7) * scale)
@@ -3186,6 +3216,10 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             tools_advanced.FindItem("measure.testchart")
         )
         self.Bind(wx.EVT_MENU, self.measure_handler, self.menuitem_measure_testchart)
+        self.menuitem_specplot_run = tools_advanced.FindItemById(
+            tools_advanced.FindItem("specplot.run")
+        )
+        self.Bind(wx.EVT_MENU, self.specplot_handler, self.menuitem_specplot_run)
 
         self.menuitem_profile_hires_b2a = tools_advanced.FindItemById(
             tools_advanced.FindItem("profile.b2a.hires")
@@ -3417,6 +3451,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self.menuitem_measure_testchart.Enable(
             bool(self.worker.displays) and bool(self.worker.instruments)
         )
+        self.menuitem_specplot_run.Enable(self.worker.argyll_version > [0, 0, 0])
         self.menuitem_create_profile.Enable(bool(self.worker.displays))
         edid = self.worker.get_display_edid()
         self.menuitem_create_profile_from_edid.Enable(
@@ -11965,6 +12000,53 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             self.restore_measurement_mode()
             self.restore_testchart()
 
+    def specplot_handler(self, event: wx.Event) -> None:
+        """Run Argyll specplot for a selected file."""
+        if not check_set_argyll_bin():
+            return
+        path = None
+        default_dir, default_file = get_verified_path("last_specplot_path")
+        dlg = wx.FileDialog(
+            self,
+            lang.getstr("specplot.choose"),
+            defaultDir=default_dir,
+            defaultFile=default_file,
+            wildcard=lang.getstr("filetype.any") + "|*.*",
+            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
+        )
+        dlg.Center(wx.BOTH)
+        result = dlg.ShowModal()
+        if result == wx.ID_OK:
+            path = dlg.GetPath()
+        dlg.Destroy()
+        if not path:
+            return
+        setcfg("last_specplot_path", path)
+        cmd = get_argyll_util("specplot")
+        if not cmd:
+            show_result_dialog(Error(lang.getstr("argyll.util.not_found", "specplot")), self)
+            return
+        args = ["-v"]
+        if getcfg("extra_args.specplot").strip():
+            args += parse_argument_string(getcfg("extra_args.specplot"))
+        args.append(path)
+        self.worker.interactive = False
+        self.worker.start(
+            self.specplot_consumer,
+            self.worker.exec_cmd,
+            wargs=(cmd, args),
+            wkwargs={"skip_scripts": True},
+            progress_msg=lang.getstr("specplot.run"),
+            fancy=False,
+        )
+
+    def specplot_consumer(self, result: bool | Exception) -> None:
+        """Handle completion of a specplot run."""
+        if isinstance(result, Exception):
+            show_result_dialog(result, self)
+        self.worker.wrapup(False)
+        self.Show()
+
     def profile_btn_handler(self, event: wx.Event) -> None:
         """Setup characterization measurements.
 
@@ -14879,9 +14961,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             btn = PlateButton(
                 dlg, -1, lang.getstr("info.display_tech.show"), get_icon(16, "info")
             )
-            hovercolor = btn._color["htxt"].GetAsString(wx.C2S_HTML_SYNTAX)
-            btn.SetBitmapHover(get_icon(16, "info" + hovercolor))
-            btn.SetBitmapDisabled(get_bitmap_disabled(get_icon(16, "info")))
+            set_platebutton_bitmaps(btn, "info")
             btn.Bind(wx.EVT_BUTTON, self.display_tech_info_show_handler)
             boxsizer.Add(btn, flag=wx.ALL | wx.ALIGN_LEFT, border=4)
             dlg.description_txt_ctrl.SetFocus()
@@ -15468,9 +15548,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             lang.getstr("colorimeter_correction.info"),
             get_icon(16, "info"),
         )
-        hovercolor = dlg.info._color["htxt"].GetAsString(wx.C2S_HTML_SYNTAX)
-        dlg.info.SetBitmapHover(get_icon(16, "info" + hovercolor))
-        dlg.info.SetBitmapDisabled(get_bitmap_disabled(get_icon(16, "info")))
+        set_platebutton_bitmaps(dlg.info, "info")
 
         def show_ccxx_info(event: wx.Event) -> None:
             """Show information about the colorimeter correction.
@@ -16663,9 +16741,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             get_icon(16, "web"),
         )
         link1.SetMaxFontSize(11)
-        hovercolor = link1._color["htxt"].GetAsString(wx.C2S_HTML_SYNTAX)
-        link1.SetBitmapHover(get_icon(16, "web" + hovercolor))
-        link1.SetBitmapDisabled(get_bitmap_disabled(get_icon(16, "web")))
+        set_platebutton_bitmaps(link1, "web")
         if sys.platform == "darwin":
             # Prevent initial highlited state
             link1.Unbind(wx.EVT_SET_FOCUS)
@@ -16686,9 +16762,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             get_icon(16, "web"),
         )
         link2.SetMaxFontSize(11)
-        hovercolor = link2._color["htxt"].GetAsString(wx.C2S_HTML_SYNTAX)
-        link2.SetBitmapHover(get_icon(16, "web" + hovercolor))
-        link2.SetBitmapDisabled(get_bitmap_disabled(get_icon(16, "web")))
+        set_platebutton_bitmaps(link2, "web")
         if sys.platform == "darwin":
             # Prevent initial highlited state
             link2.Unbind(wx.EVT_SET_FOCUS)

@@ -52,7 +52,7 @@ APPSTREAM_ID = ".".join(reversed([NAME, *DOMAIN.split(".")]))
 NAME_HTML = '<span class="appname">Display<span>CAL</span></span>'
 
 PY_MINVERSION = (3, 9)
-PY_MAXVERSION = (3, 13)
+PY_MAXVERSION = (3, 14)
 
 VERSION_STRING = VERSION_STRING
 VERSION_LIN = VERSION_STRING  # Linux

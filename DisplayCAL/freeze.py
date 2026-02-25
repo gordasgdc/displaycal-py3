@@ -120,22 +120,13 @@ config = {
     # numpy.lib.utils imports pydoc, which imports Tkinter, but
     # numpy.lib.utils is not even used by DisplayCAL, so omit all
     # Tk stuff
-    # Use pyglet with OpenAL as audio backend. We only need
-    # pyglet, pyglet.app and pyglet.media
+    # Use pyglet with OpenAL as audio backend. pyglet 2.x media import paths
+    # pull in additional submodules dynamically, so don't exclude pyglet.*
     "excludes": {
         "all": [
             "Tkconstants",
             "Tkinter",
             "pygame",
-            "pyglet.canvas",
-            "pyglet.extlibs",
-            "pyglet.font",
-            "pyglet.gl",
-            "pyglet.graphics",
-            "pyglet.image",
-            "pyglet.input",
-            "pyglet.text",
-            "pyglet.window",
             "pyo",
             "setuptools",
             "tcl",
@@ -481,6 +472,7 @@ def build_py2exe() -> None:
             "Programming Language :: Python :: 3.11",
             "Programming Language :: Python :: 3.12",
             "Programming Language :: Python :: 3.13",
+            "Programming Language :: Python :: 3.14",
             "Topic :: Multimedia :: Graphics",
         ],
         "data_files": data_files,
