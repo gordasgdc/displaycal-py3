@@ -16,7 +16,7 @@ import sys
 import tarfile
 from io import StringIO
 from time import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, BinaryIO, TextIO
 
 if sys.version_info >= (3, 11):
     from typing import Self
@@ -28,6 +28,7 @@ from DisplayCAL.util_str import universal_newlines
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from types import TracebackType
 
 
 class EncodedWriter:
@@ -36,7 +37,7 @@ class EncodedWriter:
     Either data_encoding or file_encoding can be None.
 
     Args:
-        file_obj (file-like object): The file object to write to.
+        file_obj (BinaryIO | TextIO): The file object to write to.
         data_encoding (str, optional): The encoding to use for decoding data
             before writing. Defaults to None.
         file_encoding (str, optional): The encoding to use for encoding data
@@ -46,14 +47,18 @@ class EncodedWriter:
     """
 
     def __init__(
-        self, file_obj, data_encoding=None, file_encoding=None, errors="replace"
-    ):
+        self,
+        file_obj: BinaryIO | TextIO,
+        data_encoding: str | None = None,
+        file_encoding: str | None = None,
+        errors: str = "replace",
+    ) -> None:
         self.file = file_obj
         self.data_encoding = data_encoding
         self.file_encoding = file_encoding
         self.errors = errors
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self, name: str) -> Any:  # noqa: ANN401
         """Get attribute from the file object.
 
         Args:
@@ -64,14 +69,14 @@ class EncodedWriter:
         """
         return getattr(self.file, name)
 
-    def write(self, data):
+    def write(self, data: str | bytes | bytearray) -> None:
         """Write data to the file.
 
         First decoding it with data_encoding and encoding it with file_encoding
         if specified.
 
         Args:
-            data (str | bytes): The data to write to the file.
+            data (str | bytes | bytearray): The data to write to the file.
         """
         if self.data_encoding and not isinstance(data, str):
             data = data.decode(self.data_encoding, self.errors)
@@ -84,12 +89,14 @@ class Files:
     """Read and/or write from/to several files at once.
 
     Args:
-        files (list[file objects] | list[str]): files must be a list or tuple
-            of file objects or filenames (the mode parameter is only used in
-            the latter case).
+        files (list[str] | list[BinaryIO | TextIO]): files must be a list or
+            tuple of file objects or filenames (the mode parameter is only used
+            in the latter case).
     """
 
-    def __init__(self, files, mode="r"):
+    def __init__(
+        self, files: list[str] | list[BinaryIO | TextIO], mode: str = "r"
+    ) -> None:
         self.files = []
         for item in files:
             if isinstance(item, str):
@@ -105,46 +112,46 @@ class Files:
         """
         return iter(self.files)
 
-    def close(self):
+    def close(self) -> None:
         """Close all files in the Files object."""
         for item in self.files:
             item.close()
 
-    def flush(self):
+    def flush(self) -> None:
         """Flush all files."""
         for item in self.files:
             with contextlib.suppress(AttributeError):
                 # TODO: Restore safe_log
                 item.flush()
 
-    def seek(self, pos, mode=0):
+    def seek(self, pos: int, mode: int = 0) -> None:
         """Seek to a position in all files.
 
         Args:
             pos (int): The position to seek to.
             mode (int, optional): The mode for seeking. Defaults to 0 (absolute
-                file positioning). Other values are 1 (relative to current position)
-                and 2 (relative to file's end).
+                file positioning). Other values are 1 (relative to current
+                position) and 2 (relative to file's end).
         """
         for item in self.files:
             item.seek(pos, mode)
 
-    def truncate(self, size=None):
+    def truncate(self, size: None | int = None) -> None:
         """Truncate all files to the specified size.
 
         Args:
-            size (int, optional): The size to truncate the files to. If None,
-                the files are truncated to the current position. Defaults to
-                None.
+            size (None | int, optional): The size to truncate the files to. If
+                None, the files are truncated to the current position. Defaults
+                to None.
         """
         for item in self.files:
             item.truncate(size)
 
-    def write(self, data):
+    def write(self, data: str | bytes | bytearray) -> None:
         """Write data to all files.
 
         Args:
-            data (str): The data to write to the files.
+            data (str | bytes | bytearray): The data to write to the files.
         """
         for item in self.files:
             try:
@@ -153,11 +160,11 @@ class Files:
                 with contextlib.suppress(TypeError):
                     item(data)
 
-    def writelines(self, str_sequence):
+    def writelines(self, str_sequence: list[str]) -> None:
         """Write a sequence of strings to all files.
 
         Args:
-            str_sequence (list of str): A sequence of strings to write to the files.
+            str_sequence (list[str]): A sequence of strings to write to the files.
         """
         self.write("".join(str_sequence))
 
@@ -172,7 +179,12 @@ class GzipFileProper(gzip.GzipFile):
     See RFC 1952 GZIP File Format Specification	version 4.3
     """
 
-    def _write_gzip_header(self, compresslevel):
+    def _write_gzip_header(self, compresslevel: int) -> None:
+        """Write the GZIP file header.
+
+        Args:
+            compresslevel (int): The compression level to use.
+        """
         self.fileobj.write(b"\037\213")  # magic header
         self.fileobj.write(b"\010")  # compression method
         fname = os.path.basename(self.name)
@@ -207,7 +219,12 @@ class GzipFileProper(gzip.GzipFile):
         """
         return self
 
-    def __exit__(self, exc_type, exc_value, tb) -> None:
+    def __exit__(
+        self,
+        exc_type: None | type[BaseException],
+        exc_value: None | BaseException,
+        tb: None | TracebackType,
+    ) -> None:
         """Exit the runtime context related to this object.
 
         Args:
@@ -226,13 +243,13 @@ class LineBufferedStream:
 
     def __init__(
         self,
-        stream,
-        data_encoding=None,
-        file_encoding=None,
-        errors="replace",
-        linesep_in="\r\n",
-        linesep_out="",
-    ):
+        stream: TextIO | BinaryIO,
+        data_encoding: None | str = None,
+        file_encoding: None | str = None,
+        errors: str = "replace",
+        linesep_in: str = "\r\n",
+        linesep_out: str = "",
+    ) -> None:
         self.buf = ""
         self.data_encoding = data_encoding
         self.file_encoding = file_encoding
@@ -245,7 +262,7 @@ class LineBufferedStream:
         """Destructor to ensure the stream is closed properly."""
         self.commit()
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self, name: str) -> Any:  # noqa: ANN401
         """Get attribute from the stream.
 
         Args:
@@ -256,12 +273,12 @@ class LineBufferedStream:
         """
         return getattr(self.stream, name)
 
-    def close(self):
+    def close(self) -> None:
         """Close the stream and commit any buffered data."""
         self.commit()
         self.stream.close()
 
-    def commit(self):
+    def commit(self) -> None:
         """Write the buffered data to the stream, encoding it if necessary."""
         if not self.buf:
             return
@@ -276,12 +293,12 @@ class LineBufferedStream:
         """Write data to the stream, buffering it until a line separator is detected.
 
         Args:
-            data (str | bytes): The data to write to the stream.
+            data (str | bytes | bytearray): The data to write to the stream.
 
         Raises:
             TypeError: If the data is not of type str, bytes, or bytearray.
         """
-        if isinstance(data, bytes):
+        if isinstance(data, (bytes, bytearray)):
             data = data.decode()
         if not isinstance(data, str):
             raise TypeError(
@@ -309,18 +326,18 @@ class LineCache:
             Defaults to 1.
     """
 
-    def __init__(self, maxlines=1):
+    def __init__(self, maxlines: int = 1) -> None:
         self.clear()
         self.maxlines = maxlines
 
-    def clear(self):
+    def clear(self) -> None:
         """Clear the cache, resetting it to an empty state."""
         self.cache = [""]
 
-    def flush(self):
+    def flush(self) -> None:
         """Flush the cache, clearing it."""
 
-    def read(self, triggers=None):
+    def read(self, triggers: None | list[str] = None) -> str:
         """Read cached lines, excluding those containing any triggers.
 
         Args:
@@ -342,7 +359,7 @@ class LineCache:
                 lines.append(line)
         return "\n".join([line for line in lines if line][-self.maxlines :])
 
-    def write(self, data):
+    def write(self, data: str) -> None:
         """Write data to the cache, splitting it into lines and handling line endings.
 
         Args:
@@ -364,7 +381,7 @@ class LineCache:
 class StringIOu(StringIO):
     """StringIO which converts all new line formats in buf to POSIX newlines."""
 
-    def __init__(self, buf=""):
+    def __init__(self, buf: str = "") -> None:
         StringIO.__init__(self, universal_newlines(buf))
 
 
@@ -375,10 +392,10 @@ class Tee(Files):
         file_obj (file-like object): The file object to write to.
     """
 
-    def __init__(self, file_obj):
+    def __init__(self, file_obj: TextIO | BinaryIO) -> None:
         Files.__init__((sys.stdout, file_obj))
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:  # noqa: ANN401
         """Get attribute from the second file object.
 
         Args:
@@ -389,11 +406,11 @@ class Tee(Files):
         """
         return getattr(self.files[1], name)
 
-    def close(self):
+    def close(self) -> None:
         """Close the second file object."""
         self.files[1].close()
 
-    def seek(self, pos, mode=0):
+    def seek(self, pos: int, mode: int = 0) -> int:
         """Seek to a position in the second file.
 
         Args:
@@ -406,13 +423,16 @@ class Tee(Files):
         """
         return self.files[1].seek(pos, mode)
 
-    def truncate(self, size=None):
+    def truncate(self, size: None | int = None) -> int:
         """Truncate the second file to the specified size.
 
         Args:
             size (int, optional): The size to truncate the file to. If None,
                 the file is truncated to the current position. Defaults to
                 None.
+
+        Returns:
+            int: The new size of the second file after truncation.
         """
         return self.files[1].truncate(size)
 
@@ -420,7 +440,9 @@ class Tee(Files):
 class TarFileProper(tarfile.TarFile):
     """Support extracting to unicode location and using base name."""
 
-    def extract(self, member, path="", full=True):
+    def extract(
+        self, member: str | tarfile.TarInfo, path: str = "", full: bool = True
+    ) -> None:
         """Extract a member from the archive to the current working directory.
 
         The full name or base name of the extracted files are used. Its file
@@ -466,7 +488,12 @@ class TarFileProper(tarfile.TarFile):
                 raise e
             self._dbg(1, f"tarfile: {e}")
 
-    def extractall(self, path=".", members=None, full=True):
+    def extractall(
+        self,
+        path: str = ".",
+        members: None | list[tarfile.TarInfo] = None,
+        full: bool = True,
+    ) -> None:
         """Extract all members from the archive to the current working directory.
 
         Also, set owner, modification time and permissions on directories
