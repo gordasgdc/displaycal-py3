@@ -1549,6 +1549,10 @@
 
 "download.fail.wrong_size": |-
   Échec du téléchargement : le fichier n’a pas la dimension attendue de %s octets (%s octets reçus).
+"download.retrying": |-
+  Nouvelle tentative de téléchargement (%i/%i) dans %.1f s...
+"archive.extract.fail.delete": |-
+  Impossible d’extraire l’archive, suppression du fichier : %s
 
 "download_install": |-
   Télécharger et installer

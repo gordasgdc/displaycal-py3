@@ -1032,6 +1032,10 @@
   Error de descarga: %s devolvió un documento vacío.
 "download.fail.wrong_size": |-
   Error de descarga: El archivo no tiene el tamaño esperado de %s bytes (se recibieron %s bytes).
+"download.retrying": |-
+  Reintentando descarga (%i/%i) en %.1f s...
+"archive.extract.fail.delete": |-
+  No se pudo extraer el archivo, eliminando archivo: %s
 "download_install": |-
   Descargar e instalar
 "downloading": |-

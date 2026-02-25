@@ -1548,6 +1548,10 @@
 
 "download.fail.wrong_size": |-
   Download fehlgeschlagen: Die Datei hat nicht die erwartete Größe von %s Bytes (%s Bytes erhalten).
+"download.retrying": |-
+  Download wird erneut versucht (%i/%i) in %.1f s...
+"archive.extract.fail.delete": |-
+  Archiv konnte nicht entpackt werden, Datei wird gelöscht: %s
 
 "download_install": |-
   Herunterladen & installieren

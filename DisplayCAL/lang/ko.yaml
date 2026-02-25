@@ -1546,6 +1546,10 @@
 
 "download.fail.wrong_size": |-
   다운로드 실패: 파일이 예상한 %s 바이트의 크기가 아닙니다. (%s 바이트 수신).
+"download.retrying": |-
+  다운로드 재시도 중 (%i/%i), %.1f초 후...
+"archive.extract.fail.delete": |-
+  압축 파일을 풀 수 없어 파일을 삭제합니다: %s
 
 "download_install": |-
   다운로드 & 설치
