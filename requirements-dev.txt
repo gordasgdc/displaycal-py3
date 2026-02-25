@@ -8,7 +8,7 @@ flake8-pep3101
 flake8-spellcheck
 matplotlib
 py2app; sys_platform == "darwin"
-py2exe; sys_platform == "win32"
+py2exe; sys_platform == "win32" and python_version < "3.13"
 pytest
 pytest-cov
 pytest-github-actions-annotate-failures

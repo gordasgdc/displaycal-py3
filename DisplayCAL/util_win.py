@@ -19,8 +19,11 @@ import win32process
 import winerror
 from win32comext.shell import shell as win32com_shell
 
+from DisplayCAL.mscms import WCSManagerProxy
 from DisplayCAL.util_os import quote_args
 from DisplayCAL.win_structs import UNICODE_STRING
+
+mscms = WCSManagerProxy()
 
 if TYPE_CHECKING:
     from _win32typing import PyDISPLAY_DEVICE
@@ -154,21 +157,7 @@ def calibration_management_isenabled() -> bool:
     if sys.getwindowsversion() < (6, 1):
         # Windows XP and Vista don't have calibration management
         return False
-    if False:
-        # Using registry - NEVER
-        # Also, does not work!
-        with winreg.OpenKey(
-            winreg.HKEY_LOCAL_MACHINE,
-            r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ICM\Calibration",
-        ) as key:
-            return bool(winreg.QueryValueEx(key, "CalibrationManagementEnabled")[0])
-    else:
-        # Using ctypes
-        mscms = _get_mscms_windll()
-        pbool = ctypes.pointer(ctypes.c_bool())
-        if not mscms or not mscms.WcsGetCalibrationManagementState(pbool):
-            return None
-        return bool(pbool.contents)
+    return mscms.get_calibration_management_state()
 
 
 def disable_calibration_management():
@@ -203,24 +192,7 @@ def enable_calibration_management(enable: bool = True) -> bool:
         raise NotImplementedError(
             "Calibration Management is only available in Windows 7 or later"
         )
-    if False:
-        # Using registry - NEVER
-        # Also, does not work!
-        with winreg.OpenKey(
-            winreg.HKEY_LOCAL_MACHINE,
-            r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ICM\Calibration",
-            winreg.KEY_SET_VALUE,
-        ) as key:
-            winreg.SetValueEx(
-                key, "CalibrationManagementEnabled", 0, winreg.REG_DWORD, int(enable)
-            )
-        return True
-    # Using ctypes (must be called with elevated permissions)
-    mscms = _get_mscms_windll()
-    if not mscms:
-        return False
-    if not mscms.WcsSetCalibrationManagementState(enable):
-        raise get_windows_error(ctypes.windll.kernel32.GetLastError())
+    mscms.set_calibration_management_state(enable)
     return True
 
 
@@ -251,22 +223,10 @@ def enable_per_user_profiles(
         device = get_display_device(display_no)
         if device:
             devicekey = device.DeviceKey
-    if not devicekey:
-        return False
-    if USE_REGISTRY:
-        with _get_icm_display_device_key(devicekey) as key:
-            winreg.SetValueEx(
-                key, "UsePerUserProfiles", 0, winreg.REG_DWORD, int(enable)
-            )
-    else:
-        # Using ctypes - this leaks registry key handles internally in
-        # WcsSetUsePerUserProfiles since Windows 10 1903
-        mscms = _get_mscms_windll()
-        if not mscms:
-            return False
-        if not mscms.WcsSetUsePerUserProfiles(str(devicekey), CLASS_MONITOR, enable):
-            raise get_windows_error(ctypes.windll.kernel32.GetLastError())
-    return True
+    if devicekey:
+        mscms.set_use_per_user_profiles(devicekey, enable)
+        return True
+    return False
 
 
 def get_display_devices(devicename: str) -> list[PyDISPLAY_DEVICE]:
@@ -563,24 +523,7 @@ def per_user_profiles_isenabled(
             devicekey = device.DeviceKey
     if not devicekey:
         return None
-    if USE_REGISTRY:
-        with _get_icm_display_device_key(devicekey) as key:
-            try:
-                return bool(winreg.QueryValueEx(key, "UsePerUserProfiles")[0])
-            except OSError as exception:
-                if exception.args[0] == winerror.ERROR_FILE_NOT_FOUND:
-                    return False
-                raise
-    else:
-        # Using ctypes - this leaks registry key handles internally in
-        # WcsGetUsePerUserProfiles since Windows 10 1903
-        mscms = _get_mscms_windll()
-        pbool = ctypes.pointer(ctypes.c_bool())
-        if not mscms or not mscms.WcsGetUsePerUserProfiles(
-            str(devicekey), CLASS_MONITOR, pbool
-        ):
-            return None
-        return bool(pbool.contents)
+    return mscms.get_use_per_user_profiles(devicekey)
 
 
 def run_as_admin(

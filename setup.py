@@ -17,7 +17,10 @@ from textwrap import fill
 from time import gmtime, strftime
 
 if sys.platform == "win32":
-    import msilib
+    try:
+        import msilib
+    except ModuleNotFoundError:
+        msilib = None
 
 
 pypath = Path(__file__).resolve()
@@ -788,6 +791,11 @@ def setup():
             return
 
     if "finalize_msi" in sys.argv[1:]:
+        if msilib is None:
+            raise RuntimeError(
+                "finalize_msi requires the stdlib msilib module, which is not "
+                "available in this Python version."
+            )
         db = msilib.OpenDatabase(
             rf"dist\{NAME}-{msiversion}.win32-py{sys.version_info[0]}.{sys.version_info[1]}.msi",
             msilib.MSIDBOPEN_TRANSACT,
