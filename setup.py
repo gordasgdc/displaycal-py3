@@ -445,8 +445,11 @@ def setup():
 
     from DisplayCAL.util_os import which
 
+    git_metadata = Path(pydir, ".git")
+    has_git_metadata = git_metadata.is_dir() or git_metadata.is_file()
+
     if (
-        Path(pydir, ".git").is_dir()
+        has_git_metadata
         and (which("git") or which("git.exe"))
         and (not sys.argv[1:] or (len(non_build_args) < len(sys.argv[1:]) and not help))
     ):

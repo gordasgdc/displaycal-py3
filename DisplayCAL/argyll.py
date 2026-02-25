@@ -24,6 +24,7 @@ from DisplayCAL.argyll_names import ALTNAMES as ARGYLL_ALTNAMES
 from DisplayCAL.argyll_names import NAMES as ARGYLL_NAMES
 from DisplayCAL.argyll_names import OPTIONAL as ARGYLL_OPTIONAL
 from DisplayCAL.config import (
+    APPNAME,
     EXE_EXT,
     FS_ENC,
     get_data_path,
@@ -214,7 +215,7 @@ def set_argyll_bin(
     # TODO: This function contains UI stuff, please refactor it so that it is
     #       split into a separate function that can be called from the UI.
     from DisplayCAL.wx_addons import wx
-    from DisplayCAL.wx_windows import ConfirmDialog, InfoDialog
+    from DisplayCAL.wx_windows import InfoDialog
 
     # Tests fails if wx.App is not initialized...
     _ = wx.GetApp() or wx.App()
@@ -225,21 +226,33 @@ def set_argyll_bin(
     parent = None if parent and not parent.IsShownOnScreen() else parent
     argyll_dir = prompt_argyll_dir(parent, callafter, callafter_args)
     if parent and not check_argyll_bin():
-        dlg = ConfirmDialog(
+        dlg = wx.MessageDialog(
             parent,
-            msg=lang.getstr("dialog.argyll.notfound.choice"),
-            ok=lang.getstr("download"),
-            cancel=lang.getstr("cancel"),
-            alt=lang.getstr("browse"),
-            bitmap=get_icon(size=32, name="dialog-question"),
+            lang.getstr("dialog.argyll.notfound.choice"),
+            APPNAME,
+            style=wx.YES_NO | wx.CANCEL | wx.CANCEL_DEFAULT | wx.ICON_QUESTION,
         )
+        if hasattr(dlg, "SetYesNoCancelLabels"):
+            dlg.SetYesNoCancelLabels(
+                lang.getstr("download"),
+                lang.getstr("browse"),
+                lang.getstr("cancel"),
+            )
         dlg_result = dlg.ShowModal()
         dlg.Destroy()
-        if dlg_result == wx.ID_OK:
+        if dlg_result == wx.ID_YES:
             # Download Argyll CMS
             from DisplayCAL.display_cal import app_update_check
 
-            app_update_check(parent, silent, argyll=True)
+            try:
+                app_update_check(parent, silent, argyll=True)
+            except Exception as exception:
+                InfoDialog(
+                    parent,
+                    msg=f"{lang.getstr('download.fail')}\n{exception}",
+                    ok=lang.getstr("ok"),
+                    bitmap=get_icon(size=32, name="dialog-error"),
+                )
             return False
         if dlg_result == wx.ID_CANCEL:
             if callafter:
@@ -500,22 +513,25 @@ def get_argyll_latest_version() -> str:
         str: The latest version number. Returns
     """
     argyll_domain = config.DEFAULTS.get("argyll.domain", "")
+    default_version = config.DEFAULTS.get("argyll.version")
     try:
-        changelog = re.search(
-            r"(?<=Version ).{5}",
-            urllib.request.urlopen(f"{argyll_domain}/log.txt")  # noqa: S310
-            .read(100)
-            .decode("utf-8"),
+        response = urllib.request.urlopen(f"{argyll_domain}/log.txt", timeout=20)  # noqa: S310
+        data = response.read(512).decode("utf-8", "replace")
+    except (urllib.error.URLError, OSError, TimeoutError) as exception:
+        print(f"Could not fetch ArgyllCMS latest version: {exception}")
+        return default_version
+    changelog = re.search(r"Version\s+([0-9][0-9A-Za-z.\-_]*)", data)
+    if not changelog:
+        print(
+            "Could not parse ArgyllCMS latest version from "
+            f"{argyll_domain}/log.txt, falling back to {default_version}"
         )
-    except urllib.error.URLError:
-        # no internet connection
-        # return the default version
-        return config.DEFAULTS.get("argyll.version")
-    result = changelog.group()
+        return default_version
+    result = changelog.group(1)
     print(f"Latest ArgyllCMS version: {result} (from {argyll_domain}/log.txt)")
     if not result:
         # no version found
-        return config.DEFAULTS.get("argyll.version")
+        return default_version
     return result
 
 

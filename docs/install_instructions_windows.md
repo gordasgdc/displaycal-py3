@@ -11,9 +11,9 @@ test the latest code).
 Install through PyPI
 --------------------
 
-If you desire so, you can install DisplayCAL through PyPI. You need to use Python 3.9,
-3.10 or 3.11 and use the system Python, so no Virtual Environments. We recommend using
-Python 3.11. Here is the installation procedure:
+If you desire so, you can install DisplayCAL through PyPI. Use Python 3.9, 3.10 or 3.11
+and create a dedicated virtual environment to avoid package conflicts with other Python
+programs. We recommend using Python 3.11. Here is the installation procedure:
 
 1- Download and install one of Python 3.9, 3.10 or 3.11. Unfortunatelly Python 3.12 is
    not currently working:
@@ -39,14 +39,19 @@ Python 3.11. Here is the installation procedure:
 
    ![image](../screenshots/Visual_Studio_Build_Tools.jpg)
 
-3- Install DisplayCAL through PyPI:
+3- Create and activate a virtual environment:
 
    After both Python and Visual Studio Build Tools are installed run the following in
    the command prompt:
 
    ```shell
+   py -3.11 -m venv %USERPROFILE%\venv-displaycal
+   %USERPROFILE%\venv-displaycal\Scripts\activate
+   pip install --upgrade pip
    pip install displaycal
    ```
+
+   If you installed Python 3.10 or 3.9 instead, replace `-3.11` with `-3.10` or `-3.9`.
 
 4- Run DisplayCAL:
 
@@ -54,10 +59,12 @@ Python 3.11. Here is the installation procedure:
    python -m DisplayCAL
    ```
 
-> [!WARNING]
-> Under Windows use the system Python installation instead of a virtual environment as
-> Wexpect module cannot read ArgyllCMS command outputs from inside a virtual
-> environment.
+If you close the current terminal and open a new one, activate the same virtual
+environment again before calling `python -m DisplayCAL`:
+
+```shell
+%USERPROFILE%\venv-displaycal\Scripts\activate
+```
 
 > [!WARNING]
 > Under Windows don't run DisplayCAL inside the IDE (Vscode, Pycharm etc.) terminal as
@@ -67,10 +74,10 @@ Python 3.11. Here is the installation procedure:
 Build From Source
 -----------------
 
-Under Windows the `makefile` workflow will not work, using a virtual environment is also
-breaking Wexpect module, so you need to use your system Python installation. Currently,
-DisplayCAL will run with Python 3.9, 3.10 and 3.11, but Python 3.12 is not supported. To
-build DisplayCAL from source under Windows follow these steps:
+Under Windows the `makefile` workflow will not work. Build from source in a virtual
+environment to keep dependencies isolated from your system Python installation.
+Currently, DisplayCAL will run with Python 3.9, 3.10 and 3.11, but Python 3.12 is not
+supported. To build DisplayCAL from source under Windows follow these steps:
 
 1- Download and install one of Python 3.9, 3.10 or 3.11. Unfortunatelly Python 3.12 is
    not currently working:
@@ -102,7 +109,7 @@ build DisplayCAL from source under Windows follow these steps:
 
    When installer asks, the default settings are okay.
 
-4- Clone DisplayCAL repository, build and install it:
+4- Clone DisplayCAL repository and create a virtual environment:
 
    Open up a command prompt and run the following:
 
@@ -125,6 +132,16 @@ build DisplayCAL from source under Windows follow these steps:
   > ```shell
   > git checkout 367-compiled-sucessfully-in-w10-py311-but-createprocess-fails-call-to-dispread-to-measure
   > ```
+
+   Create and activate a virtual environment in the project folder:
+
+   ```shell
+   py -3.11 -m venv .venv
+   .venv\Scripts\activate
+   pip install --upgrade pip
+   ```
+
+   If you installed Python 3.10 or 3.9 instead, replace `-3.11` with `-3.10` or `-3.9`.
 
    Let's install the requirements, build displaycal and install it:
 

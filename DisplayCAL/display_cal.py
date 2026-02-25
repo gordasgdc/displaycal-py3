@@ -585,7 +585,12 @@ def app_update_confirm(
     newversion = ".".join(str(n) for n in new_version_tuple)
     if argyll:
         newversion_desc = "ArgyllCMS"
-        newversion = get_argyll_latest_version()
+        try:
+            newversion = get_argyll_latest_version()
+        except Exception as exception:
+            # Keep update flow alive even if version lookup/parsing fails.
+            print(f"Could not determine latest ArgyllCMS version: {exception}")
+            newversion = config.DEFAULTS.get("argyll.version", "unknown")
     else:
         newversion_desc = APPNAME
     newversion_desc += f" {newversion}"

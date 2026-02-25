@@ -51,7 +51,7 @@ from DisplayCAL.worker import (
     show_result_dialog,
 )
 from DisplayCAL.wx_addons import get_platform_window_decoration_size, wx
-from DisplayCAL.wx_fixes import GenBitmapButton as BitmapButton
+from DisplayCAL.wx_fixes import GenBitmapButton as _GenBitmapButton
 from DisplayCAL.wx_fixes import wx_Panel
 from DisplayCAL.wx_measure_frame import MeasureFrame
 from DisplayCAL.wx_windows import (
@@ -68,6 +68,9 @@ from DisplayCAL.wx_windows import (
 BGCOLOUR = "#333333"
 FGCOLOUR = "#999999"
 GRIDCOLOUR = "#444444"
+# Use conservative controls by default because some wx/SIP/native combinations
+# can crash during widget construction across platforms.
+SAFE_WX_UI = os.getenv("DISPLAYCAL_UNSAFE_WX_UI", "").strip() != "1"
 
 if sys.platform == "darwin":
     FONTSIZE_LARGE = 11
@@ -884,6 +887,29 @@ class LUTCanvas(plot.PlotCanvas):
 class LUTFrame(BaseFrame):
     """LUTFrame."""
 
+    def _create_toolbar_button(
+        self,
+        parent,
+        bitmap_provider,
+        label,
+        tooltip,
+        handler,
+        sizer,
+        add_kwargs=None,
+    ):
+        """Create a toolbar button with a safe fallback."""
+        add_kwargs = add_kwargs or {}
+        if SAFE_WX_UI:
+            button = wx.Button(parent, -1, label=label, style=wx.BU_EXACTFIT)
+        else:
+            bitmap = bitmap_provider()
+            button = _GenBitmapButton(parent, -1, bitmap, style=wx.NO_BORDER)
+            button.SetBackgroundColour(BGCOLOUR)
+        sizer.Add(button, **add_kwargs)
+        button.Bind(wx.EVT_BUTTON, handler)
+        button.SetToolTip(tooltip)
+        return button
+
     def __init__(self, *args, **kwargs):
         if len(args) < 3 and "title" not in kwargs:
             kwargs["title"] = lang.getstr("calibration.lut_viewer.title")
@@ -892,9 +918,10 @@ class LUTFrame(BaseFrame):
 
         BaseFrame.__init__(self, *args, **kwargs)
 
-        self.SetIcons(
-            config.get_icon_bundle([256, 48, 32, 16], f"{APPNAME}-curve-viewer")
-        )
+        if not SAFE_WX_UI:
+            self.SetIcons(
+                config.get_icon_bundle([256, 48, 32, 16], f"{APPNAME}-curve-viewer")
+            )
 
         self.profile = None
         self.xLabel = lang.getstr("in")
@@ -926,22 +953,24 @@ class LUTFrame(BaseFrame):
             id=self.plot_mode_select.GetId(),
         )
 
-        self.tooltip_btn = BitmapButton(
-            panel, -1, get_icon(16, "question-inverted"), style=wx.NO_BORDER
+        self.tooltip_btn = self._create_toolbar_button(
+            panel,
+            lambda: get_icon(16, "question-inverted"),
+            "?",
+            lang.getstr("gamut_plot.tooltip"),
+            self.tooltip_handler,
+            panel.Sizer,
+            {"flag": wx.ALIGN_CENTER_VERTICAL},
         )
-        self.tooltip_btn.SetBackgroundColour(BGCOLOUR)
-        self.tooltip_btn.Bind(wx.EVT_BUTTON, self.tooltip_handler)
-        self.tooltip_btn.SetToolTipString(lang.getstr("gamut_plot.tooltip"))
-        panel.Sizer.Add(self.tooltip_btn, flag=wx.ALIGN_CENTER_VERTICAL)
 
-        self.save_plot_btn = BitmapButton(
-            panel, -1, get_icon(16, "image-x-generic-inverted"), style=wx.NO_BORDER
-        )
-        self.save_plot_btn.SetBackgroundColour(BGCOLOUR)
-        panel.Sizer.Add(self.save_plot_btn, flag=wx.ALIGN_CENTER_VERTICAL)
-        self.save_plot_btn.Bind(wx.EVT_BUTTON, self.SaveFile)
-        self.save_plot_btn.SetToolTipString(
-            f"{lang.getstr('save_as')} (*.bmp, *.xbm, *.xpm, *.jpg, *.png)"
+        self.save_plot_btn = self._create_toolbar_button(
+            panel,
+            lambda: get_icon(16, "image-x-generic-inverted"),
+            "Save",
+            f"{lang.getstr('save_as')} (*.bmp, *.xbm, *.xpm, *.jpg, *.png)",
+            self.SaveFile,
+            panel.Sizer,
+            {"flag": wx.ALIGN_CENTER_VERTICAL},
         )
         self.save_plot_btn.Disable()
 
@@ -1046,68 +1075,48 @@ class LUTFrame(BaseFrame):
 
         self.cbox_sizer.Add((10, 0))
 
-        self.reload_vcgt_btn = BitmapButton(
+        self.reload_vcgt_btn = self._create_toolbar_button(
             self.box_panel,
-            -1,
-            get_icon(16, "stock_refresh-inverted"),
-            style=wx.NO_BORDER,
-        )
-        self.reload_vcgt_btn.SetBackgroundColour(BGCOLOUR)
-        self.cbox_sizer.Add(
-            self.reload_vcgt_btn,
-            # flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
-            flag=wx.ALIGN_CENTER_VERTICAL,
-            border=8,
-        )
-        self.reload_vcgt_btn.Bind(wx.EVT_BUTTON, self.reload_vcgt_handler)
-        self.reload_vcgt_btn.SetToolTipString(
-            lang.getstr("calibration.load_from_display_profile")
+            lambda: get_icon(16, "stock_refresh-inverted"),
+            "Reload",
+            lang.getstr("calibration.load_from_display_profile"),
+            self.reload_vcgt_handler,
+            self.cbox_sizer,
+            {"flag": wx.ALIGN_CENTER_VERTICAL, "border": 8},
         )
         self.reload_vcgt_btn.Disable()
 
-        self.apply_bpc_btn = BitmapButton(
-            self.box_panel, -1, get_icon(16, "color-inverted"), style=wx.NO_BORDER
+        self.apply_bpc_btn = self._create_toolbar_button(
+            self.box_panel,
+            lambda: get_icon(16, "color-inverted"),
+            "BPC",
+            lang.getstr("black_point_compensation"),
+            self.apply_bpc_handler,
+            self.cbox_sizer,
+            {"flag": wx.ALIGN_CENTER_VERTICAL, "border": 8},
         )
-        self.apply_bpc_btn.SetBackgroundColour(BGCOLOUR)
-        self.cbox_sizer.Add(
-            self.apply_bpc_btn,
-            # flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
-            flag=wx.ALIGN_CENTER_VERTICAL,
-            border=8,
-        )
-        self.apply_bpc_btn.Bind(wx.EVT_BUTTON, self.apply_bpc_handler)
-        self.apply_bpc_btn.SetToolTipString(lang.getstr("black_point_compensation"))
         self.apply_bpc_btn.Disable()
 
-        self.install_vcgt_btn = BitmapButton(
-            self.box_panel, -1, get_icon(16, "install-inverted"), style=wx.NO_BORDER
+        self.install_vcgt_btn = self._create_toolbar_button(
+            self.box_panel,
+            lambda: get_icon(16, "install-inverted"),
+            "Apply",
+            lang.getstr("apply_cal"),
+            self.install_vcgt_handler,
+            self.cbox_sizer,
+            {"flag": wx.ALIGN_CENTER_VERTICAL, "border": 8},
         )
-        self.install_vcgt_btn.SetBackgroundColour(BGCOLOUR)
-        self.cbox_sizer.Add(
-            self.install_vcgt_btn,
-            # flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
-            flag=wx.ALIGN_CENTER_VERTICAL,
-            border=8,
-        )
-        self.install_vcgt_btn.Bind(wx.EVT_BUTTON, self.install_vcgt_handler)
-        self.install_vcgt_btn.SetToolTipString(lang.getstr("apply_cal"))
         self.install_vcgt_btn.Disable()
 
-        self.save_vcgt_btn = BitmapButton(
+        self.save_vcgt_btn = self._create_toolbar_button(
             self.box_panel,
-            -1,
-            get_icon(16, "document-save-as-inverted"),
-            style=wx.NO_BORDER,
+            lambda: get_icon(16, "document-save-as-inverted"),
+            "Save CAL",
+            f"{lang.getstr('save_as')} (*.cal)",
+            self.SaveFile,
+            self.cbox_sizer,
+            {"flag": wx.ALIGN_CENTER_VERTICAL, "border": 20},
         )
-        self.save_vcgt_btn.SetBackgroundColour(BGCOLOUR)
-        self.cbox_sizer.Add(
-            self.save_vcgt_btn,
-            # flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
-            flag=wx.ALIGN_CENTER_VERTICAL,
-            border=20,
-        )
-        self.save_vcgt_btn.Bind(wx.EVT_BUTTON, self.SaveFile)
-        self.save_vcgt_btn.SetToolTipString(f"{lang.getstr('save_as')} (*.cal)")
         self.save_vcgt_btn.Disable()
 
         self.show_as_L = CustomCheckBox(self.box_panel, -1, "L* \u2192")
@@ -1936,9 +1945,13 @@ class LUTFrame(BaseFrame):
         # Add toggle checkboxes for up to 16 channels
         self.toggles = []
         for i in range(16):
-            toggle = CustomCheckBox(parent, -1, "", name=f"toggle_channel_{i}")
+            if SAFE_WX_UI:
+                toggle = wx.CheckBox(parent, -1, "", name=f"toggle_channel_{i}")
+            else:
+                toggle = CustomCheckBox(parent, -1, "", name=f"toggle_channel_{i}")
             toggle.SetForegroundColour(FGCOLOUR)
-            toggle.SetMaxFontSize(11)
+            if hasattr(toggle, "SetMaxFontSize"):
+                toggle.SetMaxFontSize(11)
             toggle.SetValue(True)
             sizer.Add(
                 toggle,
