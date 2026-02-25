@@ -9,27 +9,27 @@
 "3dlut": |-
   3D LUT
 "3dlut.1dlut.videolut.nonlinear": |-
-  The display device's video card gamma tables 1D LUT calibration is non-linear, but the 3D LUT contains applied 1D LUT calibration. Make sure to manually reset the video card gamma tables to linear before using the 3D LUT, or create a 3D LUT without calibration applied (to do the latter, enable “Show advanced options” in the “Options” menu and disable “Apply calibration (vcgt)” as well as “Create 3D LUT after profiling” in the 3D LUT settings, then create a new 3D LUT).
+  La calibrazione 1D LUT delle tabelle gamma della scheda video del display non è lineare, ma la 3D LUT contiene la calibrazione 1D LUT applicata. Assicurati di reimpostare manualmente le tabelle gamma della scheda video su lineare prima di usare la 3D LUT, oppure crea una 3D LUT senza calibrazione applicata (per farlo, abilita “Mostra opzioni avanzate” nel menu “Opzioni” e disabilita “Applica calibrazione (vcgt)” e “Crea 3D LUT dopo la profilazione” nelle impostazioni 3D LUT, quindi crea una nuova 3D LUT).
 "3dlut.bitdepth.input": |-
-  3D LUT input bitdepth
+  Profondità in bit in ingresso della 3D LUT
 "3dlut.bitdepth.output": |-
-  3D LUT output bitdepth
+  Profondità in bit in uscita della 3D LUT
 "3dlut.confirm_relcol_rendering_intent": |-
-  Do you want the 3D LUT to use the measured white point as well (3D LUT rendering intent will be set to relative colorimetric)?
+  Vuoi che la 3D LUT utilizzi anche il punto di bianco misurato (l'intento di rendering della 3D LUT sarà impostato su colorimetrico relativo)?
 "3dlut.content.colorspace": |-
-  Content colorspace
+  Spazio colore del contenuto
 "3dlut.create": |-
   Create 3D LUT...
 "3dlut.create_after_profiling": |-
-  Create 3D LUT after profiling
+  Crea 3D LUT dopo la profilazione
 "3dlut.enable": |-
   Enable 3D LUT
 "3dlut.encoding.input": |-
-  Input encoding
+  Codifica di ingresso
 "3dlut.encoding.output": |-
-  Output encoding
+  Codifica di uscita
 "3dlut.encoding.output.warning.madvr": |-
-  Warning: This output encoding is not recommended and will cause clipping if madVR is not set up to output “TV levels (16-235)” under “Devices” → “%s” → “Properties”. Use at own risk!
+  Attenzione: questa codifica di uscita non è consigliata e causerà clipping se madVR non è configurato per l'uscita “Livelli TV (16-235)” in “Dispositivi” → “%s” → “Proprietà”. Usare a proprio rischio!
 "3dlut.encoding.type_2": |-
   TV Rec. 2020 YCbCr UHD
 "3dlut.encoding.type_5": |-
@@ -39,19 +39,19 @@
 "3dlut.encoding.type_7": |-
   TV Rec. 709 1125/60Hz YCbCr HD
 "3dlut.encoding.type_C": |-
-  TV Rec. 2020 Constant Luminance YCbCr UHD
+  TV Rec. 2020 YCbCr a luminanza costante UHD
 "3dlut.encoding.type_T": |-
   TV RGB 16-235 (clip WTW)
 "3dlut.encoding.type_X": |-
   TV xvYCC Rec. 709 YCbCr HD
 "3dlut.encoding.type_n": |-
-  Full range RGB 0-255
+  RGB a gamma completa 0-255
 "3dlut.encoding.type_t": |-
   TV RGB 16-235
 "3dlut.encoding.type_x": |-
   TV xvYCC Rec. 601 YCbCr (Rec. 709 Primaries) SD
 "3dlut.format": |-
-  3D LUT file format
+  Formato file 3D LUT
 "3dlut.format.3dl": |-
   Autodesk / Kodak (.3dl)
 "3dlut.format.ReShade": |-
@@ -63,15 +63,15 @@
 "3dlut.format.eeColor": |-
   eeColor Processor (.txt)
 "3dlut.format.icc": |-
-  Device link profile (.icc/.icm)
+  Profilo device link (.icc/.icm)
 "3dlut.format.madVR": |-
   madVR (.3dlut)
 "3dlut.format.madVR.hdr": |-
-  Process HDR content
+  Elabora contenuti HDR
 "3dlut.format.madVR.hdr.confirm": |-
-  Note that you need to have profiled the display in HDR mode. If the display doesn't support HDR natively, click “Cancel”.
+  Nota che devi aver profilato il display in modalità HDR. Se il display non supporta HDR nativamente, fai clic su “Annulla”.
 "3dlut.format.madVR.hdr_to_sdr": |-
-  Convert HDR content to SDR
+  Converti contenuti HDR in SDR
 "3dlut.format.mga": |-
   Pandora (.mga)
 "3dlut.format.png": |-
@@ -81,35 +81,35 @@
 "3dlut.frame.title": |-
   Create 3D LUT
 "3dlut.hdr.rolloff.diffuse_white": |-
-  Diffuse white (reference 94.38 cd/m²)
+  Bianco diffuso (riferimento 94,38 cd/m²)
 "3dlut.hdr.system_gamma": |-
-  System gamma (reference 1.2)
+  Gamma di sistema (riferimento 1,2)
 "3dlut.holder.assign_preset": |-
   Assign 3D LUT to preset:
 "3dlut.holder.out_of_memory": |-
-  %s is out of 3D LUT storage space (at least %i KB required). Please delete a few 3D LUTs from %s to make space for new ones. See your %s's documentation for more information.
+  %s non ha più spazio di archiviazione per 3D LUT (sono richiesti almeno %i KB). Elimina alcune 3D LUT da %s per fare spazio a quelle nuove. Consulta la documentazione di %s per maggiori informazioni.
 "3dlut.input.colorspace": |-
-  Source colorspace
+  Spazio colore sorgente
 "3dlut.input.profile": |-
-  Source profile
+  Profilo sorgente
 "3dlut.install": |-
-  Install 3D LUT
+  Installa 3D LUT
 "3dlut.install.failure": |-
-  3D LUT installation failed (unknown error).
+  Installazione della 3D LUT non riuscita (errore sconosciuto).
 "3dlut.install.success": |-
-  3D LUT installation successful!
+  Installazione della 3D LUT completata con successo!
 "3dlut.install.unsupported": |-
-  3D LUT installation is not supported for the selected 3D LUT format.
+  L'installazione della 3D LUT non è supportata per il formato 3D LUT selezionato.
 "3dlut.madvr.colorspace.unsupported": |-
-  The source colorspace %s with the primary chromaticity xy coordinates red %.4f %.4f, green %.4f %.4f, blue %.4f %.4f is not supported by madVR for automatic installation. Please assign the 3D LUT manually in madVR.
+  Lo spazio colore di origine %s con le coordinate di cromaticità primaria xy rosso %.4f %.4f, verde %.4f %.4f, blu %.4f %.4f non è supportato da madVR per l'installazione automatica. Assegna manualmente la LUT 3D in madVR.
 "3dlut.save_as": |-
   Save 3D LUT as...
 "3dlut.settings": |-
-  3D LUT settings
+  Impostazioni 3D LUT
 "3dlut.size": |-
-  3D LUT resolution
+  Risoluzione 3D LUT
 "3dlut.tab.enable": |-
-  Enable 3D LUT tab
+  Abilita scheda 3D LUT
 "3dlut.use_abstract_profile": |-
   Abstract (“Look”) profile
 "CMP_Digital_Target-3.cie": |-
@@ -149,124 +149,126 @@
 "Untethered": |-
   Untethered
 "[rgb]TRC": |-
-  Tone response curves
+  Curve di risposta tonale
 "aborted": |-
   ...annullato.
 "aborting": |-
-  Aborting, please wait (this may take a few seconds)...
+  Interruzione in corso, attendere (potrebbero volerci alcuni secondi)...
 "abstract_profile": |-
-  Abstract profile
+  Profilo astratto
 "active_matrix_display": |-
-  Active matrix display
+  Display a matrice attiva
 "adaptive_mode_unavailable": |-
-  Adaptive mode is only available with ArgyllCMS 1.1.0 RC3 or newer.
+  La modalità adattiva è disponibile solo con ArgyllCMS 1.1.0 RC3 o versione successiva.
 "add": |-
   Add...
 "adjust_rolloff": |-
-  Adjust roll-off
+  Regola roll-off
 "advanced": |-
   Advanced
 "allow_skip_sensor_cal": |-
-  Allow skipping of instrument self-calibration
+  Consenti di saltare l'autocalibrazione dello strumento
 "ambient.measure": |-
-  Measure ambient
+  Misura luce ambiente
 "ambient.measure.color.unsupported": |-
-  %s: The color of ambient light could not be determined using this instrument because its ambient sensor seems to be monochromatic (only got a light level reading).
+  %s: il colore della luce ambiente non può essere determinato con questo strumento perché il suo sensore ambiente sembra monocromatico (è stato ottenuto solo un valore di illuminamento).
 "ambient.measure.light_level.missing": |-
-  Didn't get a light level reading.
+  Impossibile ottenere una lettura del livello di luce.
 "ambient.set": |-
-  Do you also want to set the ambient light level to the measured value?
+  Vuoi impostare anche il livello di luce ambiente al valore misurato?
 "app.client.connect": |-
-  Scripting client %s:%s connected
+  Client di scripting %s:%s connesso
 "app.client.disconnect": |-
-  Scripting client %s:%s disconnected
+  Client di scripting %s:%s disconnesso
 "app.client.ignored": |-
-  Refused connection attempt of scripting client %s:%s: %s
+  Tentativo di connessione del client di scripting %s:%s rifiutato: %s
 "app.client.network.disallowed": |-
-  Refused connection attempt of scripting client %s:%s: Network clients are not allowed.
+  Tentativo di connessione del client di scripting %s:%s rifiutato: i client di rete non sono consentiti.
 "app.confirm_restore_defaults": |-
   Vuoi davvero perdere le tue modifiche e usare le impostazioni predefinite?
 "app.detected": |-
-  Detected %s.
+  Rilevato %s.
 "app.detected.calibration_loading_disabled": |-
-  Detected %s. Calibration loading disabled.
+  Rilevato %s. Caricamento della calibrazione disabilitato.
 "app.detection_lost": |-
-  No longer detecting %s.
+  %s non viene più rilevato.
 "app.detection_lost.calibration_loading_enabled": |-
-  No longer detecting %s. Calibration loading enabled.
+  %s non viene più rilevato. Caricamento della calibrazione abilitato.
 "app.incoming_message": |-
-  Received scripting request from %s:%s: %s
+  Richiesta di scripting ricevuta da %s:%s: %s
 "app.incoming_message.invalid": |-
-  Scripting request invalid!
+  Richiesta di scripting non valida!
 "app.listening": |-
-  Setting up scripting host at %s:%s
+  Configurazione host di scripting su %s:%s
 "app.otherinstance": |-
-  %s is already running.
+  %s è già in esecuzione.
 "app.otherinstance.notified": |-
-  Already running instance has been notified.
+  L'istanza già in esecuzione è stata notificata.
 "apply": |-
   Applicare
 "apply_black_output_offset": |-
-  Apply black output offset (100%)
+  Applica offset di uscita del nero (100%)
 "apply_cal": |-
-  Apply calibration (vcgt)
+  Applica calibrazione (vcgt)
 "apply_cal.error": |-
-  Calibration could not be applied.
+  Impossibile applicare la calibrazione.
 "archive.create": |-
-  Create compressed archive...
+  Crea archivio compresso...
 "archive.import": |-
-  Import archive...
+  Importa archivio...
 "archive.include_3dluts": |-
-  Do you want to include 3D LUT files in the archive (not recommended, leads to larger archive file size)?
+  Vuoi includere i file 3D LUT nell'archivio (sconsigliato, aumenta la dimensione del file archivio)?
 "argyll.debug.warning1": |-
-  Please only use this option if you actually need debugging information (e.g. for troubleshooting ArgyllCMS functionality)! It is normally only useful for software developers to aid in problem diagnosis and resolution. Are you sure you want to enable debugging output?
+  Usa questa opzione solo se hai davvero bisogno di informazioni di debug (ad es. per risolvere problemi di ArgyllCMS)! Normalmente è utile solo agli sviluppatori software per la diagnosi e la risoluzione dei problemi. Sei sicuro di voler abilitare l'output di debug?
 "argyll.debug.warning2": |-
-  Please remember to disable debugging output for normal operation of the software.
+  Ricorda di disabilitare l'output di debug per l'uso normale del software.
 "argyll.dir": |-
   Directory con gli eseguibili di ArgyllCMS:
 "argyll.dir.invalid": |-
   Gli eseguibili ArgyllCMS non sono stati trovati!
   Seleziona la directory che contiene gli eseguibili (prefisso o suffisso forse “argyll-” / “-argyll”): %s
+"argyll.use_homebrew": |-
+  Usa l'installazione Homebrew (%s)
 "argyll.error.detail": |-
-  Detailed ArgyllCMS error message:
+  Messaggio di errore dettagliato di ArgyllCMS:
 "argyll.instrument.configuration_files.install": |-
-  Install ArgyllCMS instrument configuration files...
+  Installa i file di configurazione degli strumenti ArgyllCMS...
 "argyll.instrument.configuration_files.install.success": |-
-  Installation of ArgyllCMS instrument configuration files complete.
+  Installazione dei file di configurazione strumenti ArgyllCMS completata.
 "argyll.instrument.configuration_files.uninstall": |-
-  Uninstall ArgyllCMS instrument configuration files...
+  Disinstalla i file di configurazione strumenti ArgyllCMS...
 "argyll.instrument.configuration_files.uninstall.success": |-
-  Uninstallation of ArgyllCMS instrument configuration files complete.
+  Disinstallazione dei file di configurazione strumenti ArgyllCMS completata.
 "argyll.instrument.driver.missing": |-
-  The ArgyllCMS driver for your measurement device seems not to be installed or installed incorrectly. Please check if your measurement device is shown in Windows' Device Manager under “Argyll LibUSB-1.0A devices” and (re-)install the driver if necessary. Please read the documentation for installation instructions.
+  Il driver ArgyllCMS per il tuo dispositivo di misura sembra non essere installato o essere installato in modo non corretto. Verifica se il dispositivo di misura è mostrato in Gestione dispositivi di Windows sotto “Argyll LibUSB-1.0A devices” e (re)installa il driver se necessario. Consulta la documentazione per le istruzioni di installazione.
 "argyll.instrument.drivers.install": |-
-  Install ArgyllCMS instrument drivers...
+  Installa i driver degli strumenti ArgyllCMS...
 "argyll.instrument.drivers.install.confirm": |-
-  You only need to install the ArgyllCMS specific drivers if you have a measurement instrument that is not a ColorMunki Display, i1 Display Pro, Huey, ColorHug, specbos, spectraval or K-10.
+  È necessario installare i driver specifici di ArgyllCMS solo se il tuo strumento di misura non è un ColorMunki Display, i1 Display Pro, Huey, ColorHug, specbos, spectraval o K-10.
   
-  Do you want to proceed?
+  Vuoi procedere?
 "argyll.instrument.drivers.install.failure": |-
-  Installation of ArgyllCMS instrument drivers failed.
+  Installazione dei driver degli strumenti ArgyllCMS non riuscita.
 "argyll.instrument.drivers.install.restart": |-
-  You need to disable Driver Signature Enforcement to install the ArgyllCMS instrument drivers. For this purpose, the system needs to be restarted. Select “Troubleshoot” on the page that will appear, then “Advanced Options”, “Startup Settings” and finally “Restart”. On startup, select “Disable Driver Signature Enforcement”. After the restart, choose “Install ArgyllCMS instrument drivers...” in the menu again to install the drivers. If you don't see the “Troubleshoot” option, please refer to the DisplayCAL documentation section “Instrument driver installation under Windows” for an alternate method to disable Driver Signature Enforcement.
+  Devi disabilitare l'imposizione della firma dei driver per installare i driver degli strumenti ArgyllCMS. A tale scopo il sistema deve essere riavviato. Seleziona “Risoluzione dei problemi” nella pagina che apparirà, poi “Opzioni avanzate”, “Impostazioni di avvio” e infine “Riavvia”. All'avvio, seleziona “Disabilita imposizione firma driver”. Dopo il riavvio, scegli di nuovo “Installa i driver degli strumenti ArgyllCMS...” nel menu per installare i driver. Se non vedi l'opzione “Risoluzione dei problemi”, consulta la sezione della documentazione DisplayCAL “Installazione del driver dello strumento in Windows” per un metodo alternativo per disabilitare l'imposizione della firma dei driver.
 "argyll.instrument.drivers.uninstall": |-
-  Uninstall ArgyllCMS instrument drivers...
+  Disinstalla i driver degli strumenti ArgyllCMS...
 "argyll.instrument.drivers.uninstall.confirm": |-
-  Note: Uninstallation doesn't affect instrument drivers that are currently in use, but just removes the driver from Windows' Driver Store. If you want to switch back to an installed vendor-supplied driver for your instrument, you'll have to use Windows' Device Manager to manually switch to the vendor driver. To do that, right click on the instrument and select “Update Driver Software...”, then choose “Browse my computer for driver software”, “Let me pick from a list of device drivers on my computer” and finally select the vendor driver for your instrument from the list.
+  Nota: la disinstallazione non influisce sui driver dello strumento attualmente in uso, ma rimuove solo il driver dal Driver Store di Windows. Se vuoi tornare a usare un driver del produttore già installato per il tuo strumento, dovrai usare Gestione dispositivi di Windows per passare manualmente al driver del produttore. Per farlo, fai clic destro sullo strumento e seleziona “Aggiorna software driver...”, quindi scegli “Cerca il software del driver nel computer”, “Scegli manualmente da un elenco di driver di dispositivo nel computer” e infine seleziona dall'elenco il driver del produttore per il tuo strumento.
   
-  Do you want to proceed?
+  Vuoi procedere?
 "argyll.instrument.drivers.uninstall.failure": |-
-  Uninstallation of ArgyllCMS instrument drivers failed.
+  Disinstallazione dei driver degli strumenti ArgyllCMS non riuscita.
 "argyll.instrument.drivers.uninstall.success": |-
-  Uninstallation of ArgyllCMS instrument drivers complete.
+  Disinstallazione dei driver degli strumenti ArgyllCMS completata.
 "argyll.malformed_ccxx": |-
-  ArgyllCMS cannot function as long as malformed colorimeter correction files are present. They will be automatically moved to the trash.
+  ArgyllCMS non può funzionare finché sono presenti file di correzione del colorimetro non validi. Verranno spostati automaticamente nel cestino.
 "argyll.util.not_found": |-
-  ArgyllCMS “%s” executable not found!
+  Eseguibile ArgyllCMS “%s” non trovato!
 "as_measured": |-
   Nativo
 "audio.lib": |-
-  Audio module: %s
+  Modulo audio: %s
 "auth": |-
   Authentication
 "auth.failed": |-
@@ -292,9 +294,9 @@
 "black_point_compensation": |-
   Black point compensation
 "black_point_compensation.3dlut.warning": |-
-  When creating a 3D LUT, the black point compensation profiling setting should be turned off, because it affects the function of the tone curve adjustment. Would you like to turn off black point compensation?
+  Durante la creazione di una 3D LUT, l'impostazione di profilazione della compensazione del punto di nero dovrebbe essere disattivata, perché influisce sul funzionamento della regolazione della curva tonale. Vuoi disattivare la compensazione del punto di nero?
 "black_point_compensation.info": |-
-  Black point compensation effectively prevents black crush, but reduces the accuracy of color conversion.
+  La compensazione del punto di nero previene efficacemente il black crush, ma riduce la precisione della conversione colore.
 "black_white": |-
   Black & white
 "black_xyz": |-
@@ -364,13 +366,13 @@
 "calibration.create_fast_matrix_shaper": |-
   Create matrix profile
 "calibration.create_fast_matrix_shaper_choice": |-
-  Do you want to create a fast matrix shaper profile from calibration measurements or just calibrate?
+  Vuoi creare un profilo matrix-shaper veloce dalle misure di calibrazione o solo calibrare?
 "calibration.do_not_use_video_lut": |-
-  Do not use video card gamma table to apply calibration
+  Non usare la tabella gamma della scheda video per applicare la calibrazione
 "calibration.do_not_use_video_lut.warning": |-
-  Do you really want to change the recommended setting?
+  Vuoi davvero cambiare l'impostazione consigliata?
 "calibration.embed": |-
-  Embed calibration curves in profile
+  Incorpora le curve di calibrazione nel profilo
 "calibration.file": |-
   Impostazioni
 "calibration.file.invalid": |-
@@ -382,29 +384,29 @@
 "calibration.interactive_display_adjustment": |-
   Correzione interattiva dello schermo
 "calibration.interactive_display_adjustment.black_level.crt": |-
-  Select “Start measurement” and adjust your display's brightness and/or RGB offset controls to match the desired level.
+  Seleziona “Avvia misurazione” e regola la luminosità del display e/o i controlli di offset RGB per raggiungere il livello desiderato.
 "calibration.interactive_display_adjustment.black_point.crt": |-
-  Select “Start measurement” and adjust your display's RGB offset controls to match the desired black point.
+  Seleziona “Avvia misurazione” e regola i controlli di offset RGB del display per raggiungere il punto di nero desiderato.
 "calibration.interactive_display_adjustment.check_all": |-
-  Select “Start measurement” to check on the overall settings.
+  Seleziona “Avvia misurazione” per verificare le impostazioni complessive.
 "calibration.interactive_display_adjustment.generic_hint.plural": |-
-  A good match is obtained if all bars can be brought to the marked position in the center.
+  Si ottiene una buona corrispondenza se tutte le barre possono essere portate nella posizione contrassegnata al centro.
 "calibration.interactive_display_adjustment.generic_hint.singular": |-
-  A good match is obtained if the bar can be brought to the marked position in the center.
+  Si ottiene una buona corrispondenza se la barra può essere portata nella posizione contrassegnata al centro.
 "calibration.interactive_display_adjustment.start": |-
   Start measurement
 "calibration.interactive_display_adjustment.stop": |-
   Stop measurement
 "calibration.interactive_display_adjustment.white_level.crt": |-
-  Select “Start measurement” and adjust your display's contrast and/or RGB gain controls to match the desired level.
+  Seleziona “Avvia misurazione” e regola il contrasto del display e/o i controlli di guadagno RGB per raggiungere il livello desiderato.
 "calibration.interactive_display_adjustment.white_level.lcd": |-
-  Select “Start measurement” and adjust your display's backlight/brightness control to match the desired level.
+  Seleziona “Avvia misurazione” e regola il controllo retroilluminazione/luminosità del display per raggiungere il livello desiderato.
 "calibration.interactive_display_adjustment.white_point": |-
-  Select “Start measurement” and adjust your display's color temperature and/or RGB gain controls to match the desired white point.
+  Seleziona “Avvia misurazione” e regola la temperatura colore del display e/o i controlli di guadagno RGB per raggiungere il punto di bianco desiderato.
 "calibration.load": |-
   Caricamento delle impostazioni...
 "calibration.load.handled_by_os": |-
-  Calibration loading is handled by the operating system.
+  Il caricamento della calibrazione è gestito dal sistema operativo.
 "calibration.load_error": |-
   Impossibile leggere le curve calibrazione.
 "calibration.load_from_cal": |-
@@ -414,7 +416,7 @@
 "calibration.load_from_display_profile": |-
   Caricamento delle curve calibrazione dal profilo corrente dello schermo
 "calibration.load_from_display_profiles": |-
-  Load calibration from current display device profile(s)
+  Carica la calibrazione dal/i profilo/i correnti del dispositivo di visualizzazione
 "calibration.load_from_profile": |-
   Caricamento delle curve di calibrazione dal profilo...
 "calibration.load_success": |-
@@ -454,7 +456,7 @@
 "calibration.settings": |-
   Impostazioni per la calibrazione
 "calibration.show_actual_lut": |-
-  Show calibration curves from video card
+  Mostra le curve di calibrazione dalla scheda video
 "calibration.show_lut": |-
   Show curves
 "calibration.skip": |-
@@ -476,15 +478,15 @@
 "calibration.update": |-
   Aggiorna calibrazione
 "calibration.update_profile_choice": |-
-  Do you want to also update the calibration curves in the existing profile or just calibrate?
+  Vuoi aggiornare anche le curve di calibrazione nel profilo esistente o solo calibrare?
 "calibration.use_linear_instead": |-
-  Use linear calibration instead
+  Usa invece una calibrazione lineare
 "calibration.verify": |-
   Verifica calibrazione
 "calibration_profiling.complete": |-
   Calibrazione e creazione profilo completati!
 "calibrationloader.description": |-
-  Sets ICC profiles and loads calibration curves for all configured display devices
+  Imposta i profili ICC e carica le curve di calibrazione per tutti i dispositivi di visualizzazione configurati
 "can_be_used_independently": |-
   Can be used independently
 "cancel": |-
@@ -616,7 +618,7 @@
 "chromaticity_illuminant_relative": |-
   Chromaticity (illuminant-relative)
 "chromecast_limitations_warning": |-
-  Please note that Chromecast accuracy is not as good as a directly connected display or madTPG, due to the Chromecast using RGB to YCbCr conversion and upscaling.
+  Nota che la precisione con Chromecast non è paragonabile a quella di un display collegato direttamente o di madTPG, a causa della conversione da RGB a YCbCr e dell'upscaling effettuati da Chromecast.
 "cie2012_2": |-
   CIE 2012 2°
 "cie2015_2": |-
@@ -1124,7 +1126,7 @@
 "error.luminance.not_monotonically_increasing": |-
   La risposta di luminanza misurata è fortemente non monotona (guasto del dispositivo o dello strumento). Impossibile generare curve di risposta tonale.
 "error.malformed_cgats": |-
-  Il file %s “%s” è malformato.
+  Il file %s «%s» è malformato.
 "error.measurement.file_invalid": |-
   Il file di misura “%s” non è valido.
 "error.measurement.file_missing": |-
@@ -1148,7 +1150,7 @@
 "error.source_dest_same": |-
   Il profilo sorgente e destinazione sono uguali.
 "error.spyderx.black_cal_offsets_too_high": |-
-  Gli offset di autocalibrazione dello strumento sono troppo elevati. Assicurati che nessuna luce colpisca il sensore durante l'autocalibrazione dello strumento (metti il cappuccio bene).
+  Gli offset di autocalibrazione dello strumento sono troppo elevati. Assicurati che durante l'autocalibrazione nessuna luce colpisca il sensore (metti bene il cappuccio).
 "error.testchart.creation_failed": |-
   Impossibile creare il file di testchart “%s”. Forse ci sono restrizioni sull'accesso oppure il file di origine non esiste.
 "error.testchart.invalid": |-
@@ -1502,13 +1504,13 @@
 "instrument": |-
   Strumento/Porta
 "instrument.calibrate": |-
-  Calibra strumento
+  Posiziona il cappuccio a tenuta di luce sullo strumento (se applicabile), oppure appoggialo su una superficie scura e opaca, o sul suo riferimento di calibrazione (se applicabile), quindi premi OK per autocalibrare lo strumento.
 "instrument.calibrate.colormunki": |-
   Calibra strumento (ColorMunki)
 "instrument.calibrate.reflective": |-
   Posiziona lo strumento sul riferimento bianco riflettente n. seriale %s e premi OK per autocalibrare lo strumento.
 "instrument.calibrate.spyderx": |-
-  Calibra strumento (SpyderX)
+  Posiziona il cappuccio a tenuta di luce sullo strumento, oppure appoggialo su una superficie scura e opaca, quindi premi OK per autocalibrare lo strumento.
 "instrument.calibrating": |-
   Calibrazione strumento in corso...
 "instrument.colormunki": |-
@@ -1562,7 +1564,7 @@
 "lut_access": |-
   Accesso a calibrazione
 "lut_access.unsupported": |-
-  Accesso LUT non supportato
+  I driver grafici o l'hardware non supportano il caricamento delle rampe gamma o la calibrazione. Potrebbe essere necessario aggiornare i driver del dispositivo.
 "macos.bugs.cal.warning": |-
   Le applicazioni che usano Apple CMM (modulo gestione colore), come Anteprima macOS e QuickLook, non supportano la correzione tonalità del punto nero di calibrazione.
   Le applicazioni che usano la propria gestione colore non sono interessate (come Adobe Creative Suite con Adobe ACE, o applicazioni grafiche open source che usano littleCMS come GIMP o Krita, o applicazioni che impiegano LUT 3D per gestione colore).
@@ -1613,10 +1615,14 @@
   Sovrascrivi ritardo minimo aggiornamento display (ms)
 "measure.testchart": |-
   Misura carta di test
+"specplot.choose": |-
+  Seleziona un file per specplot
+"specplot.run": |-
+  Esegui specplot...
 "measureframe.center": |-
   Centrare
 "measureframe.center.manual": |-
-  Centra manualmente
+  Posiziona questa finestra al centro dello schermo
 "measureframe.info": |-
   Spostare la finestra di misurazione nella posizione dello schermo desiderata e ridimensionarla se necessario. Tutta l'area sarà usata approssimativamente per mostrare i campioni, il cerchio è solo una guida per l'aiuto al posizionamento dello strumento di misurazione.
   Posizionare lo strumento di misurazione sulla finestra e premere su „Avvio misurazione“. Per annullare e ritornare alla finestra principale chiudere la finestra di misurazione.
@@ -1955,7 +1961,7 @@
 "profile.no_embedded_ti3": |-
   Il profilo non contiene dati di misurazione compatibili con Argyll.
 "profile.no_targ": |-
-  Il profilo non contiene informazioni target.
+  Il profilo non contiene informazioni sul target.
 "profile.no_vcgt": |-
   Il profilo non contiene curve di calibrazione.
 "profile.only_named_color": |-

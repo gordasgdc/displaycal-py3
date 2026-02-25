@@ -1,5 +1,6 @@
 import glob
 import os
+import platform
 import pathlib
 import shutil
 import subprocess
@@ -124,9 +125,14 @@ def setup_argyll():
     get_argyll_latest_version.cache_clear()
     argyll_version = get_argyll_latest_version()
     argyll_domain = config.DEFAULTS.get("argyll.domain", "")
+    mac_suffix = (
+        "macOS11_arm64_bin.tgz"
+        if platform.machine().lower() in ("arm64", "aarch64")
+        else "osx10.6_x86_64_bin.tgz"
+    )
     argyll_download_url = {
         "win32": f"{argyll_domain}/Argyll_V{argyll_version}_win64_exe.zip",
-        "darwin": f"{argyll_domain}/Argyll_V{argyll_version}_osx10.6_x86_64_bin.tgz",
+        "darwin": f"{argyll_domain}/Argyll_V{argyll_version}_{mac_suffix}",
         "linux": f"{argyll_domain}/Argyll_V{argyll_version}_linux_x86_64_bin.tgz",
     }
 

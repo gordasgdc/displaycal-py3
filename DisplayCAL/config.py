@@ -1669,6 +1669,7 @@ DEFAULTS = {
     "extra_args.colprof": "",
     "extra_args.dispcal": "",
     "extra_args.dispread": "",
+    "extra_args.specplot": "",
     "extra_args.spotread": "",
     "extra_args.targen": "",
     "gamap_default_intent": "p",
@@ -1692,6 +1693,7 @@ DEFAULTS = {
     "last_icc_path": "",
     "last_launch": "99",  # Version
     "last_reference_ti3_path": "",
+    "last_specplot_path": "",
     "last_ti1_path": "",
     "last_ti3_path": "",
     "last_vrml_path": "",

@@ -8,24 +8,20 @@ We now have a proper [installer](https://www.github.com/eoyilmaz/displaycal-py3/
 and this is the preferred way of running DisplayCAL under Windows (unless you want to
 test the latest code).
 
+> [!NOTE]
+> ArgyllCMS 3.5.0 adds native Windows ARM64 binaries (`Argyll_V3.5.0_win_arm64_exe.zip`)
+> in addition to x86/x64 builds. DisplayCAL download handling supports this now.
+> On ARM64 systems, instrument USB driver setup can still need extra manual steps.
+
 Install through PyPI
 --------------------
 
-If you desire so, you can install DisplayCAL through PyPI. Use Python 3.9, 3.10 or 3.11
+If you desire so, you can install DisplayCAL through PyPI. Use Python 3.9 to 3.14
 and create a dedicated virtual environment to avoid package conflicts with other Python
-programs. We recommend using Python 3.11. Here is the installation procedure:
+programs. We recommend using Python 3.11 or newer. Here is the installation procedure:
 
-1- Download and install one of Python 3.9, 3.10 or 3.11. Unfortunatelly Python 3.12 is
-   not currently working:
-
-   Here is some download links that are now hidden in Python's home page:
-   - [python-3.9.13-amd64.exe](https://www.python.org/ftp/python/3.9.13/python-3.9.13-amd64.exe)
-   - [python-3.10.11-amd64.exe](https://www.python.org/ftp/python/3.10.11/python-3.10.11-amd64.exe)
-   - Python 3.11 can be downloaded directly from [Python.org](https://www.python.org/downloads/windows/).
-   - Python 3.12 is not supported currently.
-
-   Some of the libraries that DisplayCAL depends on are not working or not supported
-   with Python 3.12. So, stick with Python 3.9, 3.10 or 3.11 until we find a solution.
+1- Download and install a supported Python release from
+   [Python.org](https://www.python.org/downloads/windows/).
 
    Also don't forget to select "Add Python 3.xx to PATH" in the installer.
 
@@ -51,7 +47,7 @@ programs. We recommend using Python 3.11. Here is the installation procedure:
    pip install displaycal
    ```
 
-   If you installed Python 3.10 or 3.9 instead, replace `-3.11` with `-3.10` or `-3.9`.
+   If you installed a different Python version, replace `-3.11` accordingly.
 
 4- Run DisplayCAL:
 
@@ -76,20 +72,11 @@ Build From Source
 
 Under Windows the `makefile` workflow will not work. Build from source in a virtual
 environment to keep dependencies isolated from your system Python installation.
-Currently, DisplayCAL will run with Python 3.9, 3.10 and 3.11, but Python 3.12 is not
-supported. To build DisplayCAL from source under Windows follow these steps:
+Currently, DisplayCAL supports Python 3.9 to 3.14. To build DisplayCAL from source under
+Windows follow these steps:
 
-1- Download and install one of Python 3.9, 3.10 or 3.11. Unfortunatelly Python 3.12 is
-   not currently working:
-
-   Here is some download links that are now hidden in Python's home page:
-   - [python-3.9.13-amd64.exe](https://www.python.org/ftp/python/3.9.13/python-3.9.13-amd64.exe)
-   - [python-3.10.11-amd64.exe](https://www.python.org/ftp/python/3.10.11/python-3.10.11-amd64.exe)
-   - Python 3.11 can be downloaded directly from [Python.org](https://www.python.org/downloads/windows/).
-   - Python 3.12 is not supported currently.
-
-   Some of the libraries that DisplayCAL depends on are not working or supported with
-   Python 3.12. So, stick with Python 3.9, 3.10 or 3.11 until we find a solution.
+1- Download and install a supported Python release from
+   [Python.org](https://www.python.org/downloads/windows/).
 
    Also don't forget to select "Add Python 3.xx to PATH" in the installer.
 
@@ -141,14 +128,14 @@ supported. To build DisplayCAL from source under Windows follow these steps:
    pip install --upgrade pip
    ```
 
-   If you installed Python 3.10 or 3.9 instead, replace `-3.11` with `-3.10` or `-3.9`.
+   If you installed a different Python version, replace `-3.11` accordingly.
 
    Let's install the requirements, build displaycal and install it:
 
    ```shell
    pip install -r requirements.txt -r requirements-dev.txt
    python -m build
-   pip install dist/DisplayCAL-3.9.*.whl
+   pip install dist/DisplayCAL-*.whl
    ```
 
 5- Run DisplayCAL:
@@ -169,7 +156,7 @@ supported. To build DisplayCAL from source under Windows follow these steps:
 
    ```shell
    python -m build
-   pip install dist/DisplayCAL-3.9.*.whl
+   pip install dist/DisplayCAL-*.whl
    ```
 
 Build The Installer
@@ -189,7 +176,7 @@ To build the installer for your own use you can follow these steps:
    ```
 
    This should generate a folder under the `dist` folder with a name similar to
-   `py2exe.win32-py3.11-DisplayCAL-3.9.14`.
+   `py2exe.win32-py3.xx-DisplayCAL-<version>`.
 
    All the executables and resources to run DisplayCAL are placed under this folder. So,
    you can directly run the executables under this folder.
@@ -211,6 +198,6 @@ To build the installer for your own use you can follow these steps:
    "C:\Program Files (x86)\Inno Setup 6\iscc" DisplayCAL-Setup-py2exe.win-amd64-py3.11.iss
    ```
 
-6- This should now generate the installer with the name
-   `DisplayCAL-3.9.14-Setup.exe` that you can use to install DisplayCAL to
-   any Windows computer.
+6- This should now generate an installer with a name similar to
+   `DisplayCAL-<version>-Setup.exe` that you can use to install DisplayCAL
+   to any Windows computer.

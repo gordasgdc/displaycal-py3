@@ -194,6 +194,35 @@ def prompt_argyll_dir(
     return argyll_dir
 
 
+def get_homebrew_argyll_bin() -> None | str:
+    """Return Homebrew ArgyllCMS bin directory on macOS if available."""
+    if sys.platform != "darwin":
+        return None
+    brew = which("brew") or which("brew", ["/opt/homebrew/bin", "/usr/local/bin"])
+    if not brew:
+        return None
+    for formula in ("argyll-cms", "argyllcms"):
+        try:
+            result = sp.run(
+                [brew, "--prefix", formula],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except (OSError, ValueError, sp.SubprocessError):
+            continue
+        if result.returncode != 0:
+            continue
+        prefix = (result.stdout or "").strip()
+        if not prefix:
+            continue
+        bin_dir = os.path.join(prefix, "bin")
+        if check_argyll_bin([bin_dir]):
+            return bin_dir
+    return None
+
+
 def set_argyll_bin(
     parent: wx.Window = None,
     silent: bool = False,
@@ -226,21 +255,35 @@ def set_argyll_bin(
     parent = None if parent and not parent.IsShownOnScreen() else parent
     argyll_dir = prompt_argyll_dir(parent, callafter, callafter_args)
     if parent and not check_argyll_bin():
-        dlg = wx.MessageDialog(
+        choices = [("download", lang.getstr("download")), ("browse", lang.getstr("browse"))]
+        brew_argyll_bin = get_homebrew_argyll_bin()
+        if brew_argyll_bin:
+            choices.append(
+                (
+                    "homebrew",
+                    lang.getstr(
+                        "argyll.use_homebrew",
+                        brew_argyll_bin,
+                    ),
+                )
+            )
+        dlg = wx.SingleChoiceDialog(
             parent,
             lang.getstr("dialog.argyll.notfound.choice"),
             APPNAME,
-            style=wx.YES_NO | wx.CANCEL | wx.CANCEL_DEFAULT | wx.ICON_QUESTION,
+            [label for _, label in choices],
+            style=wx.CHOICEDLG_STYLE,
         )
-        if hasattr(dlg, "SetYesNoCancelLabels"):
-            dlg.SetYesNoCancelLabels(
-                lang.getstr("download"),
-                lang.getstr("browse"),
-                lang.getstr("cancel"),
-            )
+        dlg.SetSelection(0)
         dlg_result = dlg.ShowModal()
+        selected = dlg.GetSelection()
         dlg.Destroy()
-        if dlg_result == wx.ID_YES:
+        if dlg_result != wx.ID_OK:
+            if callafter:
+                callafter(*callafter_args)
+            return False
+        action = choices[selected][0] if selected >= 0 else "browse"
+        if action == "download":
             # Download Argyll CMS
             from DisplayCAL.display_cal import app_update_check
 
@@ -254,10 +297,18 @@ def set_argyll_bin(
                     bitmap=get_icon(size=32, name="dialog-error"),
                 )
             return False
-        if dlg_result == wx.ID_CANCEL:
-            if callafter:
-                callafter(*callafter_args)
-            return False
+        if action == "homebrew" and brew_argyll_bin:
+            verbose_print(
+                "Using Homebrew Argyll binary directory:",
+                brew_argyll_bin,
+                verbose_level=3,
+            )
+            setcfg("argyll.dir", brew_argyll_bin)
+            # Always write cfg directly after setting Argyll directory so
+            # subprocesses that read the configuration will use the right
+            # executables
+            writecfg()
+            return True
     dlg = wx.DirDialog(
         parent,
         lang.getstr("dialog.set_argyll_bin"),

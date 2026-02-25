@@ -200,6 +200,9 @@
         <object class="wxMenuItem" name="measure.testchart">
           <label>measure.testchart</label>
         </object>
+        <object class="wxMenuItem" name="specplot.run">
+          <label>specplot.run</label>
+        </object>
         <object class="wxMenuItem" name="measurement_file.check_sanity">
           <label>measurement_file.check_sanity</label>
         </object>

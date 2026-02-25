@@ -227,6 +227,8 @@
 "argyll.dir.invalid": |-
   Los ejecutables de ArgyllCMS no se han encontrado!
   Por favor seleccione el directorio que contiene los archivos ejecutables (quizá el prefijo o sufijo “argyll-” / “-argyll”): %s
+"argyll.use_homebrew": |-
+  Usar instalación de Homebrew (%s)
 "argyll.error.detail": |-
   Mensaje de error de ArgyllCMS detallado:
 "argyll.instrument.configuration_files.install": |-
@@ -1613,6 +1615,10 @@
   Anular retardo mínimo de actualización de pantalla (ms)
 "measure.testchart": |-
   Carta de pruebas de ajustes
+"specplot.choose": |-
+  Seleccione un archivo para specplot
+"specplot.run": |-
+  Ejecutar specplot...
 "measureframe.center": |-
   Centro
 "measureframe.center.manual": |-

@@ -31,6 +31,7 @@ NAMES = [
     "oeminst",
     "profcheck",
     "spec2cie",
+    "specplot",
 ]
 
 # Argyll CMS tools optionally used by DisplayCAL
@@ -41,6 +42,7 @@ OPTIONAL = [
     "ccxxmake",
     "i1d3ccss",
     "oeminst",
+    "specplot",
     "spec2cie",
     "spyd2en",
     "spyd4en",

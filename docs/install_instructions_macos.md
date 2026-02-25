@@ -8,6 +8,11 @@ We now have a proper [installer](https://www.github.com/eoyilmaz/displaycal-py3/
 for MacOS and this is the preferred way of running DisplayCAL under MacOS (unless you
 want to test the latest code).
 
+> [!NOTE]
+> ArgyllCMS 3.5.0 adds native Apple Silicon binaries
+> (`Argyll_V3.5.0_macOS11_arm64_bin.tgz`). Intel macOS still uses
+> `Argyll_V3.5.0_osx10.6_x86_64_bin.tgz`. DisplayCAL download handling supports both.
+
 > [!WARNING]
 > In **MacOS**, after installing DisplayCAL you need to run the following in Terminal:
 >
@@ -101,7 +106,7 @@ within the correct range. If your system `python3` is not supported and you
 installed a new one, you can try passing it to the build command:
 
 ```shell
-$ SYSTEM_PYTHON=python3.11 make venv build install
+SYSTEM_PYTHON=python3.11 make venv build install
 ```
 
 If this errors out for you, you can follow the
@@ -124,7 +129,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
 python -m build
-pip install dist/DisplayCAL-3.9.*.whl
+pip install dist/DisplayCAL-*.whl
 ```
 
 This should install DisplayCAL. To run the UI:
@@ -160,9 +165,9 @@ Now you can generate the app:
 python setup.py py2app
 ```
 
-That should generate a folder with the name `py2app.macosx-14.0-arm64-py3.14` under the
-`dist` folder which should contain another folder with the name `DisplayCAL-3.9.16`
-which should contain the `DisplayCAL.app` package.
+That should generate a folder under `dist` with a name similar to
+`py2app.macosx-<macOS-version>-<arch>-py<python-version>`, containing a
+`DisplayCAL-<version>` folder with the `DisplayCAL.app` package.
 
 You can use this directly, by putting it under the `/Applications` of your system.
 
@@ -176,13 +181,13 @@ First put a link to the `Applications` folder for people to easily drag & drop t
 in to their system `Applications` folder:
 
 ```shell
-cd ~/displaycal-py3/dist/py2app.macosx-14.0-arm64-py3.14/DisplayCAL-3.9.16
+cd ~/displaycal-py3/dist/py2app.macosx-*/DisplayCAL-*
 ln -s /Applications
 ```
 
 Use `Disk Utility.app` to generate a `dmg` file, by using the
 `File -> New Image -> Image From Folder...` menu and selecting the
-`~/displaycal-py3/dist/py2app.macosx-14.0-arm64-py3.14/DisplayCAL-3.9.16` folder.
+`~/displaycal-py3/dist/py2app.macosx-*/DisplayCAL-*` folder.
 
-Now you can rename the `dmg` file to `DisplayCAL-3.9.16-macOS-arm64.dmg` or
-`DisplayCAL-3.9.16-macOS-x86.dmg` depending on your macOS architecture.
+Now you can rename the `dmg` file to `DisplayCAL-<version>-macOS-arm64.dmg` or
+`DisplayCAL-<version>-macOS-x86_64.dmg` depending on your macOS architecture.
