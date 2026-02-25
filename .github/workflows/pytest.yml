@@ -112,7 +112,7 @@ jobs:
         py_version="${{ matrix.python-version }}"
         py_version="${py_version//./}"
         wx_name="wxPython"
-        if [ "${{ matrix.wx-version }}" == "4.2.3" ]; then
+        if [ "${{ matrix.wx-version }}" == "4.2.3" ] || [ "${{ matrix.wx-version }}" == "4.2.4" ] || [ "${{ matrix.wx-version }}" == "4.2.5" ]; then
           wx_name="wxpython"
         fi
         uv pip install --system "https://extras.wxpython.org/wxPython4/extras/linux/gtk3/ubuntu-22.04/${wx_name}-${{ matrix.wx-version }}-cp${py_version}-cp${py_version}-linux_x86_64.whl"
