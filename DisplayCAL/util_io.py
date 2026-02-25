@@ -18,17 +18,17 @@ from io import StringIO
 from time import time
 from typing import TYPE_CHECKING, Any, BinaryIO, TextIO
 
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
-
 # from safe_print import safe_print
 from DisplayCAL.util_str import universal_newlines
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from types import TracebackType
+
+    if sys.version_info >= (3, 11):
+        from typing import Self
+    else:
+        from typing_extensions import Self
 
 
 class EncodedWriter:

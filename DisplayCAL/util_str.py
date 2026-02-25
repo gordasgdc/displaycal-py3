@@ -11,11 +11,14 @@ import string
 import sys
 import unicodedata
 from functools import reduce
+from typing import TYPE_CHECKING
 
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
+if TYPE_CHECKING:
+    if sys.version_info >= (3, 11):
+        from typing import Self
+    else:
+        from typing_extensions import Self
+
 
 env_errors = (EnvironmentError,)
 if sys.platform == "win32":
@@ -355,11 +358,11 @@ def make_ascii_printable(text, substitute=b""):
     """Make ASCII printable.
 
     Args:
-        text (Union[bytes, str]): A ``bytes`` or ``str`` value.
-        substitute (Union[bytes, str]): A ``bytes`` or ``str`` value.
+        text (bytes | str): A ``bytes`` or ``str`` value.
+        substitute (bytes | str): A ``bytes`` or ``str`` value.
 
     Returns:
-        Union[bytes, str]: A bytes or str value that is ASCII printable.
+        bytes | str: A bytes or str value that is ASCII printable.
     """
     buffer = []
     joiner = ""
@@ -489,12 +492,12 @@ def ellipsis_(text: str | bytes, maxlen: int = 64, pos: str = "r") -> str | byte
     Ellipsis position can be 'm' (middle) or 'r' (right).
 
     Args:
-        text (Union[str, bytes]): A ``str`` or ``bytes`` value.
+        text (str | bytes): A ``str`` or ``bytes`` value.
         maxlen (int): Maximum length of the string.
         pos (str): Position of the ellipsis ('m' or 'r').
 
     Returns:
-        Union[str, bytes]: A ``str`` or ``bytes`` value that is truncated to
+        str | bytes: A ``str`` or ``bytes`` value that is truncated to
             the maximum length and has an ellipsis added if it was longer.
     """
     if len(text) <= maxlen:

@@ -39,10 +39,6 @@ from weakref import WeakValueDictionary
 
 from DisplayCAL.util_dict import dict_sort
 
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
 
 if sys.platform == "win32":
     import winreg
@@ -133,6 +129,10 @@ if TYPE_CHECKING:
     from typing import BinaryIO, TextIO
 
     from DisplayCAL.worker import Worker, Xicclu  # noqa: TC004
+    if sys.version_info >= (3, 11):
+        from typing import Self
+    else:
+        from typing_extensions import Self
 
 
 # Gamut volumes in cubic colorspace units (L*a*b*) as reported by Argyll's

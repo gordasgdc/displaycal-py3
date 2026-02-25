@@ -4,6 +4,7 @@ It includes base worker classes, multiprocessing support, and methods for
 interacting with Argyll CMS utilities like `xicclu`. The module also handles
 subprocess management, logging, and temporary directory creation.
 """
+from __future__ import annotations
 
 import contextlib
 import math
@@ -17,11 +18,13 @@ import tempfile
 import textwrap
 import traceback
 from binascii import hexlify
+from typing import TYPE_CHECKING
 
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
+if TYPE_CHECKING:
+    if sys.version_info >= (3, 11):
+        from typing import Self
+    else:
+        from typing_extensions import Self
 
 if sys.platform == "win32":
     import win32api

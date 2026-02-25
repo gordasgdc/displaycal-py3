@@ -20,12 +20,14 @@ from ctypes import (
     pointer,
     util,
 )
-from typing import ClassVar
+from typing import ClassVar, TYPE_CHECKING
 
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
+
+if TYPE_CHECKING:
+    if sys.version_info >= (3, 11):
+        from typing import Self
+    else:
+        from typing_extensions import Self
 
 
 libx11pth = util.find_library("X11")

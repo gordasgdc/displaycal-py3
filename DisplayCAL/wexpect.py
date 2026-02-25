@@ -64,6 +64,8 @@ http://pexpect.sourceforge.net/
 $Id: pexpect.py 507 2007-12-27 02:40:52Z noah $
 """
 
+from __future__ import annotations
+
 import contextlib
 import errno
 import os
@@ -75,11 +77,13 @@ import struct
 import sys
 import time
 import traceback
+from typing import TYPE_CHECKING
 
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
+if TYPE_CHECKING:
+    if sys.version_info >= (3, 11):
+        from typing import Self
+    else:
+        from typing_extensions import Self
 
 
 if sys.platform != "win32":

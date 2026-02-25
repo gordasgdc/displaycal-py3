@@ -13,16 +13,15 @@ import urllib.error
 import urllib.request
 from typing import TYPE_CHECKING, BinaryIO
 
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
-
 from DisplayCAL import localization as lang
 from DisplayCAL.util_str import safe_str
 
 if TYPE_CHECKING:
     from types import TracebackType
+    if sys.version_info >= (3, 11):
+        from typing import Self
+    else:
+        from typing_extensions import Self
 
 
 DNS_SERVER_IP_ADDR = "8.8.8.8"

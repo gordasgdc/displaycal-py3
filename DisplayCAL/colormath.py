@@ -12,16 +12,17 @@ import logging
 import math
 import sys
 import warnings
-from typing import Any, Callable, overload
+from typing import TYPE_CHECKING, Any, Callable, overload
 
 import numpy
 
 from DisplayCAL.debughelpers import DEBUG
 
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
+if TYPE_CHECKING:
+    if sys.version_info >= (3, 11):
+        from typing import Self
+    else:
+        from typing_extensions import Self
 
 
 logger = logging.getLogger(__name__)

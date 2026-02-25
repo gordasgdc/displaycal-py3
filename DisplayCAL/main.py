@@ -15,11 +15,6 @@ import threading
 from time import sleep
 from typing import TYPE_CHECKING, Any
 
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
-
 # Python version check
 from DisplayCAL.meta import PY_MAXVERSION, PY_MINVERSION
 
@@ -75,6 +70,10 @@ elif sys.platform == "darwin":
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from types import TracebackType
+    if sys.version_info >= (3, 11):
+        from typing import Self
+    else:
+        from typing_extensions import Self
 
 
 def _excepthook(
