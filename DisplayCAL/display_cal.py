@@ -10914,15 +10914,22 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         display_name = config.get_display_name(None, True)
         if display_name == "Web @ localhost" or display_name.startswith("Chromecast "):
             for name, patterngenerator in list(self.worker.patterngenerators.items()):
-                if isinstance(
-                    patterngenerator,
-                    (WebWinHTTPPatternGeneratorServer, ChromeCastPatternGenerator),
+                if (
+                    display_name.startswith("Chromecast ")
+                    and ChromeCastPatternGenerator
+                    and isinstance(patterngenerator, ChromeCastPatternGenerator)
                 ):
-                    # Need to free connection for dispwin
+                    # Chromecast uses a single client session; reset it so dispwin
+                    # can establish a fresh connection for each run.
                     patterngenerator.disconnect_client()
-                    if isinstance(patterngenerator, WebWinHTTPPatternGeneratorServer):
-                        patterngenerator.server_close()
                     self.worker.patterngenerators.pop(name)
+                elif (
+                    display_name == "Web @ localhost"
+                    and isinstance(patterngenerator, WebWinHTTPPatternGeneratorServer)
+                ):
+                    # Keep WebWin server running and reusable between setup/test
+                    # and interactive adjustment steps to avoid reconnect churn.
+                    continue
         elif not self.setup_patterngenerator(self):
             return
         writecfg()

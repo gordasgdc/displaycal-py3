@@ -3499,10 +3499,16 @@ class Worker(WorkerBase):
             bool: True if video levels detection should be skipped, False if it
                 should not be skipped.
         """
+        display_name = config.get_display_name(None, True)
         return (
             self._detected_output_levels
             or not getcfg("patterngenerator.detect_video_levels")
-            or config.get_display_name() == "Untethered"
+            # Web @ localhost uses Argyll's built-in web server (-dweb:<port>).
+            # Video level detection would require a separate dispread session,
+            # which tears down/restarts that server before interactive adjust.
+            # Skip auto-detection here to keep a single continuous web session.
+            or display_name == "Web @ localhost"
+            or display_name == "Untethered"
             or is_ccxx_testchart()
         )
 
@@ -3514,6 +3520,15 @@ class Worker(WorkerBase):
                 detected,
         """
         if self.get_skip_video_levels_detection():
+            if (
+                config.get_display_name(None, True) == "Web @ localhost"
+                and not getattr(self, "_web_video_levels_skip_logged", False)
+            ):
+                self.log(
+                    "Skipping output levels detection for Web @ localhost "
+                    "to keep a continuous web session."
+                )
+                self._web_video_levels_skip_logged = True
             return True
         self._detecting_video_levels = True
         try:
@@ -7581,6 +7596,13 @@ BEGIN_DATA
                         if finished:
                             with contextlib.suppress(OSError):
                                 self.patterngenerator.send((0,) * 3, x=0, y=0, w=1, h=1)
+                    elif isinstance(
+                        self.patterngenerator, WebWinHTTPPatternGeneratorServer
+                    ):
+                        # Keep WebWin server alive across setup/test and
+                        # interactive adjustment so connected browsers do not
+                        # need to reconnect between consecutive operations.
+                        pass
                     else:
                         self.patterngenerator.disconnect_client()
                 except Exception as exception:

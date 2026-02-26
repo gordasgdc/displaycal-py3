@@ -122,7 +122,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
 python -m build
-pip install dist/DisplayCAL-3.9.*.whl
+pip install dist/displaycal-*.whl
 ```
 
 This should install DisplayCAL. To run the UI:

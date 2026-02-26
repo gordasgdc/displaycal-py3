@@ -1,7 +1,6 @@
 """Re-implementation of Argyll's webwin in pure python."""
 
 import http.server
-import time
 from urllib.parse import unquote
 
 from DisplayCAL.meta import NAME as APPNAME
@@ -50,16 +49,25 @@ WEBDISP_JS = r"""if (typeof XMLHttpRequest == "undefined") {
 var cpat = ["#000"];
 var oXHR;
 var pat;
+var retryDelayMs = 100;
+
+function scheduleNextRequest(delayMs) {
+    setTimeout(XHR_request, delayMs);
+}
 
 function XHR_request() {
-    oXHR.open(
-        "GET",
-        "/ajax/messages?"
-        + encodeURIComponent(cpat.join("|") + "|" + Math.random()),
-        true
-    );
-    oXHR.onreadystatechange = XHR_response;
-    oXHR.send();
+    try {
+        oXHR.open(
+            "GET",
+            "/ajax/messages?"
+            + encodeURIComponent(cpat.join("|") + "|" + Math.random()),
+            true
+        );
+        oXHR.onreadystatechange = XHR_response;
+        oXHR.send();
+    } catch (e) {
+        scheduleNextRequest(retryDelayMs);
+    }
 }
 
 function XHR_response() {
@@ -67,6 +75,7 @@ function XHR_response() {
         return;
 
     if (oXHR.status != 200) {
+        scheduleNextRequest(retryDelayMs);
         return;
     }
     var rt = oXHR.responseText;
@@ -84,7 +93,7 @@ function XHR_response() {
             pat.style.height = (rt[5] * 100) + "%";
         }
     }
-    setTimeout(XHR_request, 50);
+    scheduleNextRequest(50);
 }
 
 window.onload = function() {
@@ -137,12 +146,7 @@ class WebWinHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             ctype = "application/javascript"
         elif self.path.startswith("/ajax/messages?"):
             curpat = "|".join(unquote(self.path.split("?").pop()).split("|")[:6])
-            while (
-                self.server.patterngenerator.listening
-                and self.server.patterngenerator.pattern == curpat
-            ):
-                time.sleep(0.05)
-            s = self.server.patterngenerator.pattern
+            s = self.server.patterngenerator.wait_for_pattern_change(curpat)
             ctype = "text/plain; charset=UTF-8"
         else:
             self.send_error(404)
