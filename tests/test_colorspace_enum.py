@@ -150,11 +150,9 @@ def test_to_colorspace_colorspace_is_skipped():
 
     py_error_message = {
         9: "to_colorspace() missing 1 required positional argument: 'colorspace'",
-        10: "ColorSpace.to_colorspace() missing 1 required positional argument: 'colorspace'",
-        11: "ColorSpace.to_colorspace() missing 1 required positional argument: 'colorspace'",
-        12: "ColorSpace.to_colorspace() missing 1 required positional argument: 'colorspace'",
-        13: "ColorSpace.to_colorspace() missing 1 required positional argument: 'colorspace'",
-    }[sys.version_info.minor]
+    }.get(sys.version_info.minor,
+        "ColorSpace.to_colorspace() missing 1 required positional argument: 'colorspace'"
+    )
     assert str(cm.value) == py_error_message
 
 

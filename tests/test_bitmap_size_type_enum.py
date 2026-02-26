@@ -58,11 +58,9 @@ def test_to_type_type_is_skipped():
     py_error_message = {
         8: "to_type() missing 1 required positional argument: 'type_'",
         9: "to_type() missing 1 required positional argument: 'type_'",
-        10: "BitmapSizeType.to_type() missing 1 required positional argument: 'type_'",
-        11: "BitmapSizeType.to_type() missing 1 required positional argument: 'type_'",
-        12: "BitmapSizeType.to_type() missing 1 required positional argument: 'type_'",
-        13: "BitmapSizeType.to_type() missing 1 required positional argument: 'type_'",
-    }[sys.version_info.minor]
+    }.get(sys.version_info.minor,
+        "BitmapSizeType.to_type() missing 1 required positional argument: 'type_'"
+    )
     assert str(cm.value) == py_error_message
 
 

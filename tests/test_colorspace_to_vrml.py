@@ -47,13 +47,10 @@ def test_color_space_to_vrml_init_data_arg_is_skipped():
 
     py_error_message = {
         9: "__init__() missing 1 required positional argument: 'data'",
-        10: "ColorSpaceToVRML.__init__() missing 1 required positional argument: 'data'",
-        11: "ColorSpaceToVRML.__init__() missing 1 required positional argument: 'data'",
-        12: "ColorSpaceToVRML.__init__() missing 1 required positional argument: 'data'",
-        13: "ColorSpaceToVRML.__init__() missing 1 required positional argument: 'data'",
-    }[sys.version_info.minor]
+    }.get(sys.version_info.minor,
+        "ColorSpaceToVRML.__init__() missing 1 required positional argument: 'data'"
+    )
     assert str(cm.value) == py_error_message
-
 
 
 def test_color_space_to_vrml_init_data_arg_is_none():
@@ -180,10 +177,9 @@ def test_color_space_to_vrml_colorspace_is_read_only(get_cgats_data):
     py_error_message = {
         9: "can't set attribute",
         10: "can't set attribute 'colorspace'",
-        11: "property 'colorspace' of 'ColorSpaceToVRML' object has no setter",
-        12: "property 'colorspace' of 'ColorSpaceToVRML' object has no setter",
-        13: "property 'colorspace' of 'ColorSpaceToVRML' object has no setter",
-    }[sys.version_info.minor]
+    }.get(sys.version_info.minor,
+        "property 'colorspace' of 'ColorSpaceToVRML' object has no setter"
+    )
     assert str(cm.value) == py_error_message
 
 

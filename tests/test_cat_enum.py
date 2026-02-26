@@ -105,11 +105,9 @@ def test_to_cat_cat_is_skipped():
 
     py_error_message = {
         9: "to_cat() missing 1 required positional argument: 'cat'",
-        10: "CAT.to_cat() missing 1 required positional argument: 'cat'",
-        11: "CAT.to_cat() missing 1 required positional argument: 'cat'",
-        12: "CAT.to_cat() missing 1 required positional argument: 'cat'",
-        13: "CAT.to_cat() missing 1 required positional argument: 'cat'",
-    }[sys.version_info.minor]
+    }.get(sys.version_info.minor,
+        "CAT.to_cat() missing 1 required positional argument: 'cat'"
+    )
     assert str(cm.value) == py_error_message
 
 
