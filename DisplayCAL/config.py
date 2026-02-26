@@ -900,6 +900,7 @@ def adjust_bitmap_size(
         # HighDPI support. Icon
         rescale = True
     if rescale and (bmp.Size[0] != w or bmp.Size[1] != h):
+        from DisplayCAL.wx_addons import wx
         # HighDPI support. Rescale
         img = bmp.ConvertToImage()
         if not hasattr(wx, "IMAGE_QUALITY_BILINEAR") or orig_name == "list-add":

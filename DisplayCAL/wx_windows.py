@@ -8655,7 +8655,7 @@ class TooltipWindow(InvincibleFrame):
     ):
         scale = getcfg("app.dpi") / get_default_dpi()
         if scale > 1 and size == (400, -1):
-            size = size[0] * scale, size[1]
+            size = int(size[0] * scale), size[1]
         InvincibleFrame.__init__(self, parent, id, title, pos, size, style)
         self.SetPosition(pos)  # yes, this is needed
         set_icons(self)
