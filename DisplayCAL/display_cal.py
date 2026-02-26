@@ -16784,11 +16784,12 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         Args:
             event (wx.Event, optional): The event triggered by the control.
         """
-        debug_print(
-            "[D] measurement_mode_ctrl_handler called for ID "
-            f"{event.GetId()} {getevtobjname(event, self)} event type "
-            f"{event.GetEventType()} {getevttype(event)}"
-        )
+        if event is not None:
+            debug_print(
+                "[D] measurement_mode_ctrl_handler called for ID "
+                f"{event.GetId()} {getevtobjname(event, self)} event type "
+                f"{event.GetEventType()} {getevttype(event)}"
+            )
         v = self.get_measurement_mode()
         if v and "p" in v and self.worker.argyll_version < [1, 1, 0]:
             self.measurement_mode_ctrl.SetSelection(
