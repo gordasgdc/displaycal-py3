@@ -11,6 +11,7 @@ import zipfile
 
 from requests import HTTPError
 
+from DisplayCAL.debughelpers import DownloadError
 import pytest
 
 from DisplayCAL import config
@@ -73,7 +74,7 @@ def data_path():
     return displaycal_parent_dir.parent / "tests" / "data"
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def setup_argyll():
     """Setup ArgyllCMS.
 
@@ -152,7 +153,7 @@ def setup_argyll():
         print(f"URL: {url}")
         worker = Worker()
         result = worker.download(url, download_dir=argyll_temp_path)
-        if isinstance(result, HTTPError):
+        if isinstance(result, (DownloadError, HTTPError, PermissionError)):
             print(f"Error downloading {url}: {result}")
             raise result
         download_path = result
