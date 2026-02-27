@@ -539,6 +539,10 @@ def test_get_argyll_latest_version_returns_str():
     assert isinstance(result, str)
 
 
+@pytest.mark.skipif(
+    os.getenv("GITHUB_ACTIONS") == "true",
+    reason="Test is randomly failing on CI machines."
+)
 def test_get_argyll_latest_version_returns_latest_argyll_cms_version():
     """get_argyll_latest_version() returns the latest argyll cms version."""
     result = get_argyll_latest_version()

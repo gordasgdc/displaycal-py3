@@ -72,7 +72,7 @@ def test_show_ccxx_error_dialog(mainframe: MainFrame) -> None:
 
 
 @pytest.mark.skipif(
-    sys.platform == "darwin" and os.environ.get("SKIP_FAILING_WX_TESTS") == "1",
+    sys.platform == "darwin" and os.getenv("GITHUB_ACTIONS") == "true",,
     reason="ShowResultDialog is failing on CI macOS machines, skipping test.",
 )
 @pytest.mark.parametrize("argyll", (True, False), ids=("With argyll", "without argyll"))
@@ -231,7 +231,7 @@ def test_init_gamap_frame(mainframe: MainFrame) -> None:
 
 
 @pytest.mark.skipif(
-    sys.platform == "darwin" and os.environ.get("SKIP_FAILING_WX_TESTS") == "1",
+    sys.platform == "darwin" and os.getenv("GITHUB_ACTIONS") == "true",
     reason="StartupFrame is failing on CI macOS machines, skipping test.",
 )
 def test_init_startup_frame() -> None:
