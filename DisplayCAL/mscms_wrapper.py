@@ -1,31 +1,33 @@
+"""Wrapper for WCS API calls."""
+
+from __future__ import annotations
+
 import ctypes
 import sys
-
-from ctypes import c_wchar_p
-from ctypes import create_unicode_buffer
-from ctypes import POINTER
-from ctypes import Structure
-from ctypes import WinError
-from ctypes import WINFUNCTYPE
-from ctypes import wstring_at
-from ctypes.wintypes import BOOL
-from ctypes.wintypes import DWORD
-from ctypes.wintypes import LPWSTR
-
-from typing import Any
-from typing import Callable
-from typing import List
+from ctypes import (
+    POINTER,
+    WINFUNCTYPE,
+    Structure,
+    WinError,
+    c_wchar_p,
+    create_unicode_buffer,
+    wstring_at,
+)
+from ctypes.wintypes import BOOL, DWORD, LPWSTR
+from typing import Any, Callable
 
 if sys.version_info >= (3, 11):
     from typing import Self
 else:
     from typing_extensions import Self
 
-from DisplayCAL.mscms_types import COLORPROFILESUBTYPE
-from DisplayCAL.mscms_types import COLORPROFILETYPE
-from DisplayCAL.mscms_types import dwDeviceClass
-from DisplayCAL.mscms_types import dwFieldsUsed
-from DisplayCAL.mscms_types import WCS_PROF_SCOPE
+from DisplayCAL.mscms_types import (
+    COLORPROFILESUBTYPE,
+    COLORPROFILETYPE,
+    WCS_PROF_SCOPE,
+    dwDeviceClass,
+    dwFieldsUsed,
+)
 
 # mscms calls used:
 #  + WcsAssociateColorProfileWithDevice
@@ -39,8 +41,8 @@ from DisplayCAL.mscms_types import WCS_PROF_SCOPE
 #  + WcsGetUsePerUserProfiles (leaks)
 #  + WcsSetUsePerUserProfiles
 
-dwResolutionArray = DWORD * 2
-dwAttributesArray = DWORD * 2
+dwResolutionArray = DWORD * 2  # noqa: N816
+dwAttributesArray = DWORD * 2  # noqa: N816
 WCS_PROF_SCOPE_t = DWORD
 COLORPROFILETYPE_t = DWORD
 COLORPROFILESUBTYPE_t = DWORD
@@ -52,13 +54,16 @@ WIN_ERRNO_PROFILE_NOT_ASSOCIATED = 2015
 
 
 class ENUMTYPEW(Structure):
+    """The ENUMTYPEW structure specifies the criteria for enumerating color profiles."""
+
     _fields_ = [
         ("dwSize", DWORD),  # size of structure
         ("dwVersion", DWORD),  # should be equal to ENUM_TYPE_VERSION
         (
             "dwFields",
             DWORD,
-        ),  # indicates which fields in this structure are being used. Can be set to any combination of the dwFieldsUsed enum
+        ),  # indicates which fields in this structure are being used.
+        # Can be set to any combination of the dwFieldsUsed enum.
         ("pDeviceName", LPWSTR),
         ("dwMediaType", DWORD),
         ("dwDitheringMode", DWORD),
@@ -78,7 +83,7 @@ class ENUMTYPEW(Structure):
         ("dwDeviceClass", DWORD),
     ]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.dwSize = ctypes.sizeof(ENUMTYPEW)
         self.dwVersion = ENUM_TYPE_VERSION
 
@@ -86,27 +91,41 @@ class ENUMTYPEW(Structure):
     def create_monitor_profile_filter(
         cls, device_key: str, device_class: dwDeviceClass = dwDeviceClass.CLASS_MONITOR
     ) -> Self:
-        enumDesc = cls()
-        enumDesc.dwDeviceClass = device_class
-        enumDesc.pDeviceName = device_key
-        enumDesc.dwFields = dwFieldsUsed.ET_DEVICECLASS | dwFieldsUsed.ET_DEVICENAME
-        return enumDesc
+        """Create an ENUMTYPEW structure for monitor profile filtering.
+
+        This is used for profile enumeration for a monitor device.
+
+        Args:
+            device_key (str): Device key of the monitor device for which to
+                filter.
+            device_class (dwDeviceClass, optional): The class of the device.
+                Defaults to dwDeviceClass.CLASS_MONITOR.
+
+        Returns:
+            ENUMTYPEW: An initialized ENUMTYPEW structure for monitor profile
+                filtering.
+        """
+        enum_desc = cls()
+        enum_desc.dwDeviceClass = device_class
+        enum_desc.pDeviceName = device_key
+        enum_desc.dwFields = dwFieldsUsed.ET_DEVICECLASS | dwFieldsUsed.ET_DEVICENAME
+        return enum_desc
 
 
-def _errcheck_simple_bool(result: Any, func: Callable[..., Any], args: Any):
+def _errcheck_simple_bool(result: Any, func: Callable[..., Any], args: Any) -> Any:  # noqa: ANN401
     if not result:
         raise WinError()
     return result
 
 
-def _errcheck_args_ret(result: Any, func: Callable[..., Any], args: Any):
+def _errcheck_args_ret(result: Any, func: Callable[..., Any], args: Any) -> Any:  # noqa: ANN401
     errno = ctypes.GetLastError()
     if not result and errno != WIN_ERRNO_SUCCESS:
         raise WinError(errno)
     return args
 
 
-def _wrap_wcsAssociateColorProfileWithDevice():
+def _wrap_wcsAssociateColorProfileWithDevice() -> Callable[..., Any]:  # noqa: ANN401, N802
     proto = WINFUNCTYPE(BOOL, WCS_PROF_SCOPE_t, LPWSTR, LPWSTR)
     paramflags = (
         (1, "scope"),
@@ -114,30 +133,30 @@ def _wrap_wcsAssociateColorProfileWithDevice():
         (1, "pDeviceName"),
     )
 
-    AssociateColorProfileWithDevice = proto(
+    associate_color_profile_with_device = proto(
         ("WcsAssociateColorProfileWithDevice", ctypes.windll.mscms),
         paramflags,
     )
-    AssociateColorProfileWithDevice.errcheck = _errcheck_simple_bool
-    return AssociateColorProfileWithDevice
+    associate_color_profile_with_device.errcheck = _errcheck_simple_bool
+    return associate_color_profile_with_device
 
 
-def _wrap_wcsDisassociateColorProfileFromDevice():
+def _wrap_wcsDisassociateColorProfileFromDevice() -> Callable[..., Any]:  # noqa: N802
     proto = WINFUNCTYPE(BOOL, WCS_PROF_SCOPE_t, LPWSTR, LPWSTR)
     paramflags = (
         (1, "scope"),
         (1, "pProfileName"),
         (1, "pDeviceName"),
     )
-    DisassociateColorProfileFromDevice = proto(
+    disassociate_color_profile_from_device = proto(
         ("WcsDisassociateColorProfileFromDevice", ctypes.windll.mscms),
         paramflags,
     )
-    DisassociateColorProfileFromDevice.errcheck = _errcheck_simple_bool
-    return DisassociateColorProfileFromDevice
+    disassociate_color_profile_from_device.errcheck = _errcheck_simple_bool
+    return disassociate_color_profile_from_device
 
 
-def _wrap_wcsEnumColorProfiles():
+def _wrap_wcsEnumColorProfiles() -> Callable[..., Any]:  # noqa: N802
     proto = WINFUNCTYPE(
         BOOL, WCS_PROF_SCOPE_t, POINTER(ENUMTYPEW), LPWSTR, DWORD, POINTER(DWORD)
     )
@@ -149,48 +168,50 @@ def _wrap_wcsEnumColorProfiles():
         (2, "pnProfiles", DWORD(0)),
     )
 
-    EnumColorProfiles = proto(("WcsEnumColorProfiles", ctypes.windll.mscms), paramflags)
-    EnumColorProfiles.errcheck = _errcheck_args_ret
-    return EnumColorProfiles
+    enum_color_profiles = proto(
+        ("WcsEnumColorProfiles", ctypes.windll.mscms), paramflags
+    )
+    enum_color_profiles.errcheck = _errcheck_args_ret
+    return enum_color_profiles
 
 
-def _wrap_wcsEnumColorProfilesSize():
+def _wrap_wcsEnumColorProfilesSize() -> Callable[..., Any]:  # noqa: N802
     proto = WINFUNCTYPE(BOOL, WCS_PROF_SCOPE_t, POINTER(ENUMTYPEW), POINTER(DWORD))
     paramflags = (
         (1, "scope"),
         (1, "pEnumRecord"),
         (2, "pdwSize", DWORD(0)),
     )
-    EnumColorProfilesSize = proto(
+    get_enum_color_profiles_size = proto(
         ("WcsEnumColorProfilesSize", ctypes.windll.mscms), paramflags
     )
-    EnumColorProfilesSize.errcheck = _errcheck_args_ret
-    return EnumColorProfilesSize
+    get_enum_color_profiles_size.errcheck = _errcheck_args_ret
+    return get_enum_color_profiles_size
 
 
-def _wrap_wcsGetCalibrationManagementState():
+def _wrap_wcsGetCalibrationManagementState() -> Callable[..., Any]:  # noqa: N802
     proto = WINFUNCTYPE(BOOL, POINTER(BOOL))
     paramflags = ((2, "pbIsEnabled", BOOL(False)),)
-    GetCalibrationManagementState = proto(
+    get_calibration_management_state = proto(
         ("WcsGetCalibrationManagementState", ctypes.windll.mscms),
         paramflags,
     )
-    GetCalibrationManagementState.errcheck = _errcheck_args_ret
-    return GetCalibrationManagementState
+    get_calibration_management_state.errcheck = _errcheck_args_ret
+    return get_calibration_management_state
 
 
-def _wrap_wcsSetCalibrationManagementState():
+def _wrap_wcsSetCalibrationManagementState() -> Callable[..., Any]:  # noqa: N802
     proto = WINFUNCTYPE(BOOL, BOOL)
     paramflags = ((1, "pbIsEnabled"),)
-    SetCalibrationManagementState = proto(
+    set_calibration_management_state = proto(
         ("WcsSetCalibrationManagementState", ctypes.windll.mscms),
         paramflags,
     )
-    SetCalibrationManagementState.errcheck = _errcheck_simple_bool
-    return SetCalibrationManagementState
+    set_calibration_management_state.errcheck = _errcheck_simple_bool
+    return set_calibration_management_state
 
 
-def _wrap_wcsGetDefaultColorProfile():
+def _wrap_wcsGetDefaultColorProfile() -> Callable[..., Any]:  # noqa: N802
     proto = WINFUNCTYPE(
         BOOL,
         WCS_PROF_SCOPE_t,
@@ -210,14 +231,14 @@ def _wrap_wcsGetDefaultColorProfile():
         (1, "cbProfileName"),
         (3, "pProfileName"),
     )
-    GetDefaultColorProfile = proto(
+    get_default_color_profile = proto(
         ("WcsGetDefaultColorProfile", ctypes.windll.mscms), paramflags
     )
-    GetDefaultColorProfile.errcheck = _errcheck_args_ret
-    return GetDefaultColorProfile
+    get_default_color_profile.errcheck = _errcheck_args_ret
+    return get_default_color_profile
 
 
-def _wrap_wcsGetDefaultColorProfileSize():
+def _wrap_wcsGetDefaultColorProfileSize() -> Callable[..., Any]:  # noqa: N802
     proto = WINFUNCTYPE(
         BOOL,
         WCS_PROF_SCOPE_t,
@@ -235,15 +256,15 @@ def _wrap_wcsGetDefaultColorProfileSize():
         (1, "dwProfileID"),
         (2, "pcbProfileName", DWORD(0)),
     )
-    GetDefaultColorProfileSize = proto(
+    get_default_color_profile_size = proto(
         ("WcsGetDefaultColorProfileSize", ctypes.windll.mscms),
         paramflags,
     )
-    GetDefaultColorProfileSize.errcheck = _errcheck_args_ret
-    return GetDefaultColorProfileSize
+    get_default_color_profile_size.errcheck = _errcheck_args_ret
+    return get_default_color_profile_size
 
 
-def _wrap_wcsSetDefaultColorProfile():
+def _wrap_wcsSetDefaultColorProfile() -> Callable[..., Any]:  # noqa: N802
     proto = WINFUNCTYPE(
         BOOL,
         WCS_PROF_SCOPE_t,
@@ -261,45 +282,47 @@ def _wrap_wcsSetDefaultColorProfile():
         (1, "dwProfileID"),
         (1, "pProfileName"),
     )
-    SetDefaultColorProfile = proto(
+    set_default_color_profile = proto(
         ("WcsSetDefaultColorProfile", ctypes.windll.mscms), paramflags
     )
-    SetDefaultColorProfile.errcheck = _errcheck_simple_bool
-    return SetDefaultColorProfile
+    set_default_color_profile.errcheck = _errcheck_simple_bool
+    return set_default_color_profile
 
 
-def _wrap_wcsGetUsePerUserProfiles():
+def _wrap_wcsGetUsePerUserProfiles() -> Callable[..., Any]:  # noqa: N802
     proto = WINFUNCTYPE(BOOL, LPWSTR, DWORD, POINTER(BOOL))
     paramflags = (
         (1, "pDeviceName"),
         (1, "dwDeviceClass"),
         (2, "pUsePerUserProfiles", BOOL(False)),
     )
-    GetUsePerUserProfiles = proto(
+    get_use_per_user_profiles = proto(
         ("WcsGetUsePerUserProfiles", ctypes.windll.mscms),
         paramflags,
     )
-    GetUsePerUserProfiles.errcheck = _errcheck_args_ret
-    return GetUsePerUserProfiles
+    get_use_per_user_profiles.errcheck = _errcheck_args_ret
+    return get_use_per_user_profiles
 
 
-def _wrap_wcsSetUsePerUserProfiles():
-    set_user_per_user_proto = WINFUNCTYPE(BOOL, LPWSTR, DWORD, BOOL)
+def _wrap_wcsSetUsePerUserProfiles() -> Callable[..., Any]:  # noqa: N802
+    set_use_per_user_proto = WINFUNCTYPE(BOOL, LPWSTR, DWORD, BOOL)
     set_use_per_user_paramflags = (
         (1, "pDeviceName"),
         (1, "dwDeviceClass"),
         (1, "pUsePerUserProfiles"),
     )
-    SetUsePerUserProfiles = set_user_per_user_proto(
+    set_use_per_user_profiles = set_use_per_user_proto(
         ("WcsSetUsePerUserProfiles", ctypes.windll.mscms),
         set_use_per_user_paramflags,
     )
-    SetUsePerUserProfiles.errcheck = _errcheck_simple_bool
-    return SetUsePerUserProfiles
+    set_use_per_user_profiles.errcheck = _errcheck_simple_bool
+    return set_use_per_user_profiles
 
 
 class WCS:
-    def __init__(self):
+    """Wrapper for WCS API calls."""
+
+    def __init__(self) -> None:
         self._wcsAssociateColorProfileWithDevice = (
             _wrap_wcsAssociateColorProfileWithDevice()
         )
@@ -320,68 +343,78 @@ class WCS:
         self._wcsGetUsePerUserProfiles = _wrap_wcsGetUsePerUserProfiles()
         self._wcsSetUsePerUserProfiles = _wrap_wcsSetUsePerUserProfiles()
 
-    def AssociateColorProfileWithDevice(
+    def AssociateColorProfileWithDevice(  # noqa: N802
         self, scope: WCS_PROF_SCOPE, profile_name: str, device_key: str
     ) -> None:
-        """Associates a specified WCS color profile with a specified device.
+        """Associate a specified WCS color profile with a specified device.
 
         This API does not support "advanced color" profiles for HDR monitors
 
         Note: this API makes the added profile also be the default one
 
         Args:
-            scope (WCS_PROF_SCOPE): specifies the scope of this profile management operation, which could be system-wide or for the current user
-            profile (str): file name of the profile to disassociate
-            device_key (str): device key of the device from which to disassociate the profile
+            scope (WCS_PROF_SCOPE): The scope of this profile management
+                operation, which could be system-wide or for the current user.
+            profile_name (str): File name of the profile to associate.
+            device_key (str): Device key of the device with which to
+                associate the profile.
 
         Raises:
-            OSError: in case of Win API errors
+            OSError: If a Win API error occurs.
         """
         self._wcsAssociateColorProfileWithDevice(scope, profile_name, device_key)
 
-    def DisassociateColorProfileFromDevice(
+    def DisassociateColorProfileFromDevice(  # noqa: N802
         self, scope: WCS_PROF_SCOPE, profile_name: str, device_key: str
     ) -> None:
-        """Disassociates a specified WCS color profile from a specified device on a computer.
+        """Disassociate a specified WCS color profile from a specified device.
 
         This API does not support "advanced color" profiles for HDR monitors.
 
-        Note: very unreliable due to quirks, the actual result should be double-checked with profile listing
+        Note: very unreliable due to quirks, the actual result should be
+        double-checked with profile listing
 
         Args:
-            scope (WCS_PROF_SCOPE): specifies the scope of this profile management operation, which could be system-wide or for the current user
-            profile_name (str): file name of the profile to disassociate
-            device_key (str): device key of the device from which to disassociate the profile
+            scope (WCS_PROF_SCOPE): The scope of this profile management
+                operation, which could be system-wide or for the current user.
+            profile_name (str): File name of the profile to disassociate.
+            device_key (str): Device key of the device from which to
+                disassociate the profile.
 
         Raises:
-            OSError: in case of Win API errors (aparts of the ones caught during handling its quirks)
+            OSError: If a Win API error occurs (apart from the ones caught
+                during handling its quirks).
         """
         try:
             self._wcsDisassociateColorProfileFromDevice(scope, profile_name, device_key)
         except OSError as e:
-            # quirks: very very quirky: either returns error with errno success or errno profile
-            # not associated with device. Why? Because Windows, that's why.
+            # quirks: very very quirky: either returns error with errno success
+            # or errno profile not associated with device. Why? Because Windows,
+            # that's why.
             if e.winerror not in (WIN_ERRNO_SUCCESS, WIN_ERRNO_PROFILE_NOT_ASSOCIATED):
                 raise
 
-    def EnumColorProfiles(
+    def EnumColorProfiles(  # noqa: N802
         self, scope: WCS_PROF_SCOPE, enum_record: ENUMTYPEW, prof_size: int
-    ) -> List[str]:
-        """Enumerates color profiles associated with any device, in the specified scope.
+    ) -> list[str]:
+        """Enumerate color profiles associated with any device, in the specified scope.
 
         This API does not support "advanced color" profiles for HDR monitors
 
         Args:
-            scope (WCS_PROF_SCOPE): specifies the scope of this profile management operation, which could be system-wide or for the current user
-            enum_record (ENUMTYPEW): structure specifying the enumeration criteria
-            prof_size (int): size, in bytes, of the buffer that is needed to enumerate color profiles
+            scope (WCS_PROF_SCOPE): The scope of this profile management
+                operation, which could be system-wide or for the current user.
+            enum_record (ENUMTYPEW): Structure specifying the enumeration
+                criteria.
+            prof_size (int): Size, in bytes, of the buffer that is needed to
+                enumerate color profiles.
 
         Raises:
-            ValueError: on parsing errors
-            OSError: in case of Win API errors
+            ValueError: On parsing errors.
+            OSError: If a Win API error occurs.
 
         Returns:
-            List[str]: array of profile names
+            list[str]: Array of profile names.
         """
         wchar_size = ctypes.sizeof(ctypes.c_wchar)
         char_count = max(1, (prof_size + wchar_size - 1) // wchar_size)
@@ -392,53 +425,58 @@ class WCS:
         prof_arr = wstring_at(profiles, char_count).strip("\x00").split("\x00")
         if len(prof_arr) != p_num:
             raise ValueError(
-                f"Parsing error: profile number mismatch: reported {p_num} != {len(prof_arr)} got"
+                "Parsing error: profile number mismatch: "
+                f"reported {p_num} != {len(prof_arr)} got"
             )
         return prof_arr
 
-    def EnumColorProfilesSize(
+    def EnumColorProfilesSize(  # noqa: N802
         self, scope: WCS_PROF_SCOPE, enum_record: ENUMTYPEW
     ) -> int:
-        """Returns the size, in bytes, of the buffer that is required by the EnumColorProfiles function
-        to enumerate color profiles.
+        """Get the size in bytes of the buffer needed to enumerate color profiles.
 
         This API does not support "advanced color" profiles for HDR monitors
 
         Args:
-            scope (WCS_PROF_SCOPE): specifies the scope of this profile management operation, which could be system-wide or for the current user
-            enum_record (ENUMTYPEW): structure specifying the enumeration criteria
+            scope (WCS_PROF_SCOPE): The scope of this profile management
+                operation, which could be system-wide or for the current user.
+            enum_record (ENUMTYPEW): Structure specifying the enumeration criteria.
 
         Raises:
-            OSError: in case of Win API errors
+            OSError: In case of Win API errors.
 
         Returns:
-            int: size, in bytes, of the buffer that is needed to enumerate color profiles
+            int: Size, in bytes, of the buffer that is needed to enumerate
+                color profiles.
         """
         return self._wcsEnumColorProfilesSize(scope, enum_record)
 
-    def GetCalibrationManagementState(self) -> bool:
-        """Determines whether system management of the display calibration state is enabled
+    def GetCalibrationManagementState(self) -> bool:  # noqa: N802
+        """Check if system management of the display calibration state is enabled.
 
         Raises:
-            OSError: in case of Win API errors
+            OSError: If a Win API error occurs.
 
         Returns:
-            bool: True if system management of the display calibration state is enabled; otherwise False
+            bool: True if system management of the display calibration state is
+                enabled; otherwise False.
         """
         return bool(self._wcsGetCalibrationManagementState())
 
-    def SetCalibrationManagementState(self, new_state: bool) -> None:
-        """Enables or disables system management of the display calibration state
+    def SetCalibrationManagementState(self, new_state: bool) -> None:  # noqa: N802
+        """Enable or disable system management of the display calibration state.
 
         Args:
-            new_state (bool): True to enable system management of the display calibration state. False to disable system management of the display calibration state
+            new_state (bool): True to enable system management of the display
+                calibration state. False to disable system management of the
+                display calibration state.
 
         Raises:
-            OSError: in case of Win API errors
+            OSError: If a Win API error occurs.
         """
         self._wcsSetCalibrationManagementState(new_state)
 
-    def GetDefaultColorProfile(
+    def GetDefaultColorProfile(  # noqa: N802
         self,
         scope: WCS_PROF_SCOPE,
         device_key: str,
@@ -447,23 +485,32 @@ class WCS:
         c_prof_subtype: COLORPROFILESUBTYPE = COLORPROFILESUBTYPE.CPST_NONE,
         profile_id: int = 0,
     ) -> str:
-        """Retrieves the default color profile for a device, or for a device-independent default if the device is not specified.
+        """Get the default color profile for a device.
 
-        This API does not support "advanced color" profiles for HDR monitors. Note: if HDR enabled on a device causes OSError
+        This API does not support "advanced color" profiles for HDR monitors.
+        Note: if HDR enabled on a device causes OSError
 
         Args:
-            scope (WCS_PROF_SCOPE): specifies the scope of this profile management operation, which could be system-wide or for the current user
-            device_key (str): device key of the device for which the default color profile is obtained. If None, a device-independent default profile is obtained
-            prof_size (int): size, in bytes, of the buffer that is sufficient to contain profile name
-            c_prof_type (COLORPROFILETYPE, optional): value specifying the color profile type. Defaults to COLORPROFILETYPE.CPT_ICC
-            c_prof_subtype (COLORPROFILESUBTYPE, optional): value specifying the color profile subtype. Defaults to COLORPROFILESUBTYPE.CPST_NONE
-            profile_id (int, optional): ID of the color space that the color profile represents. Defaults to 0
+            scope (WCS_PROF_SCOPE): The scope of this profile management
+                operation, which could be system-wide or for the current user.
+            device_key (str): Device key of the device for which the default
+                color profile is obtained. If None, a device-independent
+                default profile is obtained.
+            prof_size (int): Size, in bytes, of the buffer that is sufficient
+                to contain the profile name.
+            c_prof_type (COLORPROFILETYPE, optional): Value specifying the
+                color profile type. Defaults to COLORPROFILETYPE.CPT_ICC.
+            c_prof_subtype (COLORPROFILESUBTYPE, optional): Value specifying
+                the color profile subtype. Defaults to
+                COLORPROFILESUBTYPE.CPST_NONE.
+            profile_id (int, optional): ID of the color space that the color
+                profile represents. Defaults to 0.
 
         Raises:
-            OSError: in case of Win API errors
+            OSError: In case of Win API errors.
 
         Returns:
-            str: the name of the default color profile for a device
+            str: The name of the default color profile for a device.
         """
         wchar_size = ctypes.sizeof(ctypes.c_wchar)
         char_count = max(1, (prof_size + wchar_size - 1) // wchar_size)
@@ -473,7 +520,7 @@ class WCS:
         )
         return buf.value
 
-    def GetDefaultColorProfileSize(
+    def GetDefaultColorProfileSize(  # noqa: N802
         self,
         scope: WCS_PROF_SCOPE,
         device_key: str,
@@ -481,28 +528,36 @@ class WCS:
         c_prof_subtype: COLORPROFILESUBTYPE = COLORPROFILESUBTYPE.CPST_NONE,
         profile_id: int = 0,
     ) -> int:
-        """Returns the size, in bytes, of the default color profile name (including the NULL terminator), for a device.
+        """Get the size in bytes of the default color profile name for a device.
 
-        This API does not support "advanced color" profiles for HDR monitors. Note: if HDR enabled on a device returns 0
+        This API does not support "advanced color" profiles for HDR monitors.
+        Note: if HDR enabled on a device returns 0.
 
         Args:
-            scope (WCS_PROF_SCOPE): specifies the scope of this profile management operation, which could be system-wide or for the current user
-            device_key (str): device key of the device for which the default color profile is obtained. If None, a device-independent default profile is obtained
-            c_prof_type (COLORPROFILETYPE, optional): value specifying the color profile type. Defaults to COLORPROFILETYPE.CPT_ICC
-            c_prof_subtype (COLORPROFILESUBTYPE, optional): value specifying the color profile subtype. Defaults to COLORPROFILESUBTYPE.CPST_NONE
-            profile_id (int, optional): ID of the color space that the color profile represents. Defaults to 0
+            scope (WCS_PROF_SCOPE): The scope of this profile management
+                operation, which could be system-wide or for the current user.
+            device_key (str): Device key of the device for which the default
+                color profile is obtained. If None, a device-independent
+                default profile is obtained.
+            c_prof_type (COLORPROFILETYPE, optional): Value specifying the
+                color profile type. Defaults to COLORPROFILETYPE.CPT_ICC.
+            c_prof_subtype (COLORPROFILESUBTYPE, optional): Value specifying
+                the color profile subtype. Defaults to COLORPROFILESUBTYPE.CPST_NONE.
+            profile_id (int, optional): ID of the color space that the color
+                profile represents. Defaults to 0.
 
         Raises:
-            OSError: in case of Win API errors
+            OSError: If a Win API error occurs.
 
         Returns:
-            int: size, in bytes, of the buffer that is sufficient to contain profile name
+            int: size, in bytes, of the buffer that is sufficient to contain
+                profile name.
         """
         return self._wcsGetDefaultColorProfileSize(
             scope, device_key, c_prof_type, c_prof_subtype, profile_id
         )
 
-    def SetDefaultColorProfile(
+    def SetDefaultColorProfile(  # noqa: N802
         self,
         scope: WCS_PROF_SCOPE,
         device_key: str,
@@ -511,81 +566,96 @@ class WCS:
         c_prof_subtype: COLORPROFILESUBTYPE = COLORPROFILESUBTYPE.CPST_NONE,
         profile_id: int = 0,
     ) -> None:
-        """Sets the default color profile name for the specified profile type in the specified profile management scope.
+        """Set the default color profile for the specified device.
 
-        This API does not support "advanced color" profiles for HDR monitors
+        This API does not support "advanced color" profiles for HDR monitors.
 
         Args:
-            scope (WCS_PROF_SCOPE): specifies the scope of this profile management operation, which could be system-wide or for the current user
-            device_key (str): device key of the device for which the default color profile is to be set. If None, a device-independent default profile is set
-            profile_name (str): file name of the profile
-            c_prof_type (COLORPROFILETYPE, optional): value specifying the color profile type. Defaults to COLORPROFILETYPE.CPT_ICC
-            c_prof_subtype (COLORPROFILESUBTYPE, optional): value specifying the color profile subtype. Defaults to COLORPROFILESUBTYPE.CPST_NONE
-            profile_id (int, optional): ID of the color space that the color profile represents. Defaults to 0
+            scope (WCS_PROF_SCOPE): The scope of this profile management
+                operation, which could be system-wide or for the current user.
+            device_key (str): Device key of the device for which the default
+                color profile is to be set. If None, a device-independent
+                default profile is set.
+            profile_name (str): File name of the profile.
+            c_prof_type (COLORPROFILETYPE, optional): Value specifying the
+                color profile type. Defaults to COLORPROFILETYPE.CPT_ICC.
+            c_prof_subtype (COLORPROFILESUBTYPE, optional): Value specifying
+                the color profile subtype. Defaults to
+                COLORPROFILESUBTYPE.CPST_NONE.
+            profile_id (int, optional): ID of the color space that the color
+                profile represents. Defaults to 0.
 
         Raises:
-            OSError: in case of Win API errors
+            OSError: If a Win API error occurs.
         """
         self._wcsSetDefaultColorProfile(
             scope, device_key, c_prof_type, c_prof_subtype, profile_id, profile_name
         )
 
-    def GetUsePerUserProfiles(
+    def GetUsePerUserProfiles(  # noqa: N802
         self, device_key: str, device_class: dwDeviceClass = dwDeviceClass.CLASS_MONITOR
     ) -> bool:
-        """Determines whether the user chose to use a per-user profile association list for the specified device
+        """Determine if per-user profile association is enabled for the device.
 
         Args:
-            device_key (str): device key of the device
-            device_class (dwDeviceClass, optional): the class of the device. Defaults to dwDeviceClass.CLASS_MONITOR
+            device_key (str): Device key of the device.
+            device_class (dwDeviceClass, optional): The class of the device.
+                Defaults to dwDeviceClass.CLASS_MONITOR.
 
         Raises:
-            OSError: in case of Win API errors
+            OSError: If a Win API error occurs.
 
         Returns:
-            bool: True if the user chose to use a per-user profile association list for the specified device; otherwise False
+            bool: True if the user chose to use a per-user profile association
+                list for the specified device; otherwise False
         """
         return bool(self._wcsGetUsePerUserProfiles(device_key, device_class))
 
-    def SetUsePerUserProfiles(
+    def SetUsePerUserProfiles(  # noqa: N802
         self,
         device_key: str,
         new_state: bool,
         device_class: dwDeviceClass = dwDeviceClass.CLASS_MONITOR,
     ) -> None:
-        """Enables a user to specify whether or not to use a per-user profile association list for the specified device
+        """Enable or disable per-user profile association for the specified device.
 
         Args:
-            device_key (str): device key of the device
-            new_state (bool): True if the user wants to use a per-user profile association list for the specified device; otherwise False
-            device_class (dwDeviceClass, optional): the class of the device. Defaults to dwDeviceClass.CLASS_MONITOR
+            device_key (str): Device key of the device.
+            new_state (bool): True if the user wants to use a per-user profile
+                association list for the specified device; otherwise False.
+            device_class (dwDeviceClass, optional): The class of the device.
+                Defaults to dwDeviceClass.CLASS_MONITOR.
 
         Raises:
-            OSError: in case of Win API errors
+            OSError: If a Win API error occurs.
         """
         self._wcsSetUsePerUserProfiles(device_key, device_class, new_state)
 
-    def getDeviceColorProfileList(
+    def getDeviceColorProfileList(  # noqa: N802
         self,
         scope: WCS_PROF_SCOPE,
         device_key: str,
         device_class: dwDeviceClass = dwDeviceClass.CLASS_MONITOR,
-    ) -> List[str]:
-        """Higher abstraction level function to get color profile list for a device. Also dodges the issue
-        with serialization of some ctypes structures in multiprocess context
+    ) -> list[str]:
+        """Higher abstraction level function to get color profile list for a device.
+
+        Also dodges the issue with serialization of some ctypes structures in
+        multiprocess context.
 
         Args:
-            scope (WCS_PROF_SCOPE): specifies the scope of this profile management operation, which could be system-wide or for the current user
-            device_key (str): device key of the device
+            scope (WCS_PROF_SCOPE): The scope of this profile management
+                operation, which could be system-wide or for the current user.
+            device_key (str): Device key of the device.
+            device_class (dwDeviceClass, optional): The class of the device.
+                Defaults to dwDeviceClass.CLASS_MONITOR.
 
         Raises:
-            OSError: in case of Win API errors
-            ValueError: on parsing errors
+            OSError: If a Win API error occurs.
+            ValueError: If a parsing error occurs.
 
         Returns:
-            List[str]: array of color profile names
+            list[str]: array of color profile names
         """
         enum_record = ENUMTYPEW.create_monitor_profile_filter(device_key)
         size = self.EnumColorProfilesSize(scope, enum_record)
-        prof_list = self.EnumColorProfiles(scope, enum_record, size)
-        return prof_list
+        return self.EnumColorProfiles(scope, enum_record, size)
