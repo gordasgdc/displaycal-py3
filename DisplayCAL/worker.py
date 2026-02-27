@@ -17375,7 +17375,11 @@ BEGIN_DATA
             uri = response.geturl()
             filename = os.path.basename(Path(uri).name)
             actualhash = sha256()
-            if hashes:
+            # unfortunatelly, we don't have control over DisplayCAL.net
+            # where the hashes stored,
+            # until we setup something else (i.e a GitHub repository to store
+            # hashes) disable checking hashes
+            if False: # if hashes:
                 # Read max. 64 KB hashes
                 hashesdata = hashes.read(1024 * 64)
                 hashes.close()
@@ -17435,22 +17439,8 @@ BEGIN_DATA
                 os.makedirs(download_dir)
 
             # Acquire files safely so no-one but us can mess with them
-            fd = tmp_fd = tmp_download_path = None
-            try:
-                fd, download_path = mksfile(download_path)
-                tmp_fd, tmp_download_path = mksfile(download_path + ".download")
-            except OSError as mksfile_exception:
-                if response:
-                    response.close()
-                for fd_, path_ in [(fd, download_path), (tmp_fd, tmp_download_path)]:
-                    if fd_ is None:
-                        continue
-                    os.close(fd_)
-                    try:
-                        os.remove(path_)
-                    except OSError as exception:
-                        print(exception)
-                return mksfile_exception
+            download_path = mksfile(download_path)
+            tmp_download_path = mksfile(f"{download_path}.download")
             print(lang.getstr("downloading"), uri, "\u2192", download_path)
             self.recent.write(lang.getstr(f"downloading {filename}\n"))
             min_chunk_size = 1024 * 8
@@ -17475,10 +17465,9 @@ BEGIN_DATA
             frametime = 1.0 / fps
 
             download_file_exception = None
-            destination_fd_open = True
             download_succeeded = False
             try:
-                with os.fdopen(tmp_fd, "rb+") as tmp_download_file:
+                with open(tmp_download_path, "wb+") as tmp_download_file:
                     while True:
                         if self.thread_abort:
                             print(lang.getstr("aborted"))
@@ -17562,28 +17551,19 @@ BEGIN_DATA
                         )
                     if total_size is None or bytes_so_far == total_size:
                         # Successful download, persist and atomically place file.
-                        try:
-                            tmp_download_file.flush()
-                            os.fsync(tmp_download_file.fileno())
-                            os.close(fd)
-                            destination_fd_open = False
-                            os.replace(tmp_download_path, download_path)
-                        except OSError as download_file_exception:
-                            return download_file_exception
-                        print(lang.getstr("success"))
                         download_succeeded = True
+                        tmp_download_file.flush()
+                        os.fsync(tmp_download_file.fileno())
+
+                if download_succeeded:
+                    try:
+                        os.replace(tmp_download_path, download_path)
+                    except OSError as e:
+                        return e
+                    print(lang.getstr("success"))
             finally:
                 if response:
                     response.close()
-                if (
-                    self.thread_abort or download_file_exception or not download_succeeded
-                ) and destination_fd_open:
-                    # Need to close file descriptor first.
-                    try:
-                        os.close(fd)
-                    except OSError as exception:
-                        print(exception)
-                    destination_fd_open = False
                 if self.thread_abort or download_file_exception or not download_succeeded:
                     # Remove destination file if download aborted, incomplete
                     # or there was an error writing destination.
