@@ -283,6 +283,7 @@ codec_register_alias("cp65000", "utf_7")
 codec_register_alias("cp65001", "utf_8")
 codecs.register(lambda alias: _codecs.get(alias))
 
+
 if __name__ == "__main__":
     test = "test \u00e4\u00f6\u00fc\ufffe test"
     try:

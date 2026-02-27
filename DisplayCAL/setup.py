@@ -321,8 +321,10 @@ def create_app_symlinks(dist_dir: str, scripts: list[tuple[str, str]]) -> None:
                             tgt,
                         )
             elif entry == "Info.plist":
-                with codecs.open(
-                    os.path.join(dist_dir, maincontents_rel, entry), "r", "UTF-8"
+                with open(
+                    os.path.join(dist_dir, maincontents_rel, entry),
+                    "r",
+                    encoding="utf-8",
                 ) as info_in:
                     infoxml = info_in.read()
                 # CFBundleName / CFBundleDisplayName
@@ -343,8 +345,8 @@ def create_app_symlinks(dist_dir: str, scripts: list[tuple[str, str]]) -> None:
                     lambda match, script=script: match.group(1) + script,
                     infoxml,
                 )
-                with codecs.open(
-                    os.path.join(toolcontents, entry), "w", "UTF-8"
+                with open(
+                    os.path.join(toolcontents, entry), "w", encoding="utf-8"
                 ) as info_out:
                     info_out.write(infoxml)
             else:

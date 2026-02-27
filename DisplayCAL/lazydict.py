@@ -374,7 +374,7 @@ class LazyDict(dict):
             handle_error(UserWarning(f"Warning - file not found:\n\n{path}"), tb=False)
             return
         try:
-            with codecs.open(path, "r", self.encoding, self.errors) as f:
+            with open(path, "r", encoding=self.encoding, errors=self.errors) as f:
                 self.parse(f)
         except OSError as exception:
             if raise_exceptions:
