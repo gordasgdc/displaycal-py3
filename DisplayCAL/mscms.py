@@ -49,6 +49,7 @@ from typing import (
     Callable,
     Literal,
     TypeVar,
+    Union,
 )
 
 import psutil
@@ -138,7 +139,7 @@ class FailureResponseType(TypedDict):
     error: ErrorType
 
 
-ResponseType = SuccessResponseType | FailureResponseType
+ResponseType = Union[SuccessResponseType, FailureResponseType]
 
 
 class PendingType(TypedDict):
