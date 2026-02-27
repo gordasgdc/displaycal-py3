@@ -173,7 +173,7 @@ jobs:
 
     - name: Test with pytest
       run: |
-        python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html
+        python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html  --durations=50
 
     - name: Archive code coverage results
       uses: actions/upload-artifact@v4
@@ -245,7 +245,7 @@ jobs:
 
     - name: Test with pytest
       run: |
-        python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html
+        python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html  --durations=50
 
     - name: Archive code coverage results
       uses: actions/upload-artifact@v4
@@ -299,7 +299,7 @@ jobs:
 
     - name: Test with pytest
       run: |
-        python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html
+        python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html --durations=50
 
     - name: Archive code coverage results
       uses: actions/upload-artifact@v4
