@@ -627,25 +627,8 @@ def mkstemp_bypath(path: str, dirname: None | str = None, text: bool = False):
     return tempfile.mkstemp(ext, f"{fname}-", dirname, text)
 
 
-def _set_cloexec(fd):
-    """This is from Python2.7 version of tempfile."""
-    if sys.platform == "win32":
-        return
-
-    import fcntl as _fcntl
-
-    try:
-        flags = _fcntl.fcntl(fd, _fcntl.F_GETFD, 0)
-    except OSError:
-        pass
-    else:
-        # flags read successfully, modify
-        flags |= _fcntl.FD_CLOEXEC
-        _fcntl.fcntl(fd, _fcntl.F_SETFD, flags)
-
-
-def mksfile(filename: str) -> tuple[int, str]:
-    """Create a file safely and return (fd, abspath).
+def mksfile(filename: str) -> str:
+    """Create a file safely and return abspath.
 
     If filename already exists, add '(n)' as suffix before extension
     (will try up to os.TMP_MAX or 10000 for n).
@@ -658,22 +641,17 @@ def mksfile(filename: str) -> tuple[int, str]:
         OSError: If an OS error occurs during file creation.
 
     Returns:
-        tuple[int, str]: A tuple containing the file descriptor and the absolute
+        str: A tuple containing the file descriptor and the absolute
             path of the created file.
     """
     flags = tempfile._bin_openflags
     fname, ext = os.path.splitext(filename)
     for seq in range(tempfile.TMP_MAX):
         pth = filename if not seq else f"{fname}({seq:d}){ext}"
-        try:
-            fd = os.open(pth, flags, 0o600)
-            _set_cloexec(fd)
-            return fd, os.path.abspath(pth)
-        except OSError as e:
-            if e.errno == errno.EEXIST:
-                continue  # Try again
-            raise
-
+        # not as detailed as the previous implementation but it is dead simple.
+        if os.path.exists(pth):
+            continue
+        return os.path.abspath(pth)
     raise OSError(errno.EEXIST, "No usable temporary file name found")
 
 
