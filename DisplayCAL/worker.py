@@ -17272,7 +17272,6 @@ BEGIN_DATA
         Returns:
             str: The path to the downloaded file if successful.
             Exception: An Exception object if the download fails.
-
         """
         if TEST_BADSSL:
             uri = f"https://{TEST_BADSSL}.badssl.com/"

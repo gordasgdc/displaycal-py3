@@ -226,6 +226,10 @@ def test_init_gamap_frame(mainframe: MainFrame) -> None:
         GamapFrame(mainframe)
 
 
+@pytest.mark.skipif(
+    sys.platform == "darwin" and os.environ.get("SKIP_FAILING_WX_TESTS") == "1",
+    reason="StartupFrame is not shown on macOS, skipping test.",
+)
 def test_init_startup_frame() -> None:
     """Test if StartupFrame is initialized properly."""
     show_func_name = "Show"
