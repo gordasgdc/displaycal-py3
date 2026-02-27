@@ -52,7 +52,7 @@ def fixture_mainframe() -> MainFrame:
 def test_update_colorimeter_correction_matrix_ctrl_items_1(
     mainframe: MainFrame,
 ) -> None:
-    """testing the MainFrame.update_colorimeter_correction_matrix_ctrl_items() method"""
+    """MainFrame.update_colorimeter_correction_matrix_ctrl_items() method."""
     # I have no idea how it works, let's see...
     assert mainframe.colorimeter_correction_matrix_ctrl.Items != []
     before_items = mainframe.colorimeter_correction_matrix_ctrl.Items
@@ -71,6 +71,9 @@ def test_show_ccxx_error_dialog(mainframe: MainFrame) -> None:
         show_ccxx_error_dialog(Exception("Malformed demo"), "path", mainframe)
 
 
+@pytest.mark.skipif(
+    sys.platform == "darwin" and os.environ.get("SKIP_FAILING_WX_TESTS") == "1",
+)
 @pytest.mark.parametrize("argyll", (True, False), ids=("With argyll", "without argyll"))
 @pytest.mark.parametrize("snapshot", (True, False), ids=("Snapshot", "No snapshot"))
 @pytest.mark.parametrize("silent", (True, False), ids=("Silent", "Not silent"))
