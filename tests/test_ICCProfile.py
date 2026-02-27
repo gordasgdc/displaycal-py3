@@ -1,9 +1,16 @@
 """Tests for the DisplayCAL.icc_profile module."""
+
+# Standard library imports
 import binascii
 import datetime
 import sys
+from pathlib import Path
 from time import strftime
 
+# Third party imports
+import pytest
+
+# Local Imports
 from DisplayCAL import colormath
 from DisplayCAL.icc_profile import (
     CMMS,
@@ -852,16 +859,44 @@ def test_dict_type_to_json():
     assert d.to_json() == expected_result
 
 
+def test_dict_type_to_json_roundtrip_ascii_and_unicode():
+    """Ensure DictType JSON output round-trips cleanly."""
+    import json
+
+    d = DictType()
+    d.update({"CMF_product": "DisplayCAL", "©": "ok"})
+    parsed = json.loads(d.to_json())
+
+    assert parsed["CMF_product"] == "DisplayCAL"
+    assert parsed["©"] == "ok"
+
+
+def test_hexrepr_unknown_mapping_does_not_append_vendor_name():
+    """hexrepr should only append mapped names when available."""
+    result = hexrepr(b"ZZZZ", mapping=CMMS)
+    assert result == "0x5A5A5A5A 'ZZZZ'"
+
+
+def test_text_tag_invalid_utf8_uses_replacement_character():
+    """Text.__str__ should decode invalid UTF-8 with replacement."""
+    t = Text(b"\xff")
+    assert str(t) == "\ufffd"
+
+
 def test_issue_185_parsing_of_ref_srgb_profile_from_argyllcms(setup_argyll):
     """Testing for issue #185, opening sRGB.icm from ArgyllCMS raises TypeError."""
     xicclu_path = which("xicclu")
     srgb_profile_path = None
     if xicclu_path and xicclu_path.startswith("/usr/bin"):
         # linux, system installed ArgyllCMS
-        srgb_profile_path = "/usr/share/color/argyll/ref/sRGB.icm"
+        srgb_profile_path = Path("/usr/share/color/argyll/ref/sRGB.icm")
     else:
         argyll = setup_argyll
         srgb_profile_path = argyll / ".." / "ref" / "sRGB.icm"
+
+    if not srgb_profile_path.exists():
+        pytest.skip(f"sRGB.icm not found: {srgb_profile_path}")
+
     icc_profile = ICCProfile(srgb_profile_path)
     # the following should not raise an error
     _ = icc_profile.get_info()

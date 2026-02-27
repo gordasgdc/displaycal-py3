@@ -275,6 +275,7 @@ def test_color_space_to_vrml_generate_vrml(
     vrml_filename,
     get_cgats_data,
     data_files,
+    setup_argyll,
 ):
     """ColorSpaceToVRML.generate_vrml() returns a VRML string."""
     vrml_file_path = data_files[vrml_filename]
