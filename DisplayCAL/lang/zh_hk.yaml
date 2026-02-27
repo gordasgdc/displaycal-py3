@@ -1556,6 +1556,10 @@
 
 "download.fail.wrong_size": |-
   下載失敗: 檔案大小並非為預期的 %s 位元組 (已收到 %s 位元組).
+"download.retrying": |-
+  正在重試下載（%i/%i），%.1f 秒後...
+"archive.extract.fail.delete": |-
+  無法解壓封存檔，正在刪除檔案：%s
 
 "download_install": |-
   下載及安裝

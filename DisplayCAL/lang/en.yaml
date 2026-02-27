@@ -1037,6 +1037,10 @@
   Download failed: %s returned an empty document.
 "download.fail.wrong_size": |-
   Download failed: The file does not have the expected size of %s bytes (received %s bytes).
+"download.retrying": |-
+  Retrying download (%i/%i) in %.1f s...
+"archive.extract.fail.delete": |-
+  Failed to extract archive, deleting file: %s
 "download_install": |-
   Download & install
 "downloading": |-

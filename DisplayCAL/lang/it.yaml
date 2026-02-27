@@ -1032,6 +1032,10 @@
   Download non riuscito: %s ha restituito un documento vuoto.
 "download.fail.wrong_size": |-
   Download non riuscito: il file non ha la dimensione attesa di %s byte (ricevuti %s byte).
+"download.retrying": |-
+  Nuovo tentativo di download (%i/%i) tra %.1f s...
+"archive.extract.fail.delete": |-
+  Impossibile estrarre l’archivio, eliminazione del file: %s
 "download_install": |-
   Scarica e installa
 "downloading": |-

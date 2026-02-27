@@ -1547,6 +1547,10 @@
 
 "download.fail.wrong_size": |-
   Ошибка загрузки: Файл не имеет ожидаемого размера %s bytes (отримано %s bytes).
+"download.retrying": |-
+  Повторная попытка загрузки (%i/%i) через %.1f с...
+"archive.extract.fail.delete": |-
+  Не удалось распаковать архив, удаление файла: %s
 
 "download_install": |-
   Загрузите и установите

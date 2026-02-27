@@ -1550,6 +1550,10 @@
 
 "download.fail.wrong_size": |-
   下载失败: 文件没有预期大小的 %s 字节（收到 %s 字节）。
+"download.retrying": |-
+  正在重试下载（%i/%i），%.1f 秒后...
+"archive.extract.fail.delete": |-
+  无法解压归档，正在删除文件：%s
 
 "download_install": |-
   下载 & 安装

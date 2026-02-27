@@ -135,7 +135,7 @@ Windows follow these steps:
    ```shell
    pip install -r requirements.txt -r requirements-dev.txt
    python -m build
-   pip install dist/DisplayCAL-*.whl
+   for /r dist %f in (DisplayCAL-*.whl) do pip install "%f"
    ```
 
 5- Run DisplayCAL:
@@ -156,7 +156,7 @@ Windows follow these steps:
 
    ```shell
    python -m build
-   pip install dist/DisplayCAL-*.whl
+   for /r dist %f in (DisplayCAL-*.whl) do pip install "%f"
    ```
 
 Build The Installer
