@@ -28,7 +28,7 @@ from socket import (
     socket,
     timeout,
 )
-from socketserver import TCPServer
+from socketserver import TCPServer, ThreadingMixIn
 from time import sleep
 from typing import TYPE_CHECKING, Any, Callable, TextIO
 
@@ -929,7 +929,7 @@ class ResolveCMPatternGeneratorServer(GenTCPSockPatternGeneratorServer):
         self.conn.sendall(struct.pack(">I", len(xml)) + xml.encode("utf-8"))
 
 
-class WebWinHTTPPatternGeneratorServer(TCPServer):
+class WebWinHTTPPatternGeneratorServer(ThreadingMixIn, TCPServer):
     """WebWin pattern generator server using HTTP REST interface.
 
     Args:
@@ -939,11 +939,18 @@ class WebWinHTTPPatternGeneratorServer(TCPServer):
     """
 
     def __init__(self, port: int, logfile: None | TextIO = None) -> None:
+        # Handle each HTTP client request in its own thread so multiple
+        # remote browser devices can stay connected simultaneously.
+        self.daemon_threads = True
+        self.block_on_close = False
         self.port = port
         TCPServer.__init__(self, ("", port), webwin.WebWinHTTPRequestHandler)
         self.timeout = 1
         self.patterngenerator = self
         self._listening = threading.Event()
+        self._pattern_lock = threading.Lock()
+        self._pattern_changed = threading.Condition(self._pattern_lock)
+        self._pattern_seq = 0
         self.logfile = logfile
         self.pattern = "#808080|#808080|0|0|1|1"
 
@@ -986,6 +993,9 @@ class WebWinHTTPPatternGeneratorServer(TCPServer):
             self._listening.set()
             return
         self._listening.clear()
+        with self._pattern_changed:
+            # Wake any long-poll requests so they can terminate quickly.
+            self._pattern_changed.notify_all()
         if hasattr(self, "conn"):
             self.shutdown_request(self.conn)
             del self.conn
@@ -1019,12 +1029,37 @@ class WebWinHTTPPatternGeneratorServer(TCPServer):
             w (float, optional): Width of the rectangle. Defaults to 1.
             h (float, optional): Height of the rectangle. Defaults to 1.
         """
+        # Convert normalized RGB values to 8-bit CSS hex colors.
         pattern = [
-            "#{:02d}{:02d}{:02d}".format(*tuple(round(v * 255) for v in rgb)),
-            "#{:02d}{:02d}{:02d}".format(*tuple(round(v * 255) for v in bgrgb)),
+            "#{:02x}{:02x}{:02x}".format(
+                *tuple(max(0, min(255, round(v * 255))) for v in rgb)
+            ),
+            "#{:02x}{:02x}{:02x}".format(
+                *tuple(max(0, min(255, round(v * 255))) for v in bgrgb)
+            ),
             f"{x:.4f}|{y:.4f}|{w:.4f}|{h:.4f}",
         ]
-        self.pattern = "|".join(pattern)
+        with self._pattern_changed:
+            self.pattern = "|".join(pattern)
+            self._pattern_seq += 1
+            self._pattern_changed.notify_all()
+
+    def wait_for_pattern_change(self, curpat: str, timeout: float = 25.0) -> str:
+        """Return current pattern, waiting until it changes or times out."""
+        with self._pattern_changed:
+            current = self.pattern
+            start_seq = self._pattern_seq
+            if self._listening.is_set() and current == curpat:
+                self._pattern_changed.wait_for(
+                    lambda: (
+                        not self._listening.is_set()
+                        or self._pattern_seq != start_seq
+                        or self.pattern != curpat
+                    ),
+                    timeout=timeout,
+                )
+                current = self.pattern
+            return current
 
     def serve_forever(self, poll_interval: float = 0.5) -> None:
         """Handle one request at a time until shutdown.
