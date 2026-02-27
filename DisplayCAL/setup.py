@@ -361,7 +361,7 @@ def get_data(
     key: str,
     pkgname: None | str = None,
     subkey: None | str = None,
-    excludes: None | list[str] = None
+    excludes: None | list[str] = None,
 ) -> list[tuple[str, list[str]]]:
     """Return configured data files.
 
@@ -1034,7 +1034,9 @@ def setup() -> None:
         # Modern py2app build flow errors out when install_requires is present.
         # Keep runtime metadata for normal installs, but skip it for app/exe bundling.
         if not do_py2app and not do_py2exe:
-            install_requires = [req.replace("(", "").replace(")", "") for req in requires]
+            install_requires = [
+                req.replace("(", "").replace(")", "") for req in requires
+            ]
             attrs["install_requires"] = install_requires
         attrs["zip_safe"] = False
     else:
@@ -1091,9 +1093,7 @@ def setup() -> None:
         py2app_cls._copy_package_data = py2app_cls.copy_package_data
 
         def copy_package_data(
-            self: py2app_cls,
-            package: Package,
-            target_dir: str
+            self: py2app_cls, package: Package, target_dir: str
         ) -> None:
             """Override copy_package_data to skip package data from other packages.
 

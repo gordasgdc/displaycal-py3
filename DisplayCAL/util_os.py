@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
     if sys.version_info >= (3, 11):
         from typing import Self
     else:

@@ -119,6 +119,7 @@ if TYPE_CHECKING:
     from typing import BinaryIO, TextIO
 
     from DisplayCAL.worker import Worker, Xicclu  # noqa: TC004
+
     if sys.version_info >= (3, 11):
         from typing import Self
     else:

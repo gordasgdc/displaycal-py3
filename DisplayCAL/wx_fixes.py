@@ -98,10 +98,8 @@ if "phoenix" in wx.PlatformInfo:
     wx.BitmapFromIcon = BitmapFromIcon
     wx.CursorFromImage = wx.Cursor
     wx.EmptyBitmap = wx.Bitmap
-    wx.EmptyBitmapRGBA = (
-        lambda width, height, red=0, green=0, blue=0, alpha=0: wx.Bitmap.FromRGBA(
-            width, height, red, green, blue, alpha
-        )
+    wx.EmptyBitmapRGBA = lambda width, height, red=0, green=0, blue=0, alpha=0: (
+        wx.Bitmap.FromRGBA(width, height, red, green, blue, alpha)
     )
     wx.EmptyIcon = wx.Icon
     wx.IconFromBitmap = wx.Icon
@@ -152,8 +150,8 @@ if "phoenix" in wx.PlatformInfo:
     wx.EVT_TASKBAR_RIGHT_DCLICK = wx.adv.EVT_TASKBAR_RIGHT_DCLICK
 
     # Removed items
-    wx.IconBundle.AddIconFromFile = (
-        lambda file, type_=wx.BITMAP_TYPE_ANY: wx.IconBundle.AddIcon(file, type_)
+    wx.IconBundle.AddIconFromFile = lambda file, type_=wx.BITMAP_TYPE_ANY: (
+        wx.IconBundle.AddIcon(file, type_)
     )
 
     def ContainsRect(self, *args):
@@ -1953,8 +1951,9 @@ class TempXmlResource:
                 for tag in ("border", "hgap", "vgap"):
                     xml = re.sub(
                         rf"<{tag}>(\d+)</{tag}>",
-                        lambda match,
-                        tag=tag: f"<{tag}>{round(int(match.group(1)) * scale):d}</{tag}>",  # noqa: E501
+                        lambda match, tag=tag: (
+                            f"<{tag}>{round(int(match.group(1)) * scale):d}</{tag}>"
+                        ),
                         xml,
                     )
                 for tag in ("size",):

@@ -75,8 +75,8 @@ except ImportError:
     real_display_size_mm = None
 
 # Use non-native mini frames on all platforms
-aui.framemanager.AuiManager_UseNativeMiniframes = (
-    lambda manager: (manager.GetAGWFlags() & aui.AUI_MGR_USE_NATIVE_MINIFRAMES)
+aui.framemanager.AuiManager_UseNativeMiniframes = lambda manager: (
+    (manager.GetAGWFlags() & aui.AUI_MGR_USE_NATIVE_MINIFRAMES)
     == aui.AUI_MGR_USE_NATIVE_MINIFRAMES
 )
 

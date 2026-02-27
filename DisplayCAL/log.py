@@ -44,7 +44,7 @@ def showwarning(
     filename: str,
     lineno: int,
     file: None | TextIO = None,
-    line: str = ""
+    line: str = "",
 ) -> None:
     # Adapted from _showwarning in Python2.7/lib/logging/__init__.py
     """Implementation of `showwarnings` which redirects to logging.
@@ -249,7 +249,7 @@ class LogFile:
         filename: str,
         logdir: str,
         when: str = "never",
-        backup_count: int = 0
+        backup_count: int = 0,
     ) -> None:
         self.filename = filename
         self._logger = get_file_logger(
@@ -492,10 +492,7 @@ def update_filename_with_lockfile(
         try:
             logstat = os.stat(logfile)
         except Exception as exception:
-            print(
-                    f"Warning - os.stat('{logfile}') failed: "
-                    f"{exception}"
-                )
+            print(f"Warning - os.stat('{logfile}') failed: {exception}")
         else:
             mtimes[logstat.st_mtime] = filename
     if mtimes:
@@ -557,6 +554,7 @@ def rotate_log_files(backup_count: int, logdir: str, logfile: str) -> None:
                 f"Warning - logfile backup '{logbackup}' "
                 f"could not be removed during rollover: {exception}"
             )
+
 
 def get_log_mtime(
     logstat: os.stat_result,
@@ -622,12 +620,13 @@ def validate_and_rename_logfile(logfile: str, logbackup: str) -> None:
         # Adapted from Python 2.6's
         # logging.handlers.TimedRotatingFileHandler.getFilesToDelete
 
+
 def setup_logging(
     logdir: str,
     name: str = APPNAME,
     ext: str = ".py",
     backup_count: int = 5,
-    confighome: None | str = None
+    confighome: None | str = None,
 ) -> None:
     """Setup the logging facility.
 

@@ -18,6 +18,7 @@ from DisplayCAL.util_str import safe_str
 
 if TYPE_CHECKING:
     from types import TracebackType
+
     if sys.version_info >= (3, 11):
         from typing import Self
     else:

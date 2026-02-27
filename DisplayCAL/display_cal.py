@@ -344,7 +344,9 @@ def verbose_print(*args, **kwargs) -> None:
         print(*args, **kwargs)
 
 
-def set_platebutton_bitmaps(button: PlateButton, icon_name: str, size: int = 16) -> None:
+def set_platebutton_bitmaps(
+    button: PlateButton, icon_name: str, size: int = 16
+) -> None:
     """Set normal/hover/disabled bitmaps with crash-safe hover color lookup."""
     hover_suffix = ""
     if not SAFE_WX_UI:
@@ -729,7 +731,10 @@ def app_update_confirm(
                         # Keep x86_64 as fallback on Intel and unknown machine ids.
                         suffix = "_osx10.6_x86_64_bin.tgz"
                 # Linux
-                elif machine in ("x86_64", "amd64") or platform.architecture()[0] == "64bit":
+                elif (
+                    machine in ("x86_64", "amd64")
+                    or platform.architecture()[0] == "64bit"
+                ):
                     # Assume x86_64
                     suffix = "_linux_x86_64_bin.tgz"
                 else:
@@ -3683,9 +3688,11 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         # frame insertion
         self.ffp_insertion.Bind(
             wx.EVT_CHECKBOX,
-            lambda event: setcfg("patterngenerator.ffp_insertion", event.GetInt())
-            or self.update_ffp_insertion_ctrl()
-            or self.update_estimated_measurement_times(),
+            lambda event: (
+                setcfg("patterngenerator.ffp_insertion", event.GetInt())
+                or self.update_ffp_insertion_ctrl()
+                or self.update_estimated_measurement_times()
+            ),
         )
         min_val, max_val = config.VALID_RANGES[
             "patterngenerator.ffp_insertion.interval"
@@ -3693,10 +3700,10 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self.ffp_insertion_interval.SetRange(min_val, max_val)
         self.ffp_insertion_interval.Bind(
             floatspin.EVT_FLOATSPIN,
-            lambda event: setcfg(
-                "patterngenerator.ffp_insertion.interval", event.GetValue()
-            )
-            or self.update_estimated_measurement_times(),
+            lambda event: (
+                setcfg("patterngenerator.ffp_insertion.interval", event.GetValue())
+                or self.update_estimated_measurement_times()
+            ),
         )
         min_val, max_val = config.VALID_RANGES[
             "patterngenerator.ffp_insertion.duration"
@@ -3704,10 +3711,10 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self.ffp_insertion_duration.SetRange(min_val, max_val)
         self.ffp_insertion_duration.Bind(
             floatspin.EVT_FLOATSPIN,
-            lambda event: setcfg(
-                "patterngenerator.ffp_insertion.duration", event.GetValue()
-            )
-            or self.update_estimated_measurement_times(),
+            lambda event: (
+                setcfg("patterngenerator.ffp_insertion.duration", event.GetValue())
+                or self.update_estimated_measurement_times()
+            ),
         )
         self.ffp_insertion_level.Bind(
             wx.EVT_SPINCTRL,
@@ -10923,9 +10930,8 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     # can establish a fresh connection for each run.
                     patterngenerator.disconnect_client()
                     self.worker.patterngenerators.pop(name)
-                elif (
-                    display_name == "Web @ localhost"
-                    and isinstance(patterngenerator, WebWinHTTPPatternGeneratorServer)
+                elif display_name == "Web @ localhost" and isinstance(
+                    patterngenerator, WebWinHTTPPatternGeneratorServer
                 ):
                     # Keep WebWin server running and reusable between setup/test
                     # and interactive adjustment steps to avoid reconnect churn.
@@ -12031,7 +12037,9 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         setcfg("last_specplot_path", path)
         cmd = get_argyll_util("specplot")
         if not cmd:
-            show_result_dialog(Error(lang.getstr("argyll.util.not_found", "specplot")), self)
+            show_result_dialog(
+                Error(lang.getstr("argyll.util.not_found", "specplot")), self
+            )
             return
         args = ["-v"]
         if getcfg("extra_args.specplot").strip():

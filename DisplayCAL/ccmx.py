@@ -4,7 +4,6 @@ It parses the input file, extracts relevant data, and generates CCMX files in
 the specified format for use with color calibration tools.
 """
 
-import codecs
 import json
 import os
 import sys
@@ -49,7 +48,7 @@ def convert_devicecorrections_to_ccmx(path: str, target_dir: str) -> tuple[int, 
         tuple[int, int]: A tuple containing the number of imported and skipped
             entries.
     """
-    with open(path, "r", "utf8") as devcorrections_file:
+    with open(path, "utf8") as devcorrections_file:
         lines = devcorrections_file.read().strip().splitlines()
     # Convert to JSON
     # The DeviceCorrections.txt format is as follows, so a conversion is pretty
@@ -113,7 +112,9 @@ def convert_devicecorrections_to_ccmx(path: str, target_dir: str) -> tuple[int, 
             skipped += 1
             continue
         imported += 1
-        with open(os.path.join(target_dir, f"{name}.ccmx"), "w", encoding="utf8") as ccmx:
+        with open(
+            os.path.join(target_dir, f"{name}.ccmx"), "w", encoding="utf8"
+        ) as ccmx:
             ccmx.write(CCMX_TEMPLATE % values)
     return imported, skipped
 

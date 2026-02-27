@@ -2672,12 +2672,14 @@ class BaseFrame(wx.Frame):
                 child.Bind(
                     wx.EVT_SET_FOCUS,
                     lambda event: (
-                        event.EventObject.AcceptsFocus()
-                        and event.EventObject.Navigate(
-                            int(not wx.GetKeyState(wx.WXK_SHIFT))
+                        (
+                            event.EventObject.AcceptsFocus()
+                            and event.EventObject.Navigate(
+                                int(not wx.GetKeyState(wx.WXK_SHIFT))
+                            )
                         )
-                    )
-                    or event.Skip(),
+                        or event.Skip()
+                    ),
                 )
 
     def getcfg(self, name, fallback=True, raw=False, cfg=config.CFG):
@@ -3131,7 +3133,9 @@ class HtmlWindow(wx.html.HtmlWindow):
         bgcolor, text, linkcolor, vlinkcolor = get_html_colors()
         try:
             bgcolor_html = f"#{int(bgcolor.Red()):02x}{int(bgcolor.Green()):02x}{int(bgcolor.Blue()):02x}"
-            text_html = f"#{int(text.Red()):02x}{int(text.Green()):02x}{int(text.Blue()):02x}"
+            text_html = (
+                f"#{int(text.Red()):02x}{int(text.Green()):02x}{int(text.Blue()):02x}"
+            )
             link_html = f"#{int(linkcolor.Red()):02x}{int(linkcolor.Green()):02x}{int(linkcolor.Blue()):02x}"
             vlink_html = f"#{int(vlinkcolor.Red()):02x}{int(vlinkcolor.Green()):02x}{int(vlinkcolor.Blue()):02x}"
         except Exception:
@@ -7604,9 +7608,11 @@ class ProgressDialog(wx.Dialog):
         if getcfg("measurement.play_sound"):
             wx.CallLater(
                 50,
-                lambda: self
-                and self.IsShown()
-                and self.sound.safe_fade(self.sound_get_delay(), True),
+                lambda: (
+                    self
+                    and self.IsShown()
+                    and self.sound.safe_fade(self.sound_get_delay(), True)
+                ),
             )
 
     def anim_fadeout(self):
@@ -7862,9 +7868,11 @@ class ProgressDialog(wx.Dialog):
                 self.anim_fadeout()
                 wx.CallLater(
                     delay,
-                    lambda: self
-                    and self.progress_type == progress_type
-                    and self.anim_fadein(),
+                    lambda: (
+                        self
+                        and self.progress_type == progress_type
+                        and self.anim_fadein()
+                    ),
                 )
             if hasattr(self, "sound"):
                 self.sound_fadeout()
@@ -7872,9 +7880,11 @@ class ProgressDialog(wx.Dialog):
                     self.set_sound(progress_type)
                     wx.CallLater(
                         delay,
-                        lambda: self
-                        and self.progress_type == progress_type
-                        and self.sound_fadein(),
+                        lambda: (
+                            self
+                            and self.progress_type == progress_type
+                            and self.sound_fadein()
+                        ),
                     )
             self.progress_type = progress_type
 

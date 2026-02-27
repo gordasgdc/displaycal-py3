@@ -130,6 +130,7 @@ if sys.platform == "win32":
             EXEDIR = os.path.dirname(EXE)
 else:
     SysTrayIcon = object  # type: ignore[misc]
+
     def calibration_management_isenabled() -> bool:
         """Stub for non-Windows platforms."""
         return False
@@ -1418,18 +1419,14 @@ class PLFrame(BaseFrame):
                 return "forbidden"
             if data[-1] == "display-changed":
                 if self.pl.lock.locked():
-                    print(
-                        "PLFrame.process_data: Waiting to acquire lock..."
-                    )
+                    print("PLFrame.process_data: Waiting to acquire lock...")
                 with self.pl.lock:
                     print("PLFrame.process_data: Acquired lock")
                     if self.pl._has_display_changed:
                         # Normally calibration loading is disabled while
                         # DisplayCAL is running. Override this when the
                         # display has changed
-                        self.pl._manual_restore = (
-                            getcfg("profile.load_on_login") and 2
-                        )
+                        self.pl._manual_restore = getcfg("profile.load_on_login") and 2
                     print("PLFrame.process_data: Releasing lock")
             elif data[0] == "reset-vcgt":
                 self.pl._set_reset_gamma_ramps(None, len(data))
@@ -1439,11 +1436,7 @@ class PLFrame(BaseFrame):
         if data[0] == "notify" and (
             len(data) == 2
             or (len(data) == 3 and data[2] in ("silent", "sticky"))
-            or (
-                len(data) == 4
-                and "silent" in data[2:]
-                and "sticky" in data[2:]
-            )
+            or (len(data) == 4 and "silent" in data[2:] and "sticky" in data[2:])
         ):
             self.pl.notify(
                 [data[1]],
@@ -1473,12 +1466,8 @@ class TaskBarIcon(SysTrayIcon):
         self.balloon_text = None
         self.flags = 0
         self.set_icons()
-        self._active_icon_reset = config.get_bitmap_as_icon(
-            16, "apply-profiles-reset"
-        )
-        self._error_icon = config.get_bitmap_as_icon(
-            16, "apply-profiles-error"
-        )
+        self._active_icon_reset = config.get_bitmap_as_icon(16, "apply-profiles-reset")
+        self._error_icon = config.get_bitmap_as_icon(16, "apply-profiles-error")
         self._animate = False
         self.set_visual_state(True)
         self.Bind(wx.EVT_TASKBAR_LEFT_UP, self.on_left_up)
@@ -1514,24 +1503,16 @@ class TaskBarIcon(SysTrayIcon):
         # Popup menu appears on right-click
         menu = Menu()
 
-        if self.pl._is_displaycal_running() or self.pl._is_other_running(
-            False
-        ):
+        if self.pl._is_displaycal_running() or self.pl._is_other_running(False):
             restore_auto = restore_manual = reset = None
         else:
             restore_manual = self.pl._set_manual_restore
-            if (
-                "--force" in sys.argv[1:]
-                or calibration_management_isenabled()
-            ):
+            if "--force" in sys.argv[1:] or calibration_management_isenabled():
                 restore_auto = None
             else:
                 restore_auto = self.set_auto_restore
             reset = self.pl._set_reset_gamma_ramps
-        if (
-            "--force" not in sys.argv[1:]
-            and calibration_management_isenabled()
-        ):
+        if "--force" not in sys.argv[1:] and calibration_management_isenabled():
             restore_auto_kind = apply_kind = wx.ITEM_NORMAL
         else:
             if config.getcfg("profile.load_on_login"):
@@ -1629,9 +1610,7 @@ class TaskBarIcon(SysTrayIcon):
                 )
             )
         menu_items.append(("-", None, False, None, None))
-        menu_items.append(
-            ("menuitem.quit", self.pl.exit, wx.ITEM_NORMAL, None, None)
-        )
+        menu_items.append(("menuitem.quit", self.pl.exit, wx.ITEM_NORMAL, None, None))
         for label, method, kind, option, oxform in menu_items:
             if label == "-":
                 menu.AppendSeparator()
@@ -1663,10 +1642,7 @@ class TaskBarIcon(SysTrayIcon):
                     menu.Bind(wx.EVT_MENU, method, id=item.Id)
                 menu.AppendItem(item)
                 if kind != wx.ITEM_NORMAL:
-                    if (
-                        option == "profile.load_on_login"
-                        and "--force" in sys.argv[1:]
-                    ):
+                    if option == "profile.load_on_login" and "--force" in sys.argv[1:]:
                         item.Check(True)
                     else:
                         if option == "reset_gamma_ramps":
@@ -1716,8 +1692,9 @@ class TaskBarIcon(SysTrayIcon):
         if self._icon_index > 0:
             wx.CallLater(
                 int(200 / len(self._active_icons)),
-                lambda enumerate_windows_and_processes, idle: self
-                and self.animate(enumerate_windows_and_processes, idle),
+                lambda enumerate_windows_and_processes, idle: (
+                    self and self.animate(enumerate_windows_and_processes, idle)
+                ),
                 enumerate_windows_and_processes,
                 idle,
             )
@@ -1785,9 +1762,7 @@ class TaskBarIcon(SysTrayIcon):
             # Make sure the displayed info is up-to-date
             locked = self.pl.lock.locked()
             if locked:
-                print(
-                    "TaskBarIcon.on_left_down: Waiting to acquire lock..."
-                )
+                print("TaskBarIcon.on_left_down: Waiting to acquire lock...")
             with self.pl.lock:
                 if locked:
                     print("TaskBarIcon.on_left_down: Acquired lock")
@@ -1797,17 +1772,13 @@ class TaskBarIcon(SysTrayIcon):
             time.sleep(0.11)
             locked = self.pl.lock.locked()
             if locked:
-                print(
-                    "TaskBarIcon.on_left_down: Waiting to acquire lock..."
-                )
+                print("TaskBarIcon.on_left_down: Waiting to acquire lock...")
             with self.pl.lock:
                 if locked:
                     print("TaskBarIcon.on_left_down: Acquired lock")
                 if locked:
                     print("TaskBarIcon.on_left_down: Releasing lock")
-            self._show_notification_later = wx.CallLater(
-                40, self.show_notification
-            )
+            self._show_notification_later = wx.CallLater(40, self.show_notification)
         else:
             self.show_notification(toggle=True)
 
@@ -1820,10 +1791,7 @@ class TaskBarIcon(SysTrayIcon):
         self._dclick = True
         if self.pl._is_other_running(False):
             return
-        if (
-            self._show_notification_later
-            and self._show_notification_later.IsRunning()
-        ):
+        if self._show_notification_later and self._show_notification_later.IsRunning():
             self._show_notification_later.Stop()
         locked = self.pl.lock.locked()
         if locked:
@@ -1937,9 +1905,7 @@ class TaskBarIcon(SysTrayIcon):
             event (wx.Event): The event that triggered this method.
         """
         print("Menu command: Set exceptions")
-        dlg = ProfileLoaderExceptionsDialog(
-            self.pl._exceptions, self.pl._known_apps
-        )
+        dlg = ProfileLoaderExceptionsDialog(self.pl._exceptions, self.pl._known_apps)
         result = dlg.ShowModal()
         if result == wx.ID_OK:
             exceptions = []
@@ -1968,9 +1934,7 @@ class TaskBarIcon(SysTrayIcon):
         bitmap = config.get_icon(16, "apply-profiles-tray")
         image = bitmap.ConvertToImage()
         # Use Rec. 709 luma coefficients to convert to grayscale
-        bitmap = image.ConvertToGreyscale(
-            0.2126, 0.7152, 0.0722
-        ).ConvertToBitmap()
+        bitmap = image.ConvertToGreyscale(0.2126, 0.7152, 0.0722).ConvertToBitmap()
         icon = wx.IconFromBitmap(bitmap)
         self._active_icons = []
         self._icon_index = 0
@@ -1984,9 +1948,7 @@ class TaskBarIcon(SysTrayIcon):
         for i in range(numframes):
             if i:
                 rad = i / float(numframes)
-                bitmap = config.get_icon(
-                    16, f"apply-profiles-tray-{360 * rad:0.0f}"
-                )
+                bitmap = config.get_icon(16, f"apply-profiles-tray-{360 * rad:0.0f}")
                 image = bitmap.ConvertToImage()
                 image.RotateHue(-rad)
             self._active_icon = wx.IconFromBitmap(image.ConvertToBitmap())
@@ -2063,22 +2025,14 @@ class TaskBarIcon(SysTrayIcon):
             text = self.balloon_text
             flags = self.flags or flags
         if not text:
-            if (
-                "--force" not in sys.argv[1:]
-                and calibration_management_isenabled()
-            ):
+            if "--force" not in sys.argv[1:] and calibration_management_isenabled():
                 text = lang.getstr("calibration.load.handled_by_os") + "\n"
             else:
                 text = ""
             if self.pl._component_name:
-                text += (
-                    lang.getstr("app.detected", self.pl._component_name)
-                    + "\n"
-                )
+                text += lang.getstr("app.detected", self.pl._component_name) + "\n"
             text += lang.getstr("profile_loader.info", self.pl.reload_count)
-            for i, (display, _edid, _moninfo, device) in enumerate(
-                self.pl.monitors
-            ):
+            for i, (display, _edid, _moninfo, device) in enumerate(self.pl.monitors):
                 devicekey = device.DeviceKey if device else None
                 key = devicekey or str(i)
                 (
@@ -2090,19 +2044,11 @@ class TaskBarIcon(SysTrayIcon):
                     desc = lang.getstr("unknown")
                 elif not profile_key:
                     desc = lang.getstr("unassigned").lower()
-                if (
-                    self.pl.setgammaramp_success.get(i)
-                    and self.pl._reset_gamma_ramps
-                ):
+                if self.pl.setgammaramp_success.get(i) and self.pl._reset_gamma_ramps:
                     desc = f"{lang.getstr('linear').capitalize()} / {desc}"
-                elif (
-                    not self.pl.setgammaramp_success.get(i)
-                    or not profile_key
-                ):
+                elif not self.pl.setgammaramp_success.get(i) or not profile_key:
                     desc = f"{lang.getstr('unknown')} / {desc}"
-                display = display.replace(
-                    "[PRIMARY]", lang.getstr("display.primary")
-                )
+                display = display.replace("[PRIMARY]", lang.getstr("display.primary"))
                 text += f"\n{display}: {desc}"
         if not show_notification:
             debug_print("[DEBUG] /show_notification")
@@ -2113,11 +2059,8 @@ class TaskBarIcon(SysTrayIcon):
                 debug_print("[DEBUG] /show_notification")
                 return
         bitmap = wx.BitmapFromIcon(self.get_icon())
-        self._notification = TaskBarNotification(
-            bitmap, self.pl.get_title(), text
-        )
+        self._notification = TaskBarNotification(bitmap, self.pl.get_title(), text)
         debug_print("[DEBUG] /show_notification")
-
 
 
 class ProfileLoader:
@@ -2793,15 +2736,19 @@ class ProfileLoader:
                 wx.CallAfter(
                     wx.CallLater,
                     1000,
-                    lambda: self.profile_associations_dlg
-                    and self.profile_associations_dlg.update(True),
+                    lambda: (
+                        self.profile_associations_dlg
+                        and self.profile_associations_dlg.update(True)
+                    ),
                 )
             if getattr(self, "fix_profile_associations_dlg", None):
                 wx.CallAfter(
                     wx.CallLater,
                     1000,
-                    lambda: self.fix_profile_associations_dlg
-                    and self.fix_profile_associations_dlg.update(True),
+                    lambda: (
+                        self.fix_profile_associations_dlg
+                        and self.fix_profile_associations_dlg.update(True)
+                    ),
                 )
             print("ProcessDisplayChangedEvent: Releasing lock")
 
@@ -2990,13 +2937,17 @@ class ProfileLoader:
             if profile_associations_changed and not self._has_display_changed:
                 if getattr(self, "profile_associations_dlg", None):
                     wx.CallAfter(
-                        lambda: self.profile_associations_dlg
-                        and self.profile_associations_dlg.update_profiles()
+                        lambda: (
+                            self.profile_associations_dlg
+                            and self.profile_associations_dlg.update_profiles()
+                        )
                     )
                 if getattr(self, "fix_profile_associations_dlg", None):
                     wx.CallAfter(
-                        lambda: self.fix_profile_associations_dlg
-                        and self.fix_profile_associations_dlg.update()
+                        lambda: (
+                            self.fix_profile_associations_dlg
+                            and self.fix_profile_associations_dlg.update()
+                        )
                     )
             if result:
                 self._has_display_changed = False
@@ -3257,7 +3208,7 @@ class ProfileLoader:
         bool,
         ctypes.c_ushort_Array_256_Array_3,
         ctypes.c_ushort_Array_256_Array_3,
-        list[tuple[int, int, int]]
+        list[tuple[int, int, int]],
     ]:
         """Generate and apply profiles.
 
@@ -3494,8 +3445,7 @@ class ProfileLoader:
                 )
             else:
                 debug_print(
-                    f"WARNING: Monitor {moninfo['Device']} "
-                    "has no active display device"
+                    f"WARNING: Monitor {moninfo['Device']} has no active display device"
                 )
         self.profile_associations[key] = (profile_key, mtime, desc)
         self.profiles[key] = None
@@ -3524,7 +3474,7 @@ class ProfileLoader:
         bool,
         ctypes.c_ushort_Array_256_Array_3,
         ctypes.c_ushort_Array_256_Array_3,
-        tuple[list[float], list[float], list[float]]
+        tuple[list[float], list[float], list[float]],
     ]:
         """Generate the gamma ramp for the given profile.
 
@@ -4136,7 +4086,7 @@ class ProfileLoader:
         if cls == "madHcNetQueueWindow" or self._is_known_window_class(cls):
             try:
                 thread_id, pid = win32process.GetWindowThreadProcessId(hwnd)
-                filename : str = get_process_filename(pid)
+                filename: str = get_process_filename(pid)
             except pywintypes.error:
                 return
             self._hwnds_pids.add((filename, pid, thread_id, hwnd))
@@ -4241,8 +4191,7 @@ class ProfileLoader:
         return result
 
     def _look_for_known_processes(
-        self,
-        other_component: tuple[None | str, None | str, int]
+        self, other_component: tuple[None | str, None | str, int]
     ) -> None:
         """Look for known processes that may be using the videoLUT.
 
@@ -4506,11 +4455,7 @@ class ProfileLoader:
             self._map_device_to_profile(moninfo, devices, active_device)
             self._set_active_profile(active_device, display, devices, dry_run)
 
-    def _log_active_device_info(
-        self,
-        i: int,
-        active_device: PyDISPLAY_DEVICE
-    ) -> None:
+    def _log_active_device_info(self, i: int, active_device: PyDISPLAY_DEVICE) -> None:
         """Log information about the active display device.
 
         Args:

@@ -3,6 +3,7 @@
 It includes functions for converting floats to decimals with precision handling
 and for stripping trailing zeros from numeric representations.
 """
+
 # Standard library imports
 from __future__ import annotations
 

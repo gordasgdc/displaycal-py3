@@ -685,12 +685,14 @@ class GamutViewOptions(wx_Panel):
 
         super().__init__(*args, **kwargs)
         self.SetBackgroundColour(BGCOLOUR)
+
         def _create_checkbox(parent, label):
             # Avoid custom checkbox subclasses in safe mode where SIP/wx object
             # conversion can crash while adding controls to sizers.
             if SAFE_WX_UI:
                 return wx.CheckBox(parent, -1, label)
             return CustomCheckBox(parent=parent, id=-1, label=label)
+
         self.sizer = wx.FlexGridSizer(0, 3, 4, 0)
         self.sizer.AddGrowableCol(0)
         self.sizer.AddGrowableCol(1)

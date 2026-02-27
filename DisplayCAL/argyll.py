@@ -256,7 +256,10 @@ def set_argyll_bin(
     parent = None if parent and not parent.IsShownOnScreen() else parent
     argyll_dir = prompt_argyll_dir(parent, callafter, callafter_args)
     if parent and not check_argyll_bin():
-        choices = [("download", lang.getstr("download")), ("browse", lang.getstr("browse"))]
+        choices = [
+            ("download", lang.getstr("download")),
+            ("browse", lang.getstr("browse")),
+        ]
         brew_argyll_bin = get_homebrew_argyll_bin()
         if brew_argyll_bin:
             choices.append(
@@ -566,7 +569,7 @@ def get_argyll_latest_version() -> str:
     """
     argyll_domain = config.DEFAULTS.get("argyll.domain", "")
     default_version = config.DEFAULTS.get("argyll.version")
-    # Try multiple times to fetch the version in case of transient network issues...
+    # Try multiple times to fetch the version in case of transient network issues...
     retries = 3
     while retries > 0:
         try:
@@ -579,7 +582,9 @@ def get_argyll_latest_version() -> str:
                 print(f"Could not fetch ArgyllCMS latest version: {exception}")
                 return default_version
             else:
-                print(f"Error fetching ArgyllCMS latest version: {exception}. Retrying...")
+                print(
+                    f"Error fetching ArgyllCMS latest version: {exception}. Retrying..."
+                )
             time.sleep(5)
     changelog = re.search(r"Version\s+([0-9][0-9A-Za-z.\-_]*)", data)
     if not changelog:

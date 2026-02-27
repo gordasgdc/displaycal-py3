@@ -3520,9 +3520,8 @@ class Worker(WorkerBase):
                 detected,
         """
         if self.get_skip_video_levels_detection():
-            if (
-                config.get_display_name(None, True) == "Web @ localhost"
-                and not getattr(self, "_web_video_levels_skip_logged", False)
+            if config.get_display_name(None, True) == "Web @ localhost" and not getattr(
+                self, "_web_video_levels_skip_logged", False
             ):
                 self.log(
                     "Skipping output levels detection for Web @ localhost "
@@ -11083,8 +11082,7 @@ BEGIN_DATA
         )
 
     def create_gamut_views(
-        self,
-        profile_path: str
+        self, profile_path: str
     ) -> tuple[None, None] | tuple[float, dict]:
         """Generate gamut views (VRML files).
 
@@ -17378,7 +17376,7 @@ BEGIN_DATA
             # where the hashes stored,
             # until we setup something else (i.e a GitHub repository to store
             # hashes) disable checking hashes
-            if False: # if hashes:
+            if False:  # if hashes:
                 # Read max. 64 KB hashes
                 hashesdata = hashes.read(1024 * 64)
                 hashes.close()
@@ -17393,10 +17391,12 @@ BEGIN_DATA
                             lang.getstr("file.hash.malformed", filename),
                             retryable=False,
                         )
-                    hash_filename = Path(name_hash[1].decode("utf-8", "replace").lstrip("*"))
-                    hashesdict[hash_filename.name] = name_hash[0].decode(
-                        "ascii", "replace"
-                    ).lower()
+                    hash_filename = Path(
+                        name_hash[1].decode("utf-8", "replace").lstrip("*")
+                    )
+                    hashesdict[hash_filename.name] = (
+                        name_hash[0].decode("ascii", "replace").lower()
+                    )
                 expectedhash_hex = hashesdict.get(filename)
                 if not expectedhash_hex:
                     response.close()
@@ -17563,7 +17563,11 @@ BEGIN_DATA
             finally:
                 if response:
                     response.close()
-                if self.thread_abort or download_file_exception or not download_succeeded:
+                if (
+                    self.thread_abort
+                    or download_file_exception
+                    or not download_succeeded
+                ):
                     # Remove destination file if download aborted, incomplete
                     # or there was an error writing destination.
                     try:
@@ -17699,7 +17703,9 @@ BEGIN_DATA
                 method = z.getnames if cls is not zipfile.ZipFile else z.namelist
                 names = method()
                 names.sort()
-                extracted = [os.path.join(outdir, os.path.normpath(name)) for name in names]
+                extracted = [
+                    os.path.join(outdir, os.path.normpath(name)) for name in names
+                ]
                 if names:
                     name0 = os.path.normpath(names[0])
                 for outpath in extracted:
