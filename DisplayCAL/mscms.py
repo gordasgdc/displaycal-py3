@@ -1,74 +1,16 @@
-from __future__ import annotations
+"""Provides a thread-safe interface for the Windows Color System API.
 
-import atexit
-import builtins
-import logging
-import multiprocessing
-import psutil
-import sys
-import threading
-import uuid
-
-from functools import wraps
-from logging.handlers import QueueHandler, QueueListener
-from multiprocessing import Process
-from multiprocessing import Queue
-from queue import Empty
-from threading import Lock
-from threading import Thread
-from time import sleep
-from typing import Any
-from typing import Callable
-from typing import Dict
-from typing import List
-from typing import Literal
-from typing import Optional
-from typing import Tuple
-from typing import Type
-from typing import TypeVar
-from typing import Union
-if sys.version_info >= (3, 11):
-    from typing import NotRequired
-    from typing import ParamSpec
-    from typing import TypedDict
-else:
-    from typing_extensions import NotRequired
-    from typing_extensions import ParamSpec
-    from typing_extensions import TypedDict
-
-
-from DisplayCAL.mscms_types import COLORPROFILESUBTYPE
-from DisplayCAL.mscms_types import COLORPROFILETYPE
-from DisplayCAL.mscms_types import dwDeviceClass
-from DisplayCAL.mscms_types import WCS_PROF_SCOPE
-
-if sys.platform == "win32":
-    from DisplayCAL.mscms_wrapper import WCS
-else:
-    class WCS():
-        def __getattribute__(self, name):
-            raise NotImplementedError("Windows only")
-
-        def __setattr__(self, name, value):
-            raise NotImplementedError("Windows only")
-
-        def __delattr__(self, name):
-            raise NotImplementedError("Windows only")
-
-        def __call__(self, *args, **kwargs):
-            raise NotImplementedError("Windows only")
-
-
-"""
-This module provides a threadsafe interface for the Windows Color System API while isolating actual
-communication with WinAPI to separate process
+This isolates the actual communication with WinAPI to separate process.
+Windows only.
 
 References and useful info:
 
 According to https://learn.microsoft.com/en-us/previous-versions/troubleshoot/windows/win32/geticmprofile-might-leak-one-more-handles-windows-10 and
-https://learn.microsoft.com/en-us/troubleshoot/windows/win32/geticmprofile-might-leak-one-or-more-handles-on-windows10 (in case one of those breaks eventually)
-Microsoft couldn't be bothered to fix leaking handles in mscms.dll in Windows 10. That causes issues for applications which do frequent calls to the
-leaking API calls:
+https://learn.microsoft.com/en-us/troubleshoot/windows/win32/geticmprofile-might-leak-one-or-more-handles-on-windows10
+(in case one of those breaks eventually) Microsoft couldn't be bothered to fix
+leaking handles in mscms.dll in Windows 10. That causes issues for applications
+which do frequent calls to the leaking API calls:
+
    + GetICMProfile
    + EnumICMProfiles
    + WcsGetDefaultColorProfile
@@ -76,11 +18,77 @@ leaking API calls:
    + WcsGetUsePerUserProfiles
 
 Other mitigation tactics possible:
-   + closing suspicious reg handles to specific keys (https://gist.github.com/AySz88/7a233d84632498a8de382c1199f859f2 and DisplayCal has its own implementation in _win10_1903_close_leaked_regkey_handles())
-   + using said APIs less (caching, etc)
-   + restarting once in a while (profile loader, according to the changelog 3.8.7, restarts each day at 4.00 due to leaks in SetDeviceGammaRamp)
-   + calling such APIs in separate processes
-"""
+
+ + closing suspicious reg handles to specific keys
+   (https://gist.github.com/AySz88/7a233d84632498a8de382c1199f859f2 and
+   DisplayCal has its own implementation in _win10_1903_close_leaked_regkey_handles()).
+ + using said APIs less (caching, etc)
+ + restarting once in a while (profile loader, according to the changelog 3.8.7,
+   restarts each day at 4.00 due to leaks in SetDeviceGammaRamp).
+ + calling such APIs in separate processes
+
+"""  # noqa: E501
+
+from __future__ import annotations
+
+import atexit
+import builtins
+import logging
+import multiprocessing
+import sys
+import threading
+import uuid
+from functools import wraps
+from logging.handlers import QueueHandler, QueueListener
+from multiprocessing import Process, Queue
+from queue import Empty
+from threading import Lock, Thread
+from time import sleep
+from typing import (
+    Any,
+    Callable,
+    Literal,
+    TypeVar,
+)
+
+import psutil
+
+if sys.version_info >= (3, 11):
+    from typing import NotRequired, ParamSpec, TypedDict
+else:
+    from typing_extensions import NotRequired, ParamSpec, TypedDict
+
+
+from DisplayCAL.mscms_types import (
+    COLORPROFILESUBTYPE,
+    COLORPROFILETYPE,
+    WCS_PROF_SCOPE,
+    dwDeviceClass,
+)
+
+if sys.platform == "win32":
+    from DisplayCAL.mscms_wrapper import WCS
+else:
+
+    class WCS:
+        """Placeholder class for non-Windows platforms."""
+
+        def __getattribute__(self, name: str) -> None:
+            """Placeholder method."""
+            raise NotImplementedError("Windows only")
+
+        def __setattr__(self, name: str, value: Any) -> None:  # noqa: ANN401
+            """Placeholder method."""
+            raise NotImplementedError("Windows only")
+
+        def __delattr__(self, name: str) -> None:
+            """Placeholder method."""
+            raise NotImplementedError("Windows only")
+
+        def __call__(self, *args, **kwargs) -> None:
+            """Placeholder method."""
+            raise NotImplementedError("Windows only")
+
 
 default_logging_level = logging.INFO
 logger = logging.getLogger(__name__ + ".manager")
@@ -91,44 +99,66 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 logger.propagate = False
 
-check_handles_call_num = 100 # check leaking handles every <num> of calls
-open_handles_threshold = 3000 # worker process open handle limit
+check_handles_call_num = 100  # check leaking handles every <num> of calls
+open_handles_threshold = 3000  # worker process open handle limit
 
 FILE_NOT_FOUND_ERRNO = 2
 
-RequestType = TypedDict(
-    "RequestType", {"id": str, "method": str, "args": Any, "kwargs": Any}
-)
-ErrorType = TypedDict(
-    "ErrorType", {"type": str, "message": str, "errno": NotRequired[Any]}
-)
-SuccessResponseType = TypedDict(
-    "SuccessResponseType", {"type": Literal["resp_success"], "id": str, "result": Any}
-)
-FailureResponseType = TypedDict(
-    "FailureResponseType",
-    {"type": Literal["resp_error"], "id": str, "error": ErrorType},
-)
-ResponseType = Union[SuccessResponseType, FailureResponseType]
 
-PendingType = TypedDict(
-    "PendingType",
-    {
-        "event": threading.Event,
-        "result": NotRequired[Any],
-        "error": NotRequired[ErrorType],
-    },
-)
+class RequestType(TypedDict):
+    """Represents a request sent to the worker process."""
+
+    id: str
+    method: str
+    args: Any
+    kwargs: Any
+
+
+class ErrorType(TypedDict):
+    """Represents an error response from the worker process."""
+
+    type: str
+    message: str
+    errno: NotRequired[Any]
+
+
+class SuccessResponseType(TypedDict):
+    """Represents a successful response from the worker process."""
+
+    type: Literal["resp_success"]
+    id: str
+    result: Any
+
+
+class FailureResponseType(TypedDict):
+    """Represents an error response from the worker process."""
+
+    type: Literal["resp_error"]
+    id: str
+    error: ErrorType
+
+
+ResponseType = SuccessResponseType | FailureResponseType
+
+
+class PendingType(TypedDict):
+    """Represents a pending request in the WCSManager."""
+
+    event: threading.Event
+    result: NotRequired[Any]
+    error: NotRequired[ErrorType]
 
 
 class WCSError(Exception):
-    pass
+    """Base class for WCS-related errors."""
+
 
 class WCSManagerShutdownError(WCSError):
-    pass
+    """Error type for operations attempted while WCSManager is shutting down."""
+
 
 class WCSWorkerError(WCSError):
-    pass
+    """Generic error type for exceptions raised during remote execution."""
 
 
 F_Spec = ParamSpec("F_Spec")
@@ -138,20 +168,26 @@ F_Return = TypeVar("F_Return")
 def retry(
     retries: int = 5,
     base_delay: float = 0.1,
-    retry_on: Tuple[Type[Exception], ...] = (Exception,),
+    retry_on: tuple[type[Exception], ...] = (Exception,),
 ) -> Callable[[Callable[F_Spec, F_Return]], Callable[F_Spec, F_Return]]:
+    """A simple retry decorator with exponential backoff for specified exceptions."""
+
     def real_retry(func: Callable[F_Spec, F_Return]) -> Callable[F_Spec, F_Return]:
         @wraps(func)
         def wrapper(*args: F_Spec.args, **kwargs: F_Spec.kwargs) -> F_Return:
-            assert retries >= 0
-            assert base_delay >= 0.0
+            if retries < 0:
+                raise ValueError("Retries must be non-negative")
+
+            if base_delay < 0:
+                raise ValueError("Base delay must be non-negative")
 
             attempt = 0
-            last_exception: Optional[Exception] = None
+            last_exception: None | Exception = None
             while attempt <= retries:
                 if attempt > 0:  # logging as retry after first attempt
                     logger.debug(
-                        f"Retrying {func.__name__}: attempt {attempt}/{retries} after {last_exception}"
+                        f"Retrying {func.__name__}: "
+                        f"attempt {attempt}/{retries} after {last_exception}"
                     )
 
                 try:
@@ -165,11 +201,12 @@ def retry(
                             2 ** (attempt - 1)
                         )  # exponential backoff with no jitter
                         logger.debug(
-                            f"Retriable error caught in {func.__name__}: {e}. Retrying in {delay:.3f}s..."
+                            f"Retryable error caught in {func.__name__}: {e}. "
+                            f"Retrying in {delay:.3f}s..."
                         )
                         sleep(delay)
                     else:
-                        raise last_exception
+                        raise last_exception from e
                 except Exception as e:
                     logger.debug(f"Stopping retry in {func.__name__} on exception: {e}")
                     raise
@@ -201,7 +238,7 @@ def _wcs_worker_process(
 
         while True:
             try:
-                request: Optional[RequestType] = request_queue.get(timeout=1.0)
+                request: None | RequestType = request_queue.get(timeout=1.0)
             except Empty:
                 continue
 
@@ -254,17 +291,22 @@ def _wcs_worker_process(
 
 
 class WCSManager:
+    """WCSManager class.
+
+    Note: can only be initialized once.
+
+    Args:
+        handle_threshold (int, optional): Maximum open handles limit.
+            Defaults to 10000.
+        request_timeout (float, optional): Timeout for an individual request
+            (note the retry logic and compound requests). Defaults to 10.0.
+    """
+
     def __init__(
         self,
         handle_threshold: int = open_handles_threshold,  # will restart once in a while
         request_timeout: float = 10.0,
-    ):
-        """Initializes WCSManager class. Note: can only be run once
-
-        Args:
-            handle_threshold (int, optional): maximum open handles limit. Defaults to 10000.
-            request_timeout (float, optional): timeout for an individual request (note the retry logic and compound requests). Defaults to 10.
-        """
+    ) -> None:
         if hasattr(self, "_initialized"):
             return
 
@@ -272,16 +314,16 @@ class WCSManager:
         self.request_timeout = request_timeout
 
         self._lock = Lock()
-        self._worker_process: Optional[Process] = None
-        self._request_queue: Queue[RequestType | None] = Queue()
-        self._response_queue: Queue[ResponseType] = Queue()
+        self._worker_process: None | Process = None
+        self._request_queue: None | RequestType = Queue()
+        self._response_queue: None | ResponseType = Queue()
         self._log_queue: Queue[Any] = Queue()
-        self._log_listener: Optional[QueueListener] = None
-        self._pending_requests: Dict[str, PendingType] = {}
+        self._log_listener: None | QueueListener = None
+        self._pending_requests: dict[str, PendingType] = {}
         self._shutdown_event = threading.Event()
         self._wcs_calls_made = 0
 
-        self._response_listener_thread: Optional[Thread] = None
+        self._response_listener_thread: None | Thread = None
 
         handlers = logger.handlers if logger.handlers else [logging.StreamHandler()]
         self._log_listener = QueueListener(
@@ -295,7 +337,8 @@ class WCSManager:
         atexit.register(self._atexit_shutdown)
         logger.info("WCSManager initialized")
 
-    def _start_worker(self):
+    def _start_worker(self) -> None:
+        """Start the worker process and response listener thread."""
         with self._lock:
             if self._worker_process and self._worker_process.is_alive():
                 logger.warning("Worker is already running")
@@ -318,7 +361,8 @@ class WCSManager:
             self._response_listener_thread.start()
             logger.debug("Response listener thread started")
 
-    def _stop_worker(self):
+    def _stop_worker(self) -> None:
+        """Stop the worker process with timeout and forceful termination if needed."""
         with self._lock:
             if not self._worker_process or not self._worker_process.is_alive():
                 logger.debug("Worker is not running")
@@ -335,7 +379,7 @@ class WCSManager:
             self._worker_process.join(timeout=5.0)
             if self._worker_process.is_alive():
                 logger.warning(
-                    "WCSWorker did not terminate gracefully, terminating forcefully"
+                    "WCSWorker did not terminate gracefully, terminating forcefully."
                 )
                 self._worker_process.terminate()
                 self._worker_process.join(timeout=2.0)
@@ -347,7 +391,7 @@ class WCSManager:
 
             self._shutdown_event.set()  # Closing down listener and call functionality
 
-    def _handle_check_worker(self):
+    def _handle_check_worker(self) -> None:
         logger.info("Performing worker process open handle check")
 
         p = None
@@ -361,18 +405,25 @@ class WCSManager:
                 logger.warning("No running worker process discovered")
 
         except Exception as e:
-            logger.warning(f"Failed to get handle count for process {p.pid if p else 'unknown'}: {e}")
+            logger.warning(
+                "Failed to get handle count for process "
+                f"{p.pid if p else 'unknown'}: {e}"
+            )
             return
 
         if num_handles > self.handle_threshold:
-            logger.debug(f"Open handle number exceeded: {num_handles}>{self.handle_threshold}. Restarting worker process")
+            logger.debug(
+                "Open handle number exceeded: "
+                f"{num_handles}>{self.handle_threshold}. "
+                "Restarting worker process"
+            )
             self._stop_worker()
             self._start_worker()
             logger.info("WCSWorker restarted successfully")
         else:
             logger.debug(f"Current child process open handles: {num_handles}")
 
-    def _listen_for_responses(self):
+    def _listen_for_responses(self) -> None:
         logger.debug("Response listener thread main loop started")
         while not self._shutdown_event.is_set():
             try:
@@ -407,7 +458,7 @@ class WCSManager:
         logger.debug("Response listener thread loop finished")
 
     @retry(retry_on=(RuntimeError, TimeoutError))
-    def _call_wcs_method(self, method_name: str, *args: Any, **kwargs: Any) -> Any:
+    def _call_wcs_method(self, method_name: str, *args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
         if self._shutdown_event.is_set():
             raise WCSManagerShutdownError("WCSManager is set to shut down")
 
@@ -431,9 +482,10 @@ class WCSManager:
             with self._lock:
                 self._pending_requests.pop(request_id, None)
                 logger.debug(
-                    f"Request ID {request_id} removed from pending requests: cancellation"
+                    f"Request ID {request_id} removed from pending requests: "
+                    "cancellation"
                 )
-            raise RuntimeError(f"Failed to send request to worker: {e}")
+            raise RuntimeError(f"Failed to send request to worker: {e}") from e
 
         with self._lock:
             self._wcs_calls_made += 1
@@ -477,14 +529,14 @@ class WCSManager:
                     if error_errno is not None:
                         exc.errno = error_errno
                     raise exc
-                else:
-                    # Something else might have happened
-                    raise exc_class(f"{error_type}: {error_message}")
+                # Something else might have happened
+                raise exc_class(f"{error_type}: {error_message}")
 
         # normal path
         return req_data.get("result")
 
-    def shutdown(self):
+    def shutdown(self) -> None:
+        """Shutdowns the worker process and listener thread."""
         if self._shutdown_event.is_set():
             logger.debug("WCSManager is already set to shut down")
             return
@@ -498,7 +550,8 @@ class WCSManager:
             self._response_listener_thread.join(timeout=2.0)
         logger.info("WCSManager shut down complete")
 
-    def _atexit_shutdown(self):
+    def _atexit_shutdown(self) -> None:
+        """Shutdown handler for atexit to ensure cleanup on normal interpreter exit."""
         if not self._shutdown_event.is_set():
             logger.info("WCSManager: atexit triggered shutdown")
             self.shutdown()
@@ -506,27 +559,25 @@ class WCSManager:
     def associate_color_profile_with_device(
         self, scope: WCS_PROF_SCOPE, profile_name: str, device_key: str
     ) -> None:
-        """
-        Associates a specified WCS color profile with a specified device
+        """Associate a specified WCS color profile with a specified device.
 
-        This API does not support "advanced color" profiles for HDR monitors
+        This API does not support "advanced color" profiles for HDR monitors.
 
-        Note: this API makes the added profile also be the default one
+        Note: this API makes the added profile also be the default one.
 
         Args:
             scope (WCS_PROF_SCOPE): specifies the scope of this profile management
-                                    operation, which could be system-wide or for
-                                    the current user
-            profile_name (str): file name of the profile to associate
+                operation, which could be system-wide or for the current user.
+            profile_name (str): file name of the profile to associate.
             device_key (str): device key of the device with which to associate
-                              the profile
+                              the profile.
 
         Raises:
-            OSError: in case of Win API errors
-            TimeoutError: if timeout occurs while waiting for worker response
-            WCSManagerShutdownError: if manager is shutting down
-            WCSWorkerError: in case of some unspecified error during remote execution
-            RuntimeError: in case of unrecoverable IPC errors
+            OSError: in case of Win API errors.
+            TimeoutError: if timeout occurs while waiting for worker response.
+            WCSManagerShutdownError: if manager is shutting down.
+            WCSWorkerError: in case of some unspecified error during remote execution.
+            RuntimeError: in case of unrecoverable IPC errors.
         """
         self._call_wcs_method(
             "AssociateColorProfileWithDevice", scope, profile_name, device_key
@@ -535,27 +586,27 @@ class WCSManager:
     def disassociate_color_profile_from_device(
         self, scope: WCS_PROF_SCOPE, profile_name: str, device_key: str
     ) -> None:
-        """
-        Disassociates a specified WCS color profile from a specified device
+        """Disassociate a specified WCS color profile from a specified device.
 
-        This API does not support "advanced color" profiles for HDR monitors
+        This API does not support "advanced color" profiles for HDR monitors.
 
-        Note: very unreliable due to quirks, the actual result should be double-checked with profile listing
+        Note: very unreliable due to quirks, the actual result should be
+        double-checked with profile listing.
 
         Args:
-            scope (WCS_PROF_SCOPE): specifies the scope of this profile management
-                                    operation, which could be system-wide or for
-                                    the current user
-            profile_name (str): file name of the profile to disassociate
-            device_key (str): device key of the device from which to disassociate
-                              the profile
+            scope (WCS_PROF_SCOPE): specifies the scope of this profile
+                management operation, which could be system-wide or for the
+                current user.
+            profile_name (str): file name of the profile to disassociate.
+            device_key (str): device key of the device from which to
+                disassociate the profile.
 
         Raises:
-            OSError: in case of Win API errors
-            TimeoutError: if timeout occurs while waiting for worker response
-            WCSManagerShutdownError: if manager is shutting down
-            WCSWorkerError: in case of some unspecified error during remote execution
-            RuntimeError: in case of unrecoverable IPC errors
+            OSError: in case of Win API errors.
+            TimeoutError: if timeout occurs while waiting for worker response.
+            WCSManagerShutdownError: if manager is shutting down.
+            WCSWorkerError: in case of some unspecified error during remote execution.
+            RuntimeError: in case of unrecoverable IPC errors.
         """
         self._call_wcs_method(
             "DisassociateColorProfileFromDevice", scope, profile_name, device_key
@@ -566,65 +617,64 @@ class WCSManager:
         scope: WCS_PROF_SCOPE,
         device_key: str,
         device_class: dwDeviceClass = dwDeviceClass.CLASS_MONITOR,
-    ) -> List[str]:
-        """Enumerates color profiles associated with a device
+    ) -> list[str]:
+        """Enumerate color profiles associated with a device.
 
-        This API does not support "advanced color" profiles for HDR monitors
+        This API does not support "advanced color" profiles for HDR monitors.
 
         Args:
-            scope (WCS_PROF_SCOPE): specifies the scope of this profile management
-                                    operation, which could be system-wide or for
-                                    the current user
-            device_key (str): device key of the device
-            device_class (dwDeviceClass, optional): device class. Defaults to dwDeviceClass.CLASS_MONITOR
+            scope (WCS_PROF_SCOPE): specifies the scope of this profile
+                management operation, which could be system-wide or for the
+                current user.
+            device_key (str): device key of the device.
+            device_class (dwDeviceClass, optional): device class. Defaults to
+                dwDeviceClass.CLASS_MONITOR.
 
         Raises:
-            OSError: in case of Win API errors
-            TimeoutError: if timeout occurs while waiting for worker response
-            WCSManagerShutdownError: if manager is shutting down
-            WCSWorkerError: in case of some unspecified error during remote execution
-            RuntimeError: in case of unrecoverable IPC errors
-            ValueError: on parsing errors
+            OSError: in case of Win API errors.l
+            TimeoutError: if timeout occurs while waiting for worker response.
+            WCSManagerShutdownError: if manager is shutting down.
+            WCSWorkerError: in case of some unspecified error during remote execution.
+            RuntimeError: in case of unrecoverable IPC errors.
+            ValueError: on parsing errors.
 
         Returns:
-            List[str]: array of profile names
+            list[str]: array of profile names
         """
-        prof_list: List[str] = self._call_wcs_method(
+        prof_list: list[str] = self._call_wcs_method(
             "getDeviceColorProfileList", scope, device_key, device_class
         )
         return prof_list
 
     def get_calibration_management_state(self) -> bool:
-        """
-        Determines whether system management of the display calibration state is enabled
+        """Determine if system management of the display calibration state is enabled.
 
         Raises:
-            OSError: in case of Win API errors
-            TimeoutError: if timeout occurs while waiting for worker response
-            WCSManagerShutdownError: if manager is shutting down
-            WCSWorkerError: in case of some unspecified error during remote execution
-            RuntimeError: in case of unrecoverable IPC errors
+            OSError: in case of Win API errors.
+            TimeoutError: if timeout occurs while waiting for worker response.
+            WCSManagerShutdownError: if manager is shutting down.
+            WCSWorkerError: in case of some unspecified error during remote execution.
+            RuntimeError: in case of unrecoverable IPC errors.
 
         Returns:
             bool: True if system management of the display calibration state is
-                  enabled; otherwise, False
+                enabled; otherwise, False
         """
         return self._call_wcs_method("GetCalibrationManagementState")
 
     def set_calibration_management_state(self, new_state: bool) -> None:
-        """
-        Enables or disables system management of the display calibration state
+        """Enable or disables system management of the display calibration state.
 
         Args:
             new_state (bool): True to enable system management of the display
-                              calibration state. False to disable it
+                calibration state. False to disable it.
 
         Raises:
-            OSError: in case of Win API errors
-            TimeoutError: if timeout occurs while waiting for worker response
-            WCSManagerShutdownError: if manager is shutting down
-            WCSWorkerError: in case of some unspecified error during remote execution
-            RuntimeError: in case of unrecoverable IPC errors
+            OSError: in case of Win API errors.
+            TimeoutError: if timeout occurs while waiting for worker response.
+            WCSManagerShutdownError: if manager is shutting down.
+            WCSWorkerError: in case of some unspecified error during remote execution.
+            RuntimeError: in case of unrecoverable IPC errors.
         """
         return self._call_wcs_method("SetCalibrationManagementState", new_state)
 
@@ -635,34 +685,37 @@ class WCSManager:
         c_prof_type: COLORPROFILETYPE = COLORPROFILETYPE.CPT_ICC,
         c_prof_subtype: COLORPROFILESUBTYPE = COLORPROFILESUBTYPE.CPST_NONE,
         profile_id: int = 0,
-    ) -> Optional[str]:
-        """Retrieves the default color profile for a device
+    ) -> None | str:
+        """Retrieve the default color profile for a device.
 
         This API does not support "advanced color" profiles for HDR monitors.
-        Note: If HDR is enabled on a device, it causes OSError
+
+        Note: If HDR is enabled on a device, it causes OSError.
 
         Args:
-            scope (WCS_PROF_SCOPE): specifies the scope of this profile management
-                                    operation, which could be system-wide or for
-                                    the current user
-            device_key (str): device key of the device for which the default color
-                              profile is obtained. If empty string, a device-
-                              independent default profile is obtained
-            c_prof_type (COLORPROFILETYPE, optional): value specifying the color profile type. Defaults to COLORPROFILETYPE.CPT_ICC
-            c_prof_subtype (COLORPROFILESUBTYPE, optional): value specifying the color profile
-                                                  subtype. Defaults to COLORPROFILESUBTYPE.CPST_NONE
-            profile_id (int, optional): ID of the color space that the color profile
-                              represents. Defaults to 0
+            scope (WCS_PROF_SCOPE): specifies the scope of this profile
+                management operation, which could be system-wide or for the
+                current user.
+            device_key (str): device key of the device for which the default
+                color profile is obtained. If empty string, a device-independent
+                default is obtained.
+            c_prof_type (COLORPROFILETYPE, optional): value specifying the
+                color profile type. Defaults to `COLORPROFILETYPE.CPT_ICC`.
+            c_prof_subtype (COLORPROFILESUBTYPE, optional): Value specifying
+                the color profile subtype. Defaults to `COLORPROFILESUBTYPE.CPST_NONE`.
+            profile_id (int, optional): ID of the color space that the color
+                profile represents. Defaults to 0.
 
         Raises:
-            OSError: in case of Win API errors
-            TimeoutError: if timeout occurs while waiting for worker response
-            WCSManagerShutdownError: if manager is shutting down
-            WCSWorkerError: in case of some unspecified error during remote execution
-            RuntimeError: in case of unrecoverable IPC errors
+            OSError: If a Win API error occurs.
+            TimeoutError: If a timeout occurs while waiting for worker response.
+            WCSManagerShutdownError: If the manager is shutting down.
+            WCSWorkerError: In case of some unspecified error during remote execution.
+            RuntimeError: If unrecoverable IPC errors occur.
 
         Returns:
-            str: the name of the default color profile for the device (or None if not set)
+            str: the name of the default color profile for the device (or None
+                if not set)
         """
         try:
             size = self._call_wcs_method(
@@ -673,7 +726,7 @@ class WCSManager:
                 c_prof_subtype,
                 profile_id,
             )
-            prof = self._call_wcs_method(
+            return self._call_wcs_method(
                 "GetDefaultColorProfile",
                 scope,
                 device_key,
@@ -682,8 +735,7 @@ class WCSManager:
                 c_prof_subtype,
                 profile_id,
             )
-            return prof
-        except FileNotFoundError: # no default profile
+        except FileNotFoundError:  # no default profile
             pass
         return None
 
@@ -696,30 +748,31 @@ class WCSManager:
         c_prof_subtype: COLORPROFILESUBTYPE = COLORPROFILESUBTYPE.CPST_NONE,
         profile_id: int = 0,
     ) -> None:
-        """Sets the default color profile name for the specified profile type
+        """Set the default color profile name for the specified profile type.
 
-        This API does not support "advanced color" profiles for HDR monitors
+        This API does not support "advanced color" profiles for HDR monitors.
 
         Args:
-            scope (WCS_PROF_SCOPE): specifies the scope of this profile management
-                                    operation, which could be system-wide or for
-                                    the current user
-            device_key (str): device key of the device for which the default color
-                              profile is to be set. If empty string, a device-
-                              independent default profile is set
-            profile_name (str): file name of the profile
-            c_prof_type (COLORPROFILETYPE, optional): value specifying the color profile type. Defaults to COLORPROFILETYPE.CPT_ICC
-            c_prof_subtype (COLORPROFILESUBTYPE, optional): value specifying the color profile
-                                                  subtype. Defaults to COLORPROFILESUBTYPE.CPST_NONE
-            profile_id (int, optional): ID of the color space that the color profile
-                              represents. Defaults to 0
+            scope (WCS_PROF_SCOPE): Specifies the scope of this profile management
+                operation, which could be system-wide or for the current user.
+            device_key (str): Device key of the device for which the default
+                color profile is to be set. If empty string, a device-independent
+                default profile is set.
+            profile_name (str): File name of the profile.
+            c_prof_type (COLORPROFILETYPE, optional): Value specifying the color
+                profile type. Defaults to `COLORPROFILETYPE.CPT_ICC`.
+            c_prof_subtype (COLORPROFILESUBTYPE, optional): Value specifying
+                the color profile subtype. Defaults to
+                `COLORPROFILESUBTYPE.CPST_NONE`.
+            profile_id (int, optional): ID of the color space that the color
+                profile represents. Defaults to 0.
 
         Raises:
-            OSError: in case of Win API errors
-            TimeoutError: if timeout occurs while waiting for worker response
-            WCSManagerShutdownError: if manager is shutting down
-            WCSWorkerError: in case of some unspecified error during remote execution
-            RuntimeError: in case of unrecoverable IPC errors
+            OSError: If Win API error is raised.
+            TimeoutError: If timeout occurs while waiting for worker response.
+            WCSManagerShutdownError: If manager is shutting down.
+            WCSWorkerError: If some unspecified error occurs during remote execution.
+            RuntimeError: If unrecoverable IPC errors occur.
         """
         self._call_wcs_method(
             "SetDefaultColorProfile",
@@ -734,21 +787,23 @@ class WCSManager:
     def get_use_per_user_profiles(
         self, device_key: str, device_class: dwDeviceClass = dwDeviceClass.CLASS_MONITOR
     ) -> bool:
-        """Determines whether the user chose to use a per-user profile association list for the specified device
+        """Determine if per-user profile association is enabled for the device.
 
         Args:
-            device_key (str): device key of the device
-            device_class (dwDeviceClass, optional): the class of the device. Defaults to dwDeviceClass.CLASS_MONITOR
+            device_key (str): Device key of the device.
+            device_class (dwDeviceClass, optional): The class of the device.
+                Defaults to `dwDeviceClass.CLASS_MONITOR`.
 
         Raises:
-            OSError: in case of Win API errors
-            TimeoutError: if timeout occurs while waiting for worker response
-            WCSManagerShutdownError: if manager is shutting down
-            WCSWorkerError: in case of some unspecified error during remote execution
-            RuntimeError: in case of unrecoverable IPC errors
+            OSError: If Win API error is raised.
+            TimeoutError: If timeout occurs while waiting for worker response.
+            WCSManagerShutdownError: If manager is shutting down.
+            WCSWorkerError: If some unspecified error occurs during remote execution.
+            RuntimeError: If unrecoverable IPC errors occur.
 
         Returns:
-            bool: True if the user chose to use a per-user profile association list for the specified device; otherwise False
+            bool: True if the user chose to use a per-user profile association
+                list for the specified device; otherwise False
         """
         return self._call_wcs_method("GetUsePerUserProfiles", device_key, device_class)
 
@@ -758,53 +813,66 @@ class WCSManager:
         new_state: bool,
         device_class: dwDeviceClass = dwDeviceClass.CLASS_MONITOR,
     ) -> None:
-        """Enables a user to specify whether or not to use a per-user profile association list for the specified device
+        """Enable or disable per-user profile association for a device.
 
         Args:
-            device_key (str): device key of the device
-            new_state (bool): True if the user wants to use a per-user profile association list for the specified device; otherwise False
-            device_class (dwDeviceClass, optional): the class of the device. Defaults to dwDeviceClass.CLASS_MONITOR
+            device_key (str): Device key of the device.
+            new_state (bool): True if the user wants to use a per-user profile
+                association list for the specified device; otherwise False.
+            device_class (dwDeviceClass, optional): The class of the device.
+                Defaults to dwDeviceClass.CLASS_MONITOR
 
         Raises:
-            OSError: in case of Win API errors
-            TimeoutError: if timeout occurs while waiting for worker response
-            WCSManagerShutdownError: if manager is shutting down
-            WCSWorkerError: in case of some unspecified error during remote execution
-            RuntimeError: in case of unrecoverable IPC errors
+            OSError: If Win API error is raised.
+            TimeoutError: If timeout occurs while waiting for worker response.
+            WCSManagerShutdownError: If manager is shutting down.
+            WCSWorkerError: If some unspecified error occurs during remote execution.
+            RuntimeError: If unrecoverable IPC errors occur.
         """
         self._call_wcs_method(
             "SetUsePerUserProfiles", device_key, new_state, device_class
         )
 
+
 class WCSManagerProxy:
+    """Proxy class for WCSManager to ensure single instance and lazy initialization."""
+
     _instance = None
     _lock = Lock()
 
-    def _ensure_instance(self):
+    def _ensure_instance(self) -> None:
+        """Ensure that the WCSManager instance is created."""
         if WCSManagerProxy._instance is None:
             with WCSManagerProxy._lock:
                 if WCSManagerProxy._instance is None:
                     WCSManagerProxy._instance = WCSManager()
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:  # noqa: ANN401
+        """Ensure instance exists before getting attributes."""
         self._ensure_instance()
         return getattr(WCSManagerProxy._instance, name)
 
-    def __setattr__(self, name, value):
+    def __setattr__(self, name: str, value: Any) -> None:  # noqa: ANN401
+        """Ensure instance exists before setting attributes."""
         self._ensure_instance()
         setattr(WCSManagerProxy._instance, name, value)
 
-    def __delattr__(self, name):
+    def __delattr__(self, name: str) -> None:
+        """Ensure instance exists before deleting attributes."""
         self._ensure_instance()
         delattr(WCSManagerProxy._instance, name)
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs) -> WCSManager:
+        """Make the proxy callable."""
         self._ensure_instance()
         if callable(WCSManagerProxy._instance):
             return WCSManagerProxy._instance(*args, **kwargs)
-        raise TypeError(f"'{type(WCSManagerProxy._instance).__name__}' object is not callable")
+        raise TypeError(
+            f"'{type(WCSManagerProxy._instance).__name__}' object is not callable"
+        )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """String representation of the proxy instance."""
         if WCSManagerProxy._instance is None:
             return "<WCSManagerProxy (not initialized)>"
-        return f"<WCSManagerProxy wrapping {repr(WCSManagerProxy._instance)}>"
+        return f"<WCSManagerProxy wrapping {WCSManagerProxy._instance!r}>"

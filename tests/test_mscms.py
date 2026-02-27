@@ -1,11 +1,17 @@
-import pytest
-from unittest.mock import patch
+# Standard Library Imports
+import sys
 from queue import Empty
+from unittest.mock import patch
 
+# Third Party Imports
+import pytest
+
+# Local Imports
 import DisplayCAL.mscms as mscms_module
 from DisplayCAL.mscms import WCSManagerProxy, WCSManagerShutdownError
 
-#Tests including mocks and multiprocess do not work under Windows due to spawn != fork, so this is why some tests are ugly
+# Tests including mocks and multiprocess do not work under Windows due to spawn != fork, so this is why some tests are ugly
+
 
 def _mock_wcs_worker_process(request_queue, response_queue, log_queue):
     """Test replacement for the real _wcs_worker_process."""
