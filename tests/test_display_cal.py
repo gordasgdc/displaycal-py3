@@ -72,7 +72,7 @@ def test_show_ccxx_error_dialog(mainframe: MainFrame) -> None:
 
 
 @pytest.mark.skipif(
-    sys.platform == "darwin" and os.getenv("GITHUB_ACTIONS") == "true",,
+    sys.platform == "darwin" and os.getenv("GITHUB_ACTIONS") == "true",
     reason="ShowResultDialog is failing on CI macOS machines, skipping test.",
 )
 @pytest.mark.parametrize("argyll", (True, False), ids=("With argyll", "without argyll"))
