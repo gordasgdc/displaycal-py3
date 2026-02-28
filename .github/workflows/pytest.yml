@@ -255,7 +255,7 @@ jobs:
         retention-days: 10
 
   macos:
-    name: macOS + Python ${{ matrix.python-version }}
+    name: macOS + Python ${{ matrix.python-version }} + wxPython ${{ matrix.wx-version }}
     runs-on: macos-14
 
     strategy:
@@ -269,6 +269,11 @@ jobs:
           - "3.12"
           - "3.13"
           - "3.14"
+        wx-version:
+          - "4.2.2"
+          - "4.2.3"
+          - "4.2.4"
+          - "4.2.5"
 
     steps:
     - uses: actions/checkout@v4
@@ -285,6 +290,10 @@ jobs:
 
     - name: Install wheel helper
       run: uv pip install --system wheel
+
+    - name: Install wxPython ${{ matrix.wx-version }}
+      run: |
+        uv pip install --system wxPython==${{ matrix.wx-version }}
 
     - name: Install Python dependencies
       run: |
