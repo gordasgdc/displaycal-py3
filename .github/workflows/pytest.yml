@@ -274,6 +274,11 @@ jobs:
           - "4.2.3"
           - "4.2.4"
           - "4.2.5"
+        exclude:
+          - wx-version: "4.2.2"
+            python-version: "3.14"
+          - wx-version: "4.2.3"
+            python-version: "3.14"
 
     steps:
     - uses: actions/checkout@v4
@@ -313,6 +318,6 @@ jobs:
     - name: Archive code coverage results
       uses: actions/upload-artifact@v4
       with:
-        name: code-coverage-report-${{ matrix.python-version }}-macos
+        name: code-coverage-report-${{ matrix.python-version }}-${{ matrix.wx-version }}-macos
         path: htmlcov
         retention-days: 10
