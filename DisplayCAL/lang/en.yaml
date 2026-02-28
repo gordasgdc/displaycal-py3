@@ -227,6 +227,8 @@
 "argyll.dir.invalid": |-
   ArgyllCMS executables not found!
   Please select the directory which contains the executable files (maybe prefixed or suffixed “argyll-” / “-argyll”): %s
+"argyll.use_homebrew": |-
+  Use Homebrew installation (%s)
 "argyll.error.detail": |-
   Detailed ArgyllCMS error message:
 "argyll.instrument.configuration_files.install": |-
@@ -1035,6 +1037,10 @@
   Download failed: %s returned an empty document.
 "download.fail.wrong_size": |-
   Download failed: The file does not have the expected size of %s bytes (received %s bytes).
+"download.retrying": |-
+  Retrying download (%i/%i) in %.1f s...
+"archive.extract.fail.delete": |-
+  Failed to extract archive, deleting file: %s
 "download_install": |-
   Download & install
 "downloading": |-
@@ -1108,7 +1114,7 @@
 "error.copy_failed": |-
   The file “%s” could not be copied to “%s”.
 "error.deletion": |-
-  An error occured while moving files to the %s. Some files might not have been removed.
+  An error occurred while moving files to the %s. Some files might not have been removed.
 "error.dir_creation": |-
   The directory “%s” could not be created. Maybe there are access restrictions. Please allow writing access or choose another directory.
 "error.dir_notdir": |-
@@ -1618,6 +1624,10 @@
   Override minimum display update delay
 "measure.testchart": |-
   Measure testchart
+"specplot.choose": |-
+  Please choose a file for specplot
+"specplot.run": |-
+  Run specplot...
 "measureframe.center": |-
   Center
 "measureframe.center.manual": |-

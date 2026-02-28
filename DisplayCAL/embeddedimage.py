@@ -1,3 +1,9 @@
+"""Provides the `PyEmbeddedImage` class for embedding PNG image data in Python code.
+
+It is primarily used with the `wx.tools.img2py` code generator to simplify the
+distribution of image assets by embedding them as base64-encoded data within
+Python modules.
+"""
 # ----------------------------------------------------------------------
 # Name:        wx.lib.embeddedimage
 # Purpose:     Defines a class used for embedding PNG images in Python
@@ -14,6 +20,7 @@
 
 import base64
 import io
+
 import wx
 
 try:
@@ -23,7 +30,9 @@ except AttributeError:
 
 
 class PyEmbeddedImage:
-    """PyEmbeddedImage is primarily intended to be used by code generated
+    """A class for embedding PNG images in Python code.
+
+    PyEmbeddedImage is primarily intended to be used by code generated
     by img2py as a means of embedding image data in a python module so
     the image can be used at runtime without needing to access the
     image from an image file.  This makes distributing icons and such
@@ -37,35 +46,56 @@ class PyEmbeddedImage:
     from a database.  In this case pass False for isBase64 (unless the
     data actually is base64 encoded.)  Any image type that
     wx.ImageFromStream can handle should be okay.
+
+    Args:
+        data (bytes): The image data, which can be base64 encoded or raw binary
+            data.
+        is_base64 (bool): If True, the `data` is expected to be base64 encoded.
+            If False, the `data` is treated as raw binary data. Defaults to
+            True.
     """
 
-    def __init__(self, data, isBase64=True):
+    def __init__(self, data: bytes, is_base64: bool = True) -> None:
         self.data = data
-        self.isBase64 = isBase64
+        self.is_base64 = is_base64
 
-    def GetBitmap(self):
+    def GetBitmap(self) -> wx.Bitmap:  # noqa: N802
+        """Return a wx.Bitmap object created from the embedded image data.
+
+        Returns:
+            wx.Bitmap: The bitmap created from the embedded data.
+        """
         return wx.BitmapFromImage(self.GetImage())
 
-    def GetData(self):
-        if self.isBase64:
+    def GetData(self) -> bytes:  # noqa: N802
+        """Return the raw image data, decoding it if necessary.
+
+        Returns:
+            bytes: The raw image data, decoded if it was base64 encoded.
+        """
+        if self.is_base64:
             data = b64decode(self.data)
         # TODO: what is ``data`` if self.isBase64 is False
         return data
 
-    def GetIcon(self):
+    def GetIcon(self) -> wx.Icon:  # noqa: N802
+        """Return a wx.Icon object created from the embedded image data.
+
+        Returns:
+            wx.Icon: The icon created from the embedded data.
+        """
         icon = wx.EmptyIcon()
         icon.CopyFromBitmap(self.GetBitmap())
         return icon
 
-    def GetImage(self):
+    def GetImage(self) -> wx.Image:  # noqa: N802
+        """Return a wx.Image object created from the embedded image data.
+
+        Returns:
+            wx.Image: The image created from the embedded data.
+        """
         stream = io.BytesIO(self.GetData())
         return wx.ImageFromStream(stream)
-
-    # added for backwards compatibility
-    getBitmap = GetBitmap
-    getData = GetData
-    getIcon = GetIcon
-    getImage = GetImage
 
     # define properties, for convenience
     Bitmap = property(GetBitmap)

@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import os
 import sys
 
@@ -12,8 +10,10 @@ from DisplayCAL.cgats import CGATS
 def main(calfilename, caloutfilename, r_max, g_max, b_max):
     cal = CGATS(calfilename)
     for values in cal[0].DATA.itervalues():
-        for label in "RGB":
-            values["RGB_" + label] *= float(locals()[label.lower() + "_max"])
+        values["RGB_R"] *= float(r_max)
+        values["RGB_G"] *= float(g_max)
+        values["RGB_B"] *= float(b_max)
+
     cal.write(caloutfilename)
 
 

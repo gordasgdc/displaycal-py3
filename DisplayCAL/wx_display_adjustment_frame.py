@@ -1,0 +1,1853 @@
+"""Interactive display calibration UI."""
+
+import os
+import platform
+import re
+import sys
+
+from DisplayCAL import audio, config
+from DisplayCAL import localization as lang
+from DisplayCAL.config import (
+    get_bitmap,
+    get_data_path,
+    get_default_dpi,
+    get_icon,
+    get_icon_bundle,
+    getcfg,
+    setcfg,
+)
+from DisplayCAL.lib.agw import labelbook
+from DisplayCAL.lib.agw.fmresources import (
+    IMG_NONE,
+    IMG_OVER_EW_BORDER,
+    IMG_OVER_IMG,
+    IMG_OVER_PIN,
+    INB_BORDER,
+    INB_BOTTOM,
+    INB_FIT_BUTTON,
+    INB_FIT_LABELTEXT,
+    INB_LEFT,
+    INB_RIGHT,
+    INB_SHOW_ONLY_IMAGES,
+    INB_SHOW_ONLY_TEXT,
+    INB_TOP,
+    INB_USE_PIN_BUTTON,
+    INB_WEB_HILITE,
+)
+from DisplayCAL.lib.agw.pygauge import PyGauge
+from DisplayCAL.log import get_file_logger
+from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.options import DEBUG
+from DisplayCAL.util_list import intlist
+from DisplayCAL.util_str import wrap
+from DisplayCAL.wx_addons import wx
+from DisplayCAL.wx_windows import (
+    NAV_KEYCODES,
+    NUMPAD_KEYCODES,
+    PROCESSING_KEYCODES,
+    BaseFrame,
+    FlatShadedButton,
+    wx_Panel,
+)
+
+BGCOLOUR = wx.Colour(0x33, 0x33, 0x33)
+BORDERCOLOUR = wx.Colour(0x22, 0x22, 0x22)
+FGCOLOUR = wx.Colour(0x99, 0x99, 0x99)
+
+CRT = True
+
+
+def get_panel(parent, size=wx.DefaultSize):
+    """Get a panel with the specified size."""
+    scale = max(getcfg("app.dpi") / get_default_dpi(), 1.0)
+    size = tuple(round(v * scale) for v in size)
+    panel = wx_Panel(parent, wx.ID_ANY, size=size)
+    if DEBUG:
+        from random import randint
+
+        panel.SetBackgroundColour(
+            wx.Colour(randint(0, 255), randint(0, 255), randint(0, 255))  # noqa: S311
+        )
+        get_panel.i += 1
+        wx.StaticText(panel, wx.ID_ANY, str(get_panel.i) + " " + str(size))
+    else:
+        panel.SetBackgroundColour(BGCOLOUR)
+    return panel
+
+
+get_panel.i = 0
+
+
+def get_xy_vt_dE(groups):
+    """Get x, y, vt, and dE from a regex match."""
+    x = float(groups[0])
+    y = float(groups[1])
+    vt = ""
+    dE = 0
+    if len(groups) > 2:
+        vt = groups[2] or ""
+        if groups[3]:
+            dE = float(groups[3])
+    return x, y, vt, dE
+
+
+def set_label_and_size(txtctrl, label):
+    """Set the label and size of a text control."""
+    txtctrl.SetMinSize((txtctrl.GetSize()[0], -1))
+    txtctrl.SetLabel(label)
+    txtctrl.SetMinSize(txtctrl.GetSize())
+
+
+class DisplayAdjustmentImageContainer(labelbook.ImageContainer):
+    """Overridden agw.ImageContainer.
+
+    Override default agw ImageContainer to use BackgroundColour and
+    ForegroundColour with no borders/labeltext and hilite image instead of
+    hilite shading.
+    """
+
+    def __init__(
+        self,
+        parent,
+        id=wx.ID_ANY,  # noqa: A002
+        pos=wx.DefaultPosition,
+        size=wx.DefaultSize,
+        style=0,
+        agw_style=0,
+        name="ImageContainer",
+    ):
+        labelbook.ImageContainer.__init__(
+            self, parent, id, pos, size, style, agw_style, name
+        )
+        imagelist = None
+        for img in ("tab_hilite", "tab_selected"):
+            bmp = get_bitmap(f"theme/{img}")
+            if not imagelist:
+                img_w, img_h = bmp.Size
+                imagelist = wx.ImageList(img_w, img_h)
+            imagelist.Add(bmp)
+        self.stateimgs = imagelist
+
+    def HitTest(self, pt):
+        """Return the index of the tab at the specified position or ``wx.NOT_FOUND``.
+
+        Return the index of the tab at the specified position or ``wx.NOT_FOUND``
+        if ``None``, plus the flag style of L{HitTest}.
+
+        Args:
+            pt (wx.Point): an instance of `wx.Point`, to test for hits.
+
+        Returns:
+            tupe(int, int): The index of the tab at the specified position plus
+                the hit test flag, which can be one of the following bits:
+
+                ====================== ======= ================================
+                HitTest Flags           Value  Description
+                ====================== ======= ================================
+                ``IMG_OVER_IMG``             0 The mouse is over the tab icon
+                ``IMG_OVER_PIN``             1 The mouse is over the pin button
+                ``IMG_OVER_EW_BORDER``       2 The mouse is over the east-west
+                                               book border
+                ``IMG_NONE``                 3 Nowhere
+                ====================== ======= ================================
+        """
+        if self.GetParent().GetParent().is_busy:
+            return -1, IMG_NONE
+
+        style = self.GetParent().GetAGWWindowStyleFlag()
+
+        if style & INB_USE_PIN_BUTTON and self._pinBtnRect.Contains(pt):
+            return -1, IMG_OVER_PIN
+
+        for i in range(len(self._pagesInfoVec)):
+            if self._pagesInfoVec[i].GetPosition() == wx.Point(-1, -1):
+                break
+            if i in self.GetParent().disabled_pages:
+                continue
+
+            # For Web Hover style, we test the TextRect
+            if not self.HasAGWFlag(INB_WEB_HILITE):
+                buttonRect = wx.RectPS(
+                    (
+                        self._pagesInfoVec[i].GetPosition()[0],
+                        self._pagesInfoVec[i].GetPosition()[1] + i * 8,
+                    ),
+                    self._pagesInfoVec[i].GetSize(),
+                )
+            else:
+                buttonRect = self._pagesInfoVec[i].GetTextRect()
+
+            if buttonRect.Contains(pt):
+                return i, IMG_OVER_IMG
+
+        if self.PointOnSash(pt):
+            return -1, IMG_OVER_EW_BORDER
+        return -1, IMG_NONE
+
+    def OnPaint(self, event):
+        """Handle the ``wx.EVT_PAINT`` event for L{ImageContainer}.
+
+        Args:
+            event (wx.PaintEvent): a `wx.PaintEvent` event to be processed.
+        """
+        dc = wx.BufferedPaintDC(self)
+        style = self.GetParent().GetAGWWindowStyleFlag()
+
+        backBrush = wx.Brush(self.GetBackgroundColour())
+        if style & INB_BORDER:
+            borderPen = wx.Pen(wx.SystemSettings_GetColour(wx.SYS_COLOUR_3DSHADOW))
+        else:
+            borderPen = wx.TRANSPARENT_PEN
+
+        size = self.GetSize()
+
+        # Background
+        dc.SetBrush(backBrush)
+
+        borderPen.SetWidth(1)
+        dc.SetPen(borderPen)
+        dc.DrawRectangle(0, 0, size.x, size.y)
+        bUsePin = ((style & INB_USE_PIN_BUTTON and [True]) or [False])[0]
+
+        if bUsePin:
+            # Draw the pin button
+            clientRect = self.GetClientRect()
+            pinRect = wx.Rect(clientRect.GetX() + clientRect.GetWidth() - 20, 2, 20, 20)
+            self.DrawPin(dc, pinRect, not self._bCollapsed)
+
+            if self._bCollapsed:
+                return
+
+        clientSize = 0
+        bUseYcoord = style & INB_RIGHT or style & INB_LEFT
+        clientSize = size.GetHeight() if bUseYcoord else size.GetWidth()
+
+        # We reserver 20 pixels for the 'pin' button
+
+        # The drawing of the images start position. This is
+        # depenedent of the style, especially when Pin button
+        # style is requested
+
+        if bUsePin:
+            if style & INB_TOP or style & INB_BOTTOM:
+                pos = ((style & INB_BORDER and [0]) or [1])[0]
+            else:
+                pos = ((style & INB_BORDER and [20]) or [21])[0]
+        else:
+            pos = ((style & INB_BORDER and [0]) or [1])[0]
+
+        nPadding = 4  # Pad text with 2 pixels on the left and right
+        nTextPaddingLeft = 2
+
+        count = 0
+
+        for i in range(len(self._pagesInfoVec)):
+            if (
+                self.GetParent().GetParent().is_busy
+                and i != self.GetParent().GetSelection()
+            ):
+                continue
+            if i in self.GetParent().disabled_pages:
+                continue
+
+            count = count + 1
+
+            # incase the 'fit button' style is applied,
+            # we set the rectangle width to the
+            # text width plus padding
+            # Incase the style IS applied,
+            # but the style is either LEFT or RIGHT
+            # we ignore it
+            normalFont = wx.SystemSettings_GetFont(wx.SYS_DEFAULT_GUI_FONT)
+            dc.SetFont(normalFont)
+
+            textWidth, textHeight = dc.GetTextExtent(self._pagesInfoVec[i].GetCaption())
+
+            # Restore font to be normal
+            normalFont.SetWeight(wx.FONTWEIGHT_NORMAL)
+            dc.SetFont(normalFont)
+
+            # Default values for the surronounding rectangle
+            # around a button
+            rectWidth = self._nImgSize  # To avoid the recangle to 'touch' the borders
+            rectHeight = self._nImgSize
+
+            # Incase the style requires non-fixed button (fit to text)
+            # recalc the rectangle width
+            if (
+                style & INB_FIT_BUTTON
+                and not ((style & INB_LEFT) or (style & INB_RIGHT))
+                and self._pagesInfoVec[i].GetCaption() != ""
+                and not (style & INB_SHOW_ONLY_IMAGES)
+            ):
+                rectWidth = (
+                    (
+                        (textWidth + nPadding * 2) > rectWidth
+                        and [nPadding * 2 + textWidth]
+                    )
+                    or [rectWidth]
+                )[0]
+
+                # Make the width an even number
+                if rectWidth % 2 != 0:
+                    rectWidth += 1
+
+            # Check that we have enough space to draw the button
+            # If Pin button is used, consider its space as well (applicable
+            # for top/botton style) since in the left/right, its size is already
+            # considered in 'pos'
+            pinBtnSize = ((bUsePin and [20]) or [0])[0]
+
+            if pos + rectWidth + pinBtnSize > clientSize:
+                break
+
+            # Calculate the button rectangle
+            modRectWidth = (
+                ((style & INB_LEFT or style & INB_RIGHT) and [rectWidth - 2])
+                or [rectWidth]
+            )[0]
+            modRectHeight = (
+                ((style & INB_LEFT or style & INB_RIGHT) and [rectHeight])
+                or [rectHeight - 2]
+            )[0]
+
+            if bUseYcoord:
+                buttonRect = wx.Rect(1, pos, modRectWidth, modRectHeight)
+            else:
+                buttonRect = wx.Rect(pos, 1, modRectWidth, modRectHeight)
+
+            # if bUseYcoord:
+            #     rect = wx.Rect(0, pos, rectWidth, rectWidth)
+            # else:
+            #     rect = wx.Rect(pos, 0, rectWidth, rectWidth)
+
+            # Incase user set both flags:
+            # INB_SHOW_ONLY_TEXT and INB_SHOW_ONLY_IMAGES
+            # We override them to display both
+
+            if style & INB_SHOW_ONLY_TEXT and style & INB_SHOW_ONLY_IMAGES:
+                style ^= INB_SHOW_ONLY_TEXT
+                style ^= INB_SHOW_ONLY_IMAGES
+                self.GetParent().SetAGWWindowStyleFlag(style)
+
+            # Draw the caption and text
+            imgTopPadding = 0
+            if (
+                not style & INB_SHOW_ONLY_TEXT
+                and self._pagesInfoVec[i].GetImageIndex() != -1
+            ):
+                if bUseYcoord:
+                    imgXcoord = 0
+                    imgYcoord = (
+                        (style & INB_SHOW_ONLY_IMAGES and [pos])
+                        or [pos + imgTopPadding]
+                    )[0] + (8 * (count - 1))
+
+                else:
+                    imgXcoord = pos + (rectWidth / 2) - (self._nImgSize / 2)
+                    imgYcoord = (
+                        (style & INB_SHOW_ONLY_IMAGES and [self._nImgSize / 2])
+                        or [imgTopPadding]
+                    )[0]
+
+                if self._nHoveredImgIdx == i:
+                    self.stateimgs.Draw(
+                        0, dc, 0, imgYcoord, wx.IMAGELIST_DRAW_TRANSPARENT, True
+                    )
+
+                if self._nIndex == i:
+                    self.stateimgs.Draw(
+                        1, dc, 0, imgYcoord, wx.IMAGELIST_DRAW_TRANSPARENT, True
+                    )
+
+                self._ImageList.Draw(
+                    self._pagesInfoVec[i].GetImageIndex(),
+                    dc,
+                    imgXcoord,
+                    imgYcoord,
+                    wx.IMAGELIST_DRAW_TRANSPARENT,
+                    True,
+                )
+
+            # Draw the text
+            if (
+                not style & INB_SHOW_ONLY_IMAGES
+                and self._pagesInfoVec[i].GetCaption() != ""
+            ):
+                dc.SetFont(normalFont)
+
+                # Check if the text can fit the size of the rectangle,
+                # if not truncate it
+                fixedText = self._pagesInfoVec[i].GetCaption()
+                if not style & INB_FIT_BUTTON or (
+                    style & INB_LEFT or (style & INB_RIGHT)
+                ):
+                    fixedText = self.FixTextSize(
+                        dc, self._pagesInfoVec[i].GetCaption(), self._nImgSize * 2 - 4
+                    )
+
+                    # Update the length of the text
+                    textWidth, textHeight = dc.GetTextExtent(fixedText)
+
+                if bUseYcoord:
+                    textOffsetX = (rectWidth - textWidth) / 2
+                    textOffsetY = (
+                        (
+                            not style & INB_SHOW_ONLY_TEXT
+                            and [pos + self._nImgSize + imgTopPadding + 3]
+                        )
+                        or [pos + ((self._nImgSize * 2 - textHeight) / 2)]
+                    )[0]
+
+                else:
+                    textOffsetX = (rectWidth - textWidth) / 2 + pos + nTextPaddingLeft
+                    textOffsetY = (
+                        (
+                            not style & INB_SHOW_ONLY_TEXT
+                            and [self._nImgSize + imgTopPadding + 3]
+                        )
+                        or [((self._nImgSize * 2 - textHeight) / 2)]
+                    )[0]
+
+                dc.SetTextForeground(self.GetForegroundColour())
+                dc.DrawText(fixedText, textOffsetX, textOffsetY)
+
+            # Update the page info
+            self._pagesInfoVec[i].SetPosition(buttonRect.GetPosition())
+            self._pagesInfoVec[i].SetSize(buttonRect.GetSize())
+
+            pos += rectWidth
+
+        # Update all buttons that can not fit into the screen as non-visible
+        # for ii in range(count, len(self._pagesInfoVec)):
+        # self._pagesInfoVec[ii].SetPosition(wx.Point(-1, -1))
+
+        # Draw the pin button
+        if bUsePin:
+            clientRect = self.GetClientRect()
+            pinRect = wx.Rect(clientRect.GetX() + clientRect.GetWidth() - 20, 2, 20, 20)
+            self.DrawPin(dc, pinRect, not self._bCollapsed)
+
+
+class DisplayAdjustmentFlatImageBook(labelbook.FlatImageBook):
+    """Overridden agw.ImageContainer.
+
+    This is a subclass of L{FlatImageBook} that allows you to use
+    BackgroundColour and ForegroundColour with no borders/labeltext and hilite
+    image instead of hilite shading.
+
+    Args:
+        parent (wx.Window): The parent window.
+        id (int): The identifier for the FlatImageBook.
+        pos (wx.Point): The position of the FlatImageBook.
+        size (wx.Size): The size of the FlatImageBook.
+        style (int): The style of the FlatImageBook.
+        agw_style (int): The advanced GUI window style flags.
+        name (str): The name of the FlatImageBook.
+    """
+
+    def __init__(
+        self,
+        parent,
+        id=wx.ID_ANY,  # noqa: A002
+        pos=wx.DefaultPosition,
+        size=wx.DefaultSize,
+        style=0,
+        agw_style=0,
+        name="FlatImageBook",
+    ):
+        labelbook.FlatImageBook.__init__(
+            self, parent, id, pos, size, style, agw_style, name
+        )
+
+    def CreateImageContainer(self):
+        """Create the image container for the FlatImageBook.
+
+        Returns:
+            DisplayAdjustmentImageContainer: An instance of the custom image.
+        """
+        return DisplayAdjustmentImageContainer(
+            self, wx.ID_ANY, agw_style=self.GetAGWWindowStyleFlag()
+        )
+
+    def SetAGWWindowStyleFlag(self, agw_style):
+        """Set the window style.
+
+        Args:
+            agw_style: Can be a combination of the following bits.
+
+         =========================== =========== ==================================================
+         Window Styles               Hex Value   Description
+         =========================== =========== ==================================================
+         ``INB_BOTTOM``                      0x1 Place labels below the page area. Available only for L{FlatImageBook}.
+         ``INB_LEFT``                        0x2 Place labels on the left side. Available only for L{FlatImageBook}.
+         ``INB_RIGHT``                       0x4 Place labels on the right side.
+         ``INB_TOP``                         0x8 Place labels above the page area.
+         ``INB_BORDER``                     0x10 Draws a border around L{LabelBook} or L{FlatImageBook}.
+         ``INB_SHOW_ONLY_TEXT``             0x20 Shows only text labels and no images. Available only for L{LabelBook}.
+         ``INB_SHOW_ONLY_IMAGES``           0x40 Shows only tab images and no label texts. Available only for L{LabelBook}.
+         ``INB_FIT_BUTTON``                 0x80 Displays a pin button to show/hide the book control.
+         ``INB_DRAW_SHADOW``               0x100 Draw shadows below the book tabs. Available only for L{LabelBook}.
+         ``INB_USE_PIN_BUTTON``            0x200 Displays a pin button to show/hide the book control.
+         ``INB_GRADIENT_BACKGROUND``       0x400 Draws a gradient shading on the tabs background. Available only for L{LabelBook}.
+         ``INB_WEB_HILITE``                0x800 On mouse hovering, tabs behave like html hyperlinks. Available only for L{LabelBook}.
+         ``INB_NO_RESIZE``                0x1000 Don't allow resizing of the tab area.
+         ``INB_FIT_LABELTEXT``            0x2000 Will fit the tab area to the longest text (or text+image if you have images) in all the tabs.
+         =========================== =========== ==================================================
+        """  # noqa: E501
+        self._agw_style = agw_style
+
+        # Check that we are not in initialization process
+        if self._bInitializing:
+            return
+
+        if not self._pages:
+            return
+
+        # Detach the windows attached to the sizer
+        if self.GetSelection() >= 0:
+            self._mainSizer.Detach(self._windows[self.GetSelection()])
+
+        self._mainSizer.Detach(self._pages)
+
+        # Create new sizer with the requested orientaion
+        className = self.GetName()
+
+        if className == "LabelBook" or agw_style & INB_LEFT or agw_style & INB_RIGHT:
+            self._mainSizer = wx.BoxSizer(wx.HORIZONTAL)
+        else:
+            self._mainSizer = wx.BoxSizer(wx.VERTICAL)
+
+        self.SetSizer(self._mainSizer)
+
+        # Add the tab container and the separator
+        self._mainSizer.Add(self._pages, 0, wx.EXPAND)
+
+        if className == "FlatImageBook":
+            scale = getcfg("app.dpi") / get_default_dpi()
+            scale = max(scale, 1)
+            if agw_style & INB_LEFT or agw_style & INB_RIGHT:
+                border = round(24 * scale)
+                self._pages.SetSizeHints(self._pages._nImgSize + border, -1)
+            else:
+                self._pages.SetSizeHints(-1, self._pages._nImgSize)
+
+        # Attach the windows back to the sizer to the sizer
+        if self.GetSelection() >= 0:
+            self.DoSetSelection(self._windows[self.GetSelection()])
+
+        if agw_style & INB_FIT_LABELTEXT:
+            self.ResizeTabArea()
+
+        self._mainSizer.Layout()
+        dummy = wx.SizeEvent(wx.DefaultSize)
+        wx.PostEvent(self, dummy)
+        self._pages.Refresh()
+
+
+class DisplayAdjustmentPanel(wx_Panel):
+    """Panel for interactive display adjustment.
+
+    Args:
+        parent (None | wx.Window): The parent window.
+        id (int): The identifier for the panel.
+        title (str): The title of the panel.
+        ctrltype (str): The type of control to display, e.g., "luminance",
+            "black_level", "white_point", "black_point", or "rgb_offset".
+    """
+
+    def __init__(self, parent=None, id=wx.ID_ANY, title="", ctrltype="luminance"):  # noqa: A002
+        # wx_Panel.__init__(self, parent, id)
+        super().__init__(parent, id)
+        self.ctrltype = ctrltype
+        self.SetBackgroundColour(BGCOLOUR)
+        self.SetForegroundColour(FGCOLOUR)
+        self.SetSizer(wx.BoxSizer(wx.VERTICAL))
+        self.title_txt = wx.StaticText(self, wx.ID_ANY, title)
+        font = self.title_txt.GetFont()
+        font.SetPointSize(font.PointSize + 1)
+        font.SetWeight(wx.FONTWEIGHT_BOLD)
+        self.title_txt.SetFont(font)
+        self.title_txt.SetForegroundColour(FGCOLOUR)
+        self.GetSizer().Add(self.title_txt)
+        self.sizer = wx.FlexGridSizer(0, 2, 0, 0)
+        self.GetSizer().Add(self.sizer, flag=wx.TOP, border=8)
+        self.gauges = {}
+        self.txt = {}
+        if ctrltype == "check_all":
+            txt = wx.StaticText(
+                self,
+                wx.ID_ANY,
+                lang.getstr("calibration.interactive_display_adjustment.check_all"),
+            )
+            txt.SetForegroundColour(FGCOLOUR)
+            txt.SetMaxFontSize(10)
+            txt.Wrap(250)
+            self.desc = txt
+            self.GetSizer().Insert(1, txt, flag=wx.TOP, border=8)
+            for name, lstr in (
+                ("luminance", "calibration.luminance"),
+                ("black_level", "calibration.black_luminance"),
+                ("white_point", "whitepoint"),
+                ("black_point", "black_point"),
+            ):
+                bitmap = wx.StaticBitmap(
+                    self, wx.ID_ANY, get_bitmap(f"theme/icons/16x16/{name}")
+                )
+                bitmap.SetToolTipString(lang.getstr(lstr))
+                self.add_txt(name, bitmap, 4)
+            return
+        if ctrltype.startswith("rgb"):
+            if ctrltype == "rgb_offset":
+                # CRT
+                lstr = "calibration.interactive_display_adjustment.black_point.crt"
+            else:
+                lstr = "calibration.interactive_display_adjustment.white_point"
+            txt = wx.StaticText(
+                self,
+                wx.ID_ANY,
+                lang.getstr(lstr)
+                + " "
+                + lang.getstr(
+                    "calibration.interactive_display_adjustment.generic_hint.plural"
+                ),
+            )
+            txt.SetForegroundColour(FGCOLOUR)
+            txt.SetMaxFontSize(10)
+            txt.Wrap(250)
+            self.desc = txt
+            self.GetSizer().Insert(1, txt, flag=wx.TOP, border=8)
+            self.sizer.Add((1, 4))
+            self.sizer.Add((1, 4))
+            self.add_marker()
+            self.add_gauge("R", f"{ctrltype}_red", "R")
+            self.sizer.Add((1, 4))
+            self.sizer.Add((1, 4))
+            self.add_gauge("G", f"{ctrltype}_green", "G")
+            self.sizer.Add((1, 4))
+            self.sizer.Add((1, 4))
+            self.add_gauge("B", f"{ctrltype}_blue", "B")
+            self.add_marker("btm")
+            self.add_txt("rgb")
+        else:
+            txt = wx.StaticText(self, wx.ID_ANY, " ")
+            txt.SetForegroundColour(FGCOLOUR)
+            txt.SetMaxFontSize(10)
+            txt.Wrap(250)
+            self.desc = txt
+            self.GetSizer().Insert(1, txt, flag=wx.TOP, border=8)
+        self.sizer.Add((1, 4))
+        self.sizer.Add((1, 4))
+        self.add_marker()
+        bitmapnames = {"rgb_offset": "black_level", "rgb_gain": "luminance"}
+        lstrs = {
+            "black_level": "calibration.black_luminance",
+            "rgb_offset": "calibration.black_luminance",
+            "rgb_gain": "calibration.luminance",
+            "luminance": "calibration.luminance",
+        }
+        self.add_gauge(
+            "L",
+            bitmapnames.get(ctrltype, ctrltype),
+            lang.getstr(lstrs.get(ctrltype, ctrltype)),
+        )
+        self.add_marker("btm")
+        self.add_txt("luminance")
+
+    def add_gauge(self, name="R", bitmap_name=None, tooltip=None):
+        """Add a gauge to the panel.
+
+        Args:
+            name (str): The name of the gauge, e.g., "R", "G", "B", or "L".
+            bitmap_name (None | str): The name of the bitmap to use for the
+                gauge label.
+            tooltip (None | str): An optional tooltip for the gauge label.
+        """
+        if bitmap_name == "black_level" or bitmap_name.startswith("rgb_offset"):
+            gaugecolors = {
+                "R": (wx.Colour(102, 0, 0), wx.Colour(204, 0, 0)),
+                "G": (wx.Colour(0, 102, 0), wx.Colour(0, 204, 0)),
+                "B": (wx.Colour(0, 0, 102), wx.Colour(0, 0, 204)),
+                "L": (wx.Colour(102, 102, 102), wx.Colour(204, 204, 204)),
+            }
+        else:
+            gaugecolors = {
+                "R": (wx.Colour(153, 0, 0), wx.Colour(255, 0, 0)),
+                "G": (wx.Colour(0, 153, 0), wx.Colour(0, 255, 0)),
+                "B": (wx.Colour(0, 0, 153), wx.Colour(0, 0, 255)),
+                "L": (wx.Colour(153, 153, 153), wx.Colour(255, 255, 255)),
+            }
+        scale = max(getcfg("app.dpi") / get_default_dpi(), 1.0)
+        self.gauges[name] = PyGauge(self, size=(round(200 * scale), round(8 * scale)))
+        self.gauges[name].SetBackgroundColour(BORDERCOLOUR)
+        self.gauges[name].SetBarGradient(gaugecolors[name])
+        self.gauges[name].SetBorderColour(BORDERCOLOUR)
+        self.gauges[name].SetValue(0)
+        if bitmap_name:
+            self.gauges[name].label = wx.StaticBitmap(
+                self, wx.ID_ANY, get_bitmap(f"theme/icons/16x16/{bitmap_name}")
+            )
+            if tooltip:
+                self.gauges[name].label.SetToolTipString(tooltip)
+        else:
+            self.gauges[name].label = wx.StaticText(self, wx.ID_ANY, name)
+            self.gauges[name].label.SetForegroundColour(FGCOLOUR)
+        self.sizer.Add(
+            self.gauges[name].label, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=8
+        )
+        self.sizer.Add(self.gauges[name], flag=wx.ALIGN_CENTER_VERTICAL)
+
+    def add_marker(self, direction="top"):
+        """Add a marker line to the panel.
+
+        Args:
+            direction (str): The direction of the marker, either "top" or "btm".
+        """
+        self.sizer.Add((1, 1))
+        scale = max(getcfg("app.dpi") / get_default_dpi(), 1.0)
+        self.sizer.Add(
+            wx.StaticBitmap(
+                self,
+                -1,
+                get_bitmap(f"theme/marker_{direction}"),
+                size=(round(200 * scale), round(10 * scale)),
+            )
+        )
+
+    def add_txt(self, name, spacer=None, border=8):
+        """Add a text label with a checkmark icon.
+
+        Args:
+            name (str): The name of the text control.
+            spacer (None | wx.Window): An optional spacer window to add before
+                the checkmark.
+            border (int): The border size around the text control.
+        """
+        checkmark = wx.StaticBitmap(
+            self, wx.ID_ANY, get_bitmap("theme/icons/16x16/checkmark")
+        )
+        txtsizer = wx.BoxSizer(wx.HORIZONTAL)
+        if spacer:
+            self.sizer.Add(spacer, flag=wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, border=8)
+            txtsizer.Add(checkmark, flag=wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, border=8)
+        else:
+            self.sizer.Add(
+                checkmark,
+                flag=wx.RIGHT | wx.TOP | wx.BOTTOM | wx.ALIGN_CENTER_VERTICAL,
+                border=8,
+            )
+        initial = lang.getstr("initial")
+        current = lang.getstr("current")
+        target = lang.getstr("target")
+        strings = {len(initial): initial, len(current): current, len(target): target}
+        longest = strings[max(strings.keys())]
+        label = longest + " x 0.0000 y 0.0000 VDT 0000K 0.0 \u0394E*00\nX"
+        checkmark.GetContainingSizer().Hide(checkmark)
+        self.sizer.Add(
+            txtsizer,
+            flag=wx.TOP | wx.BOTTOM | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND,
+            border=border,
+        )
+        self.txt[name] = wx.StaticText(
+            self, wx.ID_ANY, label, style=wx.ST_NO_AUTORESIZE
+        )
+        self.txt[name].SetForegroundColour(BGCOLOUR)
+        self.txt[name].SetMaxFontSize(10)
+        self.txt[name].checkmark = checkmark
+        self.txt[name].spacer = spacer
+        txtsizer.Add(self.txt[name], 1)
+        self.txt[name].Fit()
+        self.txt[name].SetMinSize(
+            (self.txt[name].GetSize()[0], self.txt[name].GetSize()[1])
+        )
+
+    def update_desc(self):
+        """Update the description label based on the control type."""
+        if self.ctrltype not in ("luminance", "black_level"):
+            return
+        if self.ctrltype == "black_level":
+            lstr = "calibration.interactive_display_adjustment.black_level.crt"
+        elif getcfg("measurement_mode") == "c":
+            # CRT
+            lstr = "calibration.interactive_display_adjustment.white_level.crt"
+        else:
+            lstr = "calibration.interactive_display_adjustment.white_level.lcd"
+        self.desc.SetLabel(
+            lang.getstr(lstr)
+            + " "
+            + lang.getstr(
+                "calibration.interactive_display_adjustment.generic_hint.singular"
+            )
+        )
+        self.desc.Wrap(250)
+
+
+NEVER = False
+if os.getenv("XDG_SESSION_TYPE") == "wayland" and NEVER:
+    windowcls = wx.Dialog
+else:
+    windowcls = BaseFrame
+
+
+class DisplayAdjustmentFrame(windowcls):
+    """Main window for interactive display adjustment.
+
+    Args:
+        parent (None | wx.Window): The parent window.
+        handler (None | callable): A handler function to call when an event
+            occurs.
+        keyhandler (None | callable): A key handler function to call when a key
+            event occurs.
+        start_timer (bool): Whether to start a timer for periodic updates.
+    """
+
+    def __init__(self, parent=None, handler=None, keyhandler=None, start_timer=True):
+        # windowcls.__init__(self, parent, wx.ID_ANY,
+        #                    lang.getstr("calibration.interactive_display_adjustment"),
+        #                    style=wx.DEFAULT_FRAME_STYLE | wx.TAB_TRAVERSAL,
+        #                    name="displayadjustmentframe")
+        super().__init__(
+            parent,
+            wx.ID_ANY,
+            lang.getstr("calibration.interactive_display_adjustment"),
+            style=wx.DEFAULT_FRAME_STYLE | wx.TAB_TRAVERSAL,
+            name="displayadjustmentframe",
+        )
+        self.SetIcons(get_icon_bundle([256, 48, 32, 16], APPNAME))
+        self.SetBackgroundColour(BGCOLOUR)
+        self.sizer = wx.FlexGridSizer(0, 3, 0, 0)
+        self.sizer.AddGrowableCol(1)
+        self.sizer.AddGrowableRow(2)
+        self.SetSizer(self.sizer)
+
+        # FlatImageNotebook
+        self.lb = DisplayAdjustmentFlatImageBook(
+            self, agw_style=INB_LEFT | INB_SHOW_ONLY_IMAGES
+        )
+        self.lb.SetBackgroundColour(BGCOLOUR)
+        self.add_panel((12, 12), flag=wx.EXPAND)
+        self.add_panel((12, 12), flag=wx.EXPAND)
+        self.add_panel((12, 12), flag=wx.EXPAND)
+        self.add_panel((12, 12), flag=wx.EXPAND)
+        self.sizer.Add(self.lb, 1, flag=wx.EXPAND)
+        self.add_panel((12, 12), flag=wx.EXPAND)
+
+        self.pagenum_2_argyll_key_num = {}
+
+        # Page - black luminance
+        self.page_black_luminance = DisplayAdjustmentPanel(
+            self, wx.ID_ANY, lang.getstr("calibration.black_luminance"), "black_level"
+        )
+        self.lb.AddPage(
+            self.page_black_luminance,
+            lang.getstr("calibration.black_luminance"),
+            True,
+            0,
+        )
+        self.pagenum_2_argyll_key_num[len(self.pagenum_2_argyll_key_num)] = "1"
+
+        # Page - white point
+        self.page_white_point = DisplayAdjustmentPanel(
+            self,
+            wx.ID_ANY,
+            lang.getstr("whitepoint") + " / " + lang.getstr("calibration.luminance"),
+            "rgb_gain",
+        )
+        self.lb.AddPage(self.page_white_point, lang.getstr("whitepoint"), True, 1)
+        self.pagenum_2_argyll_key_num[len(self.pagenum_2_argyll_key_num)] = "2"
+
+        # Page - luminance
+        self.page_luminance = DisplayAdjustmentPanel(
+            self, wx.ID_ANY, lang.getstr("calibration.luminance")
+        )
+        self.lb.AddPage(
+            self.page_luminance, lang.getstr("calibration.luminance"), True, 2
+        )
+        self.pagenum_2_argyll_key_num[len(self.pagenum_2_argyll_key_num)] = "3"
+
+        # Page - black point
+        self.page_black_point = DisplayAdjustmentPanel(
+            self,
+            wx.ID_ANY,
+            lang.getstr("black_point")
+            + " / "
+            + lang.getstr("calibration.black_luminance"),
+            "rgb_offset",
+        )
+        self.lb.AddPage(self.page_black_point, lang.getstr("black_point"), True, 3)
+        self.pagenum_2_argyll_key_num[len(self.pagenum_2_argyll_key_num)] = "4"
+
+        # Page - check all
+        self.page_check_all = DisplayAdjustmentPanel(
+            self, wx.ID_ANY, lang.getstr("calibration.check_all"), "check_all"
+        )
+        self.lb.AddPage(
+            self.page_check_all, lang.getstr("calibration.check_all"), True, 4
+        )
+        self.pagenum_2_argyll_key_num[len(self.pagenum_2_argyll_key_num)] = "5"
+
+        # Set colours on tab list
+        self.lb.Children[0].SetBackgroundColour(BGCOLOUR)
+        self.lb.Children[0].SetForegroundColour(FGCOLOUR)
+        # Sound when measuring
+        # Needs to be stereo!
+        self.measurement_sound = audio.Sound(get_data_path("beep.wav"))
+
+        # Add buttons
+        self.btnsizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.add_panel((12, 12), flag=wx.EXPAND)
+        self.add_panel((12, 12), flag=wx.EXPAND)
+        self.add_panel((12, 12), flag=wx.EXPAND)
+        self.add_panel((12, 12), flag=wx.EXPAND)
+        self.sizer.Add(self.btnsizer, flag=wx.ALIGN_RIGHT | wx.EXPAND)
+        self.btnsizer.Add(get_panel(self, (2, 12)), 1, flag=wx.EXPAND)
+        self.indicator_panel = get_panel(self, (22, 12))
+        self.indicator_panel.SetSizer(wx.BoxSizer(wx.HORIZONTAL))
+        self.indicator_panel.SetForegroundColour(FGCOLOUR)
+        self.btnsizer.Add(self.indicator_panel, flag=wx.EXPAND)
+        scale = max(getcfg("app.dpi") / get_default_dpi(), 1.0)
+        self.indicator_ctrl = wx.StaticBitmap(
+            self.indicator_panel,
+            wx.ID_ANY,
+            get_icon(10, "empty", use_mask=True),
+            size=(round(10 * scale), round(10 * scale)),
+        )
+        self.indicator_ctrl.SetForegroundColour(FGCOLOUR)
+        self.indicator_panel.GetSizer().Add(
+            self.indicator_ctrl, flag=wx.ALIGN_CENTER_VERTICAL
+        )
+        self.indicator_panel.GetSizer().Add(
+            get_panel(self.indicator_panel, (10, 12)), flag=wx.EXPAND
+        )
+        self.create_start_interactive_adjustment_button()
+        self.adjustment_btn.SetDefault()
+        self.btnsizer.Add(get_panel(self, (6, 12)), flag=wx.EXPAND)
+        bitmap = self.get_sound_on_off_btn_bitmap()
+        self.sound_on_off_btn = self.create_gradient_button(
+            bitmap, "", name="sound_on_off_btn"
+        )
+        self.sound_on_off_btn.SetToolTipString(lang.getstr("measurement.play_sound"))
+        self.sound_on_off_btn.Bind(wx.EVT_BUTTON, self.measurement_play_sound_handler)
+        self.btnsizer.Add(get_panel(self, (12, 12)), flag=wx.EXPAND)
+        self.calibration_btn = self.create_gradient_button(
+            get_bitmap("theme/icons/10x10/skip"), "", name="calibration_btn"
+        )
+        self.calibration_btn.Bind(wx.EVT_BUTTON, self.continue_to_calibration)
+        self.calibration_btn.Disable()
+        self.add_panel((12, 12), flag=wx.EXPAND)
+        self.add_panel((12, 12), flag=wx.EXPAND)
+        self.add_panel((12, 12), flag=wx.EXPAND)
+        self.add_panel((12, 12), flag=wx.EXPAND)
+
+        self.keyhandler = keyhandler
+        self.id_to_keycode = {}
+        if sys.platform == "darwin":
+            # Use an accelerator table for tab, space, 0-9, A-Z, numpad,
+            # navigation keys and processing keys
+            keycodes = [wx.WXK_TAB, wx.WXK_SPACE]
+            keycodes.extend(list(range(ord("0"), ord("9"))))
+            keycodes.extend(list(range(ord("A"), ord("Z"))))
+            keycodes.extend(NUMPAD_KEYCODES)
+            keycodes.extend(NAV_KEYCODES)
+            keycodes.extend(PROCESSING_KEYCODES)
+            for keycode in keycodes:
+                self.id_to_keycode[wx.Window.NewControlId()] = keycode
+            accels = []
+            for id_ in self.id_to_keycode:
+                keycode = self.id_to_keycode[id_]
+                self.Bind(wx.EVT_MENU, self.key_handler, id=id_)
+                accels.append((wx.ACCEL_NORMAL, keycode, id_))
+                if keycode == wx.WXK_TAB:
+                    accels.append((wx.ACCEL_SHIFT, keycode, id_))
+            self.SetAcceleratorTable(wx.AcceleratorTable(accels))
+        else:
+            self.Bind(wx.EVT_CHAR_HOOK, self.key_handler)
+
+        # Event handlers
+        self.Bind(wx.EVT_CLOSE, self.OnClose, self)
+        self.Bind(wx.EVT_MOVE, self.OnMove, self)
+        self.timer = wx.Timer(self)
+        if handler:
+            self.Bind(wx.EVT_TIMER, handler, self.timer)
+        self.Bind(labelbook.EVT_IMAGENOTEBOOK_PAGE_CHANGING, self.OnPageChanging)
+        self.Bind(wx.EVT_WINDOW_DESTROY, self.OnDestroy, self)
+
+        if "gtk3" in wx.PlatformInfo:
+            # Fix background color not working for panels under GTK3
+            self.Bind(wx.EVT_ERASE_BACKGROUND, self.OnEraseBackground)
+
+        # Final initialization steps
+        self.logger = get_file_logger("adjust")
+        self._setup(True)
+
+        self.Show()
+
+        if start_timer:
+            self.start_timer()
+
+    if "gtk3" in wx.PlatformInfo:
+        OnEraseBackground = wx_Panel.__dict__["OnEraseBackground"]
+
+    def EndModal(self, returncode=wx.ID_OK):
+        """End the modal state of the display adjustment frame.
+
+        Args:
+            returncode (int): The return code to indicate the result of the
+                modal operation. Defaults to wx.ID_OK.
+
+        Returns:
+            int: The return code indicating the result of the modal operation.
+        """
+        return returncode
+
+    def MakeModal(self, modal=False):
+        """Make the display adjustment frame modal or not.
+
+        Args:
+            modal (bool): If True, make the frame modal; otherwise, make it
+                non-modal.
+        """
+
+    def OnClose(self, event):
+        """Handle the close event of the display adjustment frame.
+
+        Args:
+            event (wx.CloseEvent): The event object containing information
+                about the window being closed.
+        """
+        # if getattr(self, "measurement_play_sound_ctrl", None):
+        # setcfg("measurement.play_sound",
+        # int(self.measurement_play_sound_ctrl.GetValue()))
+        config.writecfg()
+        if not self.timer.IsRunning():
+            self.Destroy()
+        else:
+            self.keepGoing = False
+
+    def OnDestroy(self, event):
+        """Handle the destruction of the display adjustment frame.
+
+        Args:
+            event (wx.WindowDestroyEvent): The event object containing information
+                about the window being destroyed.
+
+        Returns:
+            int: Returns 0 if the control IDs were successfully unreserved.
+        """
+        self.stop_timer()
+        del self.timer
+        if not hasattr(wx.Window, "UnreserveControlId"):
+            return 0
+
+        for id_ in self.id_to_keycode:
+            if id_ >= 0:
+                continue
+            try:
+                wx.Window.UnreserveControlId(id_)
+            except wx.wxAssertionError as exception:
+                print(exception)
+
+        return 0
+
+    def OnMove(self, event):
+        """Handle window move event.
+
+        Args:
+            event (wx.MoveEvent): The event object containing information about
+        """
+        if (
+            self.IsShownOnScreen()
+            and not self.IsIconized()
+            and (not self.GetParent() or not self.GetParent().IsShownOnScreen())
+        ):
+            prev_x = getcfg("position.progress.x")
+            prev_y = getcfg("position.progress.y")
+            x, y = self.GetScreenPosition()
+            if x != prev_x or y != prev_y:
+                setcfg("position.progress.x", x)
+                setcfg("position.progress.y", y)
+
+    def OnPageChanging(self, event):
+        """Handle page changing event.
+
+        Args:
+            event (wx.CommandEvent): The event object containing information
+        """
+        _oldsel = event.GetOldSelection()
+        _newsel = event.GetSelection()
+        self.abort()
+        event.Skip()
+
+    def Pulse(self, msg=""):
+        """Pulse the display adjustment with a message.
+
+        Args:
+            msg (str): The message to display. If empty, it will just return
+                the current state.
+
+        Returns:
+            tuple: A tuple containing the current state (keepGoing) and a
+                boolean indicating if the message was processed.
+        """
+        if not msg:
+            return self.keepGoing, False
+        msg = str(msg)
+        if (
+            msg
+            in (
+                lang.getstr("instrument.initializing"),
+                lang.getstr("instrument.calibrating"),
+                lang.getstr("please_wait"),
+                lang.getstr("aborting"),
+            )
+            or msg == " " * 4
+            or ": error -" in msg.lower()
+            or "failed" in msg.lower()
+            or msg.startswith(
+                (lang.getstr("webserver.waiting"), lang.getstr("connection.waiting"))
+            )
+        ) and msg != self.lastmsg:
+            self.lastmsg = msg
+            self.Freeze()
+            for txt in self.lb.GetCurrentPage().txt.values():
+                txt.checkmark.GetContainingSizer().Hide(txt.checkmark)
+                txt.SetLabel(" ")
+            txt = next(iter(self.lb.GetCurrentPage().txt.values()))  # first value
+            if txt.GetLabel() != wrap(msg, 46):
+                txt.SetLabel(wrap(msg, 46))
+                txt.SetForegroundColour(FGCOLOUR)
+            self.Thaw()
+        return self.keepGoing, False
+
+    def Resume(self):
+        """Resume the interactive display adjustment."""
+        self.keepGoing = True
+        self.set_sound_on_off_btn_bitmap()
+
+    def UpdateProgress(self, value, msg=""):
+        """Update the progress with a value and a message.
+
+        Args:
+            value (int): The value to set the progress to.
+            msg (str): The message to display. If empty, it will just return
+                the current state.
+
+        Returns:
+            tuple: A tuple containing the current state (keepGoing) and a
+                boolean indicating if the message was processed.
+        """
+        return self.Pulse(msg)
+
+    def UpdatePulse(self, msg=""):
+        """Update the pulse with a message.
+
+        Args:
+            msg (str): The message to display. If empty, it will just return
+                the current state.
+
+        Returns:
+            tuple: A tuple containing the current state (keepGoing) and a
+                boolean indicating if the message was processed.
+        """
+        return self.Pulse(msg)
+
+    def _assign_image_list(self):
+        """Assign an image list to the labelbook."""
+        imagelist = None
+        modes = {CRT: {"black_luminance": "luminance", "luminance": "contrast"}}
+        for img in (
+            "black_luminance",
+            "white_point",
+            "luminance",
+            "black_point",
+            "check_all",
+        ):
+            img = modes.get(getcfg("measurement_mode") == "c", {}).get(img, img)
+            bmp = get_bitmap(f"theme/icons/72x72/{img}")
+            if not imagelist:
+                img_w, img_h = bmp.Size
+                imagelist = wx.ImageList(img_w, img_h)
+            imagelist.Add(bmp)
+        self.lb.AssignImageList(imagelist)
+
+    def _setup(self, init=False):
+        """Setup the display adjustment frame.
+
+        Args:
+            init (bool): If True, perform initial setup.
+        """
+        self.logger.info("-" * 80)
+        self.cold_run = True
+        self.is_busy = None
+        self.is_measuring = None
+        self.keepGoing = True
+        self.lastmsg = ""
+        self.target_br = None
+        self._assign_image_list()
+        if getcfg("measurement_mode") == "c":
+            self.lb.disabled_pages = []
+            if getcfg("calibration.black_luminance", False):
+                self.lb.SetSelection(0)
+            else:
+                self.lb.disabled_pages.append(0)
+                self.lb.SetSelection(1)
+        else:
+            self.lb.disabled_pages = [0, 3]
+            self.lb.SetSelection(1)
+        if getcfg("trc"):
+            self.calibration_btn.SetLabel(lang.getstr("calibration.start"))
+        elif getcfg("calibration.continue_next"):
+            self.calibration_btn.SetLabel(lang.getstr("calibration.skip"))
+        else:
+            self.calibration_btn.SetLabel(lang.getstr("finish"))
+        self.calibration_btn.GetContainingSizer().Layout()
+        # Update black luminance page description
+        self.lb.GetPage(0).update_desc()
+        # Update white luminance page description
+        self.lb.GetPage(2).update_desc()
+
+        # Set size
+        scale = getcfg("app.dpi") / get_default_dpi()
+        scale = max(scale, 1)
+        img_w, img_h = list(map(int, list(map(round, (84 * scale, 72 * scale)))))
+        min_h = (
+            (img_h + 8) * (self.lb.GetPageCount() - len(self.lb.disabled_pages)) + 2 - 8
+        )
+        if init:
+            self.lb.SetMinSize((418, min_h))
+        self.lb.SetMinSize(
+            (self.lb.GetMinSize()[0], max(self.lb.GetMinSize()[1], min_h))
+        )
+        self.lb.GetCurrentPage().Fit()
+        self.lb.GetCurrentPage().Layout()
+        self.lb.Fit()
+        self.lb.Layout()
+        self.SetMinSize((0, 0))
+        self.Fit()
+        self.Layout()
+        # The button sizer will be as wide as the labelbook or wider,
+        # so use it as reference
+        w = self.btnsizer.CalcMin()[0] - img_w - 12
+        for pagenum in range(self.lb.GetPageCount()):
+            page = self.lb.GetPage(pagenum)
+            page.SetSize((w, -1))
+            page.desc.SetLabel(page.desc.GetLabel().replace("\n", " "))
+            if sys.platform == "darwin" and intlist(
+                platform.mac_ver()[0].split(".")
+            ) >= [
+                10,
+                10,
+            ]:
+                margin = 24
+            else:
+                margin = 12
+            page.desc.Wrap(w - margin)
+            bitmaps = {
+                "black_level": {CRT: "luminance", not CRT: "black_level"},
+                "luminance": {CRT: "contrast", not CRT: "luminance"},
+            }
+            if page.ctrltype == "check_all":
+                for name in bitmaps:
+                    bitmap = bitmaps.get(name).get(getcfg("measurement_mode") == "c")
+                    page.txt[name].spacer.SetBitmap(
+                        get_bitmap(f"theme/icons/16x16/{bitmap}")
+                    )
+            else:
+                ctrltype = {"rgb_offset": "black_level", "rgb_gain": "luminance"}.get(
+                    page.ctrltype, page.ctrltype
+                )
+                bitmap = bitmaps.get(ctrltype).get(getcfg("measurement_mode") == "c")
+                page.gauges["L"].label.SetBitmap(
+                    get_bitmap(f"theme/icons/16x16/{bitmap}")
+                )
+            page.Fit()
+            page.Layout()
+            for txt in page.txt.values():
+                txt.SetLabel(" ")
+        self.lb.SetMinSize(
+            (self.lb.GetMinSize()[0], max(self.lb.GetCurrentPage().GetSize()[1], min_h))
+        )
+        self.Fit()
+        self.Sizer.SetSizeHints(self)
+        self.Sizer.Layout()
+
+        # Set position
+        x = getcfg("position.progress.x")
+        y = getcfg("position.progress.y")
+        self.SetSaneGeometry(x, y)
+
+    def abort(self):
+        """Abort the current operation."""
+        if self.has_worker_subprocess() and self.is_measuring:
+            self.worker.safe_send(" ")
+
+    def abort_and_send(self, key):
+        """Abort the current operation and send a key to the worker subprocess.
+
+        Args:
+            key (str): The key to send to the worker subprocess.
+        """
+        self.abort()
+        if self.has_worker_subprocess() and self.worker.safe_send(key):
+            self.is_busy = True
+            self.adjustment_btn.Disable()
+            self.calibration_btn.Disable()
+
+    def add_panel(self, size=wx.DefaultSize, flag=0):
+        """Add a panel to the sizer with the specified size and flags.
+
+        Args:
+            size (tuple): The size of the panel to add.
+            flag (int): The flags to apply to the panel.
+
+        Returns:
+            wx.Panel: The created panel instance.
+        """
+        panel = get_panel(self, size)
+        self.sizer.Add(panel, flag=flag)
+        return panel
+
+    def continue_to_calibration(self, event=None):
+        """Continue to the calibration step after interactive adjustment.
+
+        Args:
+            event (wx.Event, optional): The event that triggered this method.
+        """
+        if getcfg("trc"):
+            self.abort_and_send("7")
+        else:
+            self.abort_and_send("8")
+
+    def create_start_interactive_adjustment_button(
+        self, icon="play", enable=False, startstop="start"
+    ):
+        """Create or update the interactive adjustment button.
+
+        Args:
+            icon (str): The icon to use for the button.
+            enable (bool): Whether the button should be enabled.
+            startstop (str): The action to display on the button, either
+                "start" or "stop".
+        """
+        if getattr(self, "adjustment_btn", None):
+            self.adjustment_btn._bitmap = get_bitmap(f"theme/icons/10x10/{icon}")
+            self.adjustment_btn.SetLabel(
+                lang.getstr(f"calibration.interactive_display_adjustment.{startstop}")
+            )
+            self.adjustment_btn.Enable(enable)
+            return
+        self.adjustment_btn = self.create_gradient_button(
+            get_bitmap(f"theme/icons/10x10/{icon}"),
+            lang.getstr(f"calibration.interactive_display_adjustment.{startstop}"),
+            name="adjustment_btn",
+        )
+        self.adjustment_btn.Bind(wx.EVT_BUTTON, self.start_interactive_adjustment)
+        self.adjustment_btn.Enable(enable)
+
+    def create_gradient_button(self, bitmap, label, name):
+        """Create a gradient button with the specified bitmap and label.
+
+        Args:
+            bitmap (wx.Bitmap): The bitmap to display on the button.
+            label (str): The label for the button.
+            name (str): The name of the button.
+
+        Returns:
+            FlatShadedButton: The created button instance.
+        """
+        btn = FlatShadedButton(
+            self, bitmap=bitmap, label=label, name=name, fgcolour=FGCOLOUR
+        )
+        self.btnsizer.Add(btn)
+        self.btnsizer.Layout()
+        return btn
+
+    def flush(self):
+        """Flush the output buffer of the worker subprocess if available."""
+
+    def has_worker_subprocess(self):
+        """Check if the worker subprocess is available.
+
+        Returns:
+            bool: True if the worker subprocess is available, False otherwise.
+        """
+        return bool(
+            getattr(self, "worker", None) and getattr(self.worker, "subprocess", None)
+        )
+
+    def isatty(self):
+        """Check if the interactive display adjustment is in a terminal.
+
+        Returns:
+            bool: Always returns True, as this is a GUI application.
+        """
+        return True
+
+    def key_handler(self, event):
+        """Handle key events for interactive display adjustment.
+
+        Args:
+            event (wx.Event): The key event triggered by the user.
+        """
+        # print {wx.EVT_CHAR.typeId: 'EVT_CHAR',
+        # wx.EVT_CHAR_HOOK.typeId: 'EVT_CHAR_HOOK',
+        # wx.EVT_KEY_DOWN.typeId: 'EVT_KEY_DOWN',
+        # wx.EVT_MENU.typeId: 'EVT_MENU'}.get(event.GetEventType(),
+        # event.GetEventType())
+        keycode = None
+        if event.GetEventType() in (
+            wx.EVT_CHAR.typeId,
+            wx.EVT_CHAR_HOOK.typeId,
+            wx.EVT_KEY_DOWN.typeId,
+        ):
+            keycode = event.GetKeyCode()
+        elif event.GetEventType() == wx.EVT_MENU.typeId:
+            keycode = self.id_to_keycode.get(event.GetId())
+        if keycode == wx.WXK_TAB:
+            self.global_navigate() or event.Skip()
+        elif keycode >= 0:
+            if keycode == ord(" "):
+                if (
+                    not isinstance(self.FindFocus(), FlatShadedButton)
+                    or self.FindFocus() is self.adjustment_btn
+                ):
+                    if self.is_measuring:
+                        self.abort()
+                    else:
+                        self.start_interactive_adjustment()
+                else:
+                    event.Skip()
+            elif keycode in [ord(str(c)) for c in range(1, 6)]:
+                key_num = chr(keycode)
+                pagenum = dict(
+                    list(
+                        zip(
+                            list(self.pagenum_2_argyll_key_num.values()),
+                            list(self.pagenum_2_argyll_key_num.keys()),
+                        )
+                    )
+                ).get(key_num)
+                if pagenum not in self.lb.disabled_pages and not self.is_measuring:
+                    self.lb.SetSelection(pagenum)
+                    self.start_interactive_adjustment()
+            elif keycode in (ord("\x1b"), ord("7"), ord("8"), ord("Q"), ord("q")):
+                if not getcfg("trc") and keycode == ord("7"):
+                    # Ignore
+                    pass
+                elif self.keyhandler:
+                    self.keyhandler(event)
+                elif self.has_worker_subprocess():
+                    self.worker.safe_send(chr(keycode))
+                else:
+                    event.Skip()
+            else:
+                event.Skip()
+        else:
+            event.Skip()
+
+    def measurement_play_sound_handler(self, event):
+        """Toggle the sound on/off setting and update the button bitmap.
+
+        Args:
+            event (wx.Event): The event triggered by the button click.
+        """
+        # self.measurement_play_sound_ctrl.SetValue(
+        #     not self.measurement_play_sound_ctrl.GetValue()
+        # )
+        setcfg(
+            "measurement.play_sound", int(not (bool(getcfg("measurement.play_sound"))))
+        )
+        self.set_sound_on_off_btn_bitmap()
+
+    def get_sound_on_off_btn_bitmap(self):
+        """Get the bitmap for the sound on/off button based on the current setting."""
+        if getcfg("measurement.play_sound"):
+            bitmap = get_icon(16, "sound_volume_full")
+        else:
+            bitmap = get_icon(16, "sound_off")
+        return bitmap
+
+    def set_sound_on_off_btn_bitmap(self):
+        """Set the bitmap for the sound on/off button based on the current setting."""
+        bitmap = self.get_sound_on_off_btn_bitmap()
+        self.sound_on_off_btn._bitmap = bitmap
+
+    def parse_txt(self, txt):
+        """Parse the text output from the instrument and update the UI.
+
+        Args:
+            txt (str): The text output from the instrument.
+        """
+        colors = {True: wx.Colour(0x33, 0xCC, 0x0), False: FGCOLOUR}
+        if not txt:
+            return
+        self.logger.info(f"{txt!r}")
+        self.Pulse(txt)
+
+        if "/ Current" in txt:
+            indicator = get_bitmap("theme/icons/10x10/record")
+        else:
+            indicator = get_bitmap("theme/icons/10x10/record_outline")
+
+        target_br = re.search(
+            r"Target white brightness = (\d+(?:\.\d+)?)".replace(" ", r"\s+"), txt, re.I
+        )
+        if getcfg("measurement_mode") == "c":
+            target_bl = re.search(
+                (
+                    r"Target Near Black = (\d+(?:\.\d+)?), Current = (\d+(?:\.\d+)?)"
+                ).replace(" ", r"\s+"),
+                txt,
+                re.I,
+            )
+            if target_bl:
+                self.lb.GetCurrentPage().target_bl = [
+                    "Target",
+                    float(target_bl.groups()[0]),
+                ]
+        initial_br = re.search(
+            (
+                r"(Initial|Target)(?: Br)? (\d+(?:\.\d+)?)\s*(?:, "
+                r"x (\d+(?:\.\d+)?)\s*, y (\d+(?:\.\d+)?)(?:\s*, "
+                r"(?:(V[CD]T \d+K?) )?DE(?: 2K)? (\d+(?:\.\d+)?))?|$)"
+            ).replace(" ", r"\s+"),
+            txt,
+            re.I,
+        )
+        current_br = None
+        current_bl = None
+        if target_br and not getattr(self, "target_br", None):
+            self.target_br = ["Target", float(target_br.groups()[0])]
+        if initial_br:
+            self.lb.GetCurrentPage().initial_br = [
+                initial_br.groups()[0],
+                float(initial_br.groups()[1]),
+                *list(initial_br.groups()[2:]),
+            ]
+        if self.lb.GetCurrentPage().ctrltype != "check_all":
+            current_br = re.search(
+                r"Current(?: Br)? (\d+(?:\.\d+)?)".replace(" ", r"\s+"), txt, re.I
+            )
+        else:
+            current_br = re.search(
+                (
+                    r"Target Brightness = (?:\d+(?:\.\d+)?), Current = (\d+(?:\.\d+)?)"
+                ).replace(" ", r"\s+"),
+                txt,
+                re.I,
+            )
+            if not current_br:
+                current_br = re.search(
+                    r"Current Brightness = (\d+(?:\.\d+)?)".replace(" ", r"\s+"),
+                    txt,
+                    re.I,
+                )
+            if getcfg("measurement_mode") == "c":
+                if target_bl:
+                    current_bl = float(target_bl.groups()[1])
+            else:
+                current_bl = re.search(
+                    (
+                        r"Black = XYZ (?:\d+(?:\.\d+)?) (\d+(?:\.\d+)?) "
+                        r"(?:\d+(?:\.\d+)?)"
+                    ).replace(" ", r"\s+"),
+                    txt,
+                    re.I,
+                )
+                if current_bl:
+                    current_bl = float(current_bl.groups()[0])
+        xy_dE_rgb = re.search(
+            (
+                r"x (\d+(?:\.\d+)?)[=+-]*, y (\d+(?:\.\d+)?)[=+-]*,? "
+                r"(?:(V[CD]T \d+K?) )?DE(?: 2K)? (\d+(?:\.\d+)?) "
+                r"R([=+-]+) G([=+-]+) B([=+-]+)"
+            ).replace(" ", r"\s+"),
+            txt,
+            re.I,
+        )
+        white_xy_dE_re = (
+            r"(?:Target white = x (?:\d+(?:\.\d+)?), y (?:\d+(?:\.\d+)?), "
+            r"Current|Current white) = x (\d+(?:\.\d+)?), y (\d+(?:\.\d+)?), "
+            r"(?:(?:(V[CD]T \d+K?) )?DE(?: 2K)?|error =) (\d+(?:\.\d+)?)"
+        ).replace(" ", r"\s+")
+        white_xy_dE = re.search(white_xy_dE_re, txt, re.I)
+        black_xy_dE = re.search(white_xy_dE_re.replace(r"white", "black"), txt, re.I)
+        white_xy_target = re.search(
+            r"Target white = x (\d+(?:\.\d+)?), y (\d+(?:\.\d+)?)".replace(" ", r"\s+"),
+            txt,
+            re.I,
+        )
+        black_xy_target = re.search(
+            r"Target black = x (\d+(?:\.\d+)?), y (\d+(?:\.\d+)?)".replace(" ", r"\s+"),
+            txt,
+            re.I,
+        )
+        if current_br or current_bl or xy_dE_rgb or white_xy_dE or black_xy_dE:
+            self.Freeze()
+        if current_br:
+            initial_br = getattr(self.lb.GetCurrentPage(), "initial_br", None)
+            if self.lb.GetCurrentPage().ctrltype in (
+                "rgb_gain",
+                "luminance",
+                "check_all",
+            ):
+                target_br = getattr(self, "target_br", None)
+            else:
+                target_br = None
+            if self.lb.GetCurrentPage().ctrltype == "rgb_gain" and initial_br:
+                initial_br = ["Initial"] + initial_br[1:]
+            compare_br = (
+                target_br or initial_br or ("Initial", float(current_br.groups()[0]))
+            )
+            lstr = (compare_br[0]).lower()
+            percent = 100.0 / compare_br[1] if compare_br[1] else 100.0
+            l_diff = float(current_br.groups()[0]) - compare_br[1]
+            l = round(50 + l_diff * percent)
+            if self.lb.GetCurrentPage().gauges.get("L"):
+                self.lb.GetCurrentPage().gauges["L"].SetValue(min(max(l, 1), 100))
+                self.lb.GetCurrentPage().gauges["L"].Refresh()
+            if self.lb.GetCurrentPage().txt.get("luminance"):
+                if initial_br or target_br:  # and round(l_diff, 2):
+                    if round(l_diff, 2) > 0:
+                        sign = "+"
+                    elif round(l_diff, 2) < 0:
+                        sign = "-"
+                    else:
+                        sign = "\u00b1"  # plusminus
+                    label = (
+                        f"{lang.getstr(lstr)} {compare_br[1]:.2f} "
+                        f"cd/m\u00b2\n{lang.getstr('current')} "
+                        f"{float(current_br.groups()[0]):.2f} cd/m\u00b2 "
+                        f"({sign}{abs(l_diff) * percent:.2f}%)"
+                    )
+                else:
+                    label = (
+                        f"{lang.getstr('current')} "
+                        f"{float(current_br.groups()[0]):.2f} cd/m\u00b2"
+                    )
+                self.lb.GetCurrentPage().txt[
+                    "luminance"
+                ].checkmark.GetContainingSizer().Show(
+                    self.lb.GetCurrentPage().txt["luminance"].checkmark,
+                    lstr == "target" and abs(l_diff) * percent <= 1,
+                )
+                self.lb.GetCurrentPage().txt["luminance"].SetForegroundColour(
+                    colors[lstr == "target" and abs(l_diff) * percent <= 1]
+                )
+                set_label_and_size(self.lb.GetCurrentPage().txt["luminance"], label)
+        if current_bl and self.lb.GetCurrentPage().txt.get("black_level"):
+            target_bl = getattr(self.lb.GetCurrentPage(), "target_bl", None) or getattr(
+                self.lb.GetCurrentPage(), "initial_br", None
+            )
+            if target_bl:
+                percent = 100.0 / target_bl[1]
+            if target_bl:  # and round(target_bl[1], 2) != round(current_bl, 2):
+                l_diff = current_bl - target_bl[1]
+                if round(l_diff, 2) > 0:
+                    sign = "+"
+                elif round(l_diff, 2) < 0:
+                    sign = "-"
+                else:
+                    sign = "\u00b1"  # plusminus
+                label = "{} {:.2f} cd/m\u00b2\n{} {:.2f} cd/m\u00b2 ({}{:.2f}%)".format(
+                    lang.getstr("target"),
+                    target_bl[1],
+                    lang.getstr("current"),
+                    current_bl,
+                    sign,
+                    abs(l_diff) * percent,
+                )
+            else:
+                l_diff = 0 if target_bl else None
+                label = f"{lang.getstr('current')} {current_bl:.2f} cd/m\u00b2"
+            self.lb.GetCurrentPage().txt[
+                "black_level"
+            ].checkmark.GetContainingSizer().Show(
+                self.lb.GetCurrentPage().txt["black_level"].checkmark,
+                l_diff is not None and abs(l_diff) * percent <= 1,
+            )
+            self.lb.GetCurrentPage().txt["black_level"].SetForegroundColour(
+                colors[l_diff is not None and abs(l_diff) * percent <= 1]
+            )
+            set_label_and_size(self.lb.GetCurrentPage().txt["black_level"], label)
+        # groups()[0] = x
+        # groups()[1] = y
+        # groups()[2] = VDT/VCT (optional)
+        # groups()[3] = dE
+        # groups()[4] = R +-
+        # groups()[5] = G +-
+        # groups()[6] = B +-
+        if xy_dE_rgb:
+            x, y, vdt, dE = get_xy_vt_dE(xy_dE_rgb.groups())
+            r = round(
+                50
+                - (xy_dE_rgb.groups()[4].count("+") - xy_dE_rgb.groups()[4].count("-"))
+                * dE
+            )
+            g = round(
+                50
+                - (xy_dE_rgb.groups()[5].count("+") - xy_dE_rgb.groups()[5].count("-"))
+                * dE
+            )
+            b = round(
+                50
+                - (xy_dE_rgb.groups()[6].count("+") - xy_dE_rgb.groups()[6].count("-"))
+                * dE
+            )
+            if self.lb.GetCurrentPage().gauges.get("R"):
+                self.lb.GetCurrentPage().gauges["R"].SetValue(min(max(r, 1), 100))
+                self.lb.GetCurrentPage().gauges["R"].Refresh()
+            if self.lb.GetCurrentPage().gauges.get("G"):
+                self.lb.GetCurrentPage().gauges["G"].SetValue(min(max(g, 1), 100))
+                self.lb.GetCurrentPage().gauges["G"].Refresh()
+            if self.lb.GetCurrentPage().gauges.get("B"):
+                self.lb.GetCurrentPage().gauges["B"].SetValue(min(max(b, 1), 100))
+                self.lb.GetCurrentPage().gauges["B"].Refresh()
+            if self.lb.GetCurrentPage().txt.get("rgb"):
+                self.lb.GetCurrentPage().txt["rgb"].checkmark.GetContainingSizer().Show(
+                    self.lb.GetCurrentPage().txt["rgb"].checkmark, abs(dE) <= 1
+                )
+                self.lb.GetCurrentPage().txt["rgb"].SetForegroundColour(
+                    colors[abs(dE) <= 1]
+                )
+                label = (
+                    f"{lang.getstr('current')} "
+                    f"x {x:.4f} y {y:.4f} {vdt} {dE:.1f} \u0394E*00"
+                ).replace("  ", " ")
+                initial_br = getattr(self.lb.GetCurrentPage(), "initial_br", None)
+                if initial_br and len(initial_br) > 3:
+                    x, y, vdt, dE = get_xy_vt_dE(initial_br[2:])
+                    label = (
+                        f"{lang.getstr(initial_br[0].lower())} "
+                        f"x {x:.4f} y {y:.4f} {vdt} {dE:.1f} \u0394E*00\n"
+                    ).replace("  ", " ") + label
+                set_label_and_size(self.lb.GetCurrentPage().txt["rgb"], label)
+        if white_xy_dE:
+            x, y, vdt, dE = get_xy_vt_dE(white_xy_dE.groups())
+            if self.lb.GetCurrentPage().txt.get("white_point"):
+                self.lb.GetCurrentPage().txt[
+                    "white_point"
+                ].checkmark.GetContainingSizer().Show(
+                    self.lb.GetCurrentPage().txt["white_point"].checkmark, abs(dE) <= 1
+                )
+                self.lb.GetCurrentPage().txt["white_point"].SetForegroundColour(
+                    colors[abs(dE) <= 1]
+                )
+                label = (
+                    f"{lang.getstr('current')} "
+                    f"x {x:.4f} y {y:.4f} {vdt} {dE:.1f} \u0394E*00"
+                ).replace("  ", " ")
+                if white_xy_target:
+                    x, y, vdt, dE = get_xy_vt_dE(white_xy_target.groups())
+                    label = (f"{lang.getstr('target')} x {x:.4f} y {y:.4f}\n").replace(
+                        "  ", " "
+                    ) + label
+                set_label_and_size(self.lb.GetCurrentPage().txt["white_point"], label)
+        if black_xy_dE:
+            x, y, vdt, dE = get_xy_vt_dE(black_xy_dE.groups())
+            if self.lb.GetCurrentPage().txt.get("white_point"):
+                self.lb.GetCurrentPage().txt[
+                    "black_point"
+                ].checkmark.GetContainingSizer().Show(
+                    self.lb.GetCurrentPage().txt["black_point"].checkmark, abs(dE) <= 1
+                )
+                self.lb.GetCurrentPage().txt["black_point"].SetForegroundColour(
+                    colors[abs(dE) <= 1]
+                )
+                label = (
+                    f"{lang.getstr('current')} x {x:.4f} y {y:.4f} {vdt} {dE:.1f} "
+                    "\u0394E*00"
+                ).replace("  ", " ")
+                if black_xy_target:
+                    x, y, vdt, dE = get_xy_vt_dE(black_xy_target.groups())
+                    label = (f"{lang.getstr('target')} x {x:.4f} y {y:.4f}\n").replace(
+                        "  ", " "
+                    ) + label
+                set_label_and_size(self.lb.GetCurrentPage().txt["black_point"], label)
+        if (
+            current_br or current_bl or xy_dE_rgb
+        ) and self.lb.GetCurrentPage().ctrltype != "check_all":
+            if getcfg("measurement.play_sound"):
+                self.measurement_sound.safe_play()
+            self.indicator_ctrl.SetBitmap(indicator)
+            self.btnsizer.Layout()
+        if current_br or current_bl or xy_dE_rgb or white_xy_dE or black_xy_dE:
+            self.lb.GetCurrentPage().Layout()
+            self.Thaw()
+        if "Press 1 .. 7" in txt or "8) Exit" in txt:
+            if self.cold_run:
+                self.cold_run = False
+                self.Pulse(" " * 4)
+            if self.is_measuring is not False:
+                self.lb.Children[0].Refresh()
+                if self.is_measuring is True:
+                    self.create_start_interactive_adjustment_button(enable=True)
+                else:
+                    self.adjustment_btn.Enable()
+                self.is_busy = False
+                self.is_measuring = False
+                self.indicator_ctrl.SetBitmap(get_icon(10, "empty", use_mask=True))
+            self.calibration_btn.Enable()
+            self.lb.SetFocus()  # Make frame receive EVT_CHAR_HOOK events under Linux
+        elif "initial measurements" in txt or "check measurements" in txt:
+            self.is_busy = True
+            self.lb.Children[0].Refresh()
+            self.Pulse(lang.getstr("please_wait"))
+            if not self.is_measuring:
+                self.create_start_interactive_adjustment_button("pause", True, "stop")
+            self.is_measuring = True
+            self.lb.SetFocus()  # Make frame receive EVT_CHAR_HOOK events under Linux
+
+    # self.SetTitle("is_measuring %s timer.IsRunning %s keepGoing %s" %
+    # (str(self.is_measuring), self.timer.IsRunning(), self.keepGoing))
+
+    def reset(self):
+        """Reset the display adjustment frame to its initial state."""
+        self.Freeze()
+        self._setup()
+        # Reset controls
+        for pagenum in range(self.lb.GetPageCount()):
+            page = self.lb.GetPage(pagenum)
+            page.initial_br = None
+            page.target_bl = None
+            for name in ("R", "G", "B", "L"):
+                if page.gauges.get(name):
+                    page.gauges[name].SetValue(0)
+                    page.gauges[name].Refresh()
+            for txt in page.txt.values():
+                txt.checkmark.GetContainingSizer().Hide(txt.checkmark)
+                txt.SetForegroundColour(FGCOLOUR)
+        self.create_start_interactive_adjustment_button()
+        self.calibration_btn.Disable()
+        self.Thaw()
+
+    def start_interactive_adjustment(self, event=None):
+        """Start the interactive display adjustment process.
+
+        Args:
+            event (wx.Event, optional): The event that triggered this method.
+        """
+        if self.is_measuring:
+            self.abort()
+        else:
+            self.abort_and_send(self.pagenum_2_argyll_key_num[self.lb.GetSelection()])
+
+    def start_timer(self, ms=50):
+        """Start the timer with a specified interval.
+
+        Args:
+            ms (int): The interval in milliseconds to trigger the timer.
+        """
+        self.timer.Start(ms)
+
+    def stop_timer(self):
+        """Stop the timer."""
+        self.timer.Stop()
+
+    def write(self, txt):
+        """Write text to the display adjustment frame.
+
+        Args:
+            txt (str): The text to write.
+        """
+        wx.CallAfter(self.parse_txt, txt)

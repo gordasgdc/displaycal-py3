@@ -1,37 +1,55 @@
-# -*- coding: utf-8 -*-
+"""Create and update HTML reports from templates.
 
-from time import strftime
+It supports placeholder substitution, JavaScript and CSS embedding, and ensures
+compatibility with existing report formats. The module also includes utilities
+for backing up and updating reports with the latest template files.
+"""
+
 import codecs
 import os
 import re
 import shutil
 import sys
+from time import strftime
 
-from DisplayCAL.config import get_data_path, initcfg
-from DisplayCAL.meta import version_short
 from DisplayCAL import jspacker
 from DisplayCAL import localization as lang
+from DisplayCAL.config import get_data_path, initcfg
+from DisplayCAL.meta import VERSION_SHORT
 
 
-def create(report_path, placeholders2data, pack=True, templatename="report"):
-    """Create a report with all placeholders substituted by data."""
+def create(
+    report_path: str,
+    placeholders_to_data: dict,
+    pack: bool = True,
+    template_name: str = "report",
+) -> None:
+    """Create a report with all placeholders substituted by data.
+
+    Args:
+        report_path (str): Path to the report file to create.
+        placeholders_to_data (dict): Dictionary mapping placeholders to their data.
+        pack (bool): Whether to pack JavaScript code.
+        template_name (str): Name of the report template to use.
+    """
     # read report template
-    templatefilename = f"{templatename}.html"
-    report_html_template_path = get_data_path(os.path.join("report", templatefilename))
+    template_filename = f"{template_name}.html"
+    report_html_template_path = get_data_path(os.path.join("report", template_filename))
     if not report_html_template_path:
-        raise IOError(lang.getstr("file.missing", templatefilename))
+        raise OSError(lang.getstr("file.missing", template_filename))
     try:
-        report_html_template = codecs.open(report_html_template_path, "r", "UTF-8")
+        with open(
+            report_html_template_path, "r", encoding="utf-8"
+        ) as report_html_template:
+            report_html = report_html_template.read()
     except OSError as exception:
         raise exception.__class__(
             lang.getstr("error.file.open", report_html_template_path)
-        )
-    report_html = report_html_template.read()
-    report_html_template.close()
+        ) from exception
 
     # create report
-    for placeholder in placeholders2data:
-        data = placeholders2data[placeholder]
+    for placeholder in placeholders_to_data:
+        data = placeholders_to_data[placeholder]
         report_html = report_html.replace(placeholder, data)
 
     for include in (
@@ -48,47 +66,53 @@ def create(report_path, placeholders2data, pack=True, templatename="report"):
     ):
         path = get_data_path(os.path.join("report", include))
         if not path:
-            raise IOError(lang.getstr("file.missing", include))
+            raise OSError(lang.getstr("file.missing", include))
         try:
-            f = codecs.open(path, "r", "UTF-8")
+            with open(path, "r", encoding="utf-8") as f:
+                if include.endswith(".js"):
+                    js = f.read()
+                    if pack:
+                        packer = jspacker.JavaScriptPacker()
+                        js = packer.pack(js, 62, True).strip()
+                    report_html = report_html.replace(
+                        f'src="{include}">', f">/*<![CDATA[*/\n{js}\n/*]]>*/"
+                    )
+                else:
+                    report_html = report_html.replace(
+                        f'@import "{include}";', f.read().strip()
+                    )
         except OSError as exception:
-            raise exception.__class__(lang.getstr("error.file.open", path))
-        if include.endswith(".js"):
-            js = f.read()
-            if pack:
-                packer = jspacker.JavaScriptPacker()
-                js = packer.pack(js, 62, True).strip()
-            report_html = report_html.replace(
-                f'src="{include}">', f">/*<![CDATA[*/\n{js}\n/*]]>*/"
-            )
-        else:
-            report_html = report_html.replace(f'@import "{include}";', f.read().strip())
-        f.close()
+            raise exception.__class__(
+                lang.getstr("error.file.open", path)
+            ) from exception
 
     # write report
     try:
-        report_html_file = codecs.open(report_path, "w", "UTF-8")
+        with open(report_path, "w", encoding="utf-8") as report_html_file:
+            report_html_file.write(report_html)
     except OSError as exception:
         raise exception.__class__(
             "{}\n\n{}".format(lang.getstr("error.file.create", report_path), exception)
-        )
-    report_html_file.write(report_html)
-    report_html_file.close()
+        ) from exception
 
 
-def update(report_path, pack=True):
+def update(report_path: str, pack: bool = True) -> None:
     """Update existing report with current template files.
 
     Also creates a backup copy of the old report.
 
+    Args:
+        report_path (str): Path to the existing report file.
+        pack (bool): Whether to pack JavaScript code.
     """
     # read original report
     try:
-        orig_report = codecs.open(report_path, "r", "UTF-8")
+        with open(report_path, "r", encoding="utf-8") as orig_report:
+            orig_report_html = orig_report.read()
     except OSError as exception:
-        raise exception.__class__(lang.getstr("error.file.open", report_path))
-    orig_report_html = orig_report.read()
-    orig_report.close()
+        raise exception.__class__(
+            lang.getstr("error.file.open", report_path)
+        ) from exception
 
     data = (
         ("${PLANCKIAN}", r'id="FF_planckian"\s*(.*?)\s*disabled="disabled"', 0),
@@ -142,7 +166,7 @@ def update(report_path, pack=True):
     )
 
     placeholders2data = {
-        "${REPORT_VERSION}": version_short,
+        "${REPORT_VERSION}": VERSION_SHORT,
         "${CORRECTION_MATRIX}": "Unknown",
         "${ADAPTION}": "None",
         "${CAL_ENTRYCOUNT}": "null",
@@ -155,7 +179,7 @@ def update(report_path, pack=True):
         "${WHITEPOINT_SIMULATION_RELATIVE}": "false",
     }
 
-    templatename = "report"
+    template_name = "report"
     for placeholder, pattern, flags in data:
         result = re.search(pattern, orig_report_html, flags)
         if result or not placeholders2data.get(placeholder):
@@ -169,14 +193,14 @@ def update(report_path, pack=True):
                 default = ""
             placeholders2data[placeholder] = result.groups()[0] if result else default
         if result and placeholder == "${COLS}":
-            templatename = "uniformity"
+            template_name = "uniformity"
 
     # backup original report
     shutil.copy2(
         report_path, "{}.{}".format(report_path, strftime("%Y-%m-%d_%H-%M-%S"))
     )
 
-    create(report_path, placeholders2data, pack, templatename)
+    create(report_path, placeholders2data, pack, template_name)
 
 
 if __name__ == "__main__":
@@ -184,11 +208,7 @@ if __name__ == "__main__":
     lang.init()
     if not sys.argv[1:]:
         print("Update existing report(s) with current template files.")
-        print(
-            "Usage: {} report1.html [report2.html...]".format(
-                os.path.basename(sys.argv[0])
-            )
-        )
+        print(f"Usage: {os.path.basename(sys.argv[0])} report1.html [report2.html...]")
     else:
         for arg in sys.argv[1:]:
             try:

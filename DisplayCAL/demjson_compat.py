@@ -1,20 +1,27 @@
-# -*- coding: utf-8 -*-c
-"""demjson 1.3 compatibility module"""
+"""demjson 1.3 compatibility module."""
 
-from io import StringIO
+from __future__ import annotations
+
 import json
 import sys
-
+from io import StringIO
+from typing import Any
 
 DEBUG = False
 
 
-def decode(txt, strict=False, encoding=None, **kw):
-    """Decodes a JSON-encoded string into a Python object.
+def debug_print(*args: list, **kwargs: dict) -> None:
+    """Print debug information if DEBUG is enabled."""
+    if DEBUG:
+        sys.stdout.write(*args, **kwargs)
+
+
+def decode(txt: str, strict: bool = False, encoding: None | str = None, **kw) -> Any:  # noqa: ANN401
+    """Decode a JSON-encoded string into a Python object.
 
     If 'strict' is set to True, then only strictly-conforming JSON
     output will be produced.  Note that this means that some types
-    of values may not be convertable and will result in a
+    of values may not be convertible and will result in a
     JSONEncodeError exception.
 
     The input string can be either a python string or a python unicode
@@ -36,88 +43,137 @@ def decode(txt, strict=False, encoding=None, **kw):
 
     Optional keywords arguments are ignored.
 
-    """
+    Args:
+        txt (str): The JSON-encoded string to decode.
+        strict (bool): If True, only strictly conforming JSON is accepted.
+        encoding (str, optional): The character encoding of the input string.
+            Defaults to None.
+        **kw: Additional keyword arguments (ignored).
 
-    if not strict:
+    Returns:
+        Any: The decoded Python object.
+    """
+    if strict:
+        return json.loads(txt, strict=strict)
+
+    dem_json_preprocessor = DEMJSONPreprocessor()
+    txt = dem_json_preprocessor.process(txt)
+
+    return json.loads(txt)
+
+
+class DEMJSONPreprocessor:
+    """A JSON preprocessor that is compatible with demjson 1.3."""
+
+    def __init__(self) -> None:
+        self.prev = None
+        self.escape = False
+        self.expect_comment = False
+        self.in_comment = False
+        self.comment_multiline = False
+        self.in_quote = False
+        self.write = True
+
+    def process(self, txt: str) -> Any:  # noqa: ANN401
+        """Process the input JSON string to remove comments.
+
+        Args:
+            txt (str): The JSON string to process.
+
+        Returns:
+            str: The processed JSON string with comments removed.
+        """
         # Remove comments
         io = StringIO()
-        escape = False
-        prev = None
-        expect_comment = False
-        in_comment = False
-        comment_multiline = False
-        in_quote = False
-        write = True
         for c in txt:
-            if DEBUG:
-                sys.stdout.write(c)
-            write = True
-            if c == "\\":
-                if DEBUG:
-                    sys.stdout.write("<ESCAPE>")
-                escape = True
-            elif escape:
-                if DEBUG:
-                    sys.stdout.write("</ESCAPE>")
-                escape = False
-            else:
-                if not in_quote:
-                    if c == "/":
-                        if expect_comment:
-                            if DEBUG:
-                                sys.stdout.write("<COMMENT>")
-                            in_comment = True
-                            comment_multiline = False
-                            expect_comment = False
-                        elif in_comment and prev == "*":
-                            if DEBUG:
-                                sys.stdout.write("</MULTILINECOMMENT>")
-                            in_comment = False
-                            comment_multiline = False
-                            write = False
-                        elif not in_comment:
-                            if DEBUG:
-                                sys.stdout.write("<EXPECT_COMMENT>")
-                            expect_comment = True
-                    elif c == "*":
-                        if expect_comment:
-                            if DEBUG:
-                                sys.stdout.write("<MULTILINECOMMENT>")
-                            in_comment = True
-                            comment_multiline = True
-                            expect_comment = False
-                    elif expect_comment:
-                        if DEBUG:
-                            sys.stdout.write("</EXPECT_COMMENT>")
-                        expect_comment = False
-                if c == "\n":
-                    if in_comment and not comment_multiline:
-                        if DEBUG:
-                            sys.stdout.write("</COMMENT>")
-                        in_comment = False
-                        write = False
-                elif c == '"' and not in_comment:
-                    if in_quote:
-                        if DEBUG:
-                            sys.stdout.write("</QUOTE>")
-                        in_quote = False
-                    else:
-                        if DEBUG:
-                            sys.stdout.write("<QUOTE>")
-                        in_quote = True
-            if write and not expect_comment and not in_comment:
+            debug_print(c)
+            self.write = True
+            self.process_character(c)
+            if self.write and not self.expect_comment and not self.in_comment:
                 io.write(c)
-            prev = c
+            self.prev = c
         txt = io.getvalue()
+        debug_print("\n")
         if DEBUG:
-            sys.stdout.write("\n")
             print("JSON:", txt)
 
-    return json.loads(txt, encoding=encoding, strict=strict)
+        return txt
+
+    def process_character(self, c: str) -> None:
+        """Process a character in the JSON string for comment handling.
+
+        Args:
+            c (str): The current character being processed.
+        """
+        if c == "\\":
+            debug_print("<ESCAPE>")
+            self.escape = True
+        elif self.escape:
+            debug_print("</ESCAPE>")
+            self.escape = False
+        else:
+            if not self.in_quote:
+                if c == "/":
+                    self.handle_forward_slash_char()
+                elif c == "*":
+                    self.handle_multiline_comment()
+                elif self.expect_comment:
+                    debug_print("</EXPECT_COMMENT>")
+                    self.expect_comment = False
+            if c == "\n":
+                self.handle_newline_char()
+            elif c == '"' and not self.in_comment:
+                self.handle_quote_status()
+
+    def handle_forward_slash_char(self) -> None:
+        """Handle the forward slash character in comment processing."""
+        if self.expect_comment:
+            debug_print("<COMMENT>")
+            self.in_comment = True
+            self.comment_multiline = False
+            self.expect_comment = False
+        elif self.in_comment and self.prev == "*":
+            debug_print("</MULTILINECOMMENT>")
+            self.in_comment = False
+            self.comment_multiline = False
+            self.write = False
+        elif not self.in_comment:
+            debug_print("<EXPECT_COMMENT>")
+            self.expect_comment = True
+
+    def handle_multiline_comment(self) -> None:
+        """Handle the start of a multiline comment."""
+        if self.expect_comment:
+            debug_print("<MULTILINECOMMENT>")
+            self.in_comment = True
+            self.comment_multiline = True
+            self.expect_comment = False
+
+    def handle_newline_char(self) -> None:
+        """Handle newline character in comment processing."""
+        if self.in_comment and not self.comment_multiline:
+            debug_print("</COMMENT>")
+            self.in_comment = False
+            self.write = False
+
+    def handle_quote_status(self) -> None:
+        """Toggle the in_quote status and print debug information."""
+        if self.in_quote:
+            debug_print("</QUOTE>")
+            self.in_quote = False
+        else:
+            debug_print("<QUOTE>")
+            self.in_quote = True
 
 
-def encode(obj, strict=False, compactly=True, escape_unicode=False, encoding=None):
-    """Encodes a Python object into a JSON-encoded string.
+def encode(
+    obj: Any,  # noqa: ANN401
+    strict: bool = False,
+    compactly: bool = True,
+    escape_unicode: bool = False,
+    encoding: None | str = None,
+) -> str:
+    """Encode a Python object into a JSON-encoded string.
 
     'strict' is ignored.
 
@@ -139,8 +195,19 @@ def encode(obj, strict=False, compactly=True, escape_unicode=False, encoding=Non
     value.  As the default/recommended encoding for JSON is UTF-8,
     you should almost always pass in encoding='utf8'.
 
-    """
+    Args:
+        obj (Any): The Python object to encode.
+        strict (bool): Ignored, for compatibility.
+        compactly (bool): If True, the output will be compact; if False, it
+            will be pretty-printed with indentation.
+        escape_unicode (bool): If True, non-ASCII characters will be escaped;
+            if False, they will be included as actual characters.
+        encoding (str, optional): The character encoding for the output string.
+            Defaults to None.
 
+    Returns:
+        str: The JSON-encoded string.
+    """
     if compactly:
         indent = None
         separators = (",", ":")
@@ -155,5 +222,4 @@ def encode(obj, strict=False, compactly=True, escape_unicode=False, encoding=Non
         ensure_ascii=ensure_ascii,
         indent=indent,
         separators=separators,
-        encoding=encoding or "utf-8",
     )

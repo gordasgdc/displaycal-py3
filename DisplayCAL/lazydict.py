@@ -1,21 +1,33 @@
-# -*- coding: utf-8 -*-
+"""Lazy-loading dictionaries that defer loading from files (JSON/YAML) until accessed."""  # noqa: E501
+
+from __future__ import annotations
+
 import codecs
 import json
 import os
-import traceback
+from typing import TYPE_CHECKING, Any, TextIO
 
 from DisplayCAL.config import get_data_path
 from DisplayCAL.debughelpers import handle_error
 from DisplayCAL.util_str import safe_str
 
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator
 
-def unquote(string, raise_exception=True):
-    """Remove single or double quote at start and end of string and unescape
-    escaped chars, YAML-style
+
+def unquote(string: str, raise_exception: bool = True) -> str:
+    """Remove outer single/double quotes and unescape YAML-style escapes.
 
     Unlike 'string'.strip("'"'"'), only removes the outermost quote pair.
     Raises ValueError on missing end quote if there is a start quote.
 
+    Args:
+        string (str): The string to unquote.
+        raise_exception (bool, optional): If True, raises a ValueError if the
+            string is not properly quoted. Defaults to True.
+
+    Returns:
+        str: The unquoted string.
     """
     if len(string) > 1 and string[0] in "'\"":
         if string[-1] == string[0]:
@@ -27,20 +39,18 @@ def unquote(string, raise_exception=True):
     return string
 
 
-def escape(string):
-    r"""
-    Backslash-escape special chars in string
+def escape(string: str) -> bytes:
+    """Backslash-escape special chars in string."""
+    if isinstance(string, str):
+        string = string.encode("string_escape")
+    return string
 
-    """
-    return string.encode("string_escape")
 
-
-def unescape(string):
-    r"""
-    Unescape escaped chars in string
-
-    """
-    return string.decode("string_escape")
+def unescape(string: bytes) -> str:
+    """Unescape escaped chars in string."""
+    if isinstance(string, bytes):
+        string = string.decode("string_escape")
+    return string
 
 
 class LazyDict(dict):
@@ -49,183 +59,414 @@ class LazyDict(dict):
     The actual mappings are loaded from the source YAML file when they
     are accessed.
 
+    Args:
+        path (None | str, optional): The path to the file to load the
+            dictionary from. If not provided, the path set during
+            initialization will be used.
+        encoding (str, optional): The encoding to use when reading the file.
+            Defaults to "UTF-8".
+        errors (str, optional): The error handling scheme to use for decoding.
+            Defaults to "strict".
     """
 
-    def __init__(self, path=None, encoding="UTF-8", errors="strict"):
-        dict.__init__(self)
-        self._isloaded = False
+    def __init__(
+        self,
+        path: None | str = None,
+        encoding: str = "UTF-8",
+        errors: str = "strict",
+    ) -> None:
+        super().__init__()
+        self._is_loaded = False
         self.path = path
         self.encoding = encoding
         self.errors = errors
 
-    def __cmp__(self, other):
+    def __cmp__(self, other: Any) -> bool:  # noqa: ANN401
+        """Compare the dictionary with another object.
+
+        Args:
+            other (Any): The object to compare with.
+
+        Returns:
+            bool: True if the dictionary is equal to the other object,
+                False otherwise.
+        """
         self.load()
-        return dict.__cmp__(self, other)
+        return super().__cmp__(other)
 
-    def __contains__(self, key):
+    def __contains__(self, key: Any) -> bool:  # noqa: ANN401
+        """Check if the dictionary contains a key.
+
+        Args:
+            key (Any): The key to check. Any hashable object.
+
+        Returns:
+            bool: True if the key is in the dictionary, False otherwise.
+        """
         self.load()
-        return dict.__contains__(self, key)
+        return super().__contains__(key)
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: Any) -> None:  # noqa: ANN401
+        """Delete a key from the dictionary.
+
+        Args:
+            key (Any): The key to delete. Any hashable object.
+        """
         self.load()
-        dict.__delitem__(self, key)
+        super().__delitem__(key)
 
-    def __delslice__(self, i, j):
+    def __eq__(self, other: object) -> bool:
+        """Compare the dictionary with another object.
+
+        Args:
+            other (Any): The object to compare with.
+
+        Returns:
+            bool: True if the dictionary is equal to the other object,
+                False otherwise.
+        """
         self.load()
-        dict.__delslice__(self, i, j)
+        return super().__eq__(other)
 
-    def __eq__(self, other):
+    def __ge__(self, other: Any) -> bool:  # noqa: ANN401
+        """Compare the dictionary with another object.
+
+        Args:
+            other (Any): The object to compare with.
+
+        Returns:
+            bool: True if the dictionary is greater than or equal to the
+                other object, False otherwise.
+        """
         self.load()
-        return dict.__eq__(self, other)
+        return super().__ge__(other)
 
-    def __ge__(self, other):
+    def __getitem__(self, name: str) -> Any:  # noqa: ANN401
+        """Get the value for a given key in the dictionary.
+
+        Args:
+            name (str): The key to get the value for.
+
+        Returns:
+            Any: The value associated with the key.
+        """
         self.load()
-        return dict.__ge__(self, other)
+        return super().__getitem__(name)
 
-    def __getitem__(self, name):
+    def __gt__(self, other: Any) -> bool:  # noqa: ANN401
+        """Compare the dictionary with another object.
+
+        Args:
+            other (Any): The object to compare with.
+
+        Returns:
+            bool: True if the dictionary is greater than the other object,
+                False otherwise.
+        """
         self.load()
-        return dict.__getitem__(self, name)
+        return super().__gt__(other)
 
-    def __getslice__(self, i, j):
+    def __iter__(self) -> Iterator:
+        """Return an iterator over the dictionary keys.
+
+        Returns:
+            Iterator: An iterator over the dictionary keys.
+        """
         self.load()
-        return dict.__getslice__(self, i, j)
+        return super().__iter__()
 
-    def __gt__(self, other):
+    def __le__(self, other: Any) -> bool:  # noqa: ANN401
+        """Compare the dictionary with another object.
+
+        Args:
+            other (Any): The object to compare with.
+
+        Returns:
+            bool: True if the dictionary is less than or equal to the other
+                object, False otherwise.
+        """
         self.load()
-        return dict.__gt__(self, other)
+        return super().__le__(other)
 
-    def __iter__(self):
+    def __len__(self) -> int:
+        """Return the number of items in the dictionary.
+
+        Returns:
+            int: The number of items in the dictionary.
+        """
         self.load()
-        return dict.__iter__(self)
+        return super().__len__()
 
-    def __le__(self, other):
+    def __lt__(self, other: Any) -> bool:  # noqa: ANN401
+        """Compare the dictionary with another object.
+
+        Args:
+            other (Any): The object to compare with.
+
+        Returns:
+            bool: True if the dictionary is less than the other object,
+                False otherwise.
+        """
         self.load()
-        return dict.__le__(self, other)
+        return super().__lt__(other)
 
-    def __len__(self):
+    def __ne__(self, other: object) -> bool:
+        """Compare the dictionary with another object.
+
+        Args:
+            other (Any): The object to compare with.
+
+        Returns:
+            bool: True if the dictionary is not equal to the other object,
+                False otherwise.
+        """
         self.load()
-        return dict.__len__(self)
+        return super().__ne__(other)
 
-    def __lt__(self, other):
+    def __repr__(self) -> str:
+        """Return a string representation of the dictionary.
+
+        Returns:
+            str: A string representation of the dictionary.
+        """
         self.load()
-        return dict.__lt__(self, other)
+        return super().__repr__()
 
-    def __ne__(self, other):
+    def __setitem__(self, name: str, value: Any) -> None:  # noqa: ANN401
+        """Set the value for a given key in the dictionary.
+
+        Args:
+            name (str): The key to set.
+            value (Any): The value to set for the key.
+        """
         self.load()
-        return dict.__ne__(self, other)
+        super().__setitem__(name, value)
 
-    def __repr__(self):
+    def __sizeof__(self) -> int:
+        """Return the size of the dictionary in bytes.
+
+        Returns:
+            int: The size of the dictionary in bytes.
+        """
         self.load()
-        return dict.__repr__(self)
+        return super().__sizeof__()
 
-    def __setitem__(self, name, value):
+    def clear(self) -> None:
+        """Clear the dictionary."""
+        if not self._is_loaded:
+            self._is_loaded = True
+        super().clear()
+
+    def copy(self) -> dict:
+        """Return a shallow copy of the dictionary.
+
+        Returns:
+            dict: A shallow copy of the dictionary.
+        """
         self.load()
-        dict.__setitem__(self, name, value)
+        return super().copy()
 
-    def __sizeof__(self):
+    def get(self, name: str, fallback: None | Any = None) -> Any:  # noqa: ANN401
+        """Get the value for a given key in the dictionary.
+
+        Args:
+            name (str): The key to get the value for.
+            fallback (Any, optional): The value to return if the key does not
+                exist. Defaults to None.
+
+        Returns:
+            Any: The value associated with the key, or the fallback value if
+                the key does not exist.
+        """
         self.load()
-        return dict.__sizeof__(self)
+        return super().get(name, fallback)
 
-    def clear(self):
-        if not self._isloaded:
-            self._isloaded = True
-        dict.clear(self)
+    def items(self) -> tuple[str, Any]:
+        """Return a tuple containing the dictionary's items.
 
-    def copy(self):
+        Returns:
+            tuple[str, Any]: The dictionary's items, where each item is a tuple
+                of (key, value).
+        """
         self.load()
-        return dict.copy(self)
+        return super().items()
 
-    def get(self, name, fallback=None):
+    def iteritems(self) -> Iterator:
+        """Return an iterator over the dictionary's items.
+
+        Returns:
+            Iterator: An iterator over the dictionary's items, where each item
+                is a tuple of (key, value).
+        """
         self.load()
-        return dict.get(self, name, fallback)
+        return super().items()
 
-    def items(self):
+    def iterkeys(self) -> Iterator:
+        """Return an iterator over the dictionary's keys.
+
+        Returns:
+            Iterator: An iterator over the dictionary's keys.
+        """
         self.load()
-        return dict.items(self)
+        return super().keys()
 
-    def iteritems(self):
+    def itervalues(self) -> Iterator:
+        """Return an iterator over the dictionary's values.
+
+        Returns:
+            Iterator: An iterator over the dictionary's values.
+        """
         self.load()
-        return dict.items(self)
+        return super().values()
 
-    def iterkeys(self):
+    def keys(self) -> Any:  # noqa: ANN401
+        """Return a view of the dictionary's keys.
+
+        Returns:
+            dict_keys: A view of the dictionary's keys.
+        """
         self.load()
-        return dict.keys(self)
+        return super().keys()
 
-    def itervalues(self):
-        self.load()
-        return dict.values(self)
+    def load(
+        self,
+        path: None | str = None,
+        encoding: None | str = None,
+        errors: None | str = None,
+        raise_exceptions: bool = False,
+    ) -> None:
+        """Load the dictionary from a file.
 
-    def keys(self):
-        self.load()
-        return dict.keys(self)
+        Args:
+            path (str, optional): The path to the file to load the dictionary
+                from. If not provided, the path set during initialization will
+                be used.
+            encoding (str, optional): The encoding to use when reading the
+                file. Defaults to "UTF-8".
+            errors (str, optional): The error handling scheme to use for
+                decoding. Defaults to "strict".
+            raise_exceptions (bool, optional): If True, exceptions will be
+                raised instead of handled. Defaults to False.
 
-    def load(self, path=None, encoding=None, errors=None, raise_exceptions=False):
-        if not self._isloaded and (path or self.path):
-            self._isloaded = True
-            if not path:
-                path = self.path
-            if path and not os.path.isabs(path):
-                path = get_data_path(path)
-            if path and os.path.isfile(path):
-                self.path = path
-                if encoding:
-                    self.encoding = encoding
-                if errors:
-                    self.errors = errors
-            else:
-                handle_error(
-                    UserWarning("Warning - file not found:\n\n%s" % path), tb=False
-                )
-                return
-            try:
-                with codecs.open(path, "r", self.encoding, self.errors) as f:
-                    self.parse(f)
-            except EnvironmentError as exception:
-                if raise_exceptions:
-                    raise
-                handle_error(exception)
-            except Exception as exception:
-                if raise_exceptions:
-                    raise
-                handle_error(
-                    UserWarning("Error parsing file:\n\n%s\n\n%s" % (path, exception)),
-                    tb=False,
-                )
+        Raises:
+            UserWarning: If the file is not found or if there is an error
+                parsing the file, a UserWarning will be raised.
+            OSError: If there is an OS error while opening the file and
+                raise_exceptions is True.
+            Exception: If there is an error parsing the file and
+                raise_exceptions is True.
+        """
+        if self._is_loaded or (not path and not self.path):
+            return
 
-    def parse(self, iterable):
+        self._is_loaded = True
+        if not path:
+            path = self.path
+        if path and not os.path.isabs(path):
+            path = get_data_path(path)
+        if path and os.path.isfile(path):
+            self.path = path
+            if encoding:
+                self.encoding = encoding
+            if errors:
+                self.errors = errors
+        else:
+            handle_error(UserWarning(f"Warning - file not found:\n\n{path}"), tb=False)
+            return
+        try:
+            with open(path, "r", encoding=self.encoding, errors=self.errors) as f:
+                self.parse(f)
+        except OSError as exception:
+            if raise_exceptions:
+                raise
+            handle_error(exception)
+        except Exception as exception:
+            if raise_exceptions:
+                raise
+            handle_error(
+                UserWarning(f"Error parsing file:\n\n{path}\n\n{exception}"),
+                tb=False,
+            )
+
+    def parse(self, iterable: Iterable[tuple[str, Any]]) -> None:
+        """Parse the iterable and update the dictionary.
+
+        Args:
+            iterable (Iterable[tuple[str, Any]]): An iterable object (e.g.,
+                file object) to parse and update the dictionary with.
+        """
         # Override this in subclass
-        pass
 
-    def pop(self, key, *args):
+    def pop(self, key: str, *args) -> Any:  # noqa: ANN401
+        """Remove a key from the dictionary and return its value.
+
+        Args:
+            key (str): The key to remove.
+            *args: Optional arguments to pass to the pop method.
+
+        Returns:
+            Any: The value associated with the key that was removed.
+        """
         self.load()
-        return dict.pop(self, key, *args)
+        return super().pop(key, *args)
 
-    def popitem(self, name, value):
+    def popitem(self, name: str, value: Any) -> tuple[str, Any]:  # noqa: ANN401
+        """Remove and return a (key, value) pair from the dictionary.
+
+        Args:
+            name (str): The key to remove.
+            value (Any): The value to return if the key does not exist.
+
+        Returns:
+            tuple: The (key, value) pair removed from the dictionary.
+        """
         self.load()
-        return dict.popitem(self, name, value)
+        return super().popitem(name, value)
 
-    def setdefault(self, name, value=None):
+    def setdefault(self, name: str, value: None | Any = None) -> Any:  # noqa: ANN401
+        """Set the default value for a key in the dictionary.
+
+        Args:
+            name (str): The key to set the default value for.
+            value (Any, optional): The default value to set if the key does
+                not exist. Defaults to None.
+
+        Returns:
+            Any: The value associated with the key after setting the default.
+        """
         self.load()
-        return dict.setdefault(self, name, value)
+        return super().setdefault(name, value)
 
-    def update(self, other):
+    def update(self, other: dict | Iterable[tuple[str, Any]]) -> None:
+        """Update the dictionary with another dictionary or iterable of key-value pairs.
+
+        Args:
+            other (dict | Iterable[tuple[str, Any]]): The dictionary or
+                iterable of key-value pairs to update the dictionary with.
+        """
         self.load()
-        dict.update(self, other)
+        super().update(other)
 
-    def values(self):
+    def values(self) -> Any:  # noqa: ANN401
+        """Return a view of the dictionary's values.
+
+        Returns:
+            dict_values: A view of the dictionary's values.
+        """
         self.load()
-        return dict.values(self)
+        return super().values()
 
 
-class LazyDict_JSON(LazyDict):
-    """JSON lazy dictionary"""
+class LazyDictJSON(LazyDict):
+    """JSON lazy dictionary."""
 
-    def parse(self, fileobj):
-        dict.update(self, json.load(fileobj))
+    def parse(self, fileobj: TextIO) -> None:
+        """Parse fileobj and update dict."""
+        super().update(json.load(fileobj))
 
 
-class LazyDict_YAML_UltraLite(LazyDict):
-    """'YAML Ultra Lite' lazy dictionary
+class LazyDictYAMLUltraLite(LazyDict):
+    """'YAML Ultra Lite' lazy dictionary.
 
     YAML Ultra Lite is a restricted subset of YAML. It only supports the
     following notations:
@@ -243,14 +484,43 @@ class LazyDict_YAML_UltraLite(LazyDict):
     around 8 times faster than JSONDict (based on demjson),
     and about 2 times faster than YAML_Lite.
 
+    Args:
+        path (None | str, optional): The path to the file to load the
+            dictionary from. If not provided, the path set during
+            initialization will be used.
+        encoding (str, optional): The encoding to use when reading the file.
+            Defaults to "UTF-8".
+        errors (str, optional): The error handling scheme to use for decoding.
+            Defaults to "strict".
+        debug (bool, optional): If True, debug output will be printed during
+            parsing. Defaults to False.
     """
 
-    def __init__(self, path=None, encoding="UTF-8", errors="strict", debug=False):
-        LazyDict.__init__(self, path, encoding, errors)
+    def __init__(
+        self,
+        path: None | str = None,
+        encoding: str = "UTF-8",
+        errors: str = "strict",
+        debug: bool = False,
+    ) -> None:
+        super().__init__(path, encoding, errors)
         self.debug = debug
 
-    def parse(self, fileobj):
-        """Parse fileobj and update dict"""
+    def debug_print(self, *args: Any) -> None:  # noqa: ANN401
+        """Print debug information if debugging is enabled.
+
+        Args:
+            *args (Any): The arguments to print.
+        """
+        if self.debug:
+            print(*args)
+
+    def parse(self, fileobj: TextIO) -> None:
+        """Parse fileobj and update dict.
+
+        Args:
+            fileobj (TextIO): The file-like object to parse.
+        """
         block = False
         value = []
         key = None
@@ -262,98 +532,153 @@ class LazyDict_YAML_UltraLite(LazyDict):
                 # Ignore comments
                 pass
             elif line != "\n" and not line.startswith("  "):
-                if value:
-                    self[key] = "".join(value).rstrip("\n")
-                # tokens = line.rstrip(' -|\n').split(":", 1)
-                tokens = line.split(":", 1)
-                if len(tokens) == 1:
-                    raise ValueError(
-                        "Unsupported format (%r line %i)"
-                        % (safe_str(getattr(fileobj, "name", line)), i)
-                    )
-                # key = tokens[0].strip("'"'"')
-                key = self._unquote(tokens[0].strip(), False, False, fileobj, i)
-                token = tokens[1].strip(" \n")
-                if token.startswith("|-"):
-                    block = True
-                    token = token[2:].lstrip(" ")
-                    if token:
-                        if token.startswith("#"):
-                            value = []
-                            continue
-                        raise ValueError(
-                            "Expected a comment or a line break "
-                            "(%r line %i)"
-                            % (safe_str(getattr(fileobj, "name", line)), i)
-                        )
-                elif token.startswith("|") or token.startswith(">"):
-                    raise ValueError(
-                        "Style not supported "
-                        "(%r line %i)" % (safe_str(getattr(fileobj, "name", line)), i)
-                    )
-                elif token.startswith("\t"):
-                    raise ValueError(
-                        "Found character '\\t' that cannot "
-                        "start any token (%r line %i)"
-                        % (safe_str(getattr(fileobj, "name", line)), i)
-                    )
-                if token:
-                    # Inline value
-                    block = False
-                    if token.startswith("#"):
-                        value = []
-                        continue
-                    comment_offset = token.find("#")
-                    if (
-                        comment_offset > -1
-                        and token[comment_offset - 1 : comment_offset] == " "
-                    ):
-                        token = token[:comment_offset].rstrip(" \n")
-                        if not token:
-                            value = []
-                            continue
-                    # value = [token.strip("'"'"')]
-                    value = [self._unquote(token, True, True, fileobj, i)]
-                else:
-                    value = []
+                block, value, key = self._parse_line(line, value, key, fileobj, i)
             else:
                 if not block:
                     raise ValueError(
-                        "Unsupported format (%r line %i)"
-                        % (safe_str(getattr(fileobj, "name", line)), i)
+                        "Unsupported format ({!r} line {})".format(
+                            safe_str(getattr(fileobj, "name", line)), i
+                        )
                     )
                 value.append(line[2:])
         if key:
             self[key] = "".join(value).rstrip("\n")
 
-    def _unquote(self, token, do_unescape=True, check=False, fileobj=None, lineno=-1):
-        if len(token) > 1:
-            c = token[0]
-            if c in "'\"" and c == token[-1]:
-                token = token[1:-1]
-                if check and token.count(c) != token.count("\\" + c):
-                    raise ValueError(
-                        "Unescaped quotes found in token "
-                        "(%r line %i)"
-                        % (safe_str(getattr(fileobj, "name", token)), lineno)
+    def _parse_line(
+        self, line: str, value: list, key: str, fileobj: TextIO, i: int
+    ) -> tuple[bool, list, str]:
+        """Parse a single line of the file and update the dictionary.
+
+        Args:
+            line (str): The line to parse.
+            value (list): The current value being built.
+            key (str): The current key being built.
+            fileobj (TextIO): The file-like object being parsed.
+            i (int): The current line number.
+
+        Raises:
+            ValueError: If the line is not in the expected format.
+
+        Returns:
+            tuple: A tuple containing:
+                - block (bool): Whether the line is a block style.
+                - value (list): The value parsed from the line.
+                - key (str): The key parsed from the line.
+        """
+        if value:
+            self[key] = "".join(value).rstrip("\n")
+        # tokens = line.rstrip(' -|\n').split(":", 1)
+        tokens = line.split(":", 1)
+        if len(tokens) == 1:
+            raise ValueError(
+                "Unsupported format ({!r} line {})".format(
+                    safe_str(getattr(fileobj, "name", line)), i
+                )
+            )
+        # key = tokens[0].strip("'"'"')
+        key = self._unquote(tokens[0].strip(), False, False, fileobj, i)
+        token = tokens[1].strip(" \n")
+        if token.startswith("|-"):
+            block = True
+            token = token[2:].lstrip(" ")
+            if token:
+                if token.startswith("#"):
+                    value = []
+                    return block, value, key
+                raise ValueError(
+                    "Expected a comment or a line break ({} line {})".format(
+                        format(safe_str(getattr(fileobj, "name", line))), i
                     )
-                if do_unescape:
-                    token = unescape(token)
-            elif check and (token.count('"') != token.count('\\"')):
-                raise ValueError(
-                    "Unbalanced quotes found in token "
-                    "(%r line %i)" % (safe_str(getattr(fileobj, "name", token)), lineno)
                 )
-            if check and "\\'" in token:
-                raise ValueError(
-                    'Found unknown escape character "\'" '
-                    "(%r line %i)" % (safe_str(getattr(fileobj, "name", token)), lineno)
+        elif token.startswith(("|", ">")):
+            raise ValueError(
+                "Style not supported ({!r} line {})".format(
+                    safe_str(getattr(fileobj, "name", line)), i
                 )
+            )
+        elif token.startswith("\t"):
+            raise ValueError(
+                "Found character '\\t' that cannot "
+                "start any token ({!r} line {})".format(
+                    safe_str(getattr(fileobj, "name", line)), i
+                )
+            )
+        if token:
+            # Inline value
+            block = False
+            if token.startswith("#"):
+                value = []
+                return block, value, key
+            comment_offset = token.find("#")
+            if (
+                comment_offset > -1
+                and token[comment_offset - 1 : comment_offset] == " "
+            ):
+                token = token[:comment_offset].rstrip(" \n")
+                if not token:
+                    value = []
+                    return block, value, key
+            # value = [token.strip("'"'"')]
+            value = [self._unquote(token, True, True, fileobj, i)]
+        else:
+            value = []
+
+        return block, value, key
+
+    def _unquote(
+        self,
+        token: str,
+        do_unescape: bool = True,
+        check: bool = False,
+        fileobj: None | TextIO = None,
+        lineno: int = -1,
+    ) -> str:
+        """Unquote a token, removing outer quotes and unescaping YAML-style escapes.
+
+        Args:
+            token (str): The token to unquote.
+            do_unescape (bool, optional): If True, unescape the token. Defaults
+                to True.
+            check (bool, optional): If True, perform additional checks on the
+                token. Defaults to False.
+            fileobj (TextIO, optional): The file-like object to use for error
+                reporting. Defaults to None.
+            lineno (int, optional): The line number for error reporting.
+                Defaults to -1
+
+        Returns:
+            str: The unquoted token.
+        """
+        if len(token) <= 1:
+            return token
+        c = token[0]
+        if c in "'\"" and c == token[-1]:
+            token = token[1:-1]
+            if check and token.count(c) != token.count("\\" + c):
+                raise ValueError(
+                    "Unescaped quotes found in token ({!r} line {})".format(
+                        safe_str(getattr(fileobj, "name", token)), lineno
+                    )
+                )
+            if do_unescape:
+                token = unescape(token)
+        elif check and (token.count('"') != token.count('\\"')):
+            raise ValueError(
+                "Unbalanced quotes found in token ({!r} line {})".format(
+                    safe_str(getattr(fileobj, "name", token)), lineno
+                )
+            )
+        if check and "\\'" in token:
+            raise ValueError(
+                'Found unknown escape character "\'" ({!r} line {})'.format(
+                    safe_str(getattr(fileobj, "name", token)), lineno
+                )
+            )
         return token
 
 
-class LazyDict_YAML_Lite(LazyDict_YAML_UltraLite):
-    """'YAML Lite' lazy dictionary
+class LazyDictYAMLLite(LazyDictYAMLUltraLite):
+    """'YAML Lite' lazy dictionary.
 
     YAML Lite is a restricted subset of YAML. It only supports the
     following notations:
@@ -377,8 +702,12 @@ class LazyDict_YAML_Lite(LazyDict_YAML_UltraLite):
 
     """
 
-    def parse(self, fileobj):
-        """Parse fileobj and update dict"""
+    def parse(self, fileobj: TextIO) -> None:
+        """Parse fileobj and update dict.
+
+        Args:
+            fileobj (TextIO): The file-like object to parse.
+        """
         style = None
         value = []
         block_styles = ("|", ">", "|-", ">-", "|+", ">+")
@@ -389,18 +718,14 @@ class LazyDict_YAML_Lite(LazyDict_YAML_UltraLite):
         for i, line in enumerate(fileobj.readlines(), 1):
             line = line.replace("\r\n", "\n")
             line_lwstrip = line.lstrip(" ")
-            if quote:
-                line_rstrip = line.rstrip()
-            if self.debug:
-                print("LINE", repr(line))
+            line_rstrip = line.rstrip() if quote else None
+            self.debug_print("LINE", repr(line))
             if not quote and style not in block_styles and line_lwstrip.startswith("#"):
                 # Ignore comments
                 pass
             elif quote and line_rstrip and line_rstrip[-1] == quote:
-                if self.debug:
-                    print("END QUOTE")
-                if self.debug:
-                    print("+ APPEND STRIPPED", repr(line.strip()))
+                self.debug_print("END QUOTE")
+                self.debug_print("+ APPEND STRIPPED", repr(line.strip()))
                 value.append(line.strip())
                 self._collect(key, value, ">i")
                 style = None
@@ -413,19 +738,11 @@ class LazyDict_YAML_Lite(LazyDict_YAML_UltraLite):
                 and line_lwstrip
                 and line_lwstrip[0] in ("'", '"')
             ):
-                if quote:
-                    raise ValueError(
-                        "Wrong end quote while scanning quoted "
-                        "scalar (%r line %i)"
-                        % (safe_str(getattr(fileobj, "name", line)), i)
-                    )
-                else:
-                    if self.debug:
-                        print("START QUOTE")
-                    quote = line_lwstrip[0]
-                    if self.debug:
-                        print("+ APPEND LWSTRIPPED", repr(line_lwstrip))
-                    value.append(line_lwstrip)
+                self.validate_quote(quote, line, fileobj, i)
+                self.debug_print("START QUOTE")
+                quote = line_lwstrip[0]
+                self.debug_print("+ APPEND LWSTRIPPED", repr(line_lwstrip))
+                value.append(line_lwstrip)
             elif line.startswith("  ") and (
                 style in block_styles or line_lwstrip != "\n"
             ):
@@ -433,131 +750,218 @@ class LazyDict_YAML_Lite(LazyDict_YAML_UltraLite):
                     if not quote and "\t" in line:
                         raise ValueError(
                             "Found character '\\t' that cannot "
-                            "start any token (%r line %i)"
-                            % (safe_str(getattr(fileobj, "name", line)), i)
+                            "start any token ({!r} line {})".format(
+                                safe_str(getattr(fileobj, "name", line)), i
+                            )
                         )
                     line = line.strip() + "\n"
-                    if self.debug:
-                        print("APPEND STRIPPED + \\n", repr(line))
+                    self.debug_print("APPEND STRIPPED + \\n", repr(line))
                 else:
                     line = line[2:]
-                    if self.debug:
-                        print("APPEND [2:]", repr(line))
+                    self.debug_print("APPEND [2:]", repr(line))
                 value.append(line)
             elif not quote and line_lwstrip != "\n" and not line.startswith(" "):
-                if key and value:
-                    self._collect(key, value, style)
-                tokens = line.split(":", 1)
-                key = unquote(tokens[0].strip())
-                if len(tokens) > 1:
-                    token = tokens[1].lstrip(" ").rstrip(" \n")
-                    if token.startswith("|") or token.startswith(">"):
-                        if token[1:2] in "+-":
-                            style = token[:2]
-                            token = token[2:].lstrip(" ")
-                        else:
-                            style = token[:1]
-                            token = token[1:].lstrip(" ")
-                    else:
-                        style = ""
-                    if token.startswith("\t"):
-                        raise ValueError(
-                            "Found character '\\t' that cannot "
-                            "start any token (%r line %i)"
-                            % (safe_str(getattr(fileobj, "name", line)), i)
-                        )
-                    if style.startswith(">"):
-                        raise NotImplementedError(
-                            "Folded style is not "
-                            "supported (%r line %i)"
-                            % (safe_str(getattr(fileobj, "name", line)), i)
-                        )
-                    if token.startswith("#"):
-                        # Block or folded
-                        if self.debug:
-                            print("IN BLOCK", repr(key), style)
-                        value = []
-                        continue
-                    if style and token:
-                        raise ValueError(
-                            "Expected a comment or a line break "
-                            "(%r line %i)"
-                            % (safe_str(getattr(fileobj, "name", line)), i)
-                        )
-                else:
-                    raise ValueError(
-                        "Unsupported format (%r line %i)"
-                        % (safe_str(getattr(fileobj, "name", line)), i)
-                    )
-                if style or not token:
-                    # Block or folded
-                    if self.debug:
-                        print("IN BLOCK", repr(key), style)
-                    value = []
-                else:
-                    # Inline value
-                    if self.debug:
-                        print("IN PLAIN", repr(key), repr(token))
-                    style = None
-                    if token.startswith("#"):
-                        value = []
-                        continue
-                    token_rstrip = token.rstrip()
-                    if (
-                        token_rstrip
-                        and token_rstrip[0] in ("'", '"')
-                        and (
-                            len(token_rstrip) < 2 or token_rstrip[0] != token_rstrip[-1]
-                        )
-                    ):
-                        if self.debug:
-                            print("START QUOTE")
-                        quote = token_rstrip[0]
-                    else:
-                        style = ">i"
-                        comment_offset = token_rstrip.find("#")
-                        if (
-                            comment_offset > -1
-                            and token_rstrip[comment_offset - 1 : comment_offset] == " "
-                        ):
-                            token_rstrip = token_rstrip[:comment_offset].rstrip()
-                    token_rstrip += "\n"
-                    if self.debug:
-                        print("SET", repr(token_rstrip))
-                    value = [token_rstrip]
+                style, value, key, quote, skip_to_next_line = self._parse_line(
+                    line, key, value, style, quote, fileobj, i
+                )
+                if skip_to_next_line:
+                    continue
             else:
                 # if line_lwstrip == "\n":
-                if True:
-                    if self.debug:
-                        print("APPEND LWSTRIPPED", repr(line_lwstrip))
-                    line = line_lwstrip
-                else:
-                    if self.debug:
-                        print("APPEND", repr(line))
+                self.debug_print("APPEND LWSTRIPPED", repr(line_lwstrip))
+                line = line_lwstrip
                 value.append(line)
         if quote:
             raise ValueError(
-                "EOF while scanning quoted scalar (%r line %i)"
-                % (safe_str(getattr(fileobj, "name", line)), i)
+                "EOF while scanning quoted scalar ({!r} line {})".format(
+                    safe_str(getattr(fileobj, "name", line)), i
+                )
             )
         if key:
-            if self.debug:
-                print("FINAL COLLECT")
+            self.debug_print("FINAL COLLECT")
             self._collect(key, value, style)
 
-    def _collect(self, key, value, style=None):
-        if self.debug:
-            print("COLLECT", key, value, style)
+    def validate_quote(
+        self, quote: None | str, line: str, fileobj: TextIO, i: int
+    ) -> None:
+        """Validate the quote character to ensure it is properly closed.
+
+        Args:
+            quote (None | str): The current quote character, if any.
+            line (str): The line being parsed.
+            fileobj (TextIO): The file-like object being parsed.
+            i (int): The current line number.
+
+        Raises:
+            ValueError: If the quote character is not properly closed.
+        """
+        if quote:
+            raise ValueError(
+                "Wrong end quote while scanning quoted scalar ({!r} line {})".format(
+                    safe_str(getattr(fileobj, "name", line)), i
+                )
+            )
+
+    def _parse_line(
+        self,
+        line: str,
+        key: str,
+        value: list,
+        style: None | str,
+        quote: None | str,
+        fileobj: TextIO,
+        i: int,
+    ) -> tuple[None | str, list, str, None | str, bool]:
+        """Parse a single line of the file and update the dictionary.
+
+        Args:
+            line (str): The line to parse.
+            key (str): The current key being built.
+            value (list): The current value being built.
+            style (None | str): The current style of the value.
+            quote (None | str): The current quote character, if any.
+            fileobj (TextIO): The file-like object being parsed.
+            i (int): The current line number.
+
+        Raises:
+            ValueError: If the line is not in the expected format.
+            NotImplementedError: If a folded style is encountered.
+
+        Returns:
+            tuple: A tuple containing:
+                - style (None | str): The style of the value.
+                - value (list): The value parsed from the line.
+                - key (str): The key parsed from the line.
+                - quote (None | str): The quote character, if any.
+                - skip_to_next_line (bool): Whether to skip to the next line.
+        """
+        if key and value:
+            self._collect(key, value, style)
+        tokens = line.split(":", 1)
+        key = unquote(tokens[0].strip())
+        if len(tokens) > 1:
+            token = tokens[1].lstrip(" ").rstrip(" \n")
+            if token.startswith(("|", ">")):
+                if token[1:2] in "+-":
+                    style = token[:2]
+                    token = token[2:].lstrip(" ")
+                else:
+                    style = token[:1]
+                    token = token[1:].lstrip(" ")
+            else:
+                style = ""
+            self.validate_token(token, line, fileobj, i)
+            self.validate_style(style, line, fileobj, i)
+            if token.startswith("#"):
+                # Block or folded
+                self.debug_print("IN BLOCK", repr(key), style)
+                value = []
+                return style, value, key, quote, True
+            if style and token:
+                raise ValueError(
+                    "Expected a comment or a line break ({!r} line {})".format(
+                        safe_str(getattr(fileobj, "name", line)), i
+                    )
+                )
+        else:
+            raise ValueError(
+                "Unsupported format ({!r} line {})".format(
+                    safe_str(getattr(fileobj, "name", line)), i
+                )
+            )
+        if style or not token:
+            # Block or folded
+            self.debug_print("IN BLOCK", repr(key), style)
+            value = []
+        else:
+            # Inline value
+            self.debug_print("IN PLAIN", repr(key), repr(token))
+            style = None
+            if token.startswith("#"):
+                value = []
+                return style, value, key, quote, True
+            token_rstrip = token.rstrip()
+            if (
+                token_rstrip
+                and token_rstrip[0] in ("'", '"')
+                and (len(token_rstrip) < 2 or token_rstrip[0] != token_rstrip[-1])
+            ):
+                self.debug_print("START QUOTE")
+                quote = token_rstrip[0]
+            else:
+                style = ">i"
+                comment_offset = token_rstrip.find("#")
+                if (
+                    comment_offset > -1
+                    and token_rstrip[comment_offset - 1 : comment_offset] == " "
+                ):
+                    token_rstrip = token_rstrip[:comment_offset].rstrip()
+            token_rstrip += "\n"
+            self.debug_print("SET", repr(token_rstrip))
+            value = [token_rstrip]
+
+        return style, value, key, quote, False
+
+    def validate_token(self, token: str, line: str, fileobj: TextIO, i: int) -> None:
+        """Validate the token to ensure it starts with a valid character.
+
+        Args:
+            token (str): The token to validate.
+            line (str): The line containing the token.
+            fileobj (TextIO): The file-like object being parsed.
+            i (int): The current line number.
+
+        Raises:
+            ValueError: If the token starts with a tab character.
+        """
+        if token.startswith("\t"):
+            raise ValueError(
+                "Found character '\\t' that cannot "
+                "start any token ({!r} line {})".format(
+                    safe_str(getattr(fileobj, "name", line)), i
+                )
+            )
+
+    def validate_style(
+        self, style: None | str, line: str, fileobj: TextIO, i: int
+    ) -> None:
+        """Validate the style to ensure it is supported.
+
+        Args:
+            style (None | str): The style to validate.
+            line (str): The line containing the style.
+            fileobj (TextIO): The file-like object being parsed.
+            i (int): The current line number.
+
+        Raises:
+            NotImplementedError: If the style is a folded style (starts with
+                '>').
+        """
+        if style.startswith(">"):
+            raise NotImplementedError(
+                "Folded style is not supported ({!r} line {})".format(
+                    safe_str(getattr(fileobj, "name", line)), i
+                )
+            )
+
+    def _collect(self, key: str, value: list, style: None | str = None) -> None:
+        """Collect the key and value, formatting the value according to style.
+
+        Args:
+            key (str): The key to collect.
+            value (list): The value to collect, as a list of strings.
+            style (None | str, optional): The style to apply to the value.
+                Defaults to None.
+        """
+        self.debug_print("COLLECT", key, value, style)
         chars = "".join(value)
-        if style != ">i":
-            chars = chars.rstrip(" ")
+        chars = chars.rstrip(" ") if style != ">i" else chars
         if not style or style.startswith(">"):
-            if self.debug:
-                print("FOLD")
+            self.debug_print("FOLD")
             out = ""
             state = 0
             for c in chars:
-                # print repr(c), repr(state)
+                # print(repr(c), repr(state))
                 if c == "\n":
                     if state > 0:
                         out += c
@@ -572,185 +976,23 @@ class LazyDict_YAML_Lite(LazyDict_YAML_UltraLite):
         else:
             out = chars
         out = out.lstrip(" ")
-        if self.debug:
-            print("OUT", repr(out))
+        self.debug_print("OUT", repr(out))
         if not style:
             # Inline value
             out = out.rstrip()
         elif style.endswith("+"):
             # Keep trailing newlines
-            if self.debug:
-                print("KEEP")
-            pass
+            self.debug_print("KEEP")
         else:
             out = out.rstrip("\n")
             if style == ">i":
                 out = unquote(out)
             elif style.endswith("-"):
                 # Chomp trailing newlines
-                if self.debug:
-                    print("CHOMP")
-                pass
+                self.debug_print("CHOMP")
             else:
                 # Clip trailing newlines (default)
-                if self.debug:
-                    print("CLIP")
+                self.debug_print("CLIP")
                 if chars.endswith("\n"):
                     out += "\n"
         self[key] = out
-
-
-def test():
-    from io import StringIO
-    from time import time
-
-    from DisplayCAL.jsondict import JSONDict
-
-    # PyYAML
-    import yaml
-    from yaml import CSafeLoader
-
-    def y(doc):
-        try:
-            return yaml.safe_load(StringIO(doc))
-        except Exception as e:
-            print(f"{e.__class__.__name__}:", e)
-            traceback.print_exc()
-            return e
-
-    def l(doc):
-        l = LazyDict_YAML_Lite(debug=True)
-        try:
-            l.parse(StringIO(doc))
-        except Exception as e:
-            print(f"{e.__class__.__name__}:", e)
-            traceback.print_exc()
-            return e
-        return l
-
-    def c(doc, do_assert=True):
-        print("-" * 80)
-        print(repr(doc))
-        a = l(doc)
-        print("LazyDict_YAML_Lite", a)
-        b = y(doc)
-        print("yaml.YAML         ", b)
-        identical = isinstance(a, dict) and isinstance(b, dict) and a == b
-        print("Identical?", identical)
-        if do_assert:
-            assert identical
-
-    print("Testing YAML Lite to YAML conformance")
-    c('TEST: \n  "ABC\n\n  DEF\n"  \n    \n\n\n\n')
-    c('TEST: \n  "ABC\n\n  DEF"')
-    c('TEST: \n  "ABC\n  DEF\n"')
-    c('TEST: \n  "ABC\n\n  DEF\tG\n  \n    \n\n\n\n \t"')
-    c("TEST: \n  ABC\n\n  DEFG\n  \n    \n\n\n\n")
-    c('TEST: \n  "ABC\n\n  DEF\n"')
-    c("TEST: \n  ABC\n\n DEFG\n  \n    \n\n\n\n ")
-    c('TEST: \n  "ABC\n\n DEF\tG\n  \n    \n\n\n\n" ')
-    c("TEST: |\n  ABC\n\n  DEFG\n  \n    \n\n\n\n")
-    c("TEST: |+\n  ABC\n\n  DEFG\n  \n    \n\n\n\n")
-    c("TEST: |-\n  ABC\n\n  DEFG\n  \n    \n\n\n\n")
-    # c('TEST: >\n  ABC\n\n  DEFG\n  \n    \n\n\n\n')
-    # c('TEST: >+\n  ABC\n\n  DEFG\n  \n    \n\n\n\n')
-    # c('TEST: >-\n  ABC\n\n  DEFG\n  \n    \n\n\n\n')
-    c('TEST: "\n ABC\n\n  DEFG\n  \n    \n\n\n\n"')
-    c("TEST: |\n  ABC\n\n  DEFG\n  \n    \n\n\n\n ")
-    c("TEST: |+\n  ABC\n\n  DEFG\n  \n    \n\n\n\n ")
-    c("TEST: |-\n  ABC\n\n  DEFG\n  \n    \n\n\n\n ")
-    # c('TEST: >\n  ABC\n\n  DEFG\n  \n    \n\n\n\n ')
-    # c('TEST: >+\n  ABC\n\n  DEFG\n  \n    \n\n\n\n ')
-    # c('TEST: >-\n  ABC\n\n  DEFG\n  \n    \n\n\n\n ')
-    c('TEST : |\n  "\n  ABC\n\n  DEFG\n  \n    \n\n\n\n  "')
-    c("TEST: |-\n  \n  ABC\n\n  DEFG\n  \n    \n\n\n\n ")
-    c("TEST: |\n  \n  ABC\n\n  DEFG\n  \n    \n\n\n\n ")
-    c("TEST:\n  \n  ABC\n\n  DEFG\n  \n    \n\n\n\n ")
-    c("TEST: |- # Comment\n  Value")
-    c("TEST: |- # Comment\n  Value # Not A Comment\n  # Not A Comment")
-
-    c("TEST: # Comment", do_assert=False)
-
-    print("=" * 80)
-    print("Performance test")
-
-    io = StringIO(
-        """{"test1": "Value 1",
-"test2": "Value 2 Line 1\\nValue 2 Line 2\\n\\nValue 2 Line 4\\n",
-"test3": "Value 3 Line 1\\n",
-"test4": "Value 4"}
-"""
-    )
-
-    d = JSONDict()
-    ts = time()
-    for i in range(10000):
-        d.parse(io)
-        io.seek(0)
-    jt = time() - ts
-
-    d = LazyDict_JSON()
-    ts = time()
-    for i in range(10000):
-        d.parse(io)
-        io.seek(0)
-    ljt = time() - ts
-
-    io = StringIO(
-        """"test1": Value 1
-"test2": |-
-  Value 2 Line 1
-  Value 2 Line 2
-
-  Value 2 Line 4
-"test3": |-
-  Value 3 Line 1
-"test4": "Value 4"
-"""
-    )
-
-    d = LazyDict_YAML_UltraLite()
-    ts = time()
-    for i in range(10000):
-        d.parse(io)
-        io.seek(0)
-    yult = time() - ts
-
-    d = LazyDict_YAML_Lite()
-    ts = time()
-    for i in range(10000):
-        d.parse(io)
-        io.seek(0)
-    ylt = time() - ts
-
-    ts = time()
-    for i in range(10000):
-        yaml.safe_load(io)
-        io.seek(0)
-    yt = time() - ts
-
-    ts = time()
-    for i in range(10000):
-        yaml.load(io, Loader=CSafeLoader)
-        io.seek(0)
-    yct = time() - ts
-
-    print("JSONDict(demjson): %.3fs" % jt)
-    print("LazyDict_JSON: %.3fs" % ljt)
-    print(
-        "LazyDict_YAML_UltraLite: %.3fs," % yult,
-        "vs JSONDict: %.1fx speed," % round(jt / yult, 1),
-        "vs YAML_Lite: %.1fx speed," % round(ylt / yult, 1),
-        "vs PyYAML: %.1fx speed," % round(yt / yult, 1),
-    )
-    print(
-        "LazyDict_YAML_Lite: %.3fs," % ylt,
-        "vs JSONDict: %.1fx speed," % round(jt / ylt, 1),
-        "vs PyYAML: %.1fx speed," % round(yt / ylt, 1),
-    )
-    print("yaml.safe_load: %.3fs" % yt)
-    print("yaml.load(CSafeLoader): %.3fs" % yct)
-
-
-if __name__ == "__main__":
-    test()

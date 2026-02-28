@@ -1,6 +1,20 @@
-# -*- coding: utf-8 -*-
+"""Pattern generator clients and servers for HTTP and TCP devices.
 
-from socketserver import TCPServer
+It supports sending RGB patterns, managing connections, and handling events for
+various pattern generator devices.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import errno
+import http.client
+import json
+import select
+import struct
+import sys
+import threading
+import urllib.parse
 from socket import (
     AF_INET,
     SHUT_RDWR,
@@ -9,101 +23,165 @@ from socket import (
     SOCK_DGRAM,
     SOCK_STREAM,
     SOL_SOCKET,
-    error,
-    gethostname,
     gethostbyname,
+    gethostname,
     socket,
     timeout,
 )
+from socketserver import TCPServer, ThreadingMixIn
 from time import sleep
-import errno
-import http.client
-import json
-import select
-import struct
-import sys
-import threading
-import urllib.request
-import urllib.error
-import urllib.parse
+from typing import TYPE_CHECKING, Any, Callable, TextIO
 
 from DisplayCAL import localization as lang
+from DisplayCAL import webwin
 from DisplayCAL.network import get_network_addr
 from DisplayCAL.util_http import encode_multipart_formdata
-from DisplayCAL import webwin
+
+if TYPE_CHECKING:
+    from http.client import HTTPResponse
+    from urllib.request import Request
 
 
 _lock = threading.RLock()
 
 
-def _eintr_retry(func, *args):
-    """restart a system call interrupted by EINTR"""
+PRISMA_DEFAULT_PORT = 80
+RESOLVE_LS_DEFAULT_BITS = 8
+RESOLVE_DEFAULT_PORT = 20002
+RESOLVE_DEFAULT_BITS = 10
+
+
+def _eintr_retry(func: Callable, *args) -> Any:  # noqa: ANN401
+    """Restart a system call interrupted by EINTR.
+
+    Args:
+        func (Callable): The function to call.
+        *args: Arguments to pass to the function.
+
+    Returns:
+        Any: The result of the function call.
+    """
     while True:
         try:
             return func(*args)
-        except (OSError, select.error) as e:
+        except OSError as e:
             if e.args[0] != errno.EINTR:
                 raise
 
 
-def _shutdown(sock, addr):
+def _shutdown(sock: socket, addr: str) -> None:
+    """Shutdown and close a socket.
+
+    Args:
+        sock (socket): The socket to shut down and close.
+        addr (str): The address associated with the socket, for logging.
+    """
     try:
         # Will fail if the socket isn't connected, i.e. if there
         # was an error during the call to connect()
         sock.shutdown(SHUT_RDWR)
-    except error as exception:
+    except OSError as exception:
         if exception.errno != errno.ENOTCONN:
-            print("PatternGenerator: SHUT_RDWR for %s:%i failed:" % addr[:2], exception)
+            print(f"PatternGenerator: SHUT_RDWR for {addr[:2]}:{exception} failed:")
     sock.close()
 
 
 class GenHTTPPatternGeneratorClient:
-    """Generic pattern generator client using HTTP REST interface"""
+    """Generic pattern generator client using HTTP REST interface.
 
-    def __init__(self, host, port, bits, use_video_levels=False, logfile=None):
+    Args:
+        host (str): The hostname or IP address of the pattern generator server.
+        port (int): The port number to connect to.
+        bits (int): Number of bits per channel.
+        use_video_levels (bool, optional): Use video levels for RGB values.
+            Defaults to False.
+        logfile (None | TextIO, optional): A file-like object to log messages.
+            Defaults to None.
+    """
+
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        bits: int,
+        use_video_levels: bool = False,
+        logfile: None | TextIO = None,
+    ) -> None:
         self.host = host
         self.port = port
         self.bits = bits
         self.use_video_levels = use_video_levels
         self.logfile = logfile
 
-    def wait(self):
+    def wait(self) -> None:
+        """Wait for the pattern generator server to be available."""
         self.connect()
 
-    def __del__(self):
+    def __del__(self) -> None:
+        """Clean up the connection and socket."""
         self.disconnect_client()
 
-    def _request(self, method, url, params=None, headers=None, validate=None):
+    def _request(
+        self,
+        method: str,
+        url: str,
+        params: None | bytes | str = None,
+        headers: None | dict = None,
+        validate: None | str | dict = None,
+    ) -> str | dict:
+        """Make an HTTP request to the pattern generator server.
+
+        Args:
+            method (str): The HTTP method to use (e.g., 'GET', 'POST').
+            url (str): The URL to request.
+            params (None | bytes | str, optional): The request body for POST
+                requests. Defaults to None.
+            headers (None | dict, optional): Additional headers to include in
+                the request. Defaults to None.
+            validate (None | str | dict, optional): Expected response format or
+                value. Defaults to None.
+
+        Returns:
+            str | dict: The response from the server, validated against the
+                expected format or value.
+        """
         try:
             self.conn.request(method, url, params, headers or {})
             resp = self.conn.getresponse()
-        except (error, http.client.HTTPException) as exception:
+        except (OSError, http.client.HTTPException) as exception:
             # TODO: What is the point of having the except clause here?
             raise exception
         else:
             if resp.status == http.client.OK:
                 return self._validate(resp, url, validate)
-            else:
-                raise http.client.HTTPException("%s %s" % (resp.status, resp.reason))
+            raise http.client.HTTPException(f"{resp.status} {resp.reason}")
 
-    def _shutdown(self):
+    def _shutdown(self) -> None:
+        """Shutdown the pattern generator device connection."""
         # Override this method in subclass!
-        pass
 
-    def _validate(self, resp, url, validate):
+    def _validate(self, resp: HTTPResponse, url: str, validate: str | dict) -> None:
+        """Validate the response from the server.
+
+        Args:
+            resp (HTTPResponse): The HTTP response object.
+            url (str): The URL that was requested.
+            validate (str | dict): The expected response format or value.
+        """
         # Override this method in subclass!
-        pass
 
-    def connect(self):
+    def connect(self) -> None:
+        """Connect to the pattern generator server."""
         self.ip = gethostbyname(self.host)
         self.conn = http.client.HTTPConnection(self.ip, self.port)
         try:
             self.conn.connect()
-        except (error, http.client.HTTPException):
+        except (OSError, http.client.HTTPException):
             del self.conn
             raise
 
-    def disconnect_client(self):
+    def disconnect_client(self) -> None:
+        """Disconnect the current client and clean up resources."""
         self.listening = False
         if hasattr(self, "conn"):
             self._shutdown()
@@ -112,24 +190,55 @@ class GenHTTPPatternGeneratorClient:
 
     def send(
         self,
-        rgb=(0, 0, 0),
-        bgrgb=(0, 0, 0),
-        bits=None,
-        use_video_levels=None,
-        x=0,
-        y=0,
-        w=1,
-        h=1,
-    ):
+        rgb: tuple[float, float, float] = (0, 0, 0),
+        bgrgb: tuple[float, float, float] = (0, 0, 0),
+        bits: None | int = None,
+        use_video_levels: None | bool = None,
+        x: float = 0,
+        y: float = 0,
+        w: float = 1,
+        h: float = 1,
+    ) -> None:
+        """Send an RGB color to the pattern generator.
+
+        Args:
+            rgb (tuple[float, float, float], optional): RGB color values in the
+                range 0..1. Defaults to (0, 0, 0).
+            bgrgb (tuple[float, float, float], optional): Background RGB color
+                values in the range 0..1. Defaults to (0, 0, 0).
+            bits (None | int, optional): Number of bits per channel. Defaults
+                to None.
+            use_video_levels (None | bool, optional): Use video levels for RGB
+                values. Defaults to None.
+            x (float, optional): X position of the rectangle. Defaults to 0.
+            y (float, optional): Y position of the rectangle. Defaults to 0.
+            w (float, optional): Width of the rectangle. Defaults to 1.
+            h (float, optional): Height of the rectangle. Defaults to 1.
+        """
         rgb, bgrgb, bits = self._get_rgb(rgb, bgrgb, bits, use_video_levels)
         # Override this method in subclass!
         # raise NotImplementedError
 
 
 class GenTCPSockPatternGeneratorServer:
-    """Generic pattern generator server using TCP sockets"""
+    """Generic pattern generator server using TCP sockets.
 
-    def __init__(self, port, bits, use_video_levels=False, logfile=None):
+    Args:
+        port (int): The port number to listen on.
+        bits (int): Number of bits per channel.
+        use_video_levels (bool, optional): Use video levels for RGB values.
+            Defaults to False.
+        logfile (None | TextIO, optional): A file-like object to log messages.
+            Defaults to None.
+    """
+
+    def __init__(
+        self,
+        port: int,
+        bits: int,
+        use_video_levels: bool = False,
+        logfile: None | TextIO = None,
+    ) -> None:
         self.port = port
         self.bits = bits
         self.use_video_levels = use_video_levels
@@ -141,12 +250,13 @@ class GenTCPSockPatternGeneratorServer:
         self.listening = False
         self.logfile = logfile
 
-    def wait(self):
+    def wait(self) -> None:
+        """Wait for a client to connect."""
         self.listening = True
         if self.logfile:
             try:
                 host = get_network_addr()
-            except error:
+            except OSError:
                 host = gethostname()
             self.logfile.write(
                 "{} {}:{}\n".format(lang.getstr("connection.waiting"), host, self.port)
@@ -161,12 +271,34 @@ class GenTCPSockPatternGeneratorServer:
         if self.listening:
             print(lang.getstr("connection.established"))
 
-    def __del__(self):
+    def __del__(self) -> None:
+        """Clean up the connection and socket."""
         self.disconnect_client()
         self.socket.close()
 
-    def _get_rgb(self, rgb, bgrgb, bits=None, use_video_levels=None):
-        """The RGB range should be 0..1."""
+    def _get_rgb(
+        self,
+        rgb: tuple[float, float, float],
+        bgrgb: tuple[float, float, float],
+        bits: None | int = None,
+        use_video_levels: None | bool = None,
+    ) -> tuple[int, int, int]:
+        """The RGB range should be 0..1.
+
+        Args:
+            rgb (tuple[float, float, float]): RGB color values in the range
+                0..1.
+            bgrgb (tuple[float, float, float]): Background RGB color values in
+                the range 0..1.
+            bits (int, optional): Number of bits per channel. Defaults to None.
+            use_video_levels (bool, optional): Use video levels for RGB values.
+                Defaults to None.
+
+        Returns:
+            tuple[int, int, int]: A tuple containing the RGB and BGRGB values
+                encoded for the TCP socket interface, and the number of bits
+                per channel.
+        """
         if not bits:
             bits = self.bits
         if use_video_levels is None:
@@ -188,12 +320,13 @@ class GenTCPSockPatternGeneratorServer:
         bgrgb = [round(minv * bitv + v * bitv * maxv) for v in bgrgb]
         return rgb, bgrgb, bits
 
-    def disconnect_client(self):
+    def disconnect_client(self) -> None:
+        """Disconnect the current client and clean up resources."""
         self.listening = False
         if hasattr(self, "conn"):
             try:
                 self.conn.shutdown(SHUT_RDWR)
-            except error as exception:
+            except OSError as exception:
                 if exception.errno != errno.ENOTCONN:
                     print(
                         "Warning - could not shutdown pattern generator connection:",
@@ -203,8 +336,29 @@ class GenTCPSockPatternGeneratorServer:
             del self.conn
 
     def send(
-        self, rgb=(0, 0, 0), bgrgb=(0, 0, 0), use_video_levels=None, x=0, y=0, w=1, h=1
-    ):
+        self,
+        rgb: tuple[float, float, float] = (0, 0, 0),
+        bgrgb: tuple[float, float, float] = (0, 0, 0),
+        use_video_levels: None | bool = None,
+        x: float = 0,
+        y: float = 0,
+        w: float = 1,
+        h: float = 1,
+    ) -> None:
+        """Send an RGB color to the pattern generator.
+
+        Args:
+            rgb (tuple, optional): RGB color values in the range 0..1. Defaults
+                to (0, 0, 0).
+            bgrgb (tuple, optional): Background RGB color values in the range
+                0..1. Defaults to (0, 0, 0).
+            use_video_levels (None | bool, optional): Use video levels for RGB
+                values. Defaults to None.
+            x (float, optional): X position of the rectangle. Defaults to 0.
+            y (float, optional): Y position of the rectangle. Defaults to 0.
+            w (float, optional): Width of the rectangle. Defaults to 1.
+            h (float, optional): Height of the rectangle. Defaults to 1.
+        """
         for server, bits in (
             (ResolveLSPatternGeneratorServer, 8),
             (ResolveCMPatternGeneratorServer, 10),
@@ -215,9 +369,24 @@ class GenTCPSockPatternGeneratorServer:
 
 
 class PrismaPatternGeneratorClient(GenHTTPPatternGeneratorClient):
-    """Prisma HTTP REST interface"""
+    """Prisma HTTP REST interface.
 
-    def __init__(self, host, port=80, use_video_levels=False, logfile=None):
+    Args:
+        host (str): The hostname or IP address of the Prisma device.
+        port (int, optional): The port number to connect to. Defaults to 80.
+        use_video_levels (bool, optional): Use video levels for RGB values.
+            Defaults to False.
+        logfile (file-like object, optional): A file-like object to log
+            messages. Defaults to None.
+    """
+
+    def __init__(
+        self,
+        host: str,
+        port: int = PRISMA_DEFAULT_PORT,
+        use_video_levels: bool = False,
+        logfile: None | TextIO = None,
+    ) -> None:
         GenHTTPPatternGeneratorClient.__init__(
             self, host, port, 8, use_video_levels=use_video_levels, logfile=logfile
         )
@@ -239,7 +408,8 @@ class PrismaPatternGeneratorClient(GenHTTPPatternGeneratorClient):
         self._size = 10
         self._enable_processing = True
 
-    def listen(self):
+    def listen(self) -> None:
+        """Start listening for Prisma devices on the local network."""
         self.listening = True
         port = self.broadcast_response_port
         if (self.broadcast_ip, port) in self._cast_sockets:
@@ -253,27 +423,29 @@ class PrismaPatternGeneratorClient(GenHTTPPatternGeneratorClient):
             thread = threading.Thread(
                 target=self._cast_receive_handler,
                 name=(
-                    "PrismaPatternGeneratorClient.BroadcastHandler[{}:{}]".format(
-                        self.broadcast_ip, port
-                    )
+                    "PrismaPatternGeneratorClient.BroadcastHandler["
+                    f"{self.broadcast_ip}:{port}]"
                 ),
                 args=(sock, self.broadcast_ip, port),
             )
             self._threads.append(thread)
             thread.start()
-        except error as exception:
-            print(
-                "PrismaPatternGeneratorClient: UDP Port {:d}: {:s}".format(
-                    port, exception
-                )
-            )
+        except OSError as exception:
+            print(f"PrismaPatternGeneratorClient: UDP Port {port:d}: {exception:s}")
 
-    def _cast_receive_handler(self, sock, host, port):
+    def _cast_receive_handler(self, sock: socket, host: str, port: int) -> None:
+        """Receive broadcast messages from Prisma devices.
+
+        Args:
+            sock (socket): The UDP socket to listen on.
+            host (str): The host IP address.
+            port (int): The port number to listen on.
+        """
         cast = "broadcast"
         if self.debug:
             print(
                 "PrismaPatternGeneratorClient: Entering receiver thread for "
-                "{:s} port {:d}".format(cast, port)
+                f"{cast:s} port {port:d}"
             )
         self._cast_sockets[(host, port)] = sock
         while getattr(self, "listening", False):
@@ -282,18 +454,18 @@ class PrismaPatternGeneratorClient(GenHTTPPatternGeneratorClient):
             except timeout as exception:
                 print(
                     "PrismaPatternGeneratorClient: In receiver thread for "
-                    "{:s} port {:d}:".format(cast, port),
+                    f"{cast:s} port {port:d}:",
                     exception,
                 )
                 continue
-            except error as exception:
+            except OSError as exception:
                 if exception.errno == errno.EWOULDBLOCK:
                     sleep(0.05)
                     continue
                 if exception.errno != errno.ECONNRESET or self.debug:
                     print(
                         "PrismaPatternGeneratorClient: In receiver thread for "
-                        "{:s} port {:d}:".format(cast, port),
+                        f"{cast:s} port {port:d}:",
                         exception,
                     )
                 break
@@ -302,7 +474,7 @@ class PrismaPatternGeneratorClient(GenHTTPPatternGeneratorClient):
                     if self.debug:
                         print(
                             "PrismaPatternGeneratorClient: Received "
-                            "{} from {}:{}: {}".format(cast, addr[0], addr[1], data)
+                            f"{cast} from {addr[0]}:{addr[1]}: {data}"
                         )
                     if data.startswith(self.prod_oem):
                         name = data[8:32].rstrip(b"\0")
@@ -315,11 +487,11 @@ class PrismaPatternGeneratorClient(GenHTTPPatternGeneratorClient):
         _shutdown(sock, (host, port))
         if self.debug:
             print(
-                "PrismaPatternGeneratorClient: Exiting {:s} receiver thread "
-                "for port {:d}".format(cast, port)
+                f"PrismaPatternGeneratorClient: Exiting {cast:s} "
+                f"receiver thread for port {port:d}"
             )
 
-    def announce(self):
+    def announce(self) -> None:
         """Anounce ourselves."""
         port = self.broadcast_request_port
         sock = socket(AF_INET, SOCK_DGRAM)
@@ -330,51 +502,118 @@ class PrismaPatternGeneratorClient(GenHTTPPatternGeneratorClient):
         if self.debug:
             print(
                 "PrismaPatternGeneratorClient: Sending broadcast from "
-                "{}:{} to port {:d}".format(addr[0], addr[1], port)
+                f"{addr[0]}:{addr[1]} to port {port:d}"
             )
         sock.sendall(self.prod_oem)
         sock.close()
 
-    def bind(self, event_name, handler):
-        """Bind a handler to an event."""
+    def bind(self, event_name: str, handler: Callable) -> None:
+        """Bind a handler to an event.
+
+        Args:
+            event_name (str): The name of the event to bind to.
+            handler (Callable): The handler to bind to the event.
+        """
         if event_name not in self._event_handlers:
             self._event_handlers[event_name] = []
         self._event_handlers[event_name].append(handler)
 
-    def unbind(self, event_name, handler=None):
+    def unbind(
+        self, event_name: str, handler: None | Callable = None
+    ) -> None | Callable:
         """Unbind (remove) a handler from an event.
 
         If handler is None, remove all handlers for the event.
-        """
-        if event_name in self._event_handlers:
-            if handler in self._event_handlers[event_name]:
-                self._event_handlers[event_name].remove(handler)
-                return handler
-            else:
-                return self._event_handlers.pop(event_name)
 
-    def _dispatch_event(self, event_name, event_data=None):
-        """Dispatch events."""
+        Args:
+            event_name (str): The name of the event to unbind from.
+            handler (None | Callable, optional): The handler to remove. If
+                None, remove all handlers for the event. Defaults to None.
+
+        Returns:
+            None | Callable: The removed handler if it was found, or None if no
+                handler was found for the event.
+        """
+        if event_name not in self._event_handlers:
+            return None
+
+        if handler in self._event_handlers[event_name]:
+            self._event_handlers[event_name].remove(handler)
+            return handler
+
+        return self._event_handlers.pop(event_name)
+
+    def _dispatch_event(self, event_name: str, event_data: None | Any = None) -> None:  # noqa: ANN401
+        """Dispatch events.
+
+        Args:
+            event_name (str): The name of the event to dispatch.
+            event_data (any, optional): Data associated with the event.
+                Defaults to None.
+        """
         if self.debug:
             print("PrismaPatternGeneratorClient: Dispatching", event_name)
         for handler in self._event_handlers.get(event_name, []):
             handler(event_data)
 
-    def _get_rgb(self, rgb, bgrgb, bits=8, use_video_levels=None):
-        """The RGB range should be 0..1."""
-        _get_rgb = GenTCPSockPatternGeneratorServer.__dict__["_get_rgb"]
-        rgb, bgrgb, bits = _get_rgb(self, rgb, bgrgb, 8, use_video_levels)
+    def _get_rgb(
+        self,
+        rgb: tuple[float, float, float],
+        bgrgb: tuple[float, float, float],
+        bits: int = 8,
+        use_video_levels: None | bool = None,
+    ) -> tuple[int, int, int]:
+        """The RGB range should be 0..1.
+
+        Args:
+            rgb (tuple[float, float, float]): RGB color values in the range
+                0..1.
+            bgrgb (tuple[float, float, float]): Background RGB color values in
+                the range 0..1.
+            bits (int, optional): Number of bits per channel. Defaults to 8.
+            use_video_levels (bool, optional): Use video levels for RGB values.
+                Defaults to None.
+
+        Returns:
+            tuple[int, int, int]: A tuple containing the RGB and BGRGB values
+                encoded for the Prisma HTTP REST interface, and the number of
+                bits per channel.
+        """
+        rgb, bgrgb, bits = GenTCPSockPatternGeneratorServer._get_rgb(
+            self, rgb, bgrgb, 8, use_video_levels
+        )
         # Encode RGB values for Prisma HTTP REST interface
         # See prisma-sdk/prisma.cpp, PrismaIo::wincolor
-        rgb = [int(round(v)) for v in rgb]
-        bgrgb = [int(round(v)) for v in bgrgb]
+        rgb = [round(v) for v in rgb]
+        bgrgb = [round(v) for v in bgrgb]
         rgb = (rgb[0] & 0xFF) << 16 | (rgb[1] & 0xFF) << 8 | (rgb[2] & 0xFF) << 0
         bgrgb = (
             (bgrgb[0] & 0xFF) << 16 | (bgrgb[1] & 0xFF) << 8 | (bgrgb[2] & 0xFF) << 0
         )
         return rgb, bgrgb, bits
 
-    def invoke(self, api, method=None, params=None, validate=None):
+    def invoke(
+        self,
+        api: str,
+        method: None | str = None,
+        params: None | dict = None,
+        validate: None | str | dict = None,
+    ) -> str | dict:
+        """Invoke a method on the Prisma device.
+
+        Args:
+            api (str): The API endpoint to call.
+            method (None | str, optional): The method to invoke. Defaults to
+                None.
+            params (None | dict, optional): Parameters to pass to the method.
+                Defaults to None.
+            validate (None | str | dict, optional): Expected response format or
+                value.
+
+        Returns:
+            str | dict: The response from the server, validated against the
+                expected format or value.
+        """
         url = "/" + api
         if method:
             url += "?m=" + method
@@ -384,23 +623,39 @@ class PrismaPatternGeneratorClient(GenHTTPPatternGeneratorClient):
             validate = {method: "Ok"}
         return self._request("GET", url, validate=validate)
 
-    def _shutdown(self):
-        try:
+    def _shutdown(self) -> None:
+        """Shutdown the Prisma device connection."""
+        with contextlib.suppress(Exception):
             self.invoke("window", "off", {"sz": 10})
-        except Exception:
-            pass
 
-    def _validate(self, resp, url, validate):
+    def _validate(
+        self, resp: HTTPResponse, url: str, validate: str | dict
+    ) -> str | dict:
+        """Validate the response from the server.
+
+        Args:
+            resp (HTTPResponse): The HTTP response object.
+            url (str): The URL that was requested.
+            validate (str | dict): The expected response format or value.
+
+        Raises:
+            http.client.HTTPException: If the response does not match the
+                expected format or value.
+
+        Returns:
+            str | dict: The validated response data, either as a dictionary or
+                raw string.
+        """
         raw = resp.read()
         if isinstance(validate, dict):
             data = json.loads(raw)
             components = urllib.parse.urlparse(url)
-            api = components.path[1:]
+            # api = components.path[1:]
             query = urllib.parse.parse_qs(components.query)
             if b"m" in query:
                 method = query[b"m"][0]
                 if data.get(method) == "Error" and "msg" in data:
-                    raise http.client.HTTPException("%s: %s" % (self.host, data["msg"]))
+                    raise http.client.HTTPException(f"{self.host}: {data['msg']}")
             for key in validate:
                 value = validate[key]
                 if key not in data:
@@ -409,7 +664,7 @@ class PrismaPatternGeneratorClient(GenHTTPPatternGeneratorClient):
                             "response.invalid.missing_key", (self.host, key, raw)
                         )
                     )
-                elif value is not None and data[key] != value:
+                if value is not None and data[key] != value:
                     raise http.client.HTTPException(
                         lang.getstr(
                             "response.invalid.value", (self.host, key, value, raw)
@@ -417,35 +672,66 @@ class PrismaPatternGeneratorClient(GenHTTPPatternGeneratorClient):
                     )
             data["raw"] = raw
             return data
-        elif validate:
-            if raw != validate:
-                raise http.client.HTTPException(
-                    lang.getstr("response.invalid", (self.host, raw))
-                )
+        if validate and raw != validate:
+            raise http.client.HTTPException(
+                lang.getstr("response.invalid", (self.host, raw))
+            )
         return raw
 
-    def disable_processing(self, size=10):
+    def disable_processing(self, size: int = 10) -> None:
+        """Disable processing on the Prisma device.
+
+        Args:
+            size (int, optional): The size of the window to set. Defaults to
+                10.
+        """
         self.enable_processing(False, size)
 
-    def enable_processing(self, enable=True, size=10):
-        if enable:
-            win = 1
-        else:
-            win = 2
-        self.invoke("Window", "win%i" % win, {"sz": size})
+    def enable_processing(self, enable: bool = True, size: int = 10) -> None:
+        """Enable or disable processing on the Prisma device.
 
-    def get_config(self):
+        Args:
+            enable (bool, optional): If True, processing is enabled; if False,
+                it is disabled. Defaults to True.
+            size (int, optional): The size of the window to set. Defaults to
+                10.
+        """
+        win = 1 if enable else 2
+        self.invoke("Window", f"win{win}", {"sz": size})
+
+    def get_config(self) -> dict:
+        """Get the current configuration of the Prisma device.
+
+        Returns:
+            dict: A dictionary containing the current configuration settings.
+        """
         return self.invoke("Prisma", "settings", validate={"v": None, "settings": "Ok"})
 
-    def get_installed_3dluts(self):
+    def get_installed_3dluts(self) -> dict:
+        """Get a list of installed 3D LUTs.
+
+        Returns:
+            dict: A dictionary containing the list of installed 3D LUTs.
+        """
         return self.invoke("Cube", "list", validate={"list": "Ok", "v": None})
 
-    def load_preset(self, presetname):
+    def load_preset(self, presetname: str) -> None:
+        """Load a preset by name.
+
+        Args:
+            presetname (str): The name of the preset to load.
+        """
         return self.invoke(
             "Prisma", "loadPreset", {"n": presetname}, validate={"v": None}
         )
 
-    def load_3dlut_file(self, path, filename):
+    def load_3dlut_file(self, path: str, filename: str) -> None:
+        """Load a 3D LUT file.
+
+        Args:
+            path (str): The path to the 3D LUT file.
+            filename (str): The name of the 3D LUT file to upload.
+        """
         with open(path, "rb") as lut3d:
             data = lut3d.read()
         files = [("cubeFile", filename, data)]
@@ -454,27 +740,61 @@ class PrismaPatternGeneratorClient(GenHTTPPatternGeneratorClient):
         # Upload 3D LUT
         self._request("POST", "/fwupload", params, headers)
 
-    def remove_3dlut(self, filename):
+    def remove_3dlut(self, filename: str) -> None:
+        """Remove a 3D LUT by name.
+
+        Args:
+            filename (str): The name of the 3D LUT file to remove.
+        """
         self.invoke("Cube", "remove", {"n": filename})
 
-    def set_3dlut(self, filename):
+    def set_3dlut(self, filename: str) -> None:
+        """Set the 3D LUT by name.
+
+        Args:
+            filename (str): The name of the 3D LUT file to set.
+        """
         # Select 3D LUT
         self.invoke("Prisma", "setCube", {"n": filename, "f": "null"})
 
-    def set_prismavue(self, value):
+    def set_prismavue(self, value: str) -> None:
+        """Set the PrismaVue mode.
+
+        Args:
+            value (str): The PrismaVue mode to set. Can be "on", "off", or
+                "null".
+        """
         self.invoke("Prisma", "setPrismaVue", {"a": value, "t": "null"})
 
     def send(
         self,
-        rgb=(0, 0, 0),
-        bgrgb=(0, 0, 0),
-        bits=None,
-        use_video_levels=None,
-        x=0,
-        y=0,
-        w=1,
-        h=1,
-    ):
+        rgb: tuple[float, float, float] = (0, 0, 0),
+        bgrgb: tuple[float, float, float] = (0, 0, 0),
+        bits: None | int = None,
+        use_video_levels: None | bool = None,
+        x: float = 0,
+        y: float = 0,
+        w: float = 1,
+        h: float = 1,
+    ) -> None:
+        """Send an RGB color to the pattern generator.
+
+        The RGB range should be 0..1.
+
+        Args:
+            rgb (tuple[float, float, float], optional): RGB color values in the
+                range 0..1.
+            bgrgb (tuple[float, float, float], optional): Background RGB color
+                values in the range 0..1.
+            bits (None | int, optional): Number of bits per channel. Defaults
+                to None.
+            use_video_levels (None | bool, optional): Use video levels for RGB
+                values. Defaults to None.
+            x (float, optional): X position of the rectangle. Defaults to 0.
+            y (float, optional): Y position of the rectangle. Defaults to 0.
+            w (float, optional): Width of the rectangle. Defaults to 1.
+            h (float, optional): Height of the rectangle. Defaults to 1.
+        """
         rgb, bgrgb, bits = self._get_rgb(rgb, bgrgb, bits, use_video_levels)
         self.invoke("Window", "color", {"bg": bgrgb, "fg": rgb})
         size = (w + h) / 2.0 * 100
@@ -484,119 +804,264 @@ class PrismaPatternGeneratorClient(GenHTTPPatternGeneratorClient):
 
 
 class ResolveLSPatternGeneratorServer(GenTCPSockPatternGeneratorServer):
-    def __init__(self, port=20002, bits=8, use_video_levels=False, logfile=None):
+    """Resolve LS pattern generator server using TCP sockets.
+
+    Args:
+        port (int): The port number to listen on. Defaults to 20002.
+        bits (int): Number of bits per channel. Defaults to 8.
+        use_video_levels (bool): Use video levels for RGB values. Defaults to
+            False.
+        logfile (None | TextIO, optional): A file-like object to log messages.
+            Defaults to None.
+    """
+
+    def __init__(
+        self,
+        port: int = RESOLVE_DEFAULT_PORT,
+        bits: int = RESOLVE_LS_DEFAULT_BITS,
+        use_video_levels: bool = False,
+        logfile: None | TextIO = None,
+    ) -> None:
         GenTCPSockPatternGeneratorServer.__init__(
             self, port, bits, use_video_levels, logfile
         )
 
     def send(
         self,
-        rgb=(0, 0, 0),
-        bgrgb=(0, 0, 0),
-        bits=None,
-        use_video_levels=None,
-        x=0,
-        y=0,
-        w=1,
-        h=1,
-    ):
-        """Send an RGB color to the pattern generator. The RGB range should be 0..1"""
+        rgb: tuple[float, float, float] = (0, 0, 0),
+        bgrgb: tuple[float, float, float] = (0, 0, 0),
+        bits: None | int = None,
+        use_video_levels: None | bool = None,
+        x: float = 0,
+        y: float = 0,
+        w: float = 1,
+        h: float = 1,
+    ) -> None:
+        """Send an RGB color to the pattern generator.
+
+        The RGB range should be 0..1.
+
+        Args:
+            rgb (tuple, optional): RGB color values in the range 0..1.
+            bgrgb (tuple, optional): Background RGB color values in the range 0..1.
+            bits (None | int, optional): Number of bits per channel. Defaults
+                to None.
+            use_video_levels (None | bool, optional): Use video levels for RGB
+                values. Defaults to None.
+            x (float, optional): X position of the rectangle. Defaults to 0.
+            y (float, optional): Y position of the rectangle. Defaults to 0.
+            w (float, optional): Width of the rectangle. Defaults to 1.
+            h (float, optional): Height of the rectangle. Defaults to 1.
+        """
         rgb, bgrgb, bits = self._get_rgb(rgb, bgrgb, bits, use_video_levels)
         xml = (
             '<?xml version="1.0" encoding="UTF-8" ?><calibration><shapes>'
-            '<rectangle><color red="{:d}" green="{:d}" blue="{:d}" />'
-            '<geometry x="{:.4f}" y="{:.4f}" cx="{:.4f}" cy="{:.4f}" />'
+            "<rectangle>"
+            f'<color red="{rgb[0]:d}" green="{rgb[1]:d}" blue="{rgb[2]:d}" />'
+            f'<geometry x="{x:.4f}" y="{y:.4f}" cx="{w:.4f}" cy="{h:.4f}" />'
             "</rectangle>"
-            "</shapes></calibration>".format(*tuple(rgb + [x, y, w, h]))
+            "</shapes></calibration>"
         )
         self.conn.sendall(struct.pack(">I", len(xml)) + xml.encode("utf-8"))
 
 
 class ResolveCMPatternGeneratorServer(GenTCPSockPatternGeneratorServer):
-    def __init__(self, port=20002, bits=10, use_video_levels=False, logfile=None):
+    """Resolve Colorimeter pattern generator server using TCP sockets.
+
+    Args:
+        port (int, optional): The port number to listen on. Defaults to 20002.
+        bits (int, optional): Number of bits per channel. Defaults to 10.
+        use_video_levels (bool, optional): Use video levels for RGB values.
+            Defaults to False.
+        logfile (None | TextIO, optional): A file-like object to log messages.
+            Defaults to None.
+    """
+
+    def __init__(
+        self,
+        port: int = RESOLVE_DEFAULT_PORT,
+        bits: int = RESOLVE_DEFAULT_BITS,
+        use_video_levels: bool = False,
+        logfile: None | TextIO = None,
+    ) -> None:
         GenTCPSockPatternGeneratorServer.__init__(
             self, port, bits, use_video_levels, logfile
         )
 
     def send(
         self,
-        rgb=(0, 0, 0),
-        bgrgb=(0, 0, 0),
-        bits=None,
-        use_video_levels=None,
-        x=0,
-        y=0,
-        w=1,
-        h=1,
-    ):
-        """Send an RGB color to the pattern generator. The RGB range should be 0..1"""
+        rgb: tuple[float, float, float] = (0, 0, 0),
+        bgrgb: tuple[float, float, float] = (0, 0, 0),
+        bits: None | int = None,
+        use_video_levels: None | bool = None,
+        x: float = 0,
+        y: float = 0,
+        w: float = 1,
+        h: float = 1,
+    ) -> None:
+        """Send an RGB color to the pattern generator.
+
+        The RGB range should be 0..1.
+
+        Args:
+            rgb (tuple, optional): RGB color values in the range 0..1.
+            bgrgb (tuple, optional): Background RGB color values in the range
+                0..1.
+            bits (None | int, optional): Number of bits per channel. Defaults
+                to None.
+            use_video_levels (None | bool, optional): Use video levels for RGB
+                values. Defaults to None.
+            x (float, optional): X position of the rectangle. Defaults to 0.
+            y (float, optional): Y position of the rectangle. Defaults to 0.
+            w (float, optional): Width of the rectangle. Defaults to 1.
+            h (float, optional): Height of the rectangle. Defaults to 1.
+        """
         rgb, bgrgb, bits = self._get_rgb(rgb, bgrgb, bits, use_video_levels)
         xml = (
             '<?xml version="1.0" encoding="utf-8"?><calibration>'
-            '<color red="{:d}" green="{:d}" blue="{:d}" bits="{:d}"/>'
-            '<background red="{:d}" green="{:d}" blue="{:d}" bits="{:d}"/>'
-            '<geometry x="{:.4f}" y="{:.4f}" cx="{:.4f}" cy="{:.4f}"/>'
-            "</calibration>".format(*tuple(rgb + [bits] + bgrgb + [bits, x, y, w, h]))
+            f'<color red="{rgb[0]:d}" green="{rgb[1]:d}" '
+            f'blue="{rgb[2]:d}" bits="{bits:d}"/>'
+            f'<background red="{bgrgb[0]:d}" green="{bgrgb[1]:d}" '
+            f'blue="{bgrgb[2]:d}" bits="{bits:d}"/>'
+            f'<geometry x="{x:.4f}" y="{y:.4f}" cx="{w:.4f}" cy="{h:.4f}"/>'
+            "</calibration>"
         )
         self.conn.sendall(struct.pack(">I", len(xml)) + xml.encode("utf-8"))
 
 
-class WebWinHTTPPatternGeneratorServer(TCPServer, object):
-    def __init__(self, port, logfile=None):
+class WebWinHTTPPatternGeneratorServer(ThreadingMixIn, TCPServer):
+    """WebWin pattern generator server using HTTP REST interface.
+
+    Args:
+        port (int): The port number to listen on.
+        logfile (None | TextIO, optional): A file-like object to log messages.
+            Defaults to None.
+    """
+
+    def __init__(self, port: int, logfile: None | TextIO = None) -> None:
+        # Handle each HTTP client request in its own thread so multiple
+        # remote browser devices can stay connected simultaneously.
+        self.daemon_threads = True
+        self.block_on_close = False
         self.port = port
-        Handler = webwin.WebWinHTTPRequestHandler
-        TCPServer.__init__(self, ("", port), Handler)
+        TCPServer.__init__(self, ("", port), webwin.WebWinHTTPRequestHandler)
         self.timeout = 1
         self.patterngenerator = self
         self._listening = threading.Event()
+        self._pattern_lock = threading.Lock()
+        self._pattern_changed = threading.Condition(self._pattern_lock)
+        self._pattern_seq = 0
         self.logfile = logfile
         self.pattern = "#808080|#808080|0|0|1|1"
 
-    def disconnect_client(self):
+    def disconnect_client(self) -> None:
+        """Disconnect the current client and clean up resources."""
         self.listening = False
 
-    def handle_error(self, request, client_address):
+    def handle_error(self, request: Request, client_address: str) -> None:
+        """Handle errors that occur during request processing.
+
+        Args:
+            request (Request): The request object that caused the error.
+            client_address (str): The address of the client that made the
+                request.
+        """
         print(
-            "Exception happened during processing of request from {}:{}:".format(
-                client_address, sys.exc_info()[1]
-            )
+            "Exception happened during processing of request from "
+            f"{client_address}:{sys.exc_info()[1]}:"
         )
 
     @property
-    def listening(self):
+    def listening(self) -> bool:
+        """Check if the server is currently listening for requests.
+
+        Returns:
+            bool: True if the server is listening, False otherwise.
+        """
         return self._listening.is_set()
 
     @listening.setter
-    def listening(self, value):
+    def listening(self, value: bool) -> None:
+        """Set the listening state of the server.
+
+        Args:
+            value (bool): If True, the server starts listening for requests.
+                If False, it stops listening and cleans up any existing
+                connections.
+        """
         if value:
             self._listening.set()
-        else:
-            self._listening.clear()
-            if hasattr(self, "conn"):
-                self.shutdown_request(self.conn)
-                del self.conn
-            if hasattr(self, "_thread") and self._thread.is_alive():
-                self.shutdown()
+            return
+        self._listening.clear()
+        with self._pattern_changed:
+            # Wake any long-poll requests so they can terminate quickly.
+            self._pattern_changed.notify_all()
+        if hasattr(self, "conn"):
+            self.shutdown_request(self.conn)
+            del self.conn
+        if hasattr(self, "_thread") and self._thread.is_alive():
+            self.shutdown()
 
     def send(
         self,
-        rgb=(0, 0, 0),
-        bgrgb=(0, 0, 0),
-        bits=None,
-        use_video_levels=None,
-        x=0,
-        y=0,
-        w=1,
-        h=1,
-    ):
-        pattern = [
-            "#{:02d}{:02d}{:02d}".format(*tuple(round(v * 255) for v in rgb)),
-            "#{:02d}{:02d}{:02d}".format(*tuple(round(v * 255) for v in bgrgb)),
-            "{:.4f}|{:.4f}|{:.4f}|{:.4f}".format(x, y, w, h),
-        ]
-        self.pattern = "|".join(pattern)
+        rgb: tuple[float, float, float] = (0, 0, 0),
+        bgrgb: tuple[float, float, float] = (0, 0, 0),
+        bits: None | int = None,
+        use_video_levels: None | bool = None,
+        x: float = 0,
+        y: float = 0,
+        w: float = 1,
+        h: float = 1,
+    ) -> None:
+        """Send an RGB color to the pattern generator. The RGB range should be 0..1.
 
-    def serve_forever(self, poll_interval=0.5):
+        Args:
+            rgb (tuple[float, float, float], optional): RGB color values in the
+                range 0..1.
+            bgrgb (tuple[float, float, float], optional): Background RGB color
+                values in the range 0..1.
+            bits (None | int, optional): Number of bits per channel. Defaults
+                to None.
+            use_video_levels (None | bool, optional): Use video levels for RGB
+                values. Defaults to None.
+            x (float, optional): X position of the rectangle. Defaults to 0.
+            y (float, optional): Y position of the rectangle. Defaults to 0.
+            w (float, optional): Width of the rectangle. Defaults to 1.
+            h (float, optional): Height of the rectangle. Defaults to 1.
+        """
+        # Convert normalized RGB values to 8-bit CSS hex colors.
+        pattern = [
+            "#{:02x}{:02x}{:02x}".format(
+                *tuple(max(0, min(255, round(v * 255))) for v in rgb)
+            ),
+            "#{:02x}{:02x}{:02x}".format(
+                *tuple(max(0, min(255, round(v * 255))) for v in bgrgb)
+            ),
+            f"{x:.4f}|{y:.4f}|{w:.4f}|{h:.4f}",
+        ]
+        with self._pattern_changed:
+            self.pattern = "|".join(pattern)
+            self._pattern_seq += 1
+            self._pattern_changed.notify_all()
+
+    def wait_for_pattern_change(self, curpat: str, timeout: float = 25.0) -> str:
+        """Return current pattern, waiting until it changes or times out."""
+        with self._pattern_changed:
+            current = self.pattern
+            start_seq = self._pattern_seq
+            if self._listening.is_set() and current == curpat:
+                self._pattern_changed.wait_for(
+                    lambda: (
+                        not self._listening.is_set()
+                        or self._pattern_seq != start_seq
+                        or self.pattern != curpat
+                    ),
+                    timeout=timeout,
+                )
+                current = self.pattern
+            return current
+
+    def serve_forever(self, poll_interval: float = 0.5) -> None:
         """Handle one request at a time until shutdown.
 
         Polls for shutdown every poll_interval seconds. Ignores
@@ -619,8 +1084,8 @@ class WebWinHTTPPatternGeneratorServer(TCPServer, object):
             )
             self._listening.clear()
 
-    def shutdown(self):
-        """Stops the serve_forever loop.
+    def shutdown(self) -> None:
+        """Stop the serve_forever loop.
 
         Blocks until the loop has finished. This must be called while
         serve_forever() is running in another thread.
@@ -629,15 +1094,16 @@ class WebWinHTTPPatternGeneratorServer(TCPServer, object):
         while self._thread.is_alive():
             sleep(0.05)
 
-    def wait(self):
+    def wait(self) -> None:
+        """Wait for a client to connect and process the request."""
         self.listening = True
         if self.logfile:
             try:
                 host = get_network_addr()
-            except error:
+            except OSError:
                 host = gethostname()
             self.logfile.write(
-                ("{} {}:{}\n".format(lang.getstr("webserver.waiting"), host, self.port))
+                "{} {}:{}\n".format(lang.getstr("webserver.waiting"), host, self.port)
             )
         self.socket.settimeout(1)
         while self.listening:
@@ -648,19 +1114,20 @@ class WebWinHTTPPatternGeneratorServer(TCPServer, object):
             self.conn.settimeout(1)
             break
         self.socket.settimeout(None)
-        if self.listening:
-            try:
-                self.process_request(self.conn, addr)
-            except Exception:
-                self.handle_error(self.conn, addr)
-                self.disconnect_client()
-            else:
-                self._thread = threading.Thread(
-                    target=self.serve_forever,
-                    name="WebWinHTTPPatternGeneratorServerThread",
-                )
-                self._thread.start()
-                print(lang.getstr("connection.established"))
+        if not self.listening:
+            return
+        try:
+            self.process_request(self.conn, addr)
+        except Exception:
+            self.handle_error(self.conn, addr)
+            self.disconnect_client()
+        else:
+            self._thread = threading.Thread(
+                target=self.serve_forever,
+                name="WebWinHTTPPatternGeneratorServerThread",
+            )
+            self._thread.start()
+            print(lang.getstr("connection.established"))
 
 
 if __name__ == "__main__":

@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -51,7 +49,7 @@ def get_cal(
     idata = []
     for i in range(num_cal_entries):
         XYZ = cm.adapt(
-            *[cm.specialpow(i / maxval, gamma, slope_limit)] * 3,
+            *[cm.special_pow(i / maxval, gamma, slope_limit)] * 3,
             whitepoint_source=(1, 1, 1),
             whitepoint_destination=XYZwp
         )
@@ -509,7 +507,7 @@ def main(icc_profile_filename, target_whitepoint=None, gamma=2.2, skip_cal=False
         out_profile.getDescription()
         + " %s%s" % (target_whitepoint and "%s " % owtpt[1:] or "", ogamma)
     )
-    out_profile.calculateID()
+    out_profile.calculate_id()
     out_profile.write(out_color_profile_filename)
 
 
