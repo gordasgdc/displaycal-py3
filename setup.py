@@ -457,7 +457,7 @@ def setup():
         and (not sys.argv[1:] or (len(non_build_args) < len(sys.argv[1:]) and not help))
     ):
         print("Trying to get git version information...")
-        git_version = None
+        git_revision_hash_short = None
 
         try:
             p = subprocess.Popen(
@@ -468,7 +468,7 @@ def setup():
         except Exception as exception:
             print("...failed:", exception)
         else:
-            git_version = p.communicate()[0].strip().decode()
+            git_revision_hash_short = p.communicate()[0].strip().decode()
             version_base_file_path = Path(pydir, "VERSION_BASE")
             version_base = "0.0.0".split(".")
 
@@ -508,7 +508,7 @@ def setup():
                 if LASTMOD:
                     versionpy.write(f"LASTMOD = {LASTMOD!r}\n")
 
-                if git_version:
+                if git_revision_hash_short:
                     print("Version", ".".join(version_base))
                     versionpy.write("VERSION = (%s)\n" % ", ".join(version_base))
                     versionpy.write("VERSION_BASE = (%s)\n" % ", ".join(version_base))
