@@ -1,7 +1,9 @@
-# -*- coding: utf-8 -*-
 """Runtime configuration and user settings parser."""
 
+from __future__ import annotations
+
 import configparser
+import contextlib
 import locale
 import math
 import os
@@ -9,45 +11,46 @@ import re
 import string
 import sys
 from decimal import Decimal
-from typing import List, Optional, Tuple, TYPE_CHECKING, Union
+from enum import IntEnum
+from typing import TYPE_CHECKING, Any
 
 if sys.platform == "win32":
-    import winreg
+    pass
 
 from DisplayCAL import colormath
-from DisplayCAL.argyll_names import intents, observers, video_encodings, viewconds
+from DisplayCAL.argyll_names import INTENTS, OBSERVERS, VIDEO_ENCODINGS, VIEWCONDS
 
 if sys.platform == "win32":
-    from DisplayCAL.defaultpaths import commonprogramfiles
+    from DisplayCAL.defaultpaths import COMMON_PROGRAM_FILES
 elif sys.platform == "darwin":
-    from DisplayCAL.defaultpaths import library, library_home, prefs, prefs_home
+    from DisplayCAL.defaultpaths import LIBRARY, LIBRARY_HOME, PREFS, PREFS_HOME
 else:
     from DisplayCAL.defaultpaths import (
-        xdg_config_dir_default,
-        xdg_config_home,
-        xdg_data_dirs,
-        xdg_data_home,
-        xdg_data_home_default,
+        XDG_CONFIG_DIR_DEFAULT,
+        XDG_CONFIG_HOME,
+        XDG_DATA_DIRS,
+        XDG_DATA_HOME,
+        XDG_DATA_HOME_DEFAULT,
     )
 
 from DisplayCAL.defaultpaths import (  # noqa: F401
-    appdata,
-    autostart,  # don't remove this, imported by other modules
-    autostart_home,  # don't remove this, imported by other modules
-    commonappdata,
-    home,  # don't remove this, imported by other modules
-    iccprofiles,
-    iccprofiles_home,
+    APPDATA,
+    AUTOSTART,  # don't remove this, imported by other modules
+    AUTOSTART_HOME,  # don't remove this, imported by other modules
+    COMMONAPPDATA,
+    HOME,  # don't remove this, imported by other modules
+    ICCPROFILES,
+    ICCPROFILES_HOME,
 )
 from DisplayCAL.meta import (  # noqa: F401
-    build,  # don't remove this, imported by other modules
-    name as appname,
-    version,
+    BUILD,  # don't remove this, imported by other modules
+    VERSION_STRING,
 )
-from DisplayCAL.options import debug
+from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.options import DEBUG
 from DisplayCAL.safe_print import (  # noqa: F401
-    enc,  # don't remove this, imported by other modules
-    fs_enc,
+    ENC,  # don't remove this, imported by other modules
+    FS_ENC,
 )
 from DisplayCAL.util_io import StringIOu as StringIO
 from DisplayCAL.util_os import (
@@ -60,131 +63,132 @@ from DisplayCAL.util_os import (
 from DisplayCAL.util_str import create_replace_function, strtr
 
 if TYPE_CHECKING:
-    from DisplayCAL.wxaddons import wx
+    from DisplayCAL.icc_profile import ICCProfile
+    from DisplayCAL.worker import Worker
+    from DisplayCAL.wx_addons import wx  # noqa: TC004
 
 configparser.DEFAULTSECT = "Default"  # Sadly, this line needs to be here.
 
-exe = sys.executable
-exedir = os.path.dirname(exe)
-exename = os.path.basename(exe)
+EXE = sys.executable
+EXEDIR = os.path.dirname(EXE)
+EXENAME = os.path.basename(EXE)
 
-isexe = sys.platform != "darwin" and getattr(sys, "frozen", False)
+ISEXE = sys.platform != "darwin" and getattr(sys, "frozen", False)
 
-if isexe and (_meipass2 := os.getenv("_MEIPASS2")):
+if ISEXE and (_meipass2 := os.getenv("_MEIPASS2")):
     os.environ["_MEIPASS2"] = _meipass2.replace("/", os.path.sep)
 
-pyfile = (
-    exe
-    if isexe
+PYFILE = (
+    EXE
+    if ISEXE
     else (os.path.isfile(sys.argv[0]) and sys.argv[0])
     or os.path.join(os.path.dirname(__file__), "main.py")
 )
-pypath = exe if isexe else os.path.abspath(pyfile)
+PYPATH = EXE if ISEXE else os.path.abspath(PYFILE)
 # Mac OS X: isapp should only be true for standalone, not 0install
-isapp = (
+ISAPP = (
     sys.platform == "darwin"
-    and exe.split(os.path.sep)[-3:-1] == ["Contents", "MacOS"]
-    and os.path.exists(os.path.join(exedir, "..", "Resources", "xrc"))
+    and EXE.split(os.path.sep)[-3:-1] == ["Contents", "MacOS"]
+    and os.path.exists(os.path.join(EXEDIR, "..", "Resources", "xrc"))
 )
-if isapp:
-    pyname, pyext = os.path.splitext(exe.split(os.path.sep)[-4])
-    pydir = os.path.normpath(os.path.join(exedir, "..", "Resources"))
+if ISAPP:
+    PYNAME, PYEXT = os.path.splitext(EXE.split(os.path.sep)[-4])
+    PYDIR = os.path.normpath(os.path.join(EXEDIR, "..", "Resources"))
 else:
-    pyname, pyext = os.path.splitext(os.path.basename(pypath))
-    pydir = os.path.dirname(
-        exe if isexe else os.path.abspath(os.path.dirname(__file__))
+    PYNAME, PYEXT = os.path.splitext(os.path.basename(PYPATH))
+    PYDIR = os.path.dirname(
+        EXE if ISEXE else os.path.abspath(os.path.dirname(__file__))
     )
 
 # TODO: Modifying ``data_dirs`` here was not an elegant solution,
 #       and it is not solving the problem either.
-data_dirs = [
+DATA_DIRS = [
     # venv/share/DisplayCAL
-    os.path.join(os.path.dirname(os.path.dirname(pypath)), "share", "DisplayCAL"),
+    os.path.join(os.path.dirname(os.path.dirname(PYPATH)), "share", "DisplayCAL"),
     # venv/lib/python3.x/site-packages/DisplayCAL
-    pydir,
+    PYDIR,
     # venv/share
-    os.path.join(os.path.dirname(pydir), "share"),
+    os.path.join(os.path.dirname(PYDIR), "share"),
     # venv/lib/python3.x/site-packages/DisplayCAL-*.egg/share/DisplayCAL
-    os.path.join(os.path.dirname(pydir), "share", "DisplayCAL"),
+    os.path.join(os.path.dirname(PYDIR), "share", "DisplayCAL"),
 ]
 
 
-extra_data_dirs = []
+EXTRA_DATA_DIRS = []
 # Search directories on PATH for data directories so Argyll reference files can
 # be found automatically if Argyll directory not explicitly configured
 for dir_ in getenvu("PATH", "").split(os.pathsep):
     dir_parent = os.path.dirname(dir_)
     if os.path.isdir(os.path.join(dir_parent, "ref")):
-        extra_data_dirs.append(dir_parent)
+        EXTRA_DATA_DIRS.append(dir_parent)
 
-appbasename = appname
+APPBASENAME = APPNAME
 # If old user data directory exists, use its basename
-if os.path.isdir(os.path.join(appdata, "dispcalGUI")):
-    appbasename = "dispcalGUI"
-    data_dirs.append(os.path.join(appdata, appname))
-datahome = os.path.join(appdata, appbasename)
+if os.path.isdir(os.path.join(APPDATA, "dispcalGUI")):
+    APPBASENAME = "dispcalGUI"
+    DATA_DIRS.append(os.path.join(APPDATA, APPNAME))
+DATA_HOME = os.path.join(APPDATA, APPBASENAME)
 if sys.platform == "win32":
-    if pydir.lower().startswith(exedir.lower()) and pydir != exedir:
+    if PYDIR.lower().startswith(EXEDIR.lower()) and PYDIR != EXEDIR:
         # We are installed in a subfolder of the executable directory
         # (e.g. C:\Python26\Lib\site-packages\DisplayCAL)
         # we need to add the executable directory to the data directories so
         # files in subfolders of the executable directory which are not in
         # Lib\site-packages\DisplayCAL can be found
         # (e.g. Scripts\displaycal-apply-profiles)
-        data_dirs.append(exedir)
-    script_ext = ".cmd"
-    scale_adjustment_factor = 1.0
-    config_sys = os.path.join(commonappdata[0], appbasename)
-    confighome = os.path.join(appdata, appbasename)
-    logdir = os.path.join(datahome, "logs")
-    if appbasename != appname:
-        data_dirs.extend(os.path.join(dir_, appname) for dir_ in commonappdata)
-        data_dirs.append(os.path.join(commonprogramfiles, appname))
-    data_dirs.append(datahome)
-    data_dirs.extend(os.path.join(dir_, appbasename) for dir_ in commonappdata)
-    data_dirs.append(os.path.join(commonprogramfiles, appbasename))
-    exe_ext = ".exe"
-    profile_ext = ".icm"
-else:
-    if sys.platform == "darwin":
-        script_ext = ".command"
-        mac_create_app = True
-        scale_adjustment_factor = 1.0
-        config_sys = os.path.join(prefs, appbasename)
-        confighome = os.path.join(prefs_home, appbasename)
-        logdir = os.path.join(expanduseru("~"), "Library", "Logs", appbasename)
-        if appbasename != appname:
-            data_dirs.append(os.path.join(commonappdata[0], appname))
-        data_dirs.append(datahome)
-        data_dirs.append(os.path.join(commonappdata[0], appbasename))
-    else:
-        script_ext = ".sh"
-        scale_adjustment_factor = 1.0
-        config_sys = os.path.join(xdg_config_dir_default, appbasename)
-        confighome = os.path.join(xdg_config_home, appbasename)
-        logdir = os.path.join(datahome, "logs")
-        if appbasename != appname:
-            datahome_default = os.path.join(xdg_data_home_default, appname)
-            if datahome_default not in data_dirs:
-                data_dirs.append(datahome_default)
-            data_dirs.extend(os.path.join(dir_, appname) for dir_ in xdg_data_dirs)
-        data_dirs.append(datahome)
-        datahome_default = os.path.join(xdg_data_home_default, appbasename)
-        if datahome_default not in data_dirs:
-            data_dirs.append(datahome_default)
-        data_dirs.extend(os.path.join(dir_, appbasename) for dir_ in xdg_data_dirs)
-        extra_data_dirs.extend(
-            os.path.join(dir_, "argyllcms") for dir_ in xdg_data_dirs
-        )
-        extra_data_dirs.extend(
-            os.path.join(dir_, "color", "argyll") for dir_ in xdg_data_dirs
-        )
-    exe_ext = ""
-    profile_ext = ".icc"
+        DATA_DIRS.append(EXEDIR)
+    SCRIPT_EXT = ".cmd"
+    SCALE_ADJUSTMENT_FACTOR = 1.0
+    CONFIG_SYS = os.path.join(COMMONAPPDATA[0], APPBASENAME)
+    CONFIG_HOME = os.path.join(APPDATA, APPBASENAME)
+    LOGDIR = os.path.join(DATA_HOME, "logs")
+    if APPBASENAME != APPNAME:
+        DATA_DIRS.extend(os.path.join(dir_, APPNAME) for dir_ in COMMONAPPDATA)
+        DATA_DIRS.append(os.path.join(COMMON_PROGRAM_FILES, APPNAME))
+    DATA_DIRS.append(DATA_HOME)
+    DATA_DIRS.extend(os.path.join(dir_, APPBASENAME) for dir_ in COMMONAPPDATA)
+    DATA_DIRS.append(os.path.join(COMMON_PROGRAM_FILES, APPBASENAME))
+    EXE_EXT = ".exe"
+    PROFILE_EXT = ".icm"
+elif sys.platform == "darwin":
+    SCRIPT_EXT = ".command"
+    MAC_CREATE_APP = True
+    SCALE_ADJUSTMENT_FACTOR = 1.0
+    CONFIG_SYS = os.path.join(PREFS, APPBASENAME)
+    CONFIG_HOME = os.path.join(PREFS_HOME, APPBASENAME)
+    LOGDIR = os.path.join(expanduseru("~"), "Library", "Logs", APPBASENAME)
+    if APPBASENAME != APPNAME:
+        DATA_DIRS.append(os.path.join(COMMONAPPDATA[0], APPNAME))
+    DATA_DIRS.append(DATA_HOME)
+    DATA_DIRS.append(os.path.join(COMMONAPPDATA[0], APPBASENAME))
+    EXE_EXT = ""
+    PROFILE_EXT = ".icc"
+else:  # Linux
+    SCRIPT_EXT = ".sh"
+    SCALE_ADJUSTMENT_FACTOR = 1.0
+    CONFIG_SYS = os.path.join(XDG_CONFIG_DIR_DEFAULT, APPBASENAME)
+    CONFIG_HOME = os.path.join(XDG_CONFIG_HOME, APPBASENAME)
+    LOGDIR = os.path.join(DATA_HOME, "logs")
+    if APPBASENAME != APPNAME:
+        DATA_HOME_DEFAULT = os.path.join(XDG_DATA_HOME_DEFAULT, APPNAME)
+        if DATA_HOME_DEFAULT not in DATA_DIRS:
+            DATA_DIRS.append(DATA_HOME_DEFAULT)
+        DATA_DIRS.extend(os.path.join(dir_, APPNAME) for dir_ in XDG_DATA_DIRS)
+    DATA_DIRS.append(DATA_HOME)
+    DATA_HOME_DEFAULT = os.path.join(XDG_DATA_HOME_DEFAULT, APPBASENAME)
+    if DATA_HOME_DEFAULT not in DATA_DIRS:
+        DATA_DIRS.append(DATA_HOME_DEFAULT)
+    DATA_DIRS.extend(os.path.join(dir_, APPBASENAME) for dir_ in XDG_DATA_DIRS)
+    EXTRA_DATA_DIRS.extend(os.path.join(dir_, "argyllcms") for dir_ in XDG_DATA_DIRS)
+    EXTRA_DATA_DIRS.extend(
+        os.path.join(dir_, "color", "argyll") for dir_ in XDG_DATA_DIRS
+    )
+    EXE_EXT = ""
+    PROFILE_EXT = ".icc"
 
-storage = os.path.join(datahome, "storage")
+STORAGE = os.path.join(DATA_HOME, "storage")
 
-resfiles = [
+RES_FILES = [
     # Only essentials
     "lang/en.yaml",
     "beep.wav",
@@ -206,21 +210,22 @@ resfiles = [
     "xrc/synthicc.xrc",
 ]
 
-bitmaps = {}
+BITMAPS = {}
 
 # Does the device not support iterative calibration?
-uncalibratable_displays = ("Untethered$",)
+UNCALIBRATABLE_DISPLAYS = ("Untethered$",)
 
 # Can the device generate patterns of its own?
-patterngenerators = ("madVR$", "Resolve$", "Chromecast ", "Prisma ", "Prisma$")
+PATTERN_GENERATORS = ("madVR$", "Resolve$", "Chromecast ", "Prisma ", "Prisma$")
 
-non_argyll_displays = uncalibratable_displays + ("Resolve$",)
+NON_ARGYLL_DISPLAYS = (*UNCALIBRATABLE_DISPLAYS, "Resolve$")
 
 # Is the device directly connected or e.g. driven via network?
 # (note that madVR can technically be both, but the endpoint is always directly
 # connected to a display so we have videoLUT access via madVR's API.
 # Only devices which don't support that are considered 'untethered' in this context)
-untethered_displays = non_argyll_displays + (
+UNTETHERED_DISPLAYS = (
+    *NON_ARGYLL_DISPLAYS,
     "Web$",
     "Chromecast ",
     "Prisma ",
@@ -228,11 +233,75 @@ untethered_displays = non_argyll_displays + (
 )
 
 # Is the device not an actual display device (i.e. is it not a TV or monitor)?
-virtual_displays = untethered_displays + ("madVR$",)
+VIRTUAL_DISPLAYS = (*UNTETHERED_DISPLAYS, "madVR$")
+
+DPISET = False
+
+
+class BitmapSizeType(IntEnum):
+    """Enum for bitmap size types."""
+
+    HighDPI_Normal = 0
+    HighDPI_4x = 1
+    HighDPI_2x = 2
+    HighDPI_2x_Original = 3
+    Original = 4
+
+    def __repr__(self) -> str:
+        """Return the enum name for str().
+
+        Returns:
+            str: The name as the string representation of this
+                ScheduleConstraint.
+        """
+        return self.name if self.name != "NONE" else "None"
+
+    __str__ = __repr__
+
+    @classmethod
+    def to_type(cls, type_: int | str | BitmapSizeType) -> BitmapSizeType:
+        """Convert the given type value to a BitmapSizeType enum.
+
+        Args:
+            type_ (int | str | BitmapSizeType]): The value to convert to a
+                BitmapSizeType to.
+
+        Raises:
+            TypeError: Input value type is invalid.
+            ValueError: Input value is invalid.
+
+        Returns:
+            BitmapSizeType: The enum.
+        """
+        acceptable_type_values = [t.name for t in cls] + [t.value for t in cls]
+        if not isinstance(type_, (int, str, BitmapSizeType)):
+            raise TypeError(
+                "type_ should be a BitmapSizeType enum value or one of "
+                f"{acceptable_type_values}, not {type_.__class__.__name__}: '{type_}'"
+            )
+        if isinstance(type_, str):
+            type_name_lut = {t.name.lower(): t.name for t in cls}
+            type_name_lut.update({t.value: t.name for t in cls})
+            type_lower_case = type_.lower()
+            if type_lower_case not in type_name_lut:
+                raise ValueError(
+                    "type_ should be a BitmapSizeType enum value or one of "
+                    f"{acceptable_type_values}, not '{type_}'"
+                )
+
+            return cls.__members__[type_name_lut[type_lower_case]]
+
+        return type_
+
+
+def debug_print(*args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+    """Print debug messages if DEBUG is enabled."""
+    if DEBUG:
+        print(*args, **kwargs)
 
 
 def is_special_display(
-    display: Optional[str] = None, tests: List[str] = virtual_displays
+    display: None | str = None, tests: list[str] = VIRTUAL_DISPLAYS
 ) -> bool:
     """Check if the display is a special display.
 
@@ -245,57 +314,70 @@ def is_special_display(
     """
     if not isinstance(display, str):
         display = get_display_name(display)
-    for test in tests:
-        if re.match(test, display):
-            return True
-    return False
+    return any(re.match(test, display) for test in tests)
 
 
-def is_uncalibratable_display(display: Optional[str] = None) -> bool:
+def is_uncalibratable_display(display: None | str = None) -> bool:
     """Check if the display is uncalibratable.
 
     Args:
-        display (Optional[str]): The display name.
+        display (None | str): The display name.
 
     Returns:
         bool: True if the display is uncalibratable, False otherwise.
     """
-    return is_special_display(display, uncalibratable_displays)
+    return is_special_display(display, UNCALIBRATABLE_DISPLAYS)
 
 
-def is_patterngenerator(display=None):
-    return is_special_display(display, patterngenerators)
+def is_patterngenerator(display: None | str = None) -> bool:
+    """Check if the display is a pattern generator.
+
+    Args:
+        display (None | str): The display name.
+
+    Returns:
+        bool: True if the display is a pattern generator, False otherwise.
+    """
+    return is_special_display(display, PATTERN_GENERATORS)
 
 
-def is_non_argyll_display(display=None):
-    return is_special_display(display, non_argyll_displays)
+def is_non_argyll_display(display: None | str = None) -> bool:
+    """Check if the display is a non-Argyll display.
+
+    Args:
+        display (None | str): The display name.
+
+    Returns:
+        bool: True if the display is a non-Argyll display, False otherwise.
+    """
+    return is_special_display(display, NON_ARGYLL_DISPLAYS)
 
 
-def is_untethered_display(display: Optional[str] = None) -> bool:
+def is_untethered_display(display: None | str = None) -> bool:
     """Check if the display is untethered.
 
     Args:
-        display (Optional[str]): The display name.
+        display (None | str): The display name.
 
     Returns:
         bool: True if the display is untethered, False otherwise.
     """
-    return is_special_display(display, untethered_displays)
+    return is_special_display(display, UNTETHERED_DISPLAYS)
 
 
-def is_virtual_display(display: Optional[str] = None) -> bool:
+def is_virtual_display(display: None | str = None) -> bool:
     """Check if the display is virtual.
 
     Args:
-        display (Optional[str]): The display name.
+        display (None | str): The display name.
 
     Returns:
         bool: True if the display is virtual, False otherwise.
     """
-    return is_special_display(display, virtual_displays)
+    return is_special_display(display, VIRTUAL_DISPLAYS)
 
 
-def check_3dlut_format(devicename) -> bool:
+def check_3dlut_format(devicename: str) -> bool:
     """Check the 3D LUT format for the given device.
 
     Args:
@@ -314,12 +396,12 @@ def check_3dlut_format(devicename) -> bool:
     return False
 
 
-def getbitmap(
+def get_bitmap(
     name: str,
     display_missing_icon: bool = True,
     scale: bool = True,
     use_mask: bool = False,
-) -> "wx.Bitmap":
+) -> wx.Bitmap:
     """Create (if necessary) and return a named bitmap.
 
     Args:
@@ -336,14 +418,14 @@ def getbitmap(
     Returns:
         wx.Bitmap: The bitmap.
     """
-    if name not in bitmaps:
-        bitmaps[name] = create_bitmap(name, display_missing_icon, scale, use_mask)
-    return bitmaps[name]
+    if name not in BITMAPS:
+        BITMAPS[name] = create_bitmap(name, display_missing_icon, scale, use_mask)
+    return BITMAPS[name]
 
 
 def create_bitmap(
     name: str, display_missing_icon: bool, scale: bool, use_mask: bool
-) -> "wx.Bitmap":
+) -> wx.Bitmap:
     """Create a bitmap with the specified name and dimensions.
 
     Args:
@@ -357,35 +439,38 @@ def create_bitmap(
         wx.Bitmap: The created bitmap.
     """
     parts = name.split("/")
-    w = 16
-    h = 16
+    width = 16
+    height = 16
     size = []
     if len(parts) > 1:
         size = parts[-2].split("x")
         if len(size) == 2:
             try:
-                w, h = list(map(int, size))
+                width, height = list(map(int, size))
             except ValueError:
                 size = []
-    ow, oh = w, h
+    orig_width, orig_height = width, height
     set_default_app_dpi()
-    if scale:
-        scale = getcfg("app.dpi") / get_default_dpi()
-    else:
-        scale = 1
+    scale = getcfg("app.dpi") / get_default_dpi() if scale else 1
     if scale > 1:
         # HighDPI support
-        w = int(round(w * scale))
-        h = int(round(h * scale))
+        width = round(width * scale)
+        height = round(height * scale)
     if parts[-1] == "empty":
-        return create_empty_bitmap(w, h, use_mask)
-    else:
-        return load_bitmap(
-            name, parts, ow, oh, w, h, scale, use_mask, display_missing_icon
-        )
+        return create_empty_bitmap(width, height, use_mask)
+    return load_bitmap(
+        name,
+        parts,
+        orig_width,
+        orig_height,
+        width,
+        height,
+        scale,
+        display_missing_icon,
+    )
 
 
-def create_empty_bitmap(w: int, h: int, use_mask: bool) -> "wx.Bitmap":
+def create_empty_bitmap(w: int, h: int, use_mask: bool) -> wx.Bitmap:
     """Create an empty bitmap with the specified dimensions.
 
     Args:
@@ -396,7 +481,7 @@ def create_empty_bitmap(w: int, h: int, use_mask: bool) -> "wx.Bitmap":
     Returns:
         wx.Bitmap: The created empty bitmap.
     """
-    from DisplayCAL.wxaddons import wx
+    from DisplayCAL.wx_addons import wx
 
     if wx.VERSION[0] < 3:
         use_mask = True
@@ -410,231 +495,507 @@ def create_empty_bitmap(w: int, h: int, use_mask: bool) -> "wx.Bitmap":
 
 def load_bitmap(
     name: str,
-    parts: List[str],
-    ow: int,
-    oh: int,
-    w: int,
-    h: int,
+    parts: list[str],
+    orig_width: int,
+    orig_height: int,
+    width: int,
+    height: int,
     scale: float,
-    use_mask: bool,
     display_missing_icon: bool = True,
-) -> "wx.Bitmap":
+) -> wx.Bitmap:
     """Load a bitmap from the specified parts and dimensions.
 
     Args:
         name (str): The name of the bitmap.
         parts (list): A list of parts representing the path to the bitmap.
-        ow (int): Original width of the bitmap.
-        oh (int): Original height of the bitmap.
-        w (int): New width of the bitmap.
-        h (int): New height of the bitmap.
+        orig_width (int): Original width of the bitmap.
+        orig_height (int): Original height of the bitmap.
+        width (int): New width of the bitmap.
+        height (int): New height of the bitmap.
         scale (float): Scale factor for the bitmap.
-        use_mask (bool): Whether to use a mask for the bitmap.
         display_missing_icon (bool): Whether to display a missing icon if the
             bitmap is not found.
 
     Returns:
         wx.Bitmap: The loaded bitmap.
     """
-    from DisplayCAL.wxaddons import wx
+    from DisplayCAL.wx_addons import wx
 
-    if parts[-1].startswith(appname):
-        parts[-1] = parts[-1].lower()
-    oname = parts[-1]
-    if "#" in oname:
-        # Hex format, RRGGBB or RRGGBBAA
-        oname, color = oname.split("#", 1)
-        parts[-1] = oname
-    else:
-        color = None
-    inverted = oname.endswith("-inverted")
-    if inverted:
-        oname = parts[-1] = oname.split("-inverted")[0]
-    name2x = f"{oname}@2x"
-    name4x = f"{oname}@4x"
-    path = None
-    size = []
-    if len(parts) > 1:
-        size = parts[-2].split("x")
-        if len(size) == 2:
-            try:
-                w, h = list(map(int, size))
-            except ValueError:
-                size = []
+    bmp = None
+    width, height, orig_name, name2x, name4x, color, inverted, size = (
+        extract_image_properties(parts)
+    )
 
-    for i in range(5):
-        if scale > 1:
-            if len(size) == 2:
-                # Icon
-                if i == 0:
-                    # HighDPI support. Try scaled size
-                    parts[-2] = f"{w:d}x{h:d}"
-                elif i == 1:
-                    if scale < 1.75 or scale == 2:
-                        continue
-                    # HighDPI support. Try @4x version
-                    parts[-2] = f"{ow:d}x{oh:d}"
-                    parts[-1] = name4x
-                elif i == 2:
-                    # HighDPI support. Try @2x version
-                    parts[-2] = f"{ow:d}x{oh:d}"
-                    parts[-1] = name2x
-                elif i == 3:
-                    # HighDPI support. Try original size times two
-                    parts[-2] = f"{ow * 2:d}x{oh * 2: d}"
-                    parts[-1] = oname
-                else:
-                    # Try original size
-                    parts[-2] = f"{ow:d}x{oh:d}"
-            else:
-                # Theme graphic
-                if i in (0, 3):
-                    continue
-                elif i == 1:
-                    if scale < 1.75 or scale == 2:
-                        continue
-                    # HighDPI support. Try @4x version
-                    parts[-1] = name4x
-                elif i == 2:
-                    # HighDPI support. Try @2x version
-                    parts[-1] = name2x
-                else:
-                    # Try original size
-                    parts[-1] = oname
-        if sys.platform not in ("darwin", "win32") and parts[-1].startswith(
-            appname.lower()
-        ):
-            # Search /usr/share/icons on Linux first
-            path = get_data_path(
-                "{}.png".format(os.path.join(parts[-2], "apps", parts[-1]))
-            )
-        if not path:
-            path = get_data_path("{}.png".format(os.path.sep.join(parts)))
-        if path or scale == 1:
-            break
+    path, bitmap_size_type = get_scaled_image_path(
+        parts,
+        orig_name,
+        orig_width,
+        orig_height,
+        width,
+        height,
+        scale,
+        name2x,
+        name4x,
+        size,
+    )
     if path:
         bmp = wx.Bitmap(path)
         if not bmp.IsOk():
             path = None
     if path:
-        img = None
-        if scale > 1 and i:
-            rescale = False
-            if i in (1, 2):
-                # HighDPI support. 4x/2x version, determine scaled size
-                w, h = [int(round(v / (2 * (3 - i)) * scale)) for v in bmp.Size]
-                rescale = True
-            elif len(size) == 2:
-                # HighDPI support. Icon
-                rescale = True
-            if rescale and (bmp.Size[0] != w or bmp.Size[1] != h):
-                # HighDPI support. Rescale
-                img = bmp.ConvertToImage()
-                if not hasattr(wx, "IMAGE_QUALITY_BILINEAR") or oname == "list-add":
-                    # In case bilinear is not supported,
-                    # and to prevent black borders after resizing for some images
-                    quality = wx.IMAGE_QUALITY_NORMAL
-                elif oname in ():
-                    # Hmm. Everything else looks great with bicubic,
-                    # but this one gets jaggy unless we use bilinear
-                    quality = wx.IMAGE_QUALITY_BILINEAR
-                elif scale < 1.5 or i == 1:
-                    quality = wx.IMAGE_QUALITY_BICUBIC
-                else:
-                    quality = wx.IMAGE_QUALITY_BILINEAR
-                img.Rescale(w, h, quality=quality)
-        factors = None
-        if (
-            not inverted
-            and len(parts) > 2
-            and parts[-3] == "icons"
-            and (ow, oh) != (10, 10)
-            and oname not in ("black_luminance", "check_all", "contrast", "luminance")
-            and max(wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)[:3]) < 102
-        ):
-            # Automatically invert B&W image if background is dark (exceptions do apply)
-            if not img:
-                img = bmp.ConvertToImage()
-            if img.IsBW():
-                inverted = True
-        # Invert after resize (avoids jaggies)
-        if inverted or color:
-            if not img:
-                img = bmp.ConvertToImage()
-            alpha = wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNTEXT).alpha
-            if oname in [
-                "applications-system",
-                "color",
-                "document-open",
-                "document-save-as",
-                "edit-delete",
-                "image-x-generic",
-                "info",
-                "install",
-                "list-add",
-                "package-x-generic",
-                "question",
-                "rgbsquares",
-                "stock_3d-color-picker",
-                "stock_lock",
-                "stock_lock-open",
-                "stock_refresh",
-                "web",
-                "window-center",
-                "zoom-best-fit",
-                "zoom-in",
-                "zoom-original",
-                "zoom-out",
-            ]:
-                # Scale 85 to 255 and adjust alpha
-                factors = (3, 3, 3, alpha / 255.0)
-            else:
-                if inverted:
-                    img.Invert()
-                if alpha != 255:
-                    # Only adjust alpha
-                    factors = (1, 1, 1, alpha / 255.0)
-            if factors:
-                R, G, B = factors[:3]
-                if len(factors) > 3:
-                    alpha = factors[3]
-                else:
-                    alpha = 1.0
-                img = img.AdjustChannels(R, G, B, alpha)
-            if color:
-                # Hex format, RRGGBB or RRGGBBAA
-                R = int(color[0:2], 16) / 255.0
-                G = int(color[2:4], 16) / 255.0
-                B = int(color[4:6], 16) / 255.0
-                if len(color) > 6:
-                    alpha = int(color[6:8], 16) / 255.0
-                else:
-                    alpha = 1.0
-                img = img.AdjustChannels(R, G, B, alpha)
-        if img:
-            bmp = img.ConvertToBitmap()
-            if not bmp.IsOk():
-                path = None
+        width, height, path, bmp = resize_and_adjust_bitmap(
+            path,
+            parts,
+            orig_name,
+            orig_width,
+            orig_height,
+            scale,
+            color,
+            inverted,
+            size,
+            bitmap_size_type,
+            bmp,
+        )
     if not path:
         print(f"Warning: Missing bitmap '{name}'")
-        img = wx.Image(w, h)
+        img = wx.Image(width, height)
         img.SetMaskColour(0, 0, 0)
         img.InitAlpha()
         bmp = img.ConvertToBitmap()
         dc = wx.MemoryDC()
         dc.SelectObject(bmp)
         if display_missing_icon:
-            art = wx.ArtProvider.GetBitmap(wx.ART_MISSING_IMAGE, size=(w, h))
+            art = wx.ArtProvider.GetBitmap(wx.ART_MISSING_IMAGE, size=(width, height))
             dc.DrawBitmap(art, 0, 0, True)
         dc.SelectObject(wx.NullBitmap)
     return bmp
 
 
-def get_bitmap_as_icon(size: int, name: str, scale: bool = True) -> "wx.Icon":
+def extract_image_properties(
+    parts: list[str],
+) -> tuple[int, int, str, str, str, bool, list[str]]:
+    """Extract image properties from the parts list.
+
+    Args:
+        parts (list): A list of parts representing the path to the bitmap.
+
+    Returns:
+        tuple[int, int, str, str, bool, list]: A tuple containing width,
+            height, original name, color, inverted flag, and size.
+    """
+    width = None
+    height = None
+    if parts[-1].startswith(APPNAME):
+        parts[-1] = parts[-1].lower()
+    orig_name = parts[-1]
+    if "#" in orig_name:
+        # Hex format, RRGGBB or RRGGBBAA
+        orig_name, color = orig_name.split("#", 1)
+        parts[-1] = orig_name
+    else:
+        color = None
+    if inverted := orig_name.endswith("-inverted"):
+        orig_name = parts[-1] = orig_name.split("-inverted")[0]
+    size = []
+    if len(parts) > 1:
+        size = parts[-2].split("x")
+        if len(size) == 2:
+            try:
+                width, height = list(map(int, size))
+            except ValueError:
+                size = []
+    name2x = f"{orig_name}@2x"
+    name4x = f"{orig_name}@4x"
+
+    return width, height, orig_name, name2x, name4x, color, inverted, size
+
+
+def get_non_scaled_image_path(parts: list[str]) -> tuple[str | None, BitmapSizeType]:
+    """Get the path for a non-scaled image.
+
+    Args:
+        parts (list): A list of parts representing the path to the bitmap.
+
+    Returns:
+        tuple[str | None, BitmapSizeType]: A tuple containing the path to the
+            bitmap and the BitmapSizeType.
+    """
+    path = None
+    if sys.platform not in ("darwin", "win32") and parts[-1].startswith(
+        APPNAME.lower()
+    ):
+        # Search /usr/share/icons on Linux first
+        path = get_data_path(
+            "{}.png".format(os.path.join(parts[-2], "apps", parts[-1]))
+        )
+    if not path:
+        path = get_data_path(f"{os.path.sep.join(parts)}.png")
+    return path, BitmapSizeType.Original
+
+
+def get_scaled_image_path(
+    parts: list[str],
+    orig_name: str,
+    orig_width: int,
+    orig_height: int,
+    width: int,
+    height: int,
+    scale: float,
+    name2x: str,
+    name4x: str,
+    size: list[str],
+) -> tuple[None | str, BitmapSizeType]:
+    """Get the path for a scaled image.
+
+    Args:
+        parts (list[str]): A list of parts representing the path to the bitmap.
+        orig_name (str): Original name of the bitmap.
+        orig_width (int): Original width of the bitmap.
+        orig_height (int): Original height of the bitmap.
+        width (int): New width of the bitmap.
+        height (int): New height of the bitmap.
+        scale (float): Scale factor for the bitmap.
+        name2x (str): Name for the 2x scaled version.
+        name4x (str): Name for the 4x scaled version.
+        size (list[str]): Size information from parts.
+
+    Returns:
+        tuple[None | str, BitmapSizeType]: A tuple containing the path to the
+            bitmap and the BitmapSizeType.
+    """
+    path = None
+    bitmap_size_type = BitmapSizeType.Original
+
+    if scale == 1:
+        return get_non_scaled_image_path(parts)
+
+    for i in range(5):
+        bitmap_size_type = BitmapSizeType.to_type(i)
+        if len(size) == 2:
+            result = get_scaled_icon_path(
+                parts,
+                orig_name,
+                orig_width,
+                orig_height,
+                width,
+                height,
+                scale,
+                name2x,
+                name4x,
+                bitmap_size_type,
+            )
+            if not result:
+                continue
+        else:
+            result = get_scaled_theme_path(
+                parts,
+                orig_name,
+                scale,
+                name2x,
+                name4x,
+                bitmap_size_type,
+            )
+            if not result:
+                continue
+        if sys.platform not in ("darwin", "win32") and parts[-1].startswith(
+            APPNAME.lower()
+        ):
+            # Search /usr/share/icons on Linux first
+            path = get_data_path(
+                "{}.png".format(os.path.join(parts[-2], "apps", parts[-1]))
+            )
+        if not path:
+            path = get_data_path(f"{os.path.sep.join(parts)}.png")
+        if path:
+            break
+    return path, bitmap_size_type
+
+
+def get_scaled_icon_path(
+    parts: list[str],
+    orig_name: str,
+    orig_width: int,
+    orig_height: int,
+    width: int,
+    height: int,
+    scale: float,
+    name2x: str,
+    name4x: str,
+    bitmap_size_type: BitmapSizeType,
+) -> bool:
+    """Get the path for a scaled icon.
+
+    Args:
+        parts (list): A list of parts representing the path to the bitmap.
+        orig_name (str): Original name of the bitmap.
+        orig_width (int): Original width of the bitmap.
+        orig_height (int): Original height of the bitmap.
+        width (int): New width of the bitmap.
+        height (int): New height of the bitmap.
+        scale (float): Scale factor for the bitmap.
+        name2x (str): Name for the 2x scaled version.
+        name4x (str): Name for the 4x scaled version.
+        bitmap_size_type (BitmapSizeType): The bitmap size type.
+
+    Returns:
+        bool: True if the path was successfully set, False otherwise.
+    """
+    # Icon
+    if bitmap_size_type == BitmapSizeType.HighDPI_Normal:
+        # HighDPI support. Try scaled size
+        parts[-2] = f"{width:d}x{height:d}"
+    elif bitmap_size_type == BitmapSizeType.HighDPI_4x:
+        if scale < 1.75 or scale == 2:
+            return False
+        # HighDPI support. Try @4x version
+        parts[-2] = f"{orig_width:d}x{orig_height:d}"
+        parts[-1] = name4x
+    elif bitmap_size_type == BitmapSizeType.HighDPI_2x:
+        # HighDPI support. Try @2x version
+        parts[-2] = f"{orig_width:d}x{orig_height:d}"
+        parts[-1] = name2x
+    elif bitmap_size_type == BitmapSizeType.HighDPI_2x_Original:
+        # HighDPI support. Try original size times two
+        parts[-2] = f"{orig_width * 2:d}x{orig_height * 2: d}"
+        parts[-1] = orig_name
+    else:
+        # Try original size
+        parts[-2] = f"{orig_width:d}x{orig_height:d}"
+    return True
+
+
+def get_scaled_theme_path(
+    parts: list[str],
+    orig_name: str,
+    scale: float,
+    name2x: str,
+    name4x: str,
+    bitmap_size_type: BitmapSizeType,
+) -> bool:
+    """Get the path for a scaled theme image.
+
+    Args:
+        parts (list): A list of parts representing the path to the bitmap.
+        orig_name (str): Original name of the bitmap.
+        scale (float): Scale factor for the bitmap.
+        name2x (str): Name for the 2x scaled version.
+        name4x (str): Name for the 4x scaled version.
+        bitmap_size_type (BitmapSizeType): The bitmap size type.
+
+    Returns:
+        bool: True if the path was successfully set, False otherwise.
+    """
+    # Theme graphic
+    if bitmap_size_type in (
+        BitmapSizeType.HighDPI_Normal,
+        BitmapSizeType.HighDPI_2x_Original,
+    ):
+        return False
+    if bitmap_size_type == BitmapSizeType.HighDPI_4x:
+        if scale < 1.75 or scale == 2:
+            return False
+        # HighDPI support. Try @4x version
+        parts[-1] = name4x
+    elif bitmap_size_type == BitmapSizeType.HighDPI_2x:
+        # HighDPI support. Try @2x version
+        parts[-1] = name2x
+    else:
+        # Try original size
+        parts[-1] = orig_name
+    return True
+
+
+def resize_and_adjust_bitmap(
+    path: str,
+    parts: list[str],
+    orig_name: str,
+    orig_width: int,
+    orig_height: int,
+    scale: float,
+    color: None | str,
+    inverted: bool,
+    size: list[str],
+    bitmap_size_type: BitmapSizeType,
+    bmp: wx.Bitmap,
+) -> tuple[int, int, None | str]:
+    """Resize and adjust the bitmap based on the given parameters.
+
+    Args:
+        path (str): The path to the bitmap.
+        parts (list): A list of parts representing the path to the bitmap.
+        orig_name (str): Original name of the bitmap.
+        orig_width (int): Original width of the bitmap.
+        orig_height (int): Original height of the bitmap.
+        scale (float): Scale factor for the bitmap.
+        color (None | str): Color in hex format, RRGGBB or RRGGBBAA.
+        inverted (bool): Whether the bitmap should be inverted.
+        size (list): Size information from parts.
+        bitmap_size_type (BitmapSizeType): The bitmap size type.
+        bmp (wx.Bitmap): The original bitmap.
+
+    Returns:
+        tuple[int, int, None | str]: A tuple containing the width, height,
+            and path to the bitmap.
+    """
+    from DisplayCAL.wx_addons import wx
+
+    img = None
+    img, width, height = adjust_bitmap_size(
+        scale, orig_name, size, bitmap_size_type, bmp
+    )
+    if (
+        not inverted
+        and len(parts) > 2
+        and parts[-3] == "icons"
+        and (orig_width, orig_height) != (10, 10)
+        and orig_name not in ("black_luminance", "check_all", "contrast", "luminance")
+        and max(wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)[:3]) < 102
+    ):
+        # Automatically invert B&W image if background is dark (exceptions do apply)
+        if not img:
+            img = bmp.ConvertToImage()
+        if img.IsBW():
+            inverted = True
+    # Invert after resize (avoids jaggies)
+    if inverted or color:
+        img = configure_image_channels(orig_name, color, inverted, bmp, img)
+    if img:
+        bmp = img.ConvertToBitmap()
+        if not bmp.IsOk():
+            path = None
+    return width, height, path, bmp
+
+
+def adjust_bitmap_size(
+    scale: float,
+    orig_name: str,
+    size: list[str],
+    bitmap_size_type: BitmapSizeType,
+    bmp: wx.Bitmap,
+) -> tuple[None | wx.Image, None | int, None | int]:
+    """Adjust the bitmap size based on the scale and bitmap size type.
+
+    Args:
+        scale (float): Scale factor for the bitmap.
+        orig_name (str): Original name of the bitmap.
+        size (list[str]): Size information from parts.
+        bitmap_size_type (BitmapSizeType): The bitmap size type.
+        bmp (wx.Bitmap): The original bitmap.
+
+    Returns:
+        tuple[None | wx.Image, None | int, None | int]: A tuple containing
+            the image, width, and height of the bitmap.
+    """
+    img = None
+    w = None
+    h = None
+    if scale == 1 or bitmap_size_type == BitmapSizeType.HighDPI_Normal:
+        return img, w, h
+    rescale = False
+    if bitmap_size_type in (BitmapSizeType.HighDPI_4x, BitmapSizeType.HighDPI_2x):
+        # HighDPI support. 4x/2x version, determine scaled size
+        w, h = [round(v / (2 * (3 - bitmap_size_type)) * scale) for v in bmp.Size]
+        rescale = True
+    elif len(size) == 2:
+        # HighDPI support. Icon
+        rescale = True
+    if rescale and (bmp.Size[0] != w or bmp.Size[1] != h):
+        from DisplayCAL.wx_addons import wx
+
+        # HighDPI support. Rescale
+        img = bmp.ConvertToImage()
+        if not hasattr(wx, "IMAGE_QUALITY_BILINEAR") or orig_name == "list-add":
+            # In case bilinear is not supported,
+            # and to prevent black borders after resizing for some images
+            quality = wx.IMAGE_QUALITY_NORMAL
+        elif orig_name in ():
+            # Hmm. Everything else looks great with bicubic,
+            # but this one gets jaggy unless we use bilinear
+            quality = wx.IMAGE_QUALITY_BILINEAR
+        elif scale < 1.5 or bitmap_size_type == BitmapSizeType.HighDPI_4x:
+            quality = wx.IMAGE_QUALITY_BICUBIC
+        else:
+            quality = wx.IMAGE_QUALITY_BILINEAR
+        img.Rescale(w, h, quality=quality)
+    return img, w, h
+
+
+def configure_image_channels(
+    orig_name: str,
+    color: None | str,
+    inverted: bool,
+    bmp: None | wx.Image,
+    img: None | wx.Image,
+) -> wx.Image:
+    """Configure image channels based on the given parameters.
+
+    Args:
+        orig_name (str): The original name of the bitmap.
+        color (None | str): Color in hex format, RRGGBB or RRGGBBAA.
+        inverted (bool): Whether the bitmap should be inverted.
+        bmp (wx.Bitmap): The original bitmap.
+        img (wx.Image | None): The image to adjust.
+
+    Returns:
+        wx.Image: The adjusted image.
+    """
+    from DisplayCAL.wx_addons import wx
+
+    factors = None
+    if not img:
+        img = bmp.ConvertToImage()
+    alpha = wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNTEXT).alpha
+    if orig_name in [
+        "applications-system",
+        "color",
+        "document-open",
+        "document-save-as",
+        "edit-delete",
+        "image-x-generic",
+        "info",
+        "install",
+        "list-add",
+        "package-x-generic",
+        "question",
+        "rgbsquares",
+        "stock_3d-color-picker",
+        "stock_lock",
+        "stock_lock-open",
+        "stock_refresh",
+        "web",
+        "window-center",
+        "zoom-best-fit",
+        "zoom-in",
+        "zoom-original",
+        "zoom-out",
+    ]:
+        # Scale 85 to 255 and adjust alpha
+        factors = (3, 3, 3, alpha / 255.0)
+    else:
+        if inverted:
+            img.Invert()
+        if alpha != 255:
+            # Only adjust alpha
+            factors = (1, 1, 1, alpha / 255.0)
+    if factors:
+        r, g, b = factors[:3]
+        alpha = factors[3] if len(factors) > 3 else 1.0
+        img = img.AdjustChannels(r, g, b, alpha)
+    if color:
+        # Hex format, RRGGBB or RRGGBBAA
+        r = int(color[0:2], 16) / 255.0
+        g = int(color[2:4], 16) / 255.0
+        b = int(color[4:6], 16) / 255.0
+        alpha = int(color[6:8], 16) / 255.0 if len(color) > 6 else 1.0
+        img = img.AdjustChannels(r, g, b, alpha)
+    return img
+
+
+def get_bitmap_as_icon(size: int, name: str, scale: bool = True) -> wx.Icon:
     """Return a wx.Icon instance.
 
-    This is like geticon, but returns a wx.Icon instance instead of a wx.Bitmap
-    instance.
+    This is like get_icon(), but returns a wx.Icon instance instead of a
+    wx.Bitmap instance.
 
     Get a bitmap as an icon with the specified size and name.
 
@@ -646,13 +1007,13 @@ def get_bitmap_as_icon(size: int, name: str, scale: bool = True) -> "wx.Icon":
     Returns:
         wx.Icon: The (created) icon (instance).
     """
-    from DisplayCAL.wxaddons import wx
+    from DisplayCAL.wx_addons import wx
 
     icon = wx.EmptyIcon()
     if sys.platform == "darwin" and wx.VERSION >= (2, 9) and size > 128:
         # FIXME: wxMac 2.9 doesn't support icon sizes above 128
         size = 128
-    bmp = geticon(size, name, scale)
+    bmp = get_icon(size, name, scale)
     icon.CopyFromBitmap(bmp)
     return icon
 
@@ -667,26 +1028,24 @@ def get_argyll_data_dir() -> str:
     if isinstance(argyll_version, str):
         argyll_version = list(map(int, argyll_version.split(".")))
 
-    if argyll_version < [1, 5, 0]:
-        argyll_data_dirname = "color"
-    else:
-        argyll_data_dirname = "ArgyllCMS"
+    argyll_data_dirname = "color" if argyll_version < [1, 5, 0] else "ArgyllCMS"
 
     if sys.platform == "darwin" and argyll_version < [1, 5, 0]:
         return os.path.join(
-            library if is_superuser() else library_home, argyll_data_dirname
+            LIBRARY if is_superuser() else LIBRARY_HOME, argyll_data_dirname
         )
-    else:
-        return os.path.join(
-            commonappdata[0] if is_superuser() else appdata, argyll_data_dirname
-        )
+    return os.path.join(
+        COMMONAPPDATA[0] if is_superuser() else APPDATA, argyll_data_dirname
+    )
 
 
-def get_display_name(disp_index: Optional[int] = None, include_geometry: bool = False):
+def get_display_name(
+    disp_index: None | int = None, include_geometry: bool = False
+) -> str:
     """Return name of currently configured display.
 
     Args:
-        disp_index (Optional[int]): The index of the display.
+        disp_index (None | int): The index of the display.
         include_geometry (bool): Whether to include geometry in the display name.
 
     Returns:
@@ -722,21 +1081,21 @@ def split_display_name(display: str) -> str:
     return display.strip()
 
 
-def get_argyll_display_number(geometry: Tuple[int, int, int, int]) -> Union[None, int]:
+def get_argyll_display_number(geometry: tuple[int, int, int, int]) -> None | int:
     """Translate from wx display geometry to Argyll display index.
 
     Args:
-        geometry (Tuple[int, int, int, int]): The geometry of the display.
+        geometry (tuple[int, int, int, int]): The geometry of the display.
 
     Returns:
-        Union[None, int]: The Argyll display index.
+        None | int: The Argyll display index.
     """
     geometry = f"{geometry[0]}, {geometry[1]}, {geometry[2]}x{geometry[3]}"
     for i, display in enumerate(getcfg("displays")):
         if display.find(f"@ {geometry}") > -1:
-            if debug:
-                print(f"[D] Found display {geometry} at index {i}")
+            debug_print(f"[D] Found display {geometry} at index {i}")
             return i
+    return None
 
 
 def get_display_number(display_no: int) -> int:
@@ -750,7 +1109,7 @@ def get_display_number(display_no: int) -> int:
     """
     if is_virtual_display(display_no):
         return 0
-    from DisplayCAL.wxaddons import wx
+    from DisplayCAL.wx_addons import wx
 
     try:
         display = getcfg("displays")[display_no]
@@ -762,19 +1121,19 @@ def get_display_number(display_no: int) -> int:
         for i in range(wx.Display.GetCount()):
             geometry = "{:d}, {:d}, {:d}x{:d}".format(*wx.Display(i).Geometry)
             if display.endswith(f"@ {geometry}"):
-                if debug:
-                    print(f"[D] Found display {geometry} at index {i}")
+                debug_print(f"[D] Found display {geometry} at index {i}")
                 return i
     return 0
 
 
-def get_display_rects() -> List[Tuple[int, int, int, int]]:
+def get_display_rects() -> list[tuple[int, int, int, int]]:
     """Return the Argyll enumerated display coordinates and sizes.
 
     Returns:
-        List[Tuple[int, int, int, int]]: A list of wx.Rect objects representing the display coordinates and sizes.
+        list[tuple[int, int, int, int]]: A list of wx.Rect objects representing
+            the display coordinates and sizes.
     """
-    from DisplayCAL.wxaddons import wx
+    from DisplayCAL.wx_addons import wx
 
     display_rects = []
     for _i, display in enumerate(getcfg("displays")):
@@ -784,17 +1143,17 @@ def get_display_rects() -> List[Tuple[int, int, int, int]]:
     return display_rects
 
 
-def get_icon_bundle(sizes, name):
+def get_icon_bundle(sizes: list[int], name: str) -> wx.IconBundle:
     """Return a wx.IconBundle with given icon sizes.
 
     Args:
-        sizes (list): A list of icon sizes.
+        sizes (list[int]): A list of icon sizes.
         name (str): The name of the icon.
 
     Returns:
         wx.IconBundle: The icon bundle.
     """
-    from DisplayCAL.wxaddons import wx
+    from DisplayCAL.wx_addons import wx
 
     iconbundle = wx.IconBundle()
     if not sizes:
@@ -824,7 +1183,9 @@ def get_instrument_name() -> str:
     return ""
 
 
-def get_measureframe_dimensions(dimensions_measureframe=None, percent=10) -> str:
+def get_measureframe_dimensions(
+    dimensions_measureframe: None | str = None, percent: int = 10
+) -> str:
     """Return measurement area size adjusted for percentage of screen area.
 
     Args:
@@ -837,26 +1198,46 @@ def get_measureframe_dimensions(dimensions_measureframe=None, percent=10) -> str
     if not dimensions_measureframe:
         dimensions_measureframe = getcfg("dimensions.measureframe")
     dimensions_measureframe = [float(n) for n in dimensions_measureframe.split(",")]
-    dimensions_measureframe[2] *= defaults["size.measureframe"]
+    dimensions_measureframe[2] *= DEFAULTS["size.measureframe"]
     dimensions_measureframe[2] /= get_display_rects()[0][2]
     dimensions_measureframe[2] *= percent
     return ",".join([str(min(n, 50)) for n in dimensions_measureframe])
 
 
-def geticon(size, name, scale=True, use_mask=False):
-    """Convenience function for getbitmap('theme/icons/<size>/<name>')."""
-    return getbitmap(
+def get_icon(
+    size: int, name: str, scale: bool = True, use_mask: bool = False
+) -> wx.Bitmap:
+    """Convenience function for get_bitmap('theme/icons/<size>/<name>').
+
+    Args:
+        size (int): The size of the icon.
+        name (str): The name of the icon.
+        scale (bool): Whether to scale the icon.
+        use_mask (bool): Whether to use a mask for the icon.
+
+    Returns:
+        wx.Bitmap: The icon bitmap.
+    """
+    return get_bitmap(
         f"theme/icons/{size}x{size}/{name}",
         scale=scale,
         use_mask=use_mask,
     )
 
 
-def get_data_path(relpath, rex=None):
+def get_data_path(relpath: str, regex: None | str = None) -> None | str | list[str]:
     """Search data_dirs for relpath and return the path or a file list.
 
     If relpath is a file, return the full path, if relpath is a directory,
     return a list of files in the intersection of searched directories.
+
+    Args:
+        relpath (str): The relative path to search for.
+        regex (None | str): A regular expression to filter files.
+
+    Returns:
+        None | str | list[str]: The full path if a file is found, or a list of
+            files if a directory is found, or None if nothing was found.
     """
     if (
         not relpath
@@ -864,13 +1245,13 @@ def get_data_path(relpath, rex=None):
         or (isinstance(os.path.altsep, str) and relpath.endswith(os.path.altsep))
     ):
         return None
-    dirs = list(data_dirs)
+    dirs = list(DATA_DIRS)
     argyll_dir = getcfg("argyll.dir") or os.path.dirname(
-        os.path.realpath(which(f"dispcal{exe_ext}") or "")
+        os.path.realpath(which(f"dispcal{EXE_EXT}") or "")
     )
     if argyll_dir and os.path.isdir(os.path.join(argyll_dir, "..", "ref")):
         dirs.append(os.path.dirname(argyll_dir))
-    dirs.extend(extra_data_dirs)
+    dirs.extend(EXTRA_DATA_DIRS)
     intersection = []
     paths = []
     for dir_ in dirs:
@@ -885,15 +1266,12 @@ def get_data_path(relpath, rex=None):
             # Fedora and Ubuntu: /usr/share/color/argyll/ref
             # openSUSE: /usr/share/color/argyll
             pth = relpath.split("/", 1)[-1]
-            if pth != "ref":
-                curpath = os.path.join(dir_, pth)
-            else:
-                curpath = dir_
+            curpath = os.path.join(dir_, pth) if pth != "ref" else dir_
         if os.path.exists(curpath):
             curpath = os.path.normpath(curpath)
             if os.path.isdir(curpath):
                 try:
-                    filelist = listdir_re(curpath, rex)
+                    filelist = listdir_re(curpath, regex)
                 except Exception as exception:
                     print(f"Error - directory '{curpath}' listing failed: {exception}")
                 else:
@@ -917,102 +1295,111 @@ def get_default_dpi() -> float:
     return 72.0 if sys.platform == "darwin" else 96.0
 
 
-def runtimeconfig(pyfile):
+def runtimeconfig(pyfile: str) -> str:
     """Configure remaining runtime options and return runtype.
 
     You need to pass in a path to the calling script (e.g. use the __file__
     attribute).
+
+    Args:
+        pyfile (str): The path to the calling script.
+
+    Returns:
+        str: The runtime type.
     """
     # global safe_log
     from DisplayCAL.log import setup_logging
 
-    setup_logging(logdir, pyname, pyext, confighome=confighome)
-    if debug:
-        print("[D] pydir:", pydir)
-    if isapp:
+    setup_logging(LOGDIR, PYNAME, PYEXT, confighome=CONFIG_HOME)
+    debug_print("[D] pydir:", PYDIR)
+    if ISAPP:
         runtype = ".app"
-    elif isexe:
-        if debug:
-            print("[D] _MEIPASS2 or pydir:", getenvu("_MEIPASS2", exedir))
-        if getenvu("_MEIPASS2", exedir) not in data_dirs:
-            data_dirs.insert(1, getenvu("_MEIPASS2", exedir))
-        runtype = exe_ext
+    elif ISEXE:
+        debug_print("[D] _MEIPASS2 or pydir:", getenvu("_MEIPASS2", EXEDIR))
+        if getenvu("_MEIPASS2", EXEDIR) not in DATA_DIRS:
+            DATA_DIRS.insert(1, getenvu("_MEIPASS2", EXEDIR))
+        runtype = EXE_EXT
     else:
-        pydir_parent = os.path.dirname(pydir)
-        if debug:
-            print(
-                "[D] dirname(os.path.abspath(sys.argv[0])):",
-                os.path.dirname(os.path.abspath(sys.argv[0])),
-            )
-            print("[D] pydir parent:", pydir_parent)
+        pydir_parent = os.path.dirname(PYDIR)
+        debug_print(
+            "[D] dirname(os.path.abspath(sys.argv[0])):",
+            os.path.dirname(os.path.abspath(sys.argv[0])),
+        )
+        debug_print("[D] pydir parent:", pydir_parent)
         if (
             os.path.dirname(os.path.abspath(sys.argv[0])) == pydir_parent
-            and pydir_parent not in data_dirs
+            and pydir_parent not in DATA_DIRS
         ):
             # Add the parent directory of the package directory to our list of
             # data directories if it is the directory containing the currently
             # run script (e.g. when running from source)
-            data_dirs.insert(1, pydir_parent)
-        runtype = pyext
+            DATA_DIRS.insert(1, pydir_parent)
+        runtype = PYEXT
     for dir_ in sys.path:
         if not isinstance(dir_, str):
-            dir_ = dir_.encode(fs_enc)
-        dir_ = os.path.abspath(os.path.join(dir_, appname))
-        if dir_ not in data_dirs and os.path.isdir(dir_):
-            data_dirs.append(dir_)
-            if debug:
-                print("[D] from sys.path:", dir_)
+            dir_ = dir_.encode(FS_ENC)
+        dir_ = os.path.abspath(os.path.join(dir_, APPNAME))
+        if dir_ not in DATA_DIRS and os.path.isdir(dir_):
+            DATA_DIRS.append(dir_)
+            debug_print("[D] from sys.path:", dir_)
+
     if sys.platform not in ("darwin", "win32"):
-        data_dirs.extend(
+        DATA_DIRS.extend(
             [
-                os.path.join(dir_, "doc", f"{appname}-{version}")
-                for dir_ in xdg_data_dirs + [xdg_data_home]
+                os.path.join(dir_, "doc", f"{APPNAME}-{VERSION_STRING}")
+                for dir_ in [*XDG_DATA_DIRS, XDG_DATA_HOME]
             ]
         )
-        data_dirs.extend(
+        DATA_DIRS.extend(
             [
-                os.path.join(dir_, "doc", "packages", appname)
-                for dir_ in xdg_data_dirs + [xdg_data_home]
+                os.path.join(dir_, "doc", "packages", APPNAME)
+                for dir_ in [*XDG_DATA_DIRS, XDG_DATA_HOME]
             ]
         )
-        data_dirs.extend(
+        DATA_DIRS.extend(
             [
-                os.path.join(dir_, "doc", appname)
-                for dir_ in xdg_data_dirs + [xdg_data_home]
+                os.path.join(dir_, "doc", APPNAME)
+                for dir_ in [*XDG_DATA_DIRS, XDG_DATA_HOME]
             ]
         )
-        data_dirs.extend(
+        DATA_DIRS.extend(
             [
-                os.path.join(dir_, "doc", appname.lower())  # Debian
-                for dir_ in xdg_data_dirs + [xdg_data_home]
+                os.path.join(dir_, "doc", APPNAME.lower())  # Debian
+                for dir_ in [*XDG_DATA_DIRS, XDG_DATA_HOME]
             ]
         )
-        data_dirs.extend(
+        DATA_DIRS.extend(
             [
                 os.path.join(dir_, "icons", "hicolor")
-                for dir_ in xdg_data_dirs + [xdg_data_home]
+                for dir_ in [*XDG_DATA_DIRS, XDG_DATA_HOME]
             ]
         )
-    if debug:
-        print("[D] Data files search paths:\n[D]", "\n[D] ".join(data_dirs))
-    defaults["calibration.file"] = get_data_path("presets/default.icc") or ""
-    defaults["measurement_report.chart"] = (
+    debug_print("[D] Data files search paths:\n[D]", "\n[D] ".join(DATA_DIRS))
+    DEFAULTS["calibration.file"] = get_data_path("presets/default.icc") or ""
+    DEFAULTS["measurement_report.chart"] = (
         get_data_path(os.path.join("ref", "verify_extended.ti1")) or ""
     )
     return runtype
 
 
 class CaseSensitiveConfigParser(configparser.RawConfigParser):
+    """Case sensitive config parser."""
+
     def optionxform(self, optionstr: str) -> str:
+        """Return the option string as is, preserving case sensitivity.
+
+        Args:
+            optionstr (str): The option string to be processed.
+        """
         return optionstr
 
 
 # User settings
-cfg = CaseSensitiveConfigParser()
-cfg["Default"] = {}
+CFG = CaseSensitiveConfigParser()
+CFG["Default"] = {}
 
 
-valid_ranges = {
+VALID_RANGES = {
     "3dlut.hdr_peak_luminance": [100.0, 10000.0],
     "3dlut.hdr_minmll": [0.0, 0.1],
     "3dlut.hdr_maxmll": [100.0, 10000.0],
@@ -1058,13 +1445,13 @@ valid_ranges = {
     "whitepoint.visual_editor.r": [0, 255],
 }
 
-valid_values = {
+VALID_VALUES = {
     "3d.format": ["HTML", "VRML", "X3D"],
     "3dlut.bitdepth.input": [8, 10, 12, 14, 16],
     "3dlut.bitdepth.output": [8, 10, 12, 14, 16],
-    "3dlut.encoding.input": list(video_encodings),
+    "3dlut.encoding.input": list(VIDEO_ENCODINGS),
     # collink: xvYCC output encoding is not supported
-    "3dlut.encoding.output": [v for v in video_encodings if v not in ("T", "x", "X")],
+    "3dlut.encoding.output": [v for v in VIDEO_ENCODINGS if v not in ("T", "x", "X")],
     "3dlut.format": [
         "3dl",
         "cube",
@@ -1080,7 +1467,7 @@ valid_values = {
     "3dlut.hdr_display": [0, 1],
     "3dlut.image.layout": ["h", "v"],
     "3dlut.image.order": ["rgb", "bgr"],
-    "3dlut.rendering_intent": intents,
+    "3dlut.rendering_intent": INTENTS,
     "3dlut.size": [5, 9, 16, 17, 24, 32, 33, 64, 65],
     "3dlut.trc": [
         "bt1886",
@@ -1092,8 +1479,8 @@ valid_values = {
     ],
     "3dlut.trc_gamma_type": ["b", "B"],
     "calibration.quality": ["v", "l", "m", "h", "u"],
-    "colorimeter_correction.observer": observers,
-    "colorimeter_correction.observer.reference": observers,
+    "colorimeter_correction.observer": OBSERVERS,
+    "colorimeter_correction.observer.reference": OBSERVERS,
     "colorimeter_correction.type": ["matrix", "spectral"],
     # Measurement modes as supported by Argyll -y parameter
     # 'l' = 'n' (non-refresh-type display, e.g. LCD)
@@ -1102,14 +1489,14 @@ valid_values = {
     # worker.Worker.add_measurement_features if using Argyll >= 1.5
     # See http://www.argyllcms.com/doc/instruments.html for description of
     # per-instrument supported modes
-    "measurement_mode": [None, "auto"] + list(string.digits[1:] + string.ascii_letters),
+    "measurement_mode": [None, "auto", *list(string.digits[1:] + string.ascii_letters)],
     "gamap_default_intent": ["a", "r", "p", "s"],
-    "gamap_perceptual_intent": intents,
-    "gamap_saturation_intent": intents,
-    "gamap_src_viewcond": viewconds,
+    "gamap_perceptual_intent": INTENTS,
+    "gamap_saturation_intent": INTENTS,
+    "gamap_src_viewcond": VIEWCONDS,
     "gamap_out_viewcond": ["mt", "mb", "md", "jm", "jd"],
     "measurement_report.trc_gamma_type": ["b", "B"],
-    "observer": observers,
+    "observer": OBSERVERS,
     "patterngenerator.detect_video_levels": [0, 1],
     "patterngenerator.prisma.preset": [
         "Movie",
@@ -1164,25 +1551,25 @@ valid_values = {
     "whitepoint.colortemp.locus": ["t", "T"],
 }
 
-content_rgb_space = colormath.get_rgb_space("DCI P3 D65")
-crx, cry = content_rgb_space[2:][0][:2]
-cgx, cgy = content_rgb_space[2:][1][:2]
-cbx, cby = content_rgb_space[2:][2][:2]
-cwx, cwy = colormath.XYZ2xyY(*content_rgb_space[1])[:2]
-defaults = {
+CONTENT_RGB_SPACE = colormath.get_rgb_space("DCI P3 D65")
+CRX, CRY = CONTENT_RGB_SPACE[2:][0][:2]
+CGX, CGY = CONTENT_RGB_SPACE[2:][1][:2]
+CBX, CBY = CONTENT_RGB_SPACE[2:][2][:2]
+CWX, CWY = colormath.XYZ2xyY(*CONTENT_RGB_SPACE[1])[:2]
+DEFAULTS = {
     "3d.format": "HTML",
     "3dlut.apply_black_offset": 0,
     "3dlut.apply_trc": 1,
     "3dlut.bitdepth.input": 10,
     "3dlut.bitdepth.output": 12,
-    "3dlut.content.colorspace.blue.x": cbx,
-    "3dlut.content.colorspace.blue.y": cby,
-    "3dlut.content.colorspace.green.x": cgx,
-    "3dlut.content.colorspace.green.y": cgy,
-    "3dlut.content.colorspace.red.x": crx,
-    "3dlut.content.colorspace.red.y": cry,
-    "3dlut.content.colorspace.white.x": cwx,
-    "3dlut.content.colorspace.white.y": cwy,
+    "3dlut.content.colorspace.blue.x": CBX,
+    "3dlut.content.colorspace.blue.y": CBY,
+    "3dlut.content.colorspace.green.x": CGX,
+    "3dlut.content.colorspace.green.y": CGY,
+    "3dlut.content.colorspace.red.x": CRX,
+    "3dlut.content.colorspace.red.y": CRY,
+    "3dlut.content.colorspace.white.x": CWX,
+    "3dlut.content.colorspace.white.y": CWY,
     "3dlut.create": 0,
     "3dlut.trc": "bt1886",
     "3dlut.trc_gamma": 2.4,
@@ -1269,7 +1656,7 @@ defaults = {
     "comport.number": 1,
     "comport.number.backup": 1,
     # Note: worker.Worker.enumerate_displays_and_ports() overwrites copyright
-    "copyright": f"No copyright. Created with {appname} {version} and ArgyllCMS",
+    "copyright": f"No copyright. Created with {APPNAME} {VERSION_STRING} and ArgyllCMS",
     "dimensions.measureframe": "0.5,0.5,1.0",
     "dimensions.measureframe.unzoomed": "0.5,0.5,1.0",
     "dimensions.measureframe.whitepoint.visual_editor": "0.5,0.5,1.0",
@@ -1284,6 +1671,7 @@ defaults = {
     "extra_args.colprof": "",
     "extra_args.dispcal": "",
     "extra_args.dispread": "",
+    "extra_args.specplot": "",
     "extra_args.spotread": "",
     "extra_args.targen": "",
     "gamap_default_intent": "p",
@@ -1307,6 +1695,7 @@ defaults = {
     "last_icc_path": "",
     "last_launch": "99",  # Version
     "last_reference_ti3_path": "",
+    "last_specplot_path": "",
     "last_ti1_path": "",
     "last_ti3_path": "",
     "last_vrml_path": "",
@@ -1400,7 +1789,7 @@ defaults = {
     ),
     "profile.license": "Public Domain",
     "profile.load_on_login": 1,
-    "profile.name": "_".join(
+    "profile.name": "_".join(  # noqa: FLY002
         [
             "%dns",
             "%out",
@@ -1421,18 +1810,18 @@ defaults = {
     "profile.b2a.hires.diagpng": 2,
     "profile.b2a.hires.size": -1,
     "profile.b2a.hires.smooth": 1,
-    "profile.save_path": storage,  # directory
+    "profile.save_path": STORAGE,  # directory
     # Force profile type to single shaper + matrix due to OS X bugs with cLUT
     # profiles and matrix profiles with individual shaper curves
     "profile.type": "X" if sys.platform != "darwin" else "S",
     "profile.update": 0,
-    "profile_loader.buggy_video_drivers": ";".join(["*"]),
+    "profile_loader.buggy_video_drivers": "*",
     "profile_loader.check_gamma_ramps": 1,
     "profile_loader.error.show_msg": 1,
     "profile_loader.exceptions": "",
     "profile_loader.fix_profile_associations": 1,
     "profile_loader.ignore_unchanged_gamma_ramps": 1,
-    "profile_loader.known_apps": ";".join(
+    "profile_loader.known_apps": ";".join(  # noqa: FLY002
         [
             "basiccolor display.exe",
             "calclient.exe",
@@ -1465,7 +1854,7 @@ defaults = {
             "dccw.exe",
         ]
     ),
-    "profile_loader.known_window_classes": ";".join(["CalClient.exe"]),
+    "profile_loader.known_window_classes": "CalClient.exe",
     "profile_loader.quantize_bits": 16,
     "profile_loader.reset_gamma_ramps": 0,
     "profile_loader.show_notifications": 0,
@@ -1582,124 +1971,64 @@ defaults = {
     "x3dom.cache": 1,
     "x3dom.embed": 0,
 }
-lcode, lenc = locale.getlocale()
-if lcode:
-    defaults["lang"] = lcode.split("_")[0].lower()
+LCODE, LENC = locale.getlocale()
+if LCODE:
+    DEFAULTS["lang"] = LCODE.split("_")[0].lower()
 
-testchart_defaults = {
+TESTCHART_DEFAULTS = {
     "s": {None: "auto"},  # shaper + matrix
     "l": {None: "auto"},  # lut
     "g": {None: "auto"},  # gamma + matrix
 }
 
 
-def _init_testcharts():
-    for testcharts in list(testchart_defaults.values()):
-        for chart in [value for value in list(testcharts.values()) if value != "auto"]:
-            resfiles.append(os.path.join("ti1", chart))
-    testchart_defaults["G"] = testchart_defaults["g"]
-    testchart_defaults["S"] = testchart_defaults["s"]
+def _init_testcharts() -> None:
+    RES_FILES.extend(
+        os.path.join("ti1", chart)
+        for testcharts in list(TESTCHART_DEFAULTS.values())
+        for chart in [value for value in list(testcharts.values()) if value != "auto"]
+    )
+    TESTCHART_DEFAULTS["G"] = TESTCHART_DEFAULTS["g"]
+    TESTCHART_DEFAULTS["S"] = TESTCHART_DEFAULTS["s"]
     for key in ("X", "x"):
-        testchart_defaults[key] = testchart_defaults["l"]
+        TESTCHART_DEFAULTS[key] = TESTCHART_DEFAULTS["l"]
 
 
-def getcfg(name, fallback=True, raw=False, cfg=cfg):
+def getcfg(
+    name: str,
+    fallback: bool = True,
+    raw: bool = False,
+    cfg: configparser.ConfigParser = CFG,
+) -> Any:  # noqa: ANN401
     """Get and return an option value from the configuration.
 
-    If fallback evaluates to True and the option is not set,
-    return its default value.
+    If fallback evaluates to True and the option is not set, return its default
+    value.
+
+    Args:
+        name (str): The name of the option to get.
+        fallback (bool): Whether to return the default value if the option is
+            not set.
+        raw (bool): If True, return the raw value without type conversion.
+        cfg (configparser.ConfigParser): The configuration parser instance.
+
+    Returns:
+        Any: The value of the option, converted to the appropriate type if
+            necessary, or the default value if the option is not set and
+            fallback is True.
     """
     if name == "profile.name.expanded" and is_ccxx_testchart():
         name = "measurement.name.expanded"
     value = None
-    hasdef = name in defaults
-    if hasdef:
-        defval = defaults[name]
-        deftype = type(defval)
-
-    if cfg.has_option(configparser.DEFAULTSECT, name):
-        try:
-            value = cfg.get(configparser.DEFAULTSECT, name)
-        except UnicodeDecodeError:
-            pass
-        else:
-            # Check for invalid types and return default if wrong type
-            if raw:
-                pass
-            elif (
-                (name != "trc" or value not in valid_values["trc"])
-                and hasdef
-                and isinstance(defval, (Decimal, int, float))
-            ):
-                try:
-                    value = deftype(value)
-                except ValueError:
-                    value = defval
-                else:
-                    valid_range = valid_ranges.get(name)
-                    if valid_range:
-                        value = min(max(valid_range[0], value), valid_range[1])
-                    elif name in valid_values and value not in valid_values[name]:
-                        value = defval
-            elif name.startswith("dimensions.measureframe"):
-                try:
-                    value = [max(0, float(n)) for n in value.split(",")]
-                    if len(value) != 3:
-                        raise ValueError()
-                except ValueError:
-                    value = defaults[name]
-                else:
-                    value[0] = min(value[0], 1)
-                    value[1] = min(value[1], 1)
-                    value[2] = min(value[2], 50)
-                    value = ",".join([str(n) for n in value])
-            elif name == "profile.quality" and getcfg("profile.type") in ("g", "G"):
-                # default to high quality for gamma + matrix
-                value = "h"
-            elif name == "trc.type" and getcfg("trc") in valid_values["trc"]:
-                value = "g"
-            elif name in valid_values and value not in valid_values[name]:
-                if debug:
-                    print(f"Invalid config value for {name}: {value}", end=" ")
-                value = None
-            elif name == "copyright":
-                # Make sure DisplayCAL and Argyll version are up-to-date
-                pattern = re.compile(
-                    r"(%s(?:\s*v(?:ersion|\.)?)?\s*)\d+(?:\.\d+)*" % appname, re.I
-                )
-                repl = create_replace_function("\\1%s", version)
-                value = re.sub(pattern, repl, value)
-                if appbasename != appname:
-                    pattern = re.compile(
-                        r"(%s(?:\s*v(?:ersion|\.)?)?\s*)\d+(?:\.\d+)*" % appbasename,
-                        re.I,
-                    )
-                    repl = create_replace_function("\\1%s", version)
-                    value = re.sub(pattern, repl, value)
-                pattern = re.compile(
-                    r"(Argyll(?:\s*CMS)?)((?:\s*v(?:ersion|\.)?)?\s*)\d+(?:\.\d+)*",
-                    re.I,
-                )
-                if defval.split()[-1] != "CMS":
-                    repl = create_replace_function("\\1\\2%s", defval.split()[-1])
-                else:
-                    repl = "\\1"
-                value = re.sub(pattern, repl, value)
-            elif name == "measurement_mode":
-                # Map n and r measurement modes to canonical l and c
-                # the inverse mapping happens per-instrument in
-                # Worker.add_measurement_features().
-                # That way we can have compatibility with old and current
-                # Argyll CMS
-                value = {"n": "l", "r": "c"}.get(value, value)
+    has_default = name in DEFAULTS
+    defval = DEFAULTS.get(name)
+    value = get_config_value(name, raw, cfg)
     if value is None:
-        if hasdef and fallback:
+        if has_default and fallback:
             value = defval
-            if debug > 1:
-                print(name, "- falling back to", value)
-        else:
-            if debug and not hasdef:
-                print("Warning - unknown option:", name)
+            debug_print(name, "- falling back to", value)
+        elif DEBUG and not has_default:
+            print("Warning - unknown option:", name)
     if raw:
         return value
     if (
@@ -1710,28 +2039,7 @@ def getcfg(name, fallback=True, raw=False, cfg=cfg):
         and (name != "testchart.file" or value != "auto")
         and (not os.path.isabs(value) or not os.path.exists(value))
     ):
-        # colorimeter_correction_matrix_file is special
-        # because it's not (only) a path
-        if debug:
-            print(f"{name} does not exist: {value}", end=" ")
-        # Normalize path (important, this turns altsep into sep under Windows)
-        value = os.path.normpath(value)
-        # Check if this is a relative path covered by data_dirs
-        if (
-            value.split(os.path.sep)[-3:-2] == [appname] or not os.path.isabs(value)
-        ) and (
-            value.split(os.path.sep)[-2:-1] == ["presets"]
-            or value.split(os.path.sep)[-2:-1] == ["ref"]
-            or value.split(os.path.sep)[-2:-1] == ["ti1"]
-        ):
-            value = os.path.join(*value.split(os.path.sep)[-2:])
-            value = get_data_path(value)
-        elif hasdef:
-            value = None
-        if not value and hasdef:
-            value = defval
-        if debug > 1:
-            print(name, "- falling back to", value)
+        value = get_corrected_colorimeter_path(name, value)
     elif name in ("displays", "instruments"):
         if not value:
             return []
@@ -1739,7 +2047,7 @@ def getcfg(name, fallback=True, raw=False, cfg=cfg):
             strtr(
                 v,
                 [
-                    ("%{}".format(hex(ord(os.pathsep))[2:].upper()), os.pathsep),
+                    (f"%{hex(ord(os.pathsep))[2:].upper()}", os.pathsep),
                     ("%25", "%"),
                 ],
             )
@@ -1748,42 +2056,153 @@ def getcfg(name, fallback=True, raw=False, cfg=cfg):
     return value
 
 
-def hascfg(name, fallback=True, cfg=cfg):
+def get_config_value(
+    name: str,
+    raw: bool,
+    cfg: configparser.ConfigParser,
+) -> Any:  # noqa: ANN401
+    """Helper function to get the configuration value.
+
+    Args:
+        name (str): The name of the configuration option.
+        raw (bool): If True, return the raw value without type conversion.
+        cfg (configparser.ConfigParser): The configuration parser instance.
+        defval: The default value for the option.
+        deftype: The type of the default value.
+
+    Returns:
+        Any: The value of the configuration option, or None if not found.
+    """
+    if not cfg.has_option(configparser.DEFAULTSECT, name):
+        return None
+
+    try:
+        value = cfg.get(configparser.DEFAULTSECT, name)
+    except UnicodeDecodeError:
+        pass
+    else:
+        if not raw:
+            value = validate_value_type(name, value)
+    return value
+
+
+def get_corrected_colorimeter_path(
+    name: str = "colorimeter_correction_matrix_file",
+    value: str | None = None,
+) -> str:
+    """Get the corrected path for a colorimeter correction matrix file.
+
+    This function checks if the provided path exists and normalizes it.
+    If the path does not exist, it attempts to find a fallback path based on
+    the application's data directories or returns a default value if specified.
+
+    Args:
+        name (str): The name of the configuration option.
+        value (str | None): The path to check. If None, the function will not
+            attempt to normalize or check the path.
+
+    Returns:
+        str: The corrected path if it exists, or a default value if specified.
+    """
+    has_default = name in DEFAULTS
+    defval = DEFAULTS.get(name)
+    # colorimeter_correction_matrix_file is special
+    # because it's not (only) a path
+    debug_print(f"{name} does not exist: {value}", end=" ")
+    # Normalize path (important, this turns altsep into sep under Windows)
+    value = os.path.normpath(value)
+    # Check if this is a relative path covered by data_dirs
+    splits = value.split(os.path.sep)
+    if (splits[-3:-2] == [APPNAME] or not os.path.isabs(value)) and (
+        splits[-2:-1] == ["presets"]
+        or splits[-2:-1] == ["ref"]
+        or splits[-2:-1] == ["ti1"]
+    ):
+        value = os.path.join(*splits[-2:])
+        value = get_data_path(value)
+    elif has_default:
+        value = None
+    if not value and has_default:
+        value = defval
+    if DEBUG > 1:
+        print(name, "- falling back to", value)
+
+    return value
+
+
+def hascfg(
+    name: str,
+    fallback: bool = True,
+    cfg: configparser.ConfigParser = CFG,
+) -> bool:
     """Check if an option name exists in the configuration.
 
     Returns a boolean value.
-    If fallback evaluates to True and the name does not exist, check defaults also.
+    If fallback evaluates to True and the name does not exist, check defaults
+    also.
+
+    Args:
+        name (str): The name of the configuration option.
+        fallback (bool, optional): If True, check the DEFAULTS dictionary if
+            the option is not found in the configuration. Defaults to True.
+        cfg (configparser.ConfigParser, optional): The configuration object to
+            check. Defaults to CFG.
+
+    Returns:
+        bool: True if the option exists in the configuration, False otherwise.
     """
     if cfg.has_option(configparser.DEFAULTSECT, name):
         return True
-    elif fallback:
-        return name in defaults
+    if fallback:
+        return name in DEFAULTS
     return False
 
 
-def get_ccxx_testchart():
-    """Get the path to the default chart for CCMX/CCSS creation."""
+def get_ccxx_testchart() -> str:
+    """Get the path to the default chart for CCMX/CCSS creation.
+
+    Returns:
+        str: The path to the default test chart file.
+    """
     return get_data_path(
-        os.path.join("ti1", defaults["colorimeter_correction.testchart"])
+        os.path.join("ti1", DEFAULTS["colorimeter_correction.testchart"])
     )
 
 
-def get_current_profile(include_display_profile=False):
-    """Get the currently selected profile (if any)."""
+def get_current_profile(include_display_profile: bool = False) -> None | ICCProfile:
+    """Get the currently selected profile (if any).
+
+    Args:
+        include_display_profile (bool, optional): If True, also return the display
+            profile if no calibration file is set. Defaults to False.
+
+    Returns:
+        None | ICCProfile: The ICC profile if available, otherwise None.
+    """
     path = getcfg("calibration.file", False)
     if path:
         from DisplayCAL.icc_profile import ICCProfile, ICCProfileInvalidError
 
         try:
             profile = ICCProfile(path, use_cache=True)
-        except (IOError, ICCProfileInvalidError):
-            return
+        except (OSError, ICCProfileInvalidError):
+            return None
         return profile
-    elif include_display_profile:
+    if include_display_profile:
         return get_display_profile()
+    return None
 
 
-def get_display_profile(display_no=None):
+def get_display_profile(display_no: None | int = None) -> None | ICCProfile:
+    """Get the display profile for the specified display number.
+
+    Args:
+        display_no (int, optional): The display number. If None, use the
+            configured display number. Defaults to None.
+
+    Returns:
+        None | ICCProfile: The display profile if available, otherwise None.
+    """
     if display_no is None:
         display_no = max(getcfg("display.number") - 1, 0)
     if is_virtual_display(display_no):
@@ -1793,46 +2212,57 @@ def get_display_profile(display_no=None):
     try:
         return get_display_profile(display_no)
     except Exception:
-        from DisplayCAL.log import log
+        from DisplayCAL.log import LOG
 
-        print(f"DisplayCAL.icc_profile.get_display_profile({display_no}):", file=log)
-
-
-standard_profiles = []
+        print(f"DisplayCAL.icc_profile.get_display_profile({display_no}):", file=LOG)
 
 
-def get_standard_profiles(paths_only=False):
-    if not standard_profiles:
+STANDARD_PROFILES = []
+
+
+def get_standard_profiles(paths_only: bool = False) -> list:
+    """Get a list of standard ICC profiles.
+
+    Args:
+        paths_only (bool, optional): If True, return only the file paths of the
+            profiles. Defaults to False.
+
+    Returns:
+        list: A list of standard ICC profiles or their file paths.
+    """
+    if not STANDARD_PROFILES:
         from DisplayCAL.icc_profile import ICCProfile
 
         # Reference profiles (Argyll + DisplayCAL)
         ref_icc = get_data_path("ref", r"\.ic[cm]$") or []
         # Other profiles installed on the system
         other_icc = []
-        rex = re.compile(r"\.ic[cm]$", re.IGNORECASE)
-        for icc_dir in set(iccprofiles + iccprofiles_home):
+        regex = re.compile(r"\.ic[cm]$", re.IGNORECASE)
+        for icc_dir in set(ICCPROFILES + ICCPROFILES_HOME):
             for dirpath, _dirnames, basenames in os.walk(icc_dir):
-                for basename in filter(rex.search, basenames):
+                for basename in filter(regex.search, basenames):
                     filename, ext = os.path.splitext(basename.lower())
                     if (
-                        filename.endswith("_bas")
-                        or filename.endswith("_eci")
-                        or filename.endswith("adobergb1998")
-                        or filename.startswith("eci-rgb")
-                        or filename.startswith("ecirgb")
-                        or filename.startswith("ekta space")
-                        or filename.startswith("ektaspace")
-                        or filename.startswith("fogra")
-                        or filename.startswith("gracol")
-                        or filename.startswith("iso")
-                        or filename.startswith("lstar-")
-                        or filename.startswith("pso")
-                        or filename.startswith("prophoto")
-                        or filename.startswith("psr_")
-                        or filename.startswith("psrgravure")
-                        or filename.startswith("snap")
-                        or filename.startswith("srgb")
-                        or filename.startswith("swop")
+                        filename.endswith(("_bas", "_eci", "adobergb1998"))
+                        or filename.startswith(
+                            (
+                                "eci-rgb",
+                                "ecirgb",
+                                "ekta space",
+                                "ektaspace",
+                                "fogra",
+                                "gracol",
+                                "iso",
+                                "lstar-",
+                                "pso",
+                                "prophoto",
+                                "psr_",
+                                "psrgravure",
+                                "snap",
+                                "srgb",
+                                "swop",
+                            )
+                        )
                         or filename
                         in (
                             "applergb",
@@ -1849,13 +2279,12 @@ def get_standard_profiles(paths_only=False):
                         other_icc.append(os.path.join(dirpath, basename))
 
         # Ensure ref_icc is a list
-        if not isinstance(ref_icc, list):
-            ref_icc = [ref_icc]
+        ref_icc = ref_icc if isinstance(ref_icc, list) else [ref_icc]
 
         for path in ref_icc + other_icc:
             try:
                 profile = ICCProfile(path, load=False, use_cache=True)
-            except EnvironmentError:
+            except OSError:
                 pass
             except Exception as exception:
                 print(exception)
@@ -1866,71 +2295,85 @@ def get_standard_profiles(paths_only=False):
                     and profile.colorSpace != b"GRAY"
                     and profile.connectionColorSpace in (b"Lab", b"XYZ")
                 ):
-                    standard_profiles.append(profile)
+                    STANDARD_PROFILES.append(profile)
     if paths_only:
-        return [profile.fileName for profile in standard_profiles]
-    return standard_profiles
+        return [profile.filename for profile in STANDARD_PROFILES]
+    return STANDARD_PROFILES
 
 
 def get_total_patches(
-    white_patches=None,
-    black_patches=None,
-    single_channel_patches=None,
-    gray_patches=None,
-    multi_steps=None,
-    multi_bcc_steps=None,
-    fullspread_patches=None,
-):
-    if white_patches is None:
-        white_patches = getcfg("tc_white_patches")
-    if black_patches is None and getcfg("argyll.version") >= "1.6":
-        black_patches = getcfg("tc_black_patches")
-    if single_channel_patches is None:
-        single_channel_patches = getcfg("tc_single_channel_patches")
+    white_patches: None | int = None,
+    black_patches: None | int = None,
+    single_channel_patches: None | int = None,
+    gray_patches: None | int = None,
+    multi_steps: None | int = None,
+    multi_bcc_steps: None | int = None,
+    fullspread_patches: None | int = None,
+) -> int:
+    """Calculate the total number of patches in a test chart.
+
+    Args:
+        white_patches (int, optional): Number of white patches. Defaults to None.
+        black_patches (int, optional): Number of black patches. Defaults to None.
+        single_channel_patches (int, optional): Number of single channel patches.
+            Defaults to None.
+        gray_patches (int, optional): Number of gray patches. Defaults to None.
+        multi_steps (int, optional): Number of multi steps. Defaults to None.
+        multi_bcc_steps (int, optional): Number of multi BCC steps. Defaults to
+            None.
+        fullspread_patches (int, optional): Number of full spread patches.
+            Defaults to None.
+
+    Returns:
+        int: Total number of patches.
+    """
+    white_patches = (
+        getcfg("tc_white_patches") if white_patches is None else white_patches
+    )
+    black_patches = (
+        getcfg("tc_black_patches")
+        if (black_patches is None and getcfg("argyll.version") >= "1.6")
+        else black_patches
+    )
+    single_channel_patches = (
+        getcfg("tc_single_channel_patches")
+        if single_channel_patches is None
+        else single_channel_patches
+    )
     single_channel_patches_total = single_channel_patches * 3
-    if gray_patches is None:
-        gray_patches = getcfg("tc_gray_patches")
-    if gray_patches == 0 and single_channel_patches > 0 and white_patches > 0:
-        gray_patches = 2
-    if multi_steps is None:
-        multi_steps = getcfg("tc_multi_steps")
-    if multi_bcc_steps is None and getcfg("argyll.version") >= "1.6":
-        multi_bcc_steps = getcfg("tc_multi_bcc_steps")
-    if fullspread_patches is None:
-        fullspread_patches = getcfg("tc_fullspread_patches")
+    gray_patches = getcfg("tc_gray_patches") if gray_patches is None else gray_patches
+    gray_patches = (
+        2
+        if (gray_patches == 0 and single_channel_patches > 0 and white_patches > 0)
+        else gray_patches
+    )
+    multi_steps = getcfg("tc_multi_steps") if multi_steps is None else multi_steps
+    multi_bcc_steps = (
+        getcfg("tc_multi_bcc_steps")
+        if (multi_bcc_steps is None and getcfg("argyll.version") >= "1.6")
+        else multi_bcc_steps
+    )
+    fullspread_patches = (
+        getcfg("tc_fullspread_patches")
+        if fullspread_patches is None
+        else fullspread_patches
+    )
     total_patches = 0
     if multi_steps > 1:
-        multi_patches = int(math.pow(multi_steps, 3))
-        if multi_bcc_steps > 1:
-            multi_patches += int(math.pow(multi_bcc_steps - 1, 3))
-        total_patches += multi_patches
-        white_patches -= 1  # white always in multi channel patches
-
-        multi_step = 255.0 / (multi_steps - 1)
-        multi_values = []
-        multi_bcc_values = []
-        if multi_bcc_steps > 1:
-            multi_bcc_step = multi_step
-            for i in range(multi_bcc_steps):
-                multi_values.append(str(multi_bcc_step * i))
-            for i in range(multi_bcc_steps * 2 - 1):
-                multi_bcc_values.append(str(multi_bcc_step / 2.0 * i))
-        else:
-            for i in range(multi_steps):
-                multi_values.append(str(multi_step * i))
-        if single_channel_patches > 1:
-            single_channel_step = 255.0 / (single_channel_patches - 1)
-            for i in range(single_channel_patches):
-                if str(single_channel_step * i) in multi_values:
-                    single_channel_patches_total -= 3
-        if gray_patches > 1:
-            gray_step = 255.0 / (gray_patches - 1)
-            for i in range(gray_patches):
-                if (
-                    str(gray_step * i) in multi_values
-                    or str(gray_step * i) in multi_bcc_values
-                ):
-                    gray_patches -= 1
+        (
+            gray_patches,
+            white_patches,
+            single_channel_patches_total,
+            total_patches,
+        ) = adjust_gray_patches_count(
+            single_channel_patches,
+            single_channel_patches_total,
+            gray_patches,
+            white_patches,
+            total_patches,
+            multi_steps,
+            multi_bcc_steps,
+        )
     elif gray_patches > 1:
         white_patches -= 1  # white always in gray patches
         single_channel_patches_total -= 3  # black always in gray patches
@@ -1950,32 +2393,104 @@ def get_total_patches(
     return total_patches
 
 
-def get_verified_path(cfg_item_name, path=None):
-    """Verify and return dir and filename for a path from the user cfg, or a given path."""  # noqa: B950
-    defaultPath = path or getcfg(cfg_item_name)
-    defaultDir = expanduseru("~")
-    defaultFile = ""
-    if defaultPath:
-        if os.path.exists(defaultPath):
-            defaultDir, defaultFile = (
-                os.path.dirname(defaultPath),
-                os.path.basename(defaultPath),
-            )
-        elif defaults.get(cfg_item_name) and os.path.exists(defaults[cfg_item_name]):
-            defaultDir, defaultFile = (
-                os.path.dirname(defaults[cfg_item_name]),
-                os.path.basename(defaults[cfg_item_name]),
-            )
-        elif os.path.exists(os.path.dirname(defaultPath)):
-            defaultDir = os.path.dirname(defaultPath)
-    return defaultDir, defaultFile
+def adjust_gray_patches_count(
+    single_channel_patches: int,
+    single_channel_patches_total: int,
+    gray_patches: int,
+    white_patches: int,
+    total_patches: int,
+    multi_steps: int,
+    multi_bcc_steps: int,
+) -> tuple[int, int]:
+    """Adjust gray patches count based on multi steps and single channel patches.
+
+    Args:
+        single_channel_patches (int): Number of single channel patches.
+        single_channel_patches_total (int): Total number of single channel
+            patches.
+        white_patches (int): Number of white patches.
+        gray_patches (int): Number of gray patches.
+        total_patches (int): Total number of patches.
+        multi_steps (int): Number of multi steps.
+        multi_bcc_steps (int): Number of multi BCC steps.
+
+    Returns:
+        tupel[int, int, int, int]: A tuple containing the adjusted number of
+            gray patches, the white patches, the total number of single channel
+            patches and the total number of patches.
+    """
+    multi_patches = int(math.pow(multi_steps, 3))
+    if multi_bcc_steps > 1:
+        multi_patches += int(math.pow(multi_bcc_steps - 1, 3))
+    total_patches += multi_patches
+    white_patches -= 1  # white always in multi channel patches
+
+    multi_step = 255.0 / (multi_steps - 1)
+    multi_values = []
+    multi_bcc_values = []
+    if multi_bcc_steps > 1:
+        multi_bcc_step = multi_step
+        multi_values.extend(str(multi_bcc_step * i) for i in range(multi_bcc_steps))
+        multi_bcc_values.extend(
+            str(multi_bcc_step / 2.0 * i) for i in range(multi_bcc_steps * 2 - 1)
+        )
+    else:
+        multi_values.extend(str(multi_step * i) for i in range(multi_steps))
+    if single_channel_patches > 1:
+        single_channel_step = 255.0 / (single_channel_patches - 1)
+        for i in range(single_channel_patches):
+            if str(single_channel_step * i) in multi_values:
+                single_channel_patches_total -= 3
+    if gray_patches > 1:
+        gray_step = 255.0 / (gray_patches - 1)
+        for i in range(gray_patches):
+            if (
+                str(gray_step * i) in multi_values
+                or str(gray_step * i) in multi_bcc_values
+            ):
+                gray_patches -= 1
+    return (
+        gray_patches,
+        white_patches,
+        single_channel_patches_total,
+        total_patches,
+    )
 
 
-def is_ccxx_testchart(testchart: Optional[str] = None) -> bool:
+def get_verified_path(cfg_item_name: str, path: None | str = None) -> tuple[str, str]:
+    """Verify and return directory and filename for a user cfg path or given path.
+
+    Args:
+        cfg_item_name (str): Config item name to retrieve the path.
+        path (str, optional): Path to verify. Defaults to None.
+
+    Returns:
+        tuple[str, str]: A tuple containing the directory and filename.
+    """
+    default_path = path or getcfg(cfg_item_name)
+    default_dir = expanduseru("~")
+    default_file = ""
+    if default_path:
+        if os.path.exists(default_path):
+            default_dir, default_file = (
+                os.path.dirname(default_path),
+                os.path.basename(default_path),
+            )
+        elif DEFAULTS.get(cfg_item_name) and os.path.exists(DEFAULTS[cfg_item_name]):
+            default_dir, default_file = (
+                os.path.dirname(DEFAULTS[cfg_item_name]),
+                os.path.basename(DEFAULTS[cfg_item_name]),
+            )
+        elif os.path.exists(os.path.dirname(default_path)):
+            default_dir = os.path.dirname(default_path)
+    return default_dir, default_file
+
+
+def is_ccxx_testchart(testchart: None | str = None) -> bool:
     """Check whether the testchart is the default chart for CCMX/CCSS creation.
 
     Args:
-        testchart (Optional[str]): The testchart to check.
+        testchart (None | str): The testchart to check.
             If not provided, the default testchart will be used.
 
     Returns:
@@ -1986,7 +2501,21 @@ def is_ccxx_testchart(testchart: Optional[str] = None) -> bool:
     return testchart == get_ccxx_testchart()
 
 
-def is_profile(filename=None, include_display_profile=False):
+def is_profile(
+    filename: None | str = None, include_display_profile: bool = False
+) -> bool:
+    """Check if the given filename is a valid ICC profile.
+
+    Args:
+        filename (None | str): The filename to check.
+            If not provided, the default calibration file will be used.
+        include_display_profile (bool): Whether to include the display profile
+            in the check. Defaults to False.
+
+    Returns:
+        bool: True if the filename is a valid ICC profile,
+            False otherwise.
+    """
     filename = filename or getcfg("calibration.file", False)
     if filename:
         if os.path.exists(filename):
@@ -1994,7 +2523,7 @@ def is_profile(filename=None, include_display_profile=False):
 
             try:
                 ICCProfile(filename, use_cache=True)
-            except (IOError, ICCProfileInvalidError):
+            except (OSError, ICCProfileInvalidError):
                 pass
             else:
                 return True
@@ -2003,25 +2532,40 @@ def is_profile(filename=None, include_display_profile=False):
     return False
 
 
-def makecfgdir(which="user", worker=None):
+def makecfgdir(which: None | str = None, worker: None | Worker = None) -> bool:
+    """Create the configuration directory.
+
+    Args:
+        which (None | str): The type of configuration directory to create.
+            Can be "user" or "system". Defaults to "user".
+        worker (None | Worker): The worker instance to use for executing
+            commands. Defaults to None.
+
+    Returns:
+        bool: True if the configuration directory was created successfully,
+            False otherwise.
+    """
+    if which is None:
+        which = "user"
+
     if which == "user":
-        if not os.path.exists(confighome):
+        if not os.path.exists(CONFIG_HOME):
             try:
-                os.makedirs(confighome)
+                os.makedirs(CONFIG_HOME)
             except Exception as exception:
                 print(
                     "Warning - could not create configuration directory "
-                    f"'{confighome}': {exception}"
+                    f"'{CONFIG_HOME}': {exception}"
                 )
                 return False
-    elif not os.path.exists(config_sys):
+    elif not os.path.exists(CONFIG_SYS):
         try:
             if sys.platform == "win32":
-                os.makedirs(config_sys)
+                os.makedirs(CONFIG_SYS)
             else:
                 result = worker.exec_cmd(
                     "mkdir",
-                    ["-p", config_sys],
+                    ["-p", CONFIG_SYS],
                     capture_output=True,
                     low_contrast=False,
                     skip_scripts=True,
@@ -2033,84 +2577,66 @@ def makecfgdir(which="user", worker=None):
         except Exception as exception:
             print(
                 "Warning - could not create configuration directory "
-                f"'{config_sys}': {exception}"
+                f"'{CONFIG_SYS}': {exception}"
             )
             return False
     return True
 
 
-cfginited = {}
+CFGINITED = {}
 
 
-def initcfg(module=None, cfg=cfg, force_load=False):
+def initcfg(
+    module: None | str = None,
+    cfg: configparser.ConfigParser = CFG,
+    force_load: bool = False,
+) -> None:
     """Initialize the configuration.
 
     Read in settings if the configuration file exists, else create the
     settings directory if nonexistent.
-    """
-    if module:
-        cfgbasename = f"{appbasename}-{module}"
-    else:
-        cfgbasename = appbasename
 
+    Args:
+        module (None | str): The module name to use for the configuration.
+            If None, use the default application name.
+            Defaults to None.
+        cfg (configparser.ConfigParser): The configuration parser instance.
+            Defaults to the global CFG instance.
+        force_load (bool): If True, force reloading the configuration files.
+            Defaults to False.
+    """
+    cfgbasename = f"{APPBASENAME}-{module}" if module else APPBASENAME
     makecfgdir()
-    cfg_full_path = os.path.join(confighome, f"{cfgbasename}.ini")
-    if os.path.exists(confighome) and not os.path.exists(cfg_full_path):
+    cfg_full_path = os.path.join(CONFIG_HOME, f"{cfgbasename}.ini")
+    if os.path.exists(CONFIG_HOME) and not os.path.exists(cfg_full_path):
         if not cfg.has_section(configparser.DEFAULTSECT):
             # No Default section, add it...
             cfg.add_section(configparser.DEFAULTSECT)
         # Set default preset
-        setcfg("calibration.file", defaults["calibration.file"], cfg=cfg)
+        setcfg("calibration.file", DEFAULTS["calibration.file"], cfg=cfg)
 
     # Read cfg
-    cfgnames = [appbasename]
-    if module:
-        cfgnames.append(cfgbasename)
-    else:
-        cfgnames.extend(
-            f"{appbasename}-{othermod}" for othermod in ("testchart-editor",)
-        )
-
-    cfgroots = [confighome]
-    if module == "apply-profiles":
-        cfgroots.append(config_sys)
-
-    cfgfiles = []
-    for cfgname in cfgnames:
-        for cfgroot in cfgroots:
-            cfgfile = os.path.join(cfgroot, f"{cfgname}.ini")
-            if not os.path.isfile(cfgfile):
-                continue
-            try:
-                mtime = os.stat(cfgfile).st_mtime
-            except EnvironmentError as exception:
-                print(f"Warning - os.stat('{cfgfile}') failed: {exception}")
-            last_checked = cfginited.get(cfgfile)
-            if force_load or mtime != last_checked:
-                cfginited[cfgfile] = mtime
-                cfgfiles.append(cfgfile)
-                if force_load:
-                    msg = "Force loading"
-                elif last_checked:
-                    msg = "Reloading"
-                else:
-                    msg = "Loading"
-                # logger.debug(msg, cfgfile)
-                print(msg, cfgfile)
-            # Make user config take precedence
-            break
+    cfgnames = (
+        [APPBASENAME, cfgbasename]
+        if module
+        else [APPBASENAME, f"{APPBASENAME}-testchart-editor"]
+    )
+    cfgroots = (
+        [CONFIG_HOME] if module == "apply-profiles" else [CONFIG_HOME, CONFIG_SYS]
+    )
+    cfgfiles = fetch_config_files(cfgnames, cfgroots, force_load)
     if not cfgfiles:
         return
     if not module:
         # Make most recent file take precedence
-        cfgfiles.sort(key=lambda cfgfile: cfginited.get(cfgfile))
+        cfgfiles.sort(key=lambda cfgfile: CFGINITED.get(cfgfile))
     try:
         cfg.read(cfgfiles)
-    # This won't raise an exception if the file does not exist,
-    # only if it can't be parsed
+        # This won't raise an exception if the file does not exist,
+        # only if it can't be parsed
     except Exception:
         print(
-            "Warning - could not parse configuration files:\n%s".format(
+            "Warning - could not parse configuration files:\n{}".format(
                 "\n".join(cfgfiles)
             )
         )
@@ -2128,177 +2654,426 @@ def initcfg(module=None, cfg=cfg, force_load=False):
             setcfg("calibration.ambient_viewcond_adjust.lux", None, cfg=cfg)
 
 
-dpiset = False
+def fetch_config_files(
+    cfgnames: list[str],
+    cfgroots: list[str],
+    force_load: bool = False,
+) -> list[str]:
+    """Fetch configuration files based on the provided names and roots.
+
+    Args:
+        cfgnames (list): List of configuration names to look for.
+        cfgroots (list): List of directories to search for configuration files.
+        force_load (bool): Whether to force reloading the configuration files.
+
+    Returns:
+        list[str]: A list of configuration file paths that were found and
+            successfully loaded.
+    """
+    cfgfiles = []
+    for cfgname in cfgnames:
+        for cfgroot in cfgroots:
+            cfgfile = os.path.join(cfgroot, f"{cfgname}.ini")
+            if not os.path.isfile(cfgfile):
+                continue
+            try:
+                mtime = os.stat(cfgfile).st_mtime
+            except OSError as exception:
+                print(f"Warning - os.stat('{cfgfile}') failed: {exception}")
+            last_checked = CFGINITED.get(cfgfile)
+            if force_load or mtime != last_checked:
+                CFGINITED[cfgfile] = mtime
+                cfgfiles.append(cfgfile)
+                msg = (
+                    "Force loading"
+                    if force_load
+                    else "Reloading"
+                    if last_checked
+                    else "Loading"
+                )
+                print(msg, cfgfile)
+            # Make user config take precedence
+            break
+    return cfgfiles
 
 
-def set_default_app_dpi():
+def validate_value_type(
+    name: str,
+    value: Any,  # noqa: ANN401
+) -> Any:  # noqa: ANN401
+    """Check for invalid types and return default if wrong type.
+
+    Args:
+        name (str): The name of the configuration option.
+        value (Any): The value of the configuration option.
+
+    Returns:
+        Any: The value of the configuration option, or the default value if the
+            option is not set or has an invalid type.
+    """
+    if (name != "trc" or value not in VALID_VALUES["trc"]) and isinstance(
+        DEFAULTS.get(name), (int, float, Decimal)
+    ):
+        value = validate_numeric_value(name, value)
+    elif name.startswith("dimensions.measureframe"):
+        value = validate_measureframe_dimensions_value(name, value)
+    elif name == "profile.quality" and getcfg("profile.type") in ("g", "G"):
+        # default to high quality for gamma + matrix
+        value = "h"
+    elif name == "trc.type" and getcfg("trc") in VALID_VALUES["trc"]:
+        value = "g"
+    elif name in VALID_VALUES and value not in VALID_VALUES[name]:
+        debug_print(f"Invalid config value for {name}: {value}", end=" ")
+        value = None
+    elif name == "copyright":
+        value = validate_copyright_value(name, value)
+    elif name == "measurement_mode":
+        value = validate_measurement_mode_value(name, value)
+
+    return value
+
+
+def validate_numeric_value(
+    name: str,
+    value: int | float | Decimal,  # noqa: PYI041
+) -> int | float | Decimal:
+    """Validate a numeric value against its default and valid ranges.
+
+    Args:
+        name (str): The name of the configuration option.
+        value (int | float | Decimal): The numeric value to validate.
+
+    Returns:
+        int | float | Decimal: The validated value, or the default value if
+            validation fails.
+    """
+    defval = DEFAULTS.get(name)
+    deftype = type(defval)
+    try:
+        value = deftype(value)
+    except (ValueError, TypeError):
+        value = defval
+    else:
+        valid_range = VALID_RANGES.get(name)
+        if valid_range:
+            value = min(max(valid_range[0], value), valid_range[1])
+        elif name in VALID_VALUES and value not in VALID_VALUES[name]:
+            value = defval
+    return value
+
+
+def validate_measureframe_dimensions_value(name: str, value: str) -> str:
+    """Validate the measure frame dimensions value.
+
+    Args:
+        name (str): The name of the configuration option.
+        value (str): The value of the configuration option.
+
+    Returns:
+        str: The validated measure frame dimensions value.
+    """
+    try:
+        value = [max(0, float(n)) for n in value.split(",")]
+        if len(value) != 3:
+            raise ValueError
+    except ValueError:
+        value = DEFAULTS[name]
+    else:
+        value[0] = min(value[0], 1)
+        value[1] = min(value[1], 1)
+        value[2] = min(value[2], 50)
+        value = ",".join([str(n) for n in value])
+
+    return value
+
+
+def validate_copyright_value(name: str, value: str) -> str:
+    """Validate the copyright value.
+
+    Args:
+        name (str): The name of the configuration option.
+        value (str): The value of the configuration option.
+
+    Returns:
+        str: The validated copyright value.
+    """
+    if name != "copyright":
+        return value
+
+    # Make sure DisplayCAL and Argyll version are up-to-date
+    defval = DEFAULTS.get(name)
+    pattern = re.compile(rf"({APPNAME}(?:\s*v(?:ersion|\.)?)?\s*)\d+(?:\.\d+)*", re.I)
+    repl = create_replace_function("\\1%s", VERSION_STRING)
+    value = re.sub(pattern, repl, value)
+    if APPBASENAME != APPNAME:
+        pattern = re.compile(
+            rf"({APPBASENAME}(?:\s*v(?:ersion|\.)?)?\s*)\d+(?:\.\d+)*",
+            re.I,
+        )
+        repl = create_replace_function("\\1%s", VERSION_STRING)
+        value = re.sub(pattern, repl, value)
+    pattern = re.compile(
+        r"(Argyll(?:\s*CMS)?)((?:\s*v(?:ersion|\.)?)?\s*)\d+(?:\.\d+)*",
+        re.I,
+    )
+    repl = (
+        create_replace_function("\\1\\2%s", defval.split()[-1])
+        if defval.split()[-1] != "CMS"
+        else "\\1"
+    )
+    return re.sub(pattern, repl, value)
+
+
+def validate_measurement_mode_value(name: str, value: str) -> str:
+    """Validate the measurement mode value.
+
+    Args:
+        name (str): The name of the configuration option.
+        value (str): The value of the configuration option.
+
+    Returns:
+        str: The validated measurement mode value.
+    """
+    if name == "measurement_mode":
+        # Map n and r measurement modes to canonical l and c
+        # the inverse mapping happens per-instrument in
+        # Worker.add_measurement_features().
+        # That way we can have compatibility with old and current
+        # Argyll CMS
+        value = {"n": "l", "r": "c"}.get(value, value)
+    return value
+
+
+def set_default_app_dpi() -> None:
     """Set application DPI."""
     # Only call this after creating the wx.App object!
-    global dpiset
-    if not dpiset and not getcfg("app.dpi", False):
-        # HighDPI support
-        from DisplayCAL.wxaddons import wx
+    global DPISET
+    if DPISET or getcfg("app.dpi", False):
+        DPISET = True
+        return
 
-        dpiset = True
-        if sys.platform in ("darwin", "win32"):
-            # Determine screen DPI
-            dpi = wx.ScreenDC().GetPPI()[0]
-        else:
-            # Linux
-            from DisplayCAL.util_os import which
+    # HighDPI support
+    from DisplayCAL.wx_addons import wx
 
-            txt_scale = None
-            # XDG_CURRENT_DESKTOP delimiter is colon (':')
-            desktop = os.getenv("XDG_CURRENT_DESKTOP", "").split(":")
-            if "gtk2" in wx.PlatformInfo:
-                txt_scale = get_hidpi_scaling_factor()
-            elif desktop[0] == "KDE":
-                pass
-            # Nothing to do
-            elif which("gsettings"):
-                import subprocess as sp
-
-                p = sp.Popen(
-                    [
-                        "gsettings",
-                        "get",
-                        "org.gnome.desktop.interface",
-                        "text-scaling-factor",
-                    ],
-                    stdin=sp.PIPE,
-                    stdout=sp.PIPE,
-                    stderr=sp.PIPE,
-                )
-                factor, stderr = p.communicate()
-                try:
-                    txt_scale = float(factor)
-                except ValueError:
-                    pass
-            dpi = get_default_dpi()
-            if txt_scale:
-                dpi = int(round(dpi * txt_scale))
-        defaults["app.dpi"] = dpi
-    dpiset = True
-
-
-def get_hidpi_scaling_factor():
+    DPISET = True
     if sys.platform in ("darwin", "win32"):
-        return 1.0  # Handled via app DPI
+        # Determine screen DPI
+        dpi = wx.ScreenDC().GetPPI()[0]
     else:
         # Linux
         from DisplayCAL.util_os import which
 
-        if which("xrdb"):
-            import subprocess as sp
-
-            p = sp.Popen(
-                ["xrdb", "-query"], stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE
-            )
-            # Format: 'Xft.dpi:        192'
-            stdout, stderr = p.communicate()
-            for line in stdout.splitlines():
-                line = line.decode()
-                if line.startswith("Xft.dpi:"):
-                    split = line.split()
-                    dpi = split[-1]
-                    try:
-                        return float(dpi) / get_default_dpi()
-                    except ValueError:
-                        pass
-        factor = None
+        txt_scale = None
         # XDG_CURRENT_DESKTOP delimiter is colon (':')
         desktop = os.getenv("XDG_CURRENT_DESKTOP", "").split(":")
-        if desktop[0] == "KDE":
-            # Two env-vars exist: QT_SCALE_FACTOR and QT_SCREEN_SCALE_FACTORS.
-            # According to documentation[1], the latter is 'mainly useful for debugging'
-            # that's not how it is used by KDE though.
-            # Changing display scaling via KDE settings GUI only sets
-            # QT_SCREEN_SCALE_FACTORS. We are thus currently ignoring QT_SCALE_FACTOR.
-            # [1] https://doc.qt.io/qt-5/highdpi.html
-            # QT_SCREEN_SCALE_FACTORS delimiter is semicolon (';')
-            # Format: Mapping of XrandR display names to scale factor
-            # e.g. 'VGA-1=1.5;VGA-2=2.0;'
-            # or just list of scale factors e.g. '1.5;2.0;'
-            screen_scale_factors = os.getenv("QT_SCREEN_SCALE_FACTORS", "").split(";")
-            if screen_scale_factors:
-                from DisplayCAL.wxaddons import wx
-
-                match = False
-                app = wx.GetApp()
-                if app:
-                    from DisplayCAL import RealDisplaySizeMM as RDSMM
-
-                    if not RDSMM._displays:
-                        RDSMM.enumerate_displays()
-                    top = app.TopWindow
-                    if top:
-                        tmp = False
-                    else:
-                        # Create temp frame if no topwindow
-                        top = wx.Frame(None)
-                        # Move to main window location (and thus screen)
-                        x, y = (
-                            getcfg("position.x", False),
-                            getcfg("position.y", False),
-                        )
-                        if None not in (x, y):
-                            top.SetSaneGeometry(x, y)
-                        tmp = True
-                    # Get wx display
-                    wx_display = top.GetDisplay()
-                    if tmp:
-                        # No longer need our temp frame
-                        top.Destroy()
-                    # Search for matching display based on geometry
-                    pos = wx_display.Geometry[:2]
-                    size = wx_display.Geometry[2:]
-                    for item in screen_scale_factors:
-                        if not item:
-                            break
-                        if "=" in item:
-                            name, factor = item.split("=", 1)
-                        else:
-                            name, factor = None, item
-                        for display in RDSMM._displays:
-                            if display.get("pos") != pos or display.get("size") != size:
-                                # No match
-                                continue
-                            if name and display.get("xrandr_name") != name:
-                                # No match
-                                continue
-                            # Match found
-                            match = True
-                            break
-                        if match:
-                            break
-                if not match:
-                    # Use first one
-                    factor = screen_scale_factors[0].split("=")[-1]
-        if not factor and which("gsettings"):
-            # GNOME
+        if "gtk2" in wx.PlatformInfo:
+            txt_scale = get_hidpi_scaling_factor()
+        elif desktop[0] == "KDE":
+            pass
+        # Nothing to do
+        elif which("gsettings"):
             import subprocess as sp
 
             p = sp.Popen(
-                ["gsettings", "get", "org.gnome.desktop.interface", "scaling-factor"],
+                [  # noqa: S607
+                    "gsettings",
+                    "get",
+                    "org.gnome.desktop.interface",
+                    "text-scaling-factor",
+                ],
                 stdin=sp.PIPE,
                 stdout=sp.PIPE,
                 stderr=sp.PIPE,
             )
-            # Format: 'unint32 1'
-            stdout, stderr = p.communicate()
-            split = stdout.split()
-            if split:
-                factor = split[-1]
-        if factor is not None:
+            factor, stderr = p.communicate()
+            with contextlib.suppress(ValueError):
+                txt_scale = float(factor)
+        dpi = get_default_dpi()
+        if txt_scale:
+            dpi = round(dpi * txt_scale)
+    DEFAULTS["app.dpi"] = dpi
+    DPISET = True
+
+
+def get_hidpi_scaling_factor() -> float:
+    """Get the scaling factor for high DPI displays.
+
+    Returns:
+        float: The scaling factor for high DPI displays.
+    """
+    if sys.platform in ("darwin", "win32"):
+        return 1.0  # Handled via app DPI
+
+    # Linux
+    from DisplayCAL.util_os import which
+
+    dpi = get_hidpi_scaling_factor_from_xrdb()
+    if dpi is not None:
+        return dpi
+
+    factor = None
+
+    # XDG_CURRENT_DESKTOP delimiter is colon (':')
+    desktop = os.getenv("XDG_CURRENT_DESKTOP", "").split(":")
+    if desktop[0] == "KDE":
+        factor = get_hidpi_scaling_factor_from_kde()
+
+    if not factor and which("gsettings"):
+        factor = get_hidpi_scaling_factor_from_gnome()
+
+    if factor is not None:
+        try:
+            factor = float(factor)
+        except ValueError:
+            factor = None
+    return factor
+
+
+def get_hidpi_scaling_factor_from_xrdb() -> float:
+    """Get the scaling factor for high DPI displays from xrdb.
+
+    Returns:
+        float: The scaling factor for high DPI displays.
+    """
+    from DisplayCAL.util_os import which
+
+    if not which("xrdb"):
+        return None
+    import subprocess as sp
+
+    p = sp.Popen(
+        ["xrdb", "-query"],  # noqa: S607
+        stdin=sp.PIPE,
+        stdout=sp.PIPE,
+        stderr=sp.PIPE,
+    )
+    # Format: 'Xft.dpi:        192'
+    stdout, _ = p.communicate()
+    for line in stdout.splitlines():
+        line = line.decode()
+        if line.startswith("Xft.dpi:"):
+            split = line.split()
+            dpi = split[-1]
             try:
-                factor = float(factor)
+                return float(dpi) / get_default_dpi()
             except ValueError:
-                factor = None
-        return factor
+                pass
+
+    return None
 
 
-def setcfg(name, value, cfg=cfg):
-    """Set an option value in the configuration."""
+def get_hidpi_scaling_factor_from_kde() -> None | str:
+    """Get the scaling factor for high DPI displays from KDE settings.
+
+    Returns:
+        None | str: The scaling factor for high DPI displays as a string if
+            found, otherwise None.
+    """
+    # Two env-vars exist: QT_SCALE_FACTOR and QT_SCREEN_SCALE_FACTORS.
+    # According to documentation[1], the latter is 'mainly useful for debugging'
+    # that's not how it is used by KDE though.
+    # Changing display scaling via KDE settings GUI only sets
+    # QT_SCREEN_SCALE_FACTORS. We are thus currently ignoring QT_SCALE_FACTOR.
+    # [1] https://doc.qt.io/qt-5/highdpi.html
+    # QT_SCREEN_SCALE_FACTORS delimiter is semicolon (';')
+    # Format: Mapping of XrandR display names to scale factor
+    # e.g. 'VGA-1=1.5;VGA-2=2.0;'
+    # or just list of scale factors e.g. '1.5;2.0;'
+    screen_scale_factors = os.getenv("QT_SCREEN_SCALE_FACTORS", "").split(";")
+    if not screen_scale_factors:
+        return None
+
+    from DisplayCAL.wx_addons import wx
+
+    factor = None
+    match = False
+    app = wx.GetApp()
+    if not app:
+        # Use first one
+        return screen_scale_factors[0].split("=")[-1]
+
+    from DisplayCAL import real_display_size_mm
+
+    if not real_display_size_mm._displays:
+        real_display_size_mm.enumerate_displays()
+    top = app.TopWindow
+    if top:
+        tmp = False
+    else:
+        # Create temp frame if no topwindow
+        top = wx.Frame(None)
+        # Move to main window location (and thus screen)
+        x, y = (
+            getcfg("position.x", False),
+            getcfg("position.y", False),
+        )
+        if None not in (x, y):
+            top.SetSaneGeometry(x, y)
+        tmp = True
+    # Get wx display
+    wx_display = top.GetDisplay()
+    if tmp:
+        # No longer need our temp frame
+        top.Destroy()
+
+    # Search for matching display based on geometry
+    pos = wx_display.Geometry[:2]
+    size = wx_display.Geometry[2:]
+    for item in screen_scale_factors:
+        if not item:
+            break
+        name, factor = item.split("=", 1) if "=" in item else (None, item)
+        for display in real_display_size_mm._displays:
+            if (display.get("pos") != pos or display.get("size") != size) or (
+                name and display.get("xrandr_name") != name
+            ):
+                # No match
+                continue
+            # Match found
+            match = True
+            break
+
+        if match:
+            break
+
+    # Use first one
+    return screen_scale_factors[0].split("=")[-1] if not match else factor
+
+
+def get_hidpi_scaling_factor_from_gnome() -> None | str:
+    """Get the scaling factor for high DPI displays from gsettings.
+
+    Returns:
+        None | str: The scaling factor for high DPI displays as a string.
+    """
+    # GNOME
+    import subprocess as sp
+
+    factor = None
+
+    p = sp.Popen(
+        ["gsettings", "get", "org.gnome.desktop.interface", "scaling-factor"],  # noqa: S607
+        stdin=sp.PIPE,
+        stdout=sp.PIPE,
+        stderr=sp.PIPE,
+    )
+    # Format: 'unint32 1'
+    stdout, _ = p.communicate()
+    split = stdout.split()
+    if split:
+        factor = split[-1]
+
+    return factor
+
+
+def setcfg(name: str, value: Any, cfg: configparser.ConfigParser = CFG) -> None:  #  noqa: ANN401
+    """Set an option value in the configuration.
+
+    Args:
+        name (str): Configuration option name.
+        value (Any): Value to set for the configuration option.
+        cfg (configparser.ConfigParser): Configuration instance.
+    """
     if value is None:
         cfg.remove_option(configparser.DEFAULTSECT, name)
     else:
@@ -2308,7 +3083,7 @@ def setcfg(name, value, cfg=cfg):
                     v,
                     [
                         ("%", "%25"),
-                        (os.pathsep, "%{}".format(hex(ord(os.pathsep))[2:].upper())),
+                        (os.pathsep, f"%{hex(ord(os.pathsep))[2:].upper()}"),
                     ],
                 )
                 for v in value
@@ -2316,7 +3091,13 @@ def setcfg(name, value, cfg=cfg):
         cfg.set(configparser.DEFAULTSECT, name, value)
 
 
-def setcfg_cond(condition, name, value, set_if_backup_exists=False, restore=True):
+def setcfg_cond(
+    condition: bool,
+    name: str,
+    value: Any,  # noqa: ANN401
+    set_if_backup_exists: bool = False,
+    restore: bool = True,
+) -> bool:
     """Set configuration conditionally.
 
     If <condition>, backup configuration option <name> if not yet backed up
@@ -2327,6 +3108,18 @@ def setcfg_cond(condition, name, value, set_if_backup_exists=False, restore=True
     backed up value and discard backup if <restore> evaluates to True
 
     Return whether or not configuration was changed
+
+    Args:
+        condition (bool): Condition to check.
+        name (str): Configuration option name.
+        value (Any): Value to set if condition is True.
+        set_if_backup_exists (bool): If True, set the value even if a backup exists
+            and the condition is True.
+        restore (bool): If True, restore the value from the backup if the condition
+            is False and a backup exists.
+
+    Returns:
+        bool: True if the configuration was changed, False otherwise.
     """
     changed = False
     backup = getcfg(f"{name}.backup", False)
@@ -2344,43 +3137,45 @@ def setcfg_cond(condition, name, value, set_if_backup_exists=False, restore=True
 
 
 def writecfg(
-    which: str = "user", worker=None, module=None, options=(), cfg=cfg
+    which: str = "user",
+    worker: None | Worker = None,
+    module: None | str = None,
+    options: tuple[str] = (),
+    cfg: configparser.ConfigParser = CFG,
 ) -> bool:
     """Write configuration file.
 
     Args:
         which (str): 'user' or 'system'
         worker (DisplayCAL.worker.Worker): worker instance if ``which == 'system'``
-        module (Optional[str]): module name.
-        options (Tuple[str]): options to write.
+        module (None | str): module name.
+        options (tuple[str]): options to write.
         cfg (configparser.ConfigParser): configuration instance.
 
     Returns:
         bool: True if successful, False otherwise.
     """
-    if module:
-        cfgbasename = f"{appbasename}-{module}"
-    else:
-        cfgbasename = appbasename
+    cfgbasename = f"{APPBASENAME}-{module}" if module else APPBASENAME
     # Remove unknown options
     for name, _val in cfg.items(configparser.DEFAULTSECT):
-        if name not in defaults:
+        if name not in DEFAULTS:
             print("Removing unknown option:", name)
             setcfg(name, None)
     if which == "user":
         # user config - stores everything and overrides system-wide config
-        cfgfilename = os.path.join(confighome, f"{cfgbasename}.ini")
+        cfgfilename = os.path.join(CONFIG_HOME, f"{cfgbasename}.ini")
         try:
             io = StringIO()
             cfg.write(io)
             io.seek(0)
             lines = io.read().strip("\n").split("\n")
             if options:
-                optionlines = []
-                for optionline in lines[1:]:
-                    for option in options:
-                        if optionline.startswith(option):
-                            optionlines.append(optionline)
+                optionlines = [
+                    optionline
+                    for optionline in lines[1:]
+                    for option in options
+                    if optionline.startswith(option)
+                ]
             else:
                 optionlines = lines[1:]
             # Sorting works as long as config has only one section
@@ -2395,29 +3190,28 @@ def writecfg(
             return False
     else:
         # system-wide config - only stores essentials ie. Argyll directory
-        cfgfilename1 = os.path.join(confighome, f"{cfgbasename}.local.ini")
-        cfgfilename2 = os.path.join(config_sys, f"{cfgbasename}.ini")
+        cfgfilename1 = os.path.join(CONFIG_HOME, f"{cfgbasename}.local.ini")
+        cfgfilename2 = os.path.join(CONFIG_SYS, f"{cfgbasename}.ini")
         if sys.platform == "win32":
             cfgfilename = cfgfilename2
         else:
             cfgfilename = cfgfilename1
         try:
-            cfgfile = open(cfgfilename, "wb")
             if getcfg("argyll.dir"):
-                cfgfile.write(
-                    (
-                        "%s%s".format(
-                            os.linesep.join(
-                                [
-                                    "[Default]",
-                                    f"argyll.dir = {getcfg('argyll.dir')}",
-                                ]
-                            ),
-                            os.linesep,
-                        )
-                    ).encode()
-                )
-            cfgfile.close()
+                with open(cfgfilename, "wb") as cfgfile:
+                    cfgfile.write(
+                        (
+                            "{}{}".format(
+                                os.linesep.join(
+                                    [
+                                        "[Default]",
+                                        f"argyll.dir = {getcfg('argyll.dir')}",
+                                    ]
+                                ),
+                                os.linesep,
+                            )
+                        ).encode()
+                    )
             if sys.platform != "win32":
                 # on Linux and OS X, we write the file to the user's config dir
                 # then 'su mv' it to the system-wide config dir
@@ -2442,20 +3236,20 @@ def writecfg(
 
 
 _init_testcharts()
-runtype = runtimeconfig(pyfile)
+RUNTYPE = runtimeconfig(PYFILE)
 
 
 if sys.platform in ("darwin", "win32") and not os.getenv("SSL_CERT_FILE"):
     try:
         import certifi
     except ImportError:
-        cafile = None
+        CAFILE = None
     else:
-        cafile = certifi.where()
-        if cafile and not os.path.isfile(cafile):
-            cafile = None
-    if not cafile:
+        CAFILE = certifi.where()
+        if CAFILE and not os.path.isfile(CAFILE):
+            CAFILE = None
+    if not CAFILE:
         # Use our bundled CA file
-        cafile = get_data_path("cacert.pem")
-    if cafile and isinstance(cafile, str):
-        os.environ["SSL_CERT_FILE"] = cafile
+        CAFILE = get_data_path("cacert.pem")
+    if CAFILE and isinstance(CAFILE, str):
+        os.environ["SSL_CERT_FILE"] = CAFILE

@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from copy import deepcopy
 import os
 import sys
@@ -12,7 +10,7 @@ from DisplayCAL.colormath import (
     convert_range,
     get_rgb_space,
     get_whitepoint,
-    specialpow,
+    special_pow,
 )
 from DisplayCAL.icc_profile import (
     create_synthetic_clut_profile,
@@ -149,7 +147,7 @@ def create_rendering_intent_test_profile(
         p.tags.rXYZ = XYZType()  # Map red to black
         p.tags.gXYZ = XYZType()  # Map green to black
         p.tags.bXYZ = srgb_icc.tags.wtpt.pcs  # Map blue to white
-    p.calculateID()
+    p.calculate_id()
     p.write(filename)
 
 

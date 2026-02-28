@@ -106,14 +106,14 @@ class Client(QtCore.QThread):
         green = int(color.attrib["green"])
         blue = int(color.attrib["blue"])
         bit_depth = int(color.attrib["bits"])
-        # scale the colors to 16bit
+        # scale the colors to 16bit
         bit_multiplier = 2**(16 - bit_depth)
         return QtGui.QColor(
             QtGui.QRgba64.fromRgba64(
                 red * bit_multiplier,
                 green * bit_multiplier,
                 blue * bit_multiplier,
-                65535,  # alpha
+                65535,  # alpha
             )
         )
 

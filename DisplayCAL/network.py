@@ -1,37 +1,57 @@
-# -*- coding: utf-8 -*-
+"""Network utilities: hostname resolution, address retrieval, and custom sockets.
+
+It also includes HTTP redirect handlers for logging or preventing redirections.
+"""
+
+from __future__ import annotations
 
 import errno
 import os
 import socket
-import urllib.request
+import sys
 import urllib.error
-import urllib.parse
+import urllib.request
+from typing import TYPE_CHECKING, BinaryIO
 
 from DisplayCAL import localization as lang
 from DisplayCAL.util_str import safe_str
 
+if TYPE_CHECKING:
+    from types import TracebackType
 
-def get_network_addr():
-    """Tries to get the local machine's network address."""
+    if sys.version_info >= (3, 11):
+        from typing import Self
+    else:
+        from typing_extensions import Self
+
+
+DNS_SERVER_IP_ADDR = "8.8.8.8"
+"""Google's public DNS server IP address."""
+DNS_SERVER_PORT = 53
+"""Port number for DNS server."""
+
+
+def get_network_addr() -> str:
+    """Try to get the local machine's network address."""
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     # Opening a connection on a UDP socket does nothing except give the socket
     # the network address of the (local) machine. We use Google's DNS server
     # as remote address, but could use any valid non-local address (doesn't
     # matter if it is actually reachable)
     try:
-        s.connect(("8.8.8.8", 53))
+        s.connect((DNS_SERVER_IP_ADDR, DNS_SERVER_PORT))
         return s.getsockname()[0]  # Return network address
     finally:
         s.close()
 
 
-def get_valid_host(hostname=None):
-    """Tries to verify the hostname by resolving to an IPv4 address.
+def get_valid_host(hostname: None | str = None) -> tuple[str, str]:
+    """Try to verify the hostname by resolving to an IPv4 address.
 
     Both hostname with and without .local suffix will be tried if necessary.
 
-    Returns a tuple hostname, addr
-
+    Returns:
+        tuple[str, str]: A tuple of hostname, addr
     """
     if hostname is None:
         hostname = socket.gethostname()
@@ -39,20 +59,30 @@ def get_valid_host(hostname=None):
     if hostname.endswith(".local"):
         hostnames.insert(0, os.path.splitext(hostname)[0])
     elif "." not in hostname:
-        hostnames.insert(0, hostname + ".local")
+        hostnames.insert(0, f"{hostname}.local")
+
     while hostnames:
         hostname = hostnames.pop()
         try:
             addr = socket.gethostbyname(hostname)
-        except socket.error:
+        except OSError as e:
             if not hostnames:
-                raise
+                raise e
         else:
             return hostname, addr
+    return None, None
 
 
 class LoggingHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
-    """Like urllib2.HTTPRedirectHandler, but logs redirections"""
+    """Like urllib2.HTTPRedirectHandler, but logs redirections.
+
+    Args:
+        req (urllib.request.Request): The request object.
+        fp (file-like object): The file-like object containing the response.
+        code (int): The HTTP status code.
+        msg (str): The HTTP status message.
+        headers (dict): The response headers.
+    """
 
     # maximum number of redirections to any single URL
     # this is needed because of the state that cookies introduce
@@ -61,7 +91,28 @@ class LoggingHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
     # assuming we're in a loop
     max_redirections = 10
 
-    def http_error_302(self, req, fp, code, msg, headers):
+    def http_error_302(
+        self,
+        req: urllib.request.Request,
+        fp: BinaryIO,
+        code: int,
+        msg: str,
+        headers: dict,
+    ) -> None | urllib.request.HTTPRedirectHandler:
+        """Handle HTTP 302 redirection error.
+
+        Args:
+            req (urllib.request.Request): The request object.
+            fp (BinaryIO): The file-like object containing the
+                response.
+            code (int): The HTTP status code.
+            msg (str): The HTTP status message.
+            headers (dict): The response headers.
+
+        Returns:
+            None | urllib.request.HTTPRedirectHandler: The HTTP redirect
+                handler instance, or None if no redirection is needed.
+        """
         # Some servers (incorrectly) return multiple Location headers
         # (so probably same goes for URI).  Use first header.
         if "location" in headers:
@@ -69,7 +120,7 @@ class LoggingHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
         elif "uri" in headers:
             newurl = headers.get("uri")
         else:
-            return
+            return None
 
         # Keep reference to new URL
         LoggingHTTPRedirectHandler.newurl = newurl
@@ -89,9 +140,38 @@ class LoggingHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 
 class NoHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
-    """Like urllib2.HTTPRedirectHandler, but does not allow redirections"""
+    """Like urllib2.HTTPRedirectHandler, but does not allow redirections.
 
-    def http_error_302(self, req, fp, code, msg, headers):
+    Args:
+        req (urllib.request.Request): The request object.
+        fp (file-like object): The file-like object containing the response.
+        code (int): The HTTP status code.
+        msg (str): The HTTP status message.
+        headers (dict): The response headers.
+    """
+
+    def http_error_302(
+        self,
+        req: urllib.request.Request,
+        fp: BinaryIO,
+        code: int,
+        msg: str,
+        headers: dict,
+    ) -> None:
+        """Handle HTTP 302 redirection error.
+
+        Args:
+            req (urllib.request.Request): The request object.
+            fp (BinaryIO): The file-like object containing the
+                response.
+            code (int): The HTTP status code.
+            msg (str): The HTTP status message.
+            headers (dict): The response headers.
+
+        Raises:
+            urllib.error.HTTPError: If redirection is not allowed, raises an
+                HTTPError with the new URL and the original error message.
+        """
         # Some servers (incorrectly) return multiple Location headers
         # (so probably same goes for URI).  Use first header.
         if "location" in headers:
@@ -104,7 +184,7 @@ class NoHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
         raise urllib.error.HTTPError(
             newurl,
             code,
-            msg + " - Redirection to url '%s' is not allowed" % newurl,
+            msg + f" - Redirection to url '{newurl}' is not allowed",
             headers,
             fp,
         )
@@ -113,42 +193,76 @@ class NoHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 
 class ScriptingClientSocket(socket.socket):
-    def __del__(self):
-        self.disconnect()
+    """A socket class for handling scripting client connections."""
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, etype, value, tb):
-        self.disconnect()
-
-    def __init__(self):
+    def __init__(self) -> None:
         socket.socket.__init__(self)
         self.recv_buffer = b""
 
-    def disconnect(self):
+    def __del__(self) -> None:
+        """Destructor for the ScriptingClientSocket class."""
+        self.disconnect()
+
+    def __enter__(self) -> Self:
+        """Enter method for context manager.
+
+        Returns:
+            ScriptingClientSocket: The instance of the socket.
+        """
+        return self
+
+    def __exit__(
+        self,
+        exc_type: None | type[BaseException],
+        exc_value: None | BaseException,
+        tb: None | TracebackType,
+    ) -> None:
+        """Exit method for context manager.
+
+        Args:
+            exc_type (type): The type of the exception raised, if any.
+            exc_value (None | BaseException): The exception instance, if any.
+            tb (None | TracebackType): The traceback object, if any.
+
+        Returns:
+            None
+        """
+        self.disconnect()
+
+    def disconnect(self) -> None:
+        """Disconnect the socket and clean up resources."""
         try:
             # Will fail if the socket isn't connected, i.e. if there was an
             # error during the call to connect()
             self.shutdown(socket.SHUT_RDWR)
-        except socket.error as exception:
+        except OSError as exception:
             if exception.errno != errno.ENOTCONN:
                 print(exception)
         self.close()
 
-    def get_single_response(self):
+    def get_single_response(self) -> bytes:
+        """Receive a single response from the socket.
+
+        Returns:
+            bytes: The single response received from the socket.
+        """
         # Buffer received data until EOT (response end marker) and return
         # single response (additional data will still be in the buffer)
         while b"\4" not in self.recv_buffer:
             incoming = self.recv(4096)
             if incoming == b"":
-                raise socket.error(lang.getstr("connection.broken"))
+                raise OSError(lang.getstr("connection.broken"))
             self.recv_buffer += incoming
         end = self.recv_buffer.find(b"\4")
         single_response = self.recv_buffer[:end]
         self.recv_buffer = self.recv_buffer[end + 1 :]
         return single_response
 
-    def send_command(self, command):
+    def send_command(self, command: str) -> None:
+        """Send a command to the socket.
+
+        Args:
+            command (str): The command to send.
+        """
         # Automatically append newline (command end marker)
         self.sendall((safe_str(command, "utf-8") + "\n").encode("utf-8"))

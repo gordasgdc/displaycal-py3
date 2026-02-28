@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import os
 import sys
 
@@ -51,10 +49,10 @@ def update_preset(name):
                 print("dispcal -%s parameter:" % option[0], option[1:])
                 print("Updating tone response curves...")
                 for chan in ("r", "g", "b"):
-                    prof.tags["%sTRC" % chan].set_trc(trc, 256)
+                    prof.tags[f"{chan}TRC"].set_trc(trc, 256)
                 print(
                     "Transfer function:",
-                    prof.tags["%sTRC" % chan].get_transfer_function()[0][0],
+                    prof.tags[f"{chan}TRC"].get_transfer_function()[0][0],
                 )
         elif option[0] in ("t", "T") and option[1:]:
             print("dispcal -t parameter:", option[1:])
@@ -94,7 +92,7 @@ def update_preset(name):
     prof.tags.gXYZ = ref.tags.gXYZ
     prof.tags.bXYZ = ref.tags.bXYZ
     print("Updating profile ID...")
-    prof.calculateID()
+    prof.calculate_id()
     prof.write()
     print("")
     return True

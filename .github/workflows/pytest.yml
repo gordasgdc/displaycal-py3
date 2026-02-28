@@ -13,62 +13,94 @@ jobs:
     name: Linux + Python ${{ matrix.python-version }} + wxPython ${{ matrix.wx-version }}
     env:
       DISPLAY: :0
+      DEBIAN_FRONTEND: noninteractive
     runs-on: ubuntu-22.04
 
     strategy:
       fail-fast: false
       matrix:
-        python-version:
-          - "3.9"
-          - "3.10"
-          - "3.11"
-          - "3.12"
-          - "3.13"
-        wx-version:
-          - "4.2.0"
-          - "4.2.1"
-          - "4.2.2"
-          - "4.2.3"
-        exclude:
-          - wx-version: "4.2.0"
-            python-version: "3.11"
-          - wx-version: "4.2.0"
-            python-version: "3.12"
-          - wx-version: "4.2.0"
-            python-version: "3.13"
-          - wx-version: "4.2.1"
-            python-version: "3.12"
-          - wx-version: "4.2.1"
-            python-version: "3.13"
-          - wx-version: "4.2.2"
-            python-version: "3.8"
+        include:
+          # tedious but easier... As we do not have all wxPython version for
+          # all other Python versions, and more so the wxPython package name
+          # changes from "wxPython" to "wxpython" for 4.2.3 and up...
+
+          # Python 3.9
+          - python-version: "3.9"
+            wx-version: "4.2.2"
+            wx_name: "wxPython"
+          - python-version: "3.9"
+            wx-version: "4.2.3"
+            wx_name: "wxpython"
+          - python-version: "3.9"
+            wx-version: "4.2.4"
+            wx_name: "wxpython"
+
+          # Python 3.10
+          - python-version: "3.10"
+            wx-version: "4.2.2"
+            wx_name: "wxPython"
+          - python-version: "3.10"
+            wx-version: "4.2.3"
+            wx_name: "wxpython"
+          - python-version: "3.10"
+            wx-version: "4.2.4"
+            wx_name: "wxpython"
+          - python-version: "3.10"
+            wx-version: "4.2.5"
+            wx_name: "wxpython"
+
+          # Python 3.11
+          - python-version: "3.11"
+            wx-version: "4.2.2"
+            wx_name: "wxPython"
+          - python-version: "3.11"
+            wx-version: "4.2.3"
+            wx_name: "wxpython"
+          - python-version: "3.11"
+            wx-version: "4.2.4"
+            wx_name: "wxpython"
+          - python-version: "3.11"
+            wx-version: "4.2.5"
+            wx_name: "wxpython"
+
+          # Python 3.12
+          - python-version: "3.12"
+            wx-version: "4.2.2"
+            wx_name: "wxPython"
+          - python-version: "3.12"
+            wx-version: "4.2.3"
+            wx_name: "wxpython"
+          - python-version: "3.12"
+            wx-version: "4.2.4"
+            wx_name: "wxpython"
+          - python-version: "3.12"
+            wx-version: "4.2.5"
+            wx_name: "wxpython"
+
+          # Python 3.13
+          - python-version: "3.13"
+            wx-version: "4.2.2"
+            wx_name: "wxPython"
+          - python-version: "3.13"
+            wx-version: "4.2.3"
+            wx_name: "wxpython"
+          - python-version: "3.13"
+            wx-version: "4.2.4"
+            wx_name: "wxpython"
+          - python-version: "3.13"
+            wx-version: "4.2.5"
+            wx_name: "wxpython"
+
+          # Python 3.14
+          - python-version: "3.14"
+            wx-version: "4.2.4"
+            wx_name: "wxpython"
+          - python-version: "3.14"
+            wx-version: "4.2.5"
+            wx_name: "wxpython"
 
     steps:
     - uses: actions/checkout@v4
-
-    - name: Set Environment Variables
-      run: |
-        echo "py_version=$(echo ${{ matrix.python-version }} | tr -d .)" >> $GITHUB_ENV
-        echo "wx_version=$(echo ${{ matrix.wx-version }} | tr -d .)" >> $GITHUB_ENV
-        if [ "${{ matrix.python-version }}" == "3.8" ]; then
-          echo "add_dir_str=${{ matrix.python-version }}" >> $GITHUB_ENV
-        elif [ "${{ matrix.python-version }}" == "3.9" ]; then
-          echo "add_dir_str=${{ matrix.python-version }}" >> $GITHUB_ENV
-        elif [ "${{ matrix.python-version }}" == "3.10" ]; then
-          echo "add_dir_str=cpython-310" >> $GITHUB_ENV
-        elif [ "${{ matrix.python-version }}" == "3.11" ]; then
-          echo "add_dir_str=cpython-311" >> $GITHUB_ENV
-        elif [ "${{ matrix.python-version }}" == "3.12" ]; then
-          echo "add_dir_str=cpython-312" >> $GITHUB_ENV
-        elif [ "${{ matrix.python-version }}" == "3.13" ]; then
-          echo "add_dir_str=cpython-313" >> $GITHUB_ENV
-        fi
-
-        if [ "${{ matrix.wx-version }}" == "4.2.3" ]; then
-          echo "wx_name=wxpython" >> $GITHUB_ENV
-        else
-          echo "wx_name=wxPython" >> $GITHUB_ENV
-        fi
 
     - name: Setup xvfb
       run: |
@@ -95,19 +127,36 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Install uv
+    - name: Install system dependencies
+      # timeout-minutes: 15
       run: |
-        sudo apt-get install -y $(grep -o ^[^#][[:alnum:]-]*.* "packages.list")
-        python3 -m pip install uv
-        uv pip install --system wheel
+        set -euxo pipefail
+        packages="$(awk '!/^\s*(#|$)/ { print $1 }' packages.list | xargs)"
+        for attempt in 1 2 3; do
+          if sudo apt-get install -y --no-install-recommends ${packages}; then
+            break
+          fi
+          if [ "${attempt}" -eq 3 ]; then
+            exit 1
+          fi
+          sudo apt-get -f install -y || true
+          sleep "$((attempt * 10))"
+        done
 
-    - name: Patch requirements.txt for wxPython
-      run: |
-        sed -i "s/requirements.txt/requirements-tests.txt/g" pyproject.toml
+    - name: Setup uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+
+    - name: Install wheel helper
+      run: uv pip install --system wheel
 
     - name: Install wxPython ${{ matrix.wx-version }}
       run: |
-        uv pip install --system https://extras.wxpython.org/wxPython4/extras/linux/gtk3/ubuntu-22.04/${{ env.wx_name }}-${{ matrix.wx-version }}-cp${{ env.py_version }}-cp${{ env.py_version }}-linux_x86_64.whl
+        py_version="${{ matrix.python-version }}"
+        py_version="${py_version//./}"
+        wx_name="${{ matrix.wx_name}}"
+        uv pip install --system "https://extras.wxpython.org/wxPython4/extras/linux/gtk3/ubuntu-22.04/${wx_name}-${{ matrix.wx-version }}-cp${py_version}-cp${py_version}-linux_x86_64.whl"
 
     - name: Install Python dependencies
       run: |
@@ -124,12 +173,12 @@ jobs:
 
     - name: Test with pytest
       run: |
-        python -m pytest --verbose -n auto -W ignore --color=yes --cov=./DisplayCAL --cov-report html
+        python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html  --durations=50
 
     - name: Archive code coverage results
       uses: actions/upload-artifact@v4
       with:
-        name: code-coverage-report-${{ env.py_version }}-${{ matrix.wx-version }}-linux
+        name: code-coverage-report-${{ matrix.python-version }}-${{ matrix.wx-version }}-linux
         path: htmlcov
         retention-days: 10
 
@@ -145,59 +194,33 @@ jobs:
           - "3.10"
           - "3.11"
         wx-version:
-          - "4.2.0"
-          - "4.2.1"
           - "4.2.2"
           - "4.2.3"
+          - "4.2.4"
+          - "4.2.5"
         exclude:
-          - wx-version: "4.2.0"
-            python-version: "3.11"
-          - wx-version: "4.2.0"
-            python-version: "3.12"
-          - wx-version: "4.2.0"
-            python-version: "3.13"
-          - wx-version: "4.2.1"
-            python-version: "3.12"
-          - wx-version: "4.2.1"
-            python-version: "3.13"
-          - wx-version: "4.2.2"
-            python-version: "3.13"
+          - wx-version: "4.2.5"
+            python-version: "3.9"
 
     steps:
     - uses: actions/checkout@v4
-
-    - name: Set Environment Variables
-      run: |
-        $py_version = "${{ matrix.python-version }}" -replace '\.', ''
-        echo "py_version=$py_version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        $ScriptsPath = python -c "import sysconfig,os; print(sysconfig.get_path('scripts'))"
-        echo "ScriptsPath=$ScriptsPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        if ("${{ matrix.python-version }}" -eq "3.8") {
-          echo "add_dir_str=${{ matrix.python-version }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        } elseif ("${{ matrix.python-version }}" -eq "3.9") {
-          echo "add_dir_str=${{ matrix.python-version }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        } elseif ("${{ matrix.python-version }}" -eq "3.10") {
-          echo "add_dir_str=cpython-310" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        } elseif ("${{ matrix.python-version }}" -eq "3.11") {
-          echo "add_dir_str=cpython-311" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        } elseif ("${{ matrix.python-version }}" -eq "3.12") {
-          echo "add_dir_str=cpython-312" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        }
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Install uv
-      run: |
-        python -m pip install uv
-        uv pip install --system wheel
+    - name: Setup uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+
+    - name: Install wheel helper
+      run: uv pip install --system wheel
 
     - name: Fix user Scripts missing from PATH
       run: |
         $ScriptsPath = python -c "import sysconfig,os; print(sysconfig.get_path('scripts'))"
-        echo "ScriptsPath=$ScriptsPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         Add-Content $env:GITHUB_PATH $ScriptsPath
 
     - name: Install wxPython ${{ matrix.wx-version }}
@@ -210,7 +233,8 @@ jobs:
 
     - name: Fix pywin32
       run: |
-        python ${{ env.ScriptsPath }}\pywin32_postinstall.py -install
+        $ScriptsPath = python -c "import sysconfig,os; print(sysconfig.get_path('scripts'))"
+        python "$ScriptsPath\pywin32_postinstall.py" -install
 
     - name: Build DisplayCAL
       run: |
@@ -221,11 +245,79 @@ jobs:
 
     - name: Test with pytest
       run: |
-        python -m pytest --verbose -n auto -W ignore --color=yes --cov=./DisplayCAL --cov-report html
+        python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html  --durations=50
 
     - name: Archive code coverage results
       uses: actions/upload-artifact@v4
       with:
-        name: code-coverage-report-${{ env.py_version }}-${{ matrix.wx-version }}-windows
+        name: code-coverage-report-${{ matrix.python-version }}-${{ matrix.wx-version }}-windows
+        path: htmlcov
+        retention-days: 10
+
+  macos:
+    name: macOS + Python ${{ matrix.python-version }} + wxPython ${{ matrix.wx-version }}
+    runs-on: macos-14
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # for now we just care about the Python version.
+        # After the workflow stabilizes we introduce different wxPython versions
+        # too...
+        python-version:
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
+        wx-version:
+          - "4.2.2"
+          - "4.2.3"
+          - "4.2.4"
+          - "4.2.5"
+        exclude:
+          - wx-version: "4.2.2"
+            python-version: "3.14"
+          - wx-version: "4.2.3"
+            python-version: "3.14"
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Setup uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+
+    - name: Install wheel helper
+      run: uv pip install --system wheel
+
+    - name: Install wxPython ${{ matrix.wx-version }}
+      run: |
+        uv pip install --system wxPython==${{ matrix.wx-version }}
+
+    - name: Install Python dependencies
+      run: |
+        uv pip install --system -r requirements-tests.txt -r requirements-dev.txt
+
+    - name: Build DisplayCAL
+      run: |
+        python -m build
+        wheel_file=$(ls dist/*.whl)
+        echo wheel_file=$wheel_file
+        uv pip install --system "$wheel_file"
+
+    - name: Test with pytest
+      run: |
+        python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html --durations=50
+
+    - name: Archive code coverage results
+      uses: actions/upload-artifact@v4
+      with:
+        name: code-coverage-report-${{ matrix.python-version }}-${{ matrix.wx-version }}-macos
         path: htmlcov
         retention-days: 10
