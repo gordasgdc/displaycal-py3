@@ -215,7 +215,9 @@ plist_dict = {
     "CFBundleSignature": "????",
     "CFBundleVersion": ".".join(map(str, VERSION_TUPLE)),
     "NSHumanReadableCopyright": f"© {strftime('%Y')} {AUTHOR}",
-    "LSMinimumSystemVersion": "10.6.0",
+    "LSMinimumSystemVersion": "11.0", # Required for native ARM64 support
+    "com.apple.security.cs.disable-library-validation": True, # Critical fix
+    "com.apple.security.cs.allow-unsigned-executable-memory": True,
 }
 
 
@@ -1133,7 +1135,13 @@ def setup() -> None:
         import wx
         from winmanifest_util import getmanifestxml
 
-        arch = "amd64" if platform.architecture()[0] == "64bit" else "x86"
+        machine = platform.machine().lower()
+        if "arm" in machine or "aarch64" in machine:
+            arch = "arm64"
+        elif "64" in platform.architecture()[0]:
+            arch = "amd64"
+        else:
+            arch = "x86"
         manifest_xml = getmanifestxml(
             os.path.join(
                 pydir,
@@ -1681,6 +1689,11 @@ def setup() -> None:
                 )
                 print("Copying", pil_installed_dylibs, "->", pil_dylibs)
                 shutil.copytree(pil_installed_dylibs, pil_dylibs)
+                # ADD THIS: Remove existing signatures so the later deep-sign works properly
+                for root, dirs, files in os.walk(pil_dylibs):
+                    for file in files:
+                        if file.endswith(".dylib"):
+                            os.system(f"codesign --remove-signature '{os.path.join(root, file)}'")
                 for entry in os.listdir(pil_dylibs):
                     print(os.path.join(pil_dylibs, entry))
                 # Remove wrongly included frameworks

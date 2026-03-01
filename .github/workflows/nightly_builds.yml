@@ -1,18 +1,22 @@
 name: Nightly Builds
 
 on:
-  schedule:
-    - cron: '0 2 * * *' # Runs at 02:00 UTC every day
+  # schedule:
+  #   - cron: '0 2 * * *' # Runs at 02:00 UTC every day
+  push:
+    branches:
+      - develop  # Runs whenever you push or merge to the develop branch
   workflow_dispatch: # Allows manual triggering
 
 jobs:
   windows:
-    name: Build on Windows
+    name: Build on Windows (${{ matrix.architecture }})
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest]
         python-version: ['3.11']
+        architecture: [x64] # Split the build into two architectures
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -31,9 +35,6 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Install wheel helper
-        run: uv pip install --system wheel
-
       - name: Fix user Scripts missing from PATH
         run: |
           $ScriptsPath = python -c "import sysconfig,os; print(sysconfig.get_path('scripts'))"
@@ -41,6 +42,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
+          uv pip install --system wheel
           uv pip install --system -r requirements.txt -r requirements-dev.txt
 
       - name: Fix pywin32
@@ -51,11 +53,8 @@ jobs:
       - name: Build DisplayCAL
         run: |
           $version = Get-Content VERSION_BASE
-          $git_revision = git rev-parse --short HEAD
-          $version_tag = "$version.$git_revision.nightly"
           uv build
-          $wheel_file = Get-ChildItem dist\*.whl
-          echo "wheel_file=$wheel_file"
+          $wheel_file = Get-ChildItem dist\*.whl | Select-Object -First 1
           uv pip install --system $wheel_file
           copy misc/net.displaycal.DisplayCAL.appdata.xml dist/net.displaycal.DisplayCAL.appdata.xml
 
@@ -73,7 +72,7 @@ jobs:
       - name: Build Windows Installer
         run: |
             cd dist
-            iscc.exe DisplayCAL-Setup-py2exe.win-amd64-py${{ matrix.python-version }}.iss
+            iscc.exe DisplayCAL-Setup-py2exe.win-${{ matrix.architecture == 'x64' && 'amd64' || 'arm64' }}-py${{ matrix.python-version }}.iss
 
       # The next step can't interpret wildcards,
       # so we need to rename the installer to a known name.
@@ -87,18 +86,19 @@ jobs:
           upload_url: https://uploads.github.com/repos/eoyilmaz/displaycal-py3/releases/291565678/assets{?name,label}
           release_id: 291565678
           asset_path: dist\DisplayCAL-Setup.exe
-          asset_name: DisplayCAL-$$-nightly-Windows.exe
+          asset_name: DisplayCAL-$$-nightly-Windows-${{ matrix.architecture }}.exe
           asset_content_type: application/x-msdownload
-          max_releases: 5
+          max_releases: 1
           ignore_hash: true
 
   macOS:
-    name: Build on macOS
+    name: Build on macOS (${{ matrix.architecture }})
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest]
         python-version: ['3.11']
+        architecture: [arm64, x64] # New key to split the builds
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -115,6 +115,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.architecture }} # Use matrix value
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v5
@@ -126,7 +127,8 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          uv pip install --system -r requirements.txt -r requirements-dev.txt
+          # Explicitly target the current architecture to prevent mix-and-match
+          uv pip install --system --compile-bytecode -r requirements.txt -r requirements-dev.txt
 
       - name: Build DisplayCAL
         run: |
@@ -136,21 +138,52 @@ jobs:
           uv build;
           uv pip install --system ./dist/displaycal-${version}-*.whl --force-reinstall;
 
+      - name: Build macOS APP
+        env:
+          # This forces setuptools to target ARM64 and a modern macOS version
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+          # Map x64 matrix to x86_64 for compiler flags
+          ARCHFLAGS: "-arch ${{ matrix.architecture == 'x64' && 'x86_64' || 'arm64' }}"
+        run: |
+          # Use x86_64 for Intel or arm64 for Apple Silicon
+          TARGET_ARCH="${{ matrix.architecture == 'x64' && 'x86_64' || 'arm64' }}"
+          python setup.py py2app --arch=$TARGET_ARCH
+
+      - name: Force Ad-Hoc Signing
+        run: |
+          APP_PATH=$(ls -d dist/*/DisplayCAL-*/DisplayCAL.app)
+
+          # 1. Strip all signatures
+          find "$APP_PATH" -type f -name "*.dylib" -exec codesign --remove-signature {} +
+          find "$APP_PATH" -type f -name "*.so" -exec codesign --remove-signature {} +
+
+          # 2. Sign EVERY binary subcomponent in the bundle
+          # This includes the deep .dylibs folders inside Pillow
+          find "$APP_PATH/Contents" -type f \( -name "*.dylib" -o -name "*.so" \) -exec codesign -s - -f -o linker-signed {} +
+
+          # 3. Final Deep Sign
+          codesign --force --deep --options runtime --entitlements misc/entitlements.plist --sign - "$APP_PATH"
+
       - name: Build macOS DMG
         run: |
           version=$(cat VERSION_BASE)
-          python setup.py py2app
           build_folder=$(ls dist | grep -i py2app.macosx)
+          TARGET_ARCH="${{ matrix.architecture == 'x64' && 'x86_64' || 'arm64' }}"
+
+          # Clean attributes from the app BEFORE putting it in the DMG
+          xattr -cr "dist/${build_folder}/DisplayCAL-${version}/DisplayCAL.app"
+
           ln -s /Applications "dist/${build_folder}/DisplayCAL-${version}/Applications"
-          create-dmg --volname DisplayCAL-${version} dist/DisplayCAL-macOS-universal.dmg dist/$build_folder/DisplayCAL-${version}
+          create-dmg --volname DisplayCAL-${version} dist/DisplayCAL-macOS-${TARGET_ARCH}.dmg dist/$build_folder/DisplayCAL-${version}
+
 
       - name: Update nightly macOS release
         uses: WebFreak001/deploy-nightly@v3.2.0
         with:
           upload_url: https://uploads.github.com/repos/eoyilmaz/displaycal-py3/releases/291565678/assets{?name,label}
           release_id: 291565678
-          asset_path: ./dist/DisplayCAL-macOS-universal.dmg
-          asset_name: DisplayCAL-$$-nightly-macOS-universal.dmg
+          asset_path: ./dist/DisplayCAL-macOS-${{ matrix.architecture == 'x64' && 'x86_64' || 'arm64' }}.dmg
+          asset_name: DisplayCAL-$$-nightly-macOS-${{ matrix.architecture == 'x64' && 'x86_64' || 'arm64' }}.dmg
           asset_content_type: application/x-apple-diskimage
-          max_releases: 5
+          max_releases: 1
           ignore_hash: true
