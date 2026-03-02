@@ -8,6 +8,11 @@ on:
     branches:
       - develop
 
+# Centralized variables for easy updates
+env:
+  ARGYLL_VERSION: "3.5.0"
+  ARGYLL_REPO: "https://github.com/eoyilmaz/argyllcms-binaries/releases/download"
+
 jobs:
   linux:
     name: Linux + Python ${{ matrix.python-version }} + wxPython ${{ matrix.wx-version }}
@@ -104,7 +109,6 @@ jobs:
 
     - name: Setup xvfb
       run: |
-        sudo apt-get update
         sudo apt-get install -y xvfb \
             libxkbcommon-x11-0 \
             libxcb-icccm4 \
@@ -122,13 +126,19 @@ jobs:
       run: |
         sudo apt-get install -y libnotify4
 
+    - name: Install ArgyllCMS (Linux)
+      run: |
+        curl -L "${{ env.ARGYLL_REPO }}/${{ env.ARGYLL_VERSION }}/Argyll_V${{ env.ARGYLL_VERSION }}_linux_x86_64_bin.tgz" -o argyll.tgz
+        mkdir argyllcms
+        tar -xzf argyll.tgz -C argyllcms --strip-components=1
+        echo "$GITHUB_WORKSPACE/argyllcms/bin" >> $GITHUB_PATH
+
     - name: Setup Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
     - name: Install system dependencies
-      # timeout-minutes: 15
       run: |
         set -euxo pipefail
         packages="$(awk '!/^\s*(#|$)/ { print $1 }' packages.list | xargs)"
@@ -166,7 +176,6 @@ jobs:
       run: |
         sudo chmod a+rw /etc/udev/rules.d
         python3 -m build
-        ls -l dist/
         wheel_file=$(ls dist/*.whl)
         echo wheel_file=$wheel_file
         uv pip install --system $wheel_file
@@ -204,6 +213,15 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Install ArgyllCMS (Windows)
+      run: |
+        $url = "${{ env.ARGYLL_REPO }}/${{ env.ARGYLL_VERSION }}/Argyll_V${{ env.ARGYLL_VERSION }}_win64_exe.zip"
+        Invoke-WebRequest -Uri $url -OutFile "argyll.zip"
+        Expand-Archive -Path "argyll.zip" -DestinationPath "$env:USERPROFILE\argyllcms"
+        $binPath = Get-ChildItem -Path "$env:USERPROFILE\argyllcms\*\bin" | Select-Object -First 1
+        echo $binPath.FullName >> $env:GITHUB_PATH
+      shell: pwsh
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
@@ -282,6 +300,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Install ArgyllCMS (macOS arm64)
+      run: |
+        curl -L "${{ env.ARGYLL_REPO }}/${{ env.ARGYLL_VERSION }}/Argyll_V${{ env.ARGYLL_VERSION }}_macOS11_arm64_bin.tgz" -o argyll.tgz
+        mkdir argyllcms
+        tar -xzf argyll.tgz -C argyllcms --strip-components=1
+        echo "$GITHUB_WORKSPACE/argyllcms/bin" >> $GITHUB_PATH
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
