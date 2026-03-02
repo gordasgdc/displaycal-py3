@@ -53,7 +53,7 @@ from wx.lib import delayedresult, platebtn
 from wx.lib.art import flagart
 from wx.lib.scrolledpanel import ScrolledPanel
 
-# Custom modules
+# Local Imports
 from DisplayCAL import (
     audio,
     ccmx,
@@ -164,10 +164,8 @@ from DisplayCAL.meta import (
     AUTHOR,
     DEVELOPMENT_HOME_PAGE,
     DOMAIN,
-    VERSION,
-    VERSION_BASE,
-    VERSION_SHORT,
     VERSION_STRING,
+    VERSION_TUPLE,
     get_latest_changelog_entry,
 )
 from DisplayCAL.meta import (
@@ -401,13 +399,13 @@ def app_update_check(
         chglog_file = "Argyll/ChangesSummary.html"
     elif snapshot:
         # Snapshot
-        curversion_tuple = VERSION
+        curversion_tuple = VERSION_TUPLE
         version_file = "SNAPSHOT_VERSION"
         chglog_file = "SNAPSHOT_CHANGES.html"
     else:
         # Stable
         print(lang.getstr("update_check"))
-        curversion_tuple = VERSION_BASE
+        curversion_tuple = VERSION_TUPLE
         version_file = "VERSION"
         chglog_file = "CHANGES.html"
     resp = http_request(
@@ -486,7 +484,7 @@ def app_update_check(
             argyll,
             silent,
         )
-    elif not argyll and not snapshot and VERSION > VERSION_BASE:
+    elif not argyll and not snapshot:
         app_update_check(parent, silent, True)
     elif not argyll:
         print(lang.getstr("update_check.uptodate", APPNAME))
@@ -525,11 +523,10 @@ def check_donation(parent: wx.Window, snapshot: bool) -> None:
         parent (wx.Window): Parent window to show the dialog.
         snapshot (bool): If True, the application is a snapshot build.
     """
-    if not snapshot and VERSION[0] > next(
-        iter(intlist(getcfg("last_launch").split(".")))
-    ):
+    if not snapshot and VERSION_TUPLE[0] > intlist(getcfg("last_launch", "0.0.0").split("."))[0]:
         setcfg("show_donation_message", 1)
-    setcfg("last_launch", VERSION_STRING)
+        # store the current version as the last_launch version
+        setcfg("last_launch", VERSION_STRING)
     if getcfg("show_donation_message"):
         wx.CallAfter(donation_message, parent)
 
@@ -2258,9 +2255,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         # UGLY HACK: This 'print' call fixes a GTK assertion and
         # segfault under Arch Linux when setting the window title
         print("")
-        title = f"{APPNAME} {VERSION_SHORT}"
-        if VERSION > VERSION_BASE:
-            title += " Beta"
+        title = f"{APPNAME} {VERSION_STRING}"
         self.SetTitle(title)
         self.SetMaxSize((-1, -1))
         self.SetIcons(config.get_icon_bundle([256, 48, 32, 16], APPNAME))
@@ -9790,7 +9785,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         report_type = "Self Check" if self_check_report else "Measurement"
         default_file = "{} Report {} - {} - {}".format(
             report_type,
-            VERSION_SHORT,
+            VERSION_STRING,
             re.sub(
                 r"[\\/:;*?\"<>|]+",
                 "_",
@@ -10571,7 +10566,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             "${CAL_ENTRYCOUNT}": str(cal_entrycount),
             "${CAL_RGBLEVELS}": repr(cal_rgblevels),
             "${GRAYSCALE}": repr(gray) if gray else "null",
-            "${REPORT_VERSION}": VERSION_SHORT,
+            "${REPORT_VERSION}": VERSION_STRING,
             "${REPORT_TYPE}": report_type,
         }
 
@@ -21326,9 +21321,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         separator.BackgroundColour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_3DLIGHT)
         items.append(separator)
         items.append((1, 12))
-        version_title = VERSION_SHORT
-        if VERSION > VERSION_BASE:
-            version_title += " Beta"
+        version_title = VERSION_STRING
         items.append(
             [
                 HyperLinkCtrl(
@@ -21708,8 +21701,7 @@ class StartupFrame(start_cls):
 
     def __init__(self) -> None:
         super().__init__()
-        title = f"{APPNAME} {VERSION_SHORT}"
-        title += " Beta" if VERSION > VERSION_BASE else ""
+        title = f"{APPNAME} {VERSION_STRING}"
         start_cls.__init__(
             self,
             None,
@@ -22152,7 +22144,7 @@ class StartupFrame(start_cls):
             wx.CallAfter(
                 app.frame.check_instrument_setup,
                 check_donation,
-                (app.frame, VERSION > VERSION_BASE),
+                (app.frame, False),
             )
         # If resources are missing, XRC shows an error dialog which immediately
         # gets hidden when we close ourselves because we are the parent.
@@ -22226,9 +22218,7 @@ class StartupFrame(start_cls):
         )
         dc.SetFont(self.GetFont())
         # Version label
-        label_str = VERSION_SHORT
-        if VERSION > VERSION_BASE:
-            label_str += " Beta"
+        label_str = VERSION_STRING
         dc.SetTextForeground("#101010")
         yoff = 10
         scale = getcfg("app.dpi") / config.get_default_dpi()
