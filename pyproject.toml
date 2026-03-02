@@ -76,7 +76,7 @@ bitmap = "misc/media/install-py.bmp"
 install_script = "util/DisplayCAL_postinstall.py"
 
 [tool.setuptools]
-include-package-data = True
+include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["./"]
