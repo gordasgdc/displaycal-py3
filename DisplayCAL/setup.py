@@ -188,6 +188,7 @@ config = {
             "x3d-viewer/*.html",
             "x3d-viewer/*.js",
             "xrc/*.xrc",
+            "VERSION",
         ]
     },
     "xtra_package_data": {NAME: {"win32": [f"theme/icons/{NAME}-uninstall.ico"]}},
@@ -1571,6 +1572,7 @@ def setup() -> None:
                 f"include {NAME}-*.pyw",
                 f"include {NAME}-*.py",
                 "include use-distutils",
+                "include VERSION",
             ]
         )
         manifest_in.append("include " + os.path.basename(sys.argv[0]))
