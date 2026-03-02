@@ -76,7 +76,7 @@ bitmap = "misc/media/install-py.bmp"
 install_script = "util/DisplayCAL_postinstall.py"
 
 [tool.setuptools]
-include-package-data = false
+include-package-data = True
 
 [tool.setuptools.packages.find]
 where = ["./"]
@@ -106,6 +106,7 @@ DisplayCAL = [
     "theme/**",
     "ti1/**",
     "util/**",
+    "DisplayCAL/VERSION",
     "VERSION",
     "x3d-viewer/**",
     "xrc/**",
