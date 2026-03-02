@@ -12419,8 +12419,6 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 if options_dispcal and self.recent_cals[sel] == cal:
                     self.recent_cals.remove(cal)
                     self.calibration_file_ctrl.Delete(sel)
-                if getcfg("settings.changed"):
-                    self.settings_discard_changes()
                 if options_dispcal and options_colprof:
                     self.load_cal_handler(
                         None,
@@ -19669,7 +19667,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         if not path:
             return
 
-        if getcfg("settings.changed") and not self.settings_confirm_discard():
+        if getcfg("settings.changed"):
             return
 
         if not os.path.exists(path):
