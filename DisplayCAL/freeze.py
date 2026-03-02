@@ -722,7 +722,7 @@ def build_py2exe() -> None:
             f"include {NAME}-*.pyw",
             f"include {NAME}-*.py",
             "include use-distutils",
-            "include VERSION",
+            f"include {NAME}/VERSION",
         ]
     )
     manifest_in.append("include " + os.path.basename(sys.argv[0]))

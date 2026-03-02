@@ -1562,7 +1562,7 @@ def setup() -> None:
         manifest_in.extend(
             [
                 "include LICENSE.txt",
-                "include VERSION",
+                "include DisplayCAL/VERSION"
                 "include MANIFEST",
                 "include MANIFEST.in",
                 "include README.html",
@@ -1572,7 +1572,6 @@ def setup() -> None:
                 f"include {NAME}-*.pyw",
                 f"include {NAME}-*.py",
                 "include use-distutils",
-                "include VERSION",
             ]
         )
         manifest_in.append("include " + os.path.basename(sys.argv[0]))
