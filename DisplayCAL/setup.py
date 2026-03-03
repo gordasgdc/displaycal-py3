@@ -188,6 +188,7 @@ config = {
             "x3d-viewer/*.html",
             "x3d-viewer/*.js",
             "xrc/*.xrc",
+            "VERSION",
         ]
     },
     "xtra_package_data": {NAME: {"win32": [f"theme/icons/{NAME}-uninstall.ico"]}},
@@ -1561,7 +1562,7 @@ def setup() -> None:
         manifest_in.extend(
             [
                 "include LICENSE.txt",
-                "include VERSION",
+                "include DisplayCAL/VERSION"
                 "include MANIFEST",
                 "include MANIFEST.in",
                 "include README.html",

@@ -29,6 +29,22 @@ sys.path.insert(0, "DisplayCAL")
 sys.path.insert(1, str(pydir))
 
 
+def generate_version_file() -> None:
+    """Generate VERSION file from DisplayCAL/VERSION if it exists.
+
+    otherwise use "0.0.0" as version.
+    """
+    version_base_file_path = Path(pydir, "DisplayCAL", "VERSION")
+    version_base = "0.0.0"
+
+    if version_base_file_path.is_file():
+        with open(version_base_file_path) as version_base_file:
+            version_base = version_base_file.read().strip()
+
+    with open(Path(pydir, "VERSION"), "w") as versiontxt:
+        versiontxt.write(version_base)
+
+
 def create_appdmg(zeroinstall=False):
     from DisplayCAL.meta import NAME, VERSION_STRING
     if zeroinstall:
@@ -242,7 +258,7 @@ def replace_placeholders(
     global LONG_DESCRIPTION
     import DisplayCAL
 
-    with codecs.open(str(tmpl_path), "r", "UTF-8") as tmpl:
+    with open(str(tmpl_path), "r", encoding="UTF-8") as tmpl:
         tmpl_data = tmpl.read()
 
     if Path(tmpl_path).name.startswith("debian"):
@@ -326,7 +342,7 @@ def replace_placeholders(
     out_path = Path(out_path)
 
     if out_path.is_file():
-        with codecs.open(str(out_path), "r", "UTF-8") as out:
+        with open(str(out_path), "r", encoding="UTF-8") as out:
             data = out.read()
 
         if data == tmpl_data:
@@ -334,7 +350,7 @@ def replace_placeholders(
     elif not out_path.parent.is_dir():
         os.makedirs(out_path.parent)
 
-    with codecs.open(str(out_path), "w", "UTF-8") as out:
+    with open(str(out_path), "w", encoding="UTF-8") as out:
         out.write(tmpl_data)
 
 
@@ -446,6 +462,8 @@ def setup():
     )
 
     from DisplayCAL.util_os import which
+
+    generate_version_file()
 
     if not sys.argv[1:]:
         return
@@ -568,7 +586,7 @@ def setup():
         buildservice = True
 
     if create_appdata or buildservice:
-        with codecs.open(str(Path(pydir, "CHANGES.html")), "r", "UTF-8") as f:
+        with open(str(Path(pydir, "CHANGES.html")), "r", encoding="UTF-8") as f:
             readme = f.read()
             changelog = get_latest_changelog_entry(readme)
 
@@ -1445,8 +1463,8 @@ def setup():
                     shutil.copy2(iconsrc, icondst)
 
             # README as .webloc file (link to homepage)
-            with codecs.open(
-                str(Path(dist_dir, "README.webloc")), "w", "UTF-8"
+            with open(
+                str(Path(dist_dir, "README.webloc")), "w", encoding="utf-8"
             ) as readme:
                 readme.write(
                     f"""<?xml version="1.0" encoding="UTF-8"?>

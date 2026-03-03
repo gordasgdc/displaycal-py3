@@ -195,7 +195,7 @@ To build the installer for your own use you can follow these steps:
 
    ```shell
    cd dist
-   "C:\Program Files (x86)\Inno Setup 6\iscc" DisplayCAL-Setup-py2exe.win-amd64-py3.11.iss
+   iscc DisplayCAL-Setup-py2exe.win-amd64-py3.11.iss
    ```
 
 6- This should now generate an installer with a name similar to

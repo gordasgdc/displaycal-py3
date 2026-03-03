@@ -4,19 +4,25 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 
 # globals
 VERSION_STRING = None
-VERSION_FILE = os.path.join(os.path.dirname(__file__), "VERSION")
+if getattr(sys, "frozen", False):
+    base_path = os.path.dirname(sys.executable)
+else:
+    base_path = os.path.dirname(__file__)
+VERSION_FILE = os.path.join(base_path, "VERSION")
+
+# If it's not in the root, check the DisplayCAL subfolder just in case
+if not os.path.isfile(VERSION_FILE):
+    VERSION_FILE = os.path.join(base_path, "DisplayCAL", "VERSION")
+
 if os.path.isfile(VERSION_FILE):
-    with open(VERSION_FILE, "r", encoding="utf-8") as f:
+    with open(VERSION_FILE, encoding="utf-8") as f:
         VERSION_STRING = f.read().strip()
 VERSION_STRING = VERSION_STRING or "0.0.0"
 """str: The version number of DisplayCAL."""
-
-
-from DisplayCAL.options import TEST_UPDATE
-
 
 AUTHOR = "Florian Höch, Erkan Özgür Yılmaz, Patrick Zwerschke"  # noqa: RUF001
 AUTHOR_ASCII = "Florian Hoech, Erkan Ozgur Yilmaz, Patrick Zwerschke"

@@ -59,8 +59,8 @@ jobs:
 
       - name: Build DisplayCAL
         run: |
-          $version = Get-Content VERSION
           uv build
+          $version = Get-Content VERSION
           $wheel_file = Get-ChildItem dist\*.whl | Select-Object -First 1
           uv pip install --system $wheel_file
           copy misc/net.displaycal.DisplayCAL.appdata.xml dist/net.displaycal.DisplayCAL.appdata.xml
@@ -146,8 +146,8 @@ jobs:
 
       - name: Build DisplayCAL
         run: |
-          version=$(cat VERSION)
           uv build;
+          version=$(cat VERSION)
           uv pip install --system ./dist/displaycal-${version}-*.whl --force-reinstall;
 
       - name: Build macOS APP
