@@ -5,6 +5,7 @@ VERSION_FILE=$(CURDIR)/DisplayCAL/VERSION
 VERSION := $(shell cat $(VERSION_FILE))
 VIRTUALENV_DIR:=.venv
 SYSTEM_PYTHON?=python3
+TARGET_ARCH?=`arch`
 
 all: build FORCE
 
@@ -19,6 +20,7 @@ venv:
 	@printf "\n\033[36m--- $@: Creating Local virtualenv '$(VIRTUALENV_DIR)' using '`which python`' ---\033[0m\n"
 	$(SYSTEM_PYTHON) -m venv $(VIRTUALENV_DIR)
 
+.PHONY: build
 build:
 	@printf "\n\033[36m--- $@: Building ---\033[0m"
 	@printf "\n\033[36m--- $@: Local install into virtualenv '$(VIRTUALENV_DIR)' ---\033[0m";
@@ -62,6 +64,20 @@ clean-all: clean
 
 html:
 	./setup.py readme
+
+py2app:
+	@printf "\n\033[36m--- $@: Generating macOS APP ---\033[0m\n"
+	@source ./$(VIRTUALENV_DIR)/bin/activate; \
+	ACOSX_DEPLOYMENT_TARGE=11.0 ARCHFLAGS="-arch $(TARGET_ARCH)" python setup.py py2app --arch=$(TARGET_ARCH); \
+	for APP_PATH in dist/*/DisplayCAL-*/*.app; do \
+		echo "Signing $$APP_PATH..."; \
+		find "$$APP_PATH" -type f -name "*.dylib" -exec codesign --remove-signature {} +; \
+		find "$$APP_PATH" -type f -name "*.so" -exec codesign --remove-signature {} +; \
+		find "$$APP_PATH/Contents" -type f \( -name "*.dylib" -o -name "*.so" \) -exec codesign -s - -f -o linker-signed {} +; \
+		codesign --force --deep --options runtime --entitlements misc/entitlements.plist --sign - "$$APP_PATH"; \
+	done; \
+	build_folder=$(ls dist | grep -i py2app.macosx); \
+	xattr -cr "dist/${build_folder}/DisplayCAL-${version}/DisplayCAL.app";
 
 new-release:
 	@printf "\n\033[36m--- $@: Generating New Release ---\033[0m\n"
