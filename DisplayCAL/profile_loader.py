@@ -251,7 +251,7 @@ def setup_profile_loader_task(exe: str, exedir: str, pydir: str) -> None:
                 triggers=[daily],
                 actions=actions,
             )
-        except Exception:
+        except Exception as exception:
             if DEBUG:
                 exception = traceback.format_exc()
             print(
@@ -2513,12 +2513,12 @@ class ProfileLoader:
 
         loader_args = []
         if os.path.basename(EXE).lower() not in ("python.exe", "pythonw.exe"):
-            cmd = os.path.join(PYDIR, APPNAME + "-apply-profiles.exe")
+            cmd = os.path.join(PYDIR, f"{APPNAME}-apply-profiles.exe")
         else:
             # cmd = os.path.join(exedir, "pythonw.exe")
             cmd = EXE
             pyw = os.path.normpath(
-                os.path.join(PYDIR, "..", APPNAME + "-apply-profiles.pyw")
+                os.path.join(PYDIR, "..", f"{APPNAME}-apply-profiles.pyw")
             )
             if os.path.exists(pyw):
                 # Running from source or 0install
@@ -2545,10 +2545,12 @@ class ProfileLoader:
             else:
                 # Regular install
                 loader_args.append(
-                    get_data_path("/".join(["scripts", APPNAME + "-apply-profiles"]))
+                    get_data_path("/".join(["scripts", f"{APPNAME}-apply-profiles"]))
                 )
 
         loader_args.append("--profile-associations")
+        print(f"cmd: {cmd}")
+        print(f"loader_args: {loader_args}")
         try:
             run_as_admin(cmd, loader_args)
         except pywintypes.error as exception:
@@ -2896,7 +2898,7 @@ class ProfileLoader:
             self._check_display_changed(first_run)
             profile_associations_changed, apply_profiles, idle, result = (
                 self._check_profile_associations(
-                    first_run, idle, previous_hwnds_pids, results, errors
+                    first_run, idle, previous_hwnds_pids, result, results, errors
                 )
             )
             if self._next:
@@ -2982,6 +2984,7 @@ class ProfileLoader:
         first_run: bool,
         idle: bool,
         previous_hwnds_pids: dict,
+        result: None | bool,
         results: list[str],
         errors: list[str],
     ) -> tuple[int, bool, bool, None | bool]:
@@ -2991,6 +2994,7 @@ class ProfileLoader:
             first_run (bool): Whether this is the first run of the application.
             idle (bool): Whether the system is idle.
             previous_hwnds_pids (dict): Previous window handles and process IDs.
+            result (None | bool): Result of the last profile application.
             results (list[str]): List to store results of profile applications.
             errors (list[str]): List to store errors encountered during profile
                 applications.

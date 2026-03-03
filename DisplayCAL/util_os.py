@@ -166,8 +166,10 @@ def quote_args(args: list[str]) -> list[str]:
     """
     args_out = []
     for arg in args:
+        if arg is None:
+            continue
         if re.search(r"[\^!$%&()[\]{}=;'+,`~\s]", arg):
-            arg = '"' + arg + '"'
+            arg = f'"{arg}"'
         args_out.append(arg)
     return args_out
 

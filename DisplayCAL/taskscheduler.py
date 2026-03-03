@@ -377,7 +377,10 @@ class Task(_Dict2XML):
             xmlfilename (str): The filename to write the XML to.
         """
         with open(xmlfilename, "wb") as xmlfile:
-            xmlfile.write(codecs.BOM_UTF16_LE + str(self).encode())
+            str_self = str(self)
+            if isinstance(str_self, str):
+                str_self = str_self.encode()
+            xmlfile.write(codecs.BOM_UTF16_LE + str_self)
 
     def __str__(self) -> str:
         """Convert the task to a string representation in XML format.
