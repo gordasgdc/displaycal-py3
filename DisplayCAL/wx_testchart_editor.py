@@ -1047,7 +1047,9 @@ class TestchartEditor(BaseFrame):
 
         # grid
         self.sizer.Add((-1, 12))
-        self.grid = CustomGrid(panel, -1, size=(-1, 100))
+        use_native_grid = sys.version_info >= (3, 10)
+        grid_cls = wx.grid.Grid if use_native_grid else CustomGrid
+        self.grid = grid_cls(panel, -1, size=(-1, 100))
         self.grid.DisableDragColSize()
         self.grid.EnableGridLines(False)
         self.grid.SetCellHighlightPenWidth(0)
@@ -1056,8 +1058,10 @@ class TestchartEditor(BaseFrame):
         self.grid.SetDefaultCellAlignment(wx.ALIGN_CENTER, wx.ALIGN_CENTER)
         self.grid.SetRowLabelAlignment(wx.ALIGN_RIGHT, wx.ALIGN_CENTER)
         self.grid.SetScrollRate(0, 5)
-        self.grid.draw_horizontal_grid_lines = False
-        self.grid.draw_vertical_grid_lines = False
+        if hasattr(self.grid, "draw_horizontal_grid_lines"):
+            self.grid.draw_horizontal_grid_lines = False
+        if hasattr(self.grid, "draw_vertical_grid_lines"):
+            self.grid.draw_vertical_grid_lines = False
         self.sizer.Add(self.grid, 1, flag=wx.EXPAND)
         self.grid.CreateGrid(0, 0)
         font = self.grid.GetDefaultCellFont()
@@ -1092,7 +1096,7 @@ class TestchartEditor(BaseFrame):
             p2.sizer.Add(gradientpanel, flag=wx.EXPAND)
             p2.sizer.Add(hsizer, 1, flag=wx.EXPAND)
             p2.BackgroundColour = "#333333"
-            preview = CustomGrid(p2, -1, size=(-1, 100))
+            preview = grid_cls(p2, -1, size=(-1, 100))
             preview.DisableDragColSize()
             preview.DisableDragRowSize()
             preview.EnableEditing(False)
@@ -1104,14 +1108,20 @@ class TestchartEditor(BaseFrame):
             preview.SetRowLabelAlignment(wx.ALIGN_RIGHT, wx.ALIGN_CENTER)
             preview.SetLabelTextColour("#CCCCCC")
             preview.SetScrollRate(0, 5)
-            preview._default_col_label_renderer.bgcolor = "#333333"
-            preview._default_row_label_renderer.bgcolor = "#333333"
+            if hasattr(preview, "_default_col_label_renderer"):
+                preview._default_col_label_renderer.bgcolor = "#333333"
+            if hasattr(preview, "_default_row_label_renderer"):
+                preview._default_row_label_renderer.bgcolor = "#333333"
             preview.alternate_cell_background_color = False
             preview.alternate_row_label_background_color = False
-            preview.draw_horizontal_grid_lines = False
-            preview.draw_vertical_grid_lines = False
-            preview.rendernative = False
-            preview.style = ""
+            if hasattr(preview, "draw_horizontal_grid_lines"):
+                preview.draw_horizontal_grid_lines = False
+            if hasattr(preview, "draw_vertical_grid_lines"):
+                preview.draw_vertical_grid_lines = False
+            if hasattr(preview, "rendernative"):
+                preview.rendernative = False
+            if hasattr(preview, "style"):
+                preview.style = ""
             preview.CreateGrid(0, 0)
             font = preview.GetDefaultCellFont()
             if font.PointSize > 11:
