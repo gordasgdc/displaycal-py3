@@ -1,8 +1,8 @@
 SHELL:=bash
 NUM_CPUS = $(shell nproc ||  grep -c '^processor' /proc/cpuinfo)
 SETUP_PY_FLAGS = --use-distutils
-VERSION := $(shell cat VERSION)
-VERSION_FILE=$(CURDIR)/VERSION
+VERSION_FILE=$(CURDIR)/DisplayCAL/VERSION
+VERSION := $(shell cat $(VERSION_FILE))
 VIRTUALENV_DIR:=.venv
 SYSTEM_PYTHON?=python3
 
