@@ -251,7 +251,7 @@ def setup_profile_loader_task(exe: str, exedir: str, pydir: str) -> None:
                 triggers=[daily],
                 actions=actions,
             )
-        except Exception:
+        except Exception as exception:
             if DEBUG:
                 exception = traceback.format_exc()
             print(
@@ -2513,12 +2513,12 @@ class ProfileLoader:
 
         loader_args = []
         if os.path.basename(EXE).lower() not in ("python.exe", "pythonw.exe"):
-            cmd = os.path.join(PYDIR, APPNAME + "-apply-profiles.exe")
+            cmd = os.path.join(PYDIR, f"{APPNAME}-apply-profiles.exe")
         else:
             # cmd = os.path.join(exedir, "pythonw.exe")
             cmd = EXE
             pyw = os.path.normpath(
-                os.path.join(PYDIR, "..", APPNAME + "-apply-profiles.pyw")
+                os.path.join(PYDIR, "..", f"{APPNAME}-apply-profiles.pyw")
             )
             if os.path.exists(pyw):
                 # Running from source or 0install
@@ -2545,10 +2545,12 @@ class ProfileLoader:
             else:
                 # Regular install
                 loader_args.append(
-                    get_data_path("/".join(["scripts", APPNAME + "-apply-profiles"]))
+                    get_data_path("/".join(["scripts", f"{APPNAME}-apply-profiles"]))
                 )
 
         loader_args.append("--profile-associations")
+        print(f"cmd: {cmd}")
+        print(f"loader_args: {loader_args}")
         try:
             run_as_admin(cmd, loader_args)
         except pywintypes.error as exception:
