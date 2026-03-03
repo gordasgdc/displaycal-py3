@@ -80,6 +80,7 @@ include-package-data = false
 
 [tool.setuptools.packages.find]
 where = ["./"]
+exclude = ["misc", "misc.*", "tests", "tests.*", "util", "util.*"]
 
 [tool.setuptools.package-data]
 DisplayCAL = [

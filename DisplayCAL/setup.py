@@ -1447,7 +1447,6 @@ def setup() -> None:
                     "ref",
                     "report",
                     "screenshots",
-                    "tests",
                     "theme",
                     "ti1",
                     "x3d-viewer",
