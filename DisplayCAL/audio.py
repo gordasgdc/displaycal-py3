@@ -14,6 +14,7 @@ sound.Play(fade_ms=1000)
 
 from __future__ import annotations
 
+import atexit
 import contextlib
 import ctypes.util
 import os
@@ -47,6 +48,23 @@ if TYPE_CHECKING:
     import sdl  # noqa: TC004
     import sdl2  # noqa: TC004
     import wx
+
+
+# Workaround for pyglet crash on exit
+try:
+    import pyglet
+except ImportError:
+    pass
+else:
+    def _pyglet_cleanup():
+        with contextlib.suppress(Exception):
+            for ch in list(_CH.values()):
+                if hasattr(ch, "delete"):
+                    ch.delete()
+            if pyglet.media.get_audio_driver():
+                pyglet.media.get_audio_driver().delete()
+    atexit.register(_pyglet_cleanup)
+
 
 _CH = {}
 _INITIALIZED = False
