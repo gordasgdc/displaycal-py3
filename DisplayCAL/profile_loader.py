@@ -2896,7 +2896,7 @@ class ProfileLoader:
             self._check_display_changed(first_run)
             profile_associations_changed, apply_profiles, idle, result = (
                 self._check_profile_associations(
-                    first_run, idle, previous_hwnds_pids, results, errors
+                    first_run, idle, previous_hwnds_pids, result, results, errors
                 )
             )
             if self._next:
@@ -2982,6 +2982,7 @@ class ProfileLoader:
         first_run: bool,
         idle: bool,
         previous_hwnds_pids: dict,
+        result: None | bool,
         results: list[str],
         errors: list[str],
     ) -> tuple[int, bool, bool, None | bool]:
@@ -2991,6 +2992,7 @@ class ProfileLoader:
             first_run (bool): Whether this is the first run of the application.
             idle (bool): Whether the system is idle.
             previous_hwnds_pids (dict): Previous window handles and process IDs.
+            result (None | bool): Result of the last profile application.
             results (list[str]): List to store results of profile applications.
             errors (list[str]): List to store errors encountered during profile
                 applications.
