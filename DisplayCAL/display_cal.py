@@ -12420,6 +12420,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     self.recent_cals.remove(cal)
                     self.calibration_file_ctrl.Delete(sel)
                 if options_dispcal and options_colprof:
+                    setcfg("settings.changed", 0)
                     self.load_cal_handler(
                         None,
                         path=profile_path,
