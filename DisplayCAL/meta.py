@@ -10,6 +10,10 @@ import sys
 VERSION_STRING = None
 if getattr(sys, "frozen", False):
     base_path = os.path.dirname(sys.executable)
+    if sys.platform == "darwin":
+        _base_path = os.path.join(os.path.dirname(base_path), "Resources")
+        if os.path.isdir(_base_path):
+            base_path = _base_path
 else:
     base_path = os.path.dirname(__file__)
 VERSION_FILE = os.path.join(base_path, "VERSION")
