@@ -160,7 +160,6 @@ config = {
             "linear.cal",
             "pnp.ids",
             "presets/*.icc",
-            "quirk.json",
             "ref/*.cie",
             "ref/*.gam",
             "ref/*.icm",
@@ -1561,8 +1560,7 @@ def setup() -> None:
         manifest_in.extend(
             [
                 "include LICENSE.txt",
-                "include DisplayCAL/VERSION"
-                "include MANIFEST",
+                "include DisplayCAL/VERSION",
                 "include MANIFEST.in",
                 "include README.html",
                 "include README-fr.html",
@@ -1570,12 +1568,7 @@ def setup() -> None:
                 f"include {NAME}*.pyw",
                 f"include {NAME}-*.pyw",
                 f"include {NAME}-*.py",
-                "include use-distutils",
             ]
-        )
-        manifest_in.append("include " + os.path.basename(sys.argv[0]))
-        manifest_in.append(
-            "include " + os.path.splitext(os.path.basename(sys.argv[0]))[0] + ".cfg"
         )
         for _datadir, datafiles in attrs.get("data_files", []):
             manifest_in.extend(
