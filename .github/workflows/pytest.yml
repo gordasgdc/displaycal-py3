@@ -141,6 +141,7 @@ jobs:
     - name: Install system dependencies
       run: |
         set -euxo pipefail
+        sudo apt-get update -y
         packages="$(awk '!/^\s*(#|$)/ { print $1 }' packages.list | xargs)"
         for attempt in 1 2 3; do
           if sudo apt-get install -y --no-install-recommends ${packages}; then
