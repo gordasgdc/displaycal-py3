@@ -955,18 +955,24 @@ class SynthICCFrame(BaseFrame, LUT3DMixin):
         defaultDir, defaultFile = get_verified_path("last_icc_path")
         defaultFile = lang.getstr("unnamed")
         path = None
+        icc_file_type_wildcard = f"{lang.getstr('filetype.icc')}|*{PROFILE_EXT}"
+        save_dialog_title = lang.getstr("save_as")
+
         dlg = wx.FileDialog(
             self,
-            lang.getstr("save_as"),
+            save_dialog_title,
             defaultDir=defaultDir,
             defaultFile=defaultFile,
-            wildcard=lang.getstr("filetype.icc") + "|*" + PROFILE_EXT,
+            wildcard=icc_file_type_wildcard,
             style=wx.SAVE | wx.FD_OVERWRITE_PROMPT,
         )
         dlg.Center(wx.BOTH)
-        if dlg.ShowModal() == wx.ID_OK:
+        result = dlg.ShowModal()
+
+        if result == wx.ID_OK:
             path = dlg.GetPath()
         dlg.Destroy()
+
         if path:
             if os.path.splitext(path)[1].lower() not in (".icc", ".icm"):
                 path += PROFILE_EXT
@@ -1034,7 +1040,7 @@ class SynthICCFrame(BaseFrame, LUT3DMixin):
                 progress_msg=lang.getstr("synthicc.create"),
             )
         else:
-            consumer(self.create_profile(*wargs, **wkwargs))
+            consumer(self.create_profile(*wargs, **wkwargs), parent=self)
 
     def create_profile(
         self,
