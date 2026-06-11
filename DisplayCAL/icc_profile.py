@@ -10460,7 +10460,7 @@ class ICCProfile:
             return False
         rgb_space = [gamma or [], list(getattr(tags.wtpt, relation).values())]
         for component in ("r", "g", "b"):
-            if "{component}XYZ" not in tags or (
+            if f"{component}XYZ" not in tags or (
                 not gamma
                 and (
                     f"{component}TRC" not in tags
