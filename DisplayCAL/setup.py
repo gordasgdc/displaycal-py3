@@ -214,8 +214,8 @@ plist_dict = {
     "CFBundleSignature": "????",
     "CFBundleVersion": ".".join(map(str, VERSION_TUPLE)),
     "NSHumanReadableCopyright": f"© {strftime('%Y')} {AUTHOR}",
-    "LSMinimumSystemVersion": "11.0", # Required for native ARM64 support
-    "com.apple.security.cs.disable-library-validation": True, # Critical fix
+    "LSMinimumSystemVersion": "11.0",  # Required for native ARM64 support
+    "com.apple.security.cs.disable-library-validation": True,  # Critical fix
     "com.apple.security.cs.allow-unsigned-executable-memory": True,
 }
 
@@ -1687,7 +1687,9 @@ def setup() -> None:
                 for root, dirs, files in os.walk(pil_dylibs):
                     for file in files:
                         if file.endswith(".dylib"):
-                            os.system(f"codesign --remove-signature '{os.path.join(root, file)}'")
+                            os.system(
+                                f"codesign --remove-signature '{os.path.join(root, file)}'"
+                            )
                 for entry in os.listdir(pil_dylibs):
                     print(os.path.join(pil_dylibs, entry))
                 # Remove wrongly included frameworks
