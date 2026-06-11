@@ -3013,8 +3013,7 @@ class Worker(WorkerBase):
                         or getcfg("measurement_mode") in ("l", "c")
                     )
                     and (
-                        instrument_name
-                        not in ("SpyderX", "SpyderX2", "Spyder 2024")
+                        instrument_name not in ("SpyderX", "SpyderX2", "Spyder 2024")
                         or getcfg("measurement_mode") == "l"
                     )
                     and (instrument_name != "K-10" or getcfg("measurement_mode") == "F")

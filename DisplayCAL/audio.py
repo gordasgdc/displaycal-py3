@@ -56,6 +56,7 @@ try:
 except ImportError:
     pass
 else:
+
     def _pyglet_cleanup():
         with contextlib.suppress(Exception):
             for ch in list(_CH.values()):
@@ -63,6 +64,7 @@ else:
                     ch.delete()
             if pyglet.media.get_audio_driver():
                 pyglet.media.get_audio_driver().delete()
+
     atexit.register(_pyglet_cleanup)
 
 

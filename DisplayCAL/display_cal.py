@@ -523,7 +523,10 @@ def check_donation(parent: wx.Window, snapshot: bool) -> None:
         parent (wx.Window): Parent window to show the dialog.
         snapshot (bool): If True, the application is a snapshot build.
     """
-    if not snapshot and VERSION_TUPLE[0] > intlist(getcfg("last_launch", "0.0.0").split("."))[0]:
+    if (
+        not snapshot
+        and VERSION_TUPLE[0] > intlist(getcfg("last_launch", "0.0.0").split("."))[0]
+    ):
         setcfg("show_donation_message", 1)
         # store the current version as the last_launch version
         setcfg("last_launch", VERSION_STRING)
@@ -11496,14 +11499,18 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 "e": lang.getstr("measurement_mode.lcd.white_led"),
                 "b": lang.getstr("measurement_mode.lcd.wide_gamut.led"),
                 "i": lang.getstr("measurement_mode.lcd.wide_gamut.gb_led"),
-                "h": lang.getstr("measurement_mode.lcd.high_brightness", "High brightness"),
+                "h": lang.getstr(
+                    "measurement_mode.lcd.high_brightness", "High brightness"
+                ),
             },
             "Spyder 2024": {
                 "l": lang.getstr("measurement_mode.lcd"),
                 "e": lang.getstr("measurement_mode.lcd.white_led"),
                 "b": lang.getstr("measurement_mode.lcd.wide_gamut.led"),
                 "i": lang.getstr("measurement_mode.lcd.wide_gamut.gb_led"),
-                "h": lang.getstr("measurement_mode.lcd.high_brightness", "High brightness"),
+                "h": lang.getstr(
+                    "measurement_mode.lcd.high_brightness", "High brightness"
+                ),
                 "o": lang.getstr("measurement_mode.lcd.oled", "OLED"),
                 "m": lang.getstr("measurement_mode.lcd.mini_led", "Mini-LED"),
             },

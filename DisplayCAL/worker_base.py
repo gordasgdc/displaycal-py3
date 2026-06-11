@@ -66,7 +66,7 @@ from DisplayCAL.icc_profile import (
 )
 from DisplayCAL.log import LogFile
 from DisplayCAL.meta import NAME as APPNAME
-from DisplayCAL.multiprocess import mp, pool_slice
+from DisplayCAL.multiprocess import MAX_CPUS, mp, pool_slice
 from DisplayCAL.options import DEBUG, VERBOSE
 from DisplayCAL.util_os import quote_args
 from DisplayCAL.util_str import make_filename_safe, safe_basestring, safe_str
@@ -1051,7 +1051,8 @@ class XiccluMP(Xicclu):
             verbose,
         )
         self._out = []
-        num_cpus = mp.cpu_count()
+
+        num_cpus = min(mp.cpu_count(), MAX_CPUS)
         if isinstance(profile.tags.get("A2B0"), LUT16Type):
             size = profile.tags.A2B0.clut_grid_steps
             self.num_workers = min(max(num_cpus, 1), size)

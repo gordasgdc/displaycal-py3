@@ -1728,9 +1728,9 @@ class TaskBarIcon(SysTrayIcon):
                 len(
                     [
                         i_success
-                        for i_success in sorted(
-                            self.pl.setgammaramp_success.items()
-                        )[: count or 1]
+                        for i_success in sorted(self.pl.setgammaramp_success.items())[
+                            : count or 1
+                        ]
                         if not i_success[1]
                     ]
                 )

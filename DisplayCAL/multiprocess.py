@@ -21,6 +21,10 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 
+# BUG #715 : Limiting the total workers/CPUs to 32
+MAX_CPUS = 32
+
+
 def cpu_count(limit_by_total_vmem: bool = True) -> int:
     """Return the number of CPUs in the system.
 
@@ -39,7 +43,7 @@ def cpu_count(limit_by_total_vmem: bool = True) -> int:
         int: The number of CPUs in the system, limited by total RAM if
             specified.
     """
-    max_cpus = sys.maxsize
+    max_cpus = min(sys.maxsize, MAX_CPUS)
     if limit_by_total_vmem:
         try:
             import psutil
@@ -51,7 +55,9 @@ def cpu_count(limit_by_total_vmem: bool = True) -> int:
             # smart enough to swap memory used by inactive processes to disk to
             # free up more physical RAM for active processes.
             with contextlib.suppress(Exception):
-                max_cpus = int(psutil.virtual_memory().total / (1024**3) - 1)
+                max_cpus = min(
+                    int(psutil.virtual_memory().total / (1024**3) - 1), MAX_CPUS
+                )
     try:
         return max(min(mp.cpu_count(), max_cpus), 1)
     except Exception:
@@ -163,7 +169,7 @@ def determine_worker_count(
     """
     from DisplayCAL.config import getcfg
 
-    num_workers = cpu_count() if num_workers is None else num_workers
+    num_workers = cpu_count() if num_workers is None else min(num_workers, MAX_CPUS)
     num_workers = max(min(int(num_workers), len(data_in)), 1)
     max_workers = getcfg("multiprocessing.max_cpus")
     num_workers = min(num_workers, max_workers) if max_workers else num_workers
