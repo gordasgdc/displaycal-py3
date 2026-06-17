@@ -3082,7 +3082,7 @@ class Worker(WorkerBase):
             )
             profile1.apply_black_offset(
                 oXYZbp,
-                logfiles=logfiles,
+                logfile=logfiles,
                 thread_abort=self.thread_abort,
                 abortmessage=lang.getstr("aborted"),
             )
