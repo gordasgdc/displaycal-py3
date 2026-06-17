@@ -12545,13 +12545,18 @@ BEGIN_DATA
 
         if clutres > iclutres:
             # Lookup input RGB to interpolated XYZ
+            # NOTE: step must be (re)computed for the *target* clutres BEFORE
+            # building RGB_in. Otherwise it still holds the previous low-res
+            # iclutres step, so the RGB_in grid coordinates run far past device
+            # 100% (e.g. 32 * 6.25 = 200), which clamps most lookups to the
+            # white corner and produces a grossly corrupt A2B cLUT.
+            step = 100 / (clutres - 1.0)
             RGB_in = [
                 [a * step, b * step, c * step]
                 for a in range(clutres)
                 for b in range(clutres)
                 for c in range(clutres)
             ]
-            step = 100 / (clutres - 1.0)
             XYZ_out = self.xicclu(profile, RGB_in, "a", pcs="X", scale=100)
             profile.filename = None
 
