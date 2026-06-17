@@ -8124,11 +8124,17 @@ BEGIN_DATA
         XYZg = odata[3]
         XYZb = odata[4]
 
-        # Sanity check whitepoint
+        # Sanity check whitepoint - after normalisation it should be close to
+        # D50 (the ICC PCS white). Use a tolerance rather than an exact rounded
+        # match: a real profile's adapted white is routinely off D50 by ~0.001
+        # (chromatic adaptation / measurement / 16-bit encoding) and must not be
+        # rejected. The tolerance still catches a grossly wrong white (e.g. from
+        # a failed inverse lookup, which lands far from D50).
+        D50_wp = colormath.get_whitepoint("D50")
         if (
-            round(XYZwp[0], 3) != 0.964
-            or round(XYZwp[1], 3) != 1
-            or round(XYZwp[2], 3) != 0.825
+            abs(XYZwp[0] - D50_wp[0]) > 0.01
+            or abs(XYZwp[1] - D50_wp[1]) > 0.01
+            or abs(XYZwp[2] - D50_wp[2]) > 0.01
         ):
             raise Error(
                 "Argyll CMS xicclu: Invalid white XYZ: {:.4f} {:.4f} {:.4f}".format(
