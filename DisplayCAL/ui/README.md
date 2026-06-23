@@ -35,7 +35,20 @@ modules that have been ported; everything else still falls through to wx.
 | `base_window.py` | `BaseWindow(QMainWindow)`: icon, geometry persistence, menubar | `wx_windows.BaseFrame` (essentials) |
 | `assets.py` | themed PNG → `QIcon`/`QPixmap` | `config.get_icon*` |
 | `file_drop.py` | `FileDropTarget` event filter (suffix→handler) | `wx_addons.FileDrop` |
+| `plot/` | pyqtgraph-based plotting (gamut view + colorimetry) | `wx_enhanced_plot`, `GamutCanvas` |
 | `tools/` | standalone tools (one window + `main()` each) | `wx_*` tool modules |
+
+### Plotting (`plot/`)
+
+2D plotting uses **pyqtgraph** (axes, grid, zoom/pan, item rendering). The
+DisplayCAL-specific parts live here:
+
+- `plot/colorspaces.py` — registry of gamut projections (axis labels, view
+  range, XYZ→2D, outline curves), replacing the big `if/elif` ladder in
+  `GamutCanvas.DrawCanvas`.
+- `plot/gamut.py` — `GamutPlot(pg.PlotWidget)`, the gamut renderer.
+- `plot/gamut_data.py` — binding-agnostic gamut sampling via Argyll `xicclu`,
+  extracted from `GamutCanvas.setup`.
 
 ## Migration pattern (follow `tools/vrml_to_x3d.py`)
 
@@ -59,8 +72,18 @@ module:
 6. **Verify headless**: `QT_QPA_PLATFORM=offscreen python -m
    DisplayCAL.ui.tools.<name>` plus a scripted construct-and-exercise check.
 
+## Ported tools
+
+- **VRML-to-X3D converter** (`tools/vrml_to_x3d.py`) — complete.
+- **Profile info / gamut viewer** (`tools/profile_info.py`) — gamut view with
+  colorspace + white-point controls, profile load/drop, info panel. Still to
+  add: tone-response-curve view (needs the `LUTFrame` port), profile comparison
+  overlay, rendering-intent/direction controls, 3D/VRML export.
+
 ## Not yet ported / deliberately deferred
 
+- **Curve / LUT viewer** (`wx_lut_viewer.LUTFrame`) — the tone-curve counterpart
+  of the gamut view; once ported it also completes profile-info's curve tab.
 - **Scripting/IPC socket server** (`BaseFrame.listen`/`connection_handler`/
   `message_handler`): binding-agnostic; will move to a reusable mixin when the
   first window that needs it (the main window or scripting client) is ported.

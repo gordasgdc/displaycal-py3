@@ -51,7 +51,9 @@ class GamutPlot(pg.PlotWidget):
         self.colorspace = "a*b*"
         self.pcs_data: list[list[tuple[float, float, float]]] = []
         self.profiles: dict[int, object] = {}
-        self.size = 40  # segments per primary→secondary edge
+        # Segments per primary→secondary edge. NB: not named ``size`` because
+        # that would shadow ``QWidget.size()``.
+        self.segment_size = 40
         plot_item = self.getPlotItem()
         plot_item.setAspectLocked(True)
         plot_item.showGrid(x=True, y=True, alpha=0.25)
@@ -67,7 +69,7 @@ class GamutPlot(pg.PlotWidget):
         """Set the gamut sample data and (optional) profile map."""
         self.pcs_data = pcs_data
         self.profiles = profiles or {}
-        self.size = size
+        self.segment_size = size
 
     # -- drawing -----------------------------------------------------------
 
@@ -179,9 +181,9 @@ class GamutPlot(pg.PlotWidget):
         # comparison profile which is drawn as a plain grey outline.
         surface = coords[:-1]
         triplets = pcs_triplets[:-1]
-        for start in range(0, len(surface) - 1, self.size):
-            edge = surface[start : start + self.size]
-            edge_triplets = triplets[start : start + self.size]
+        for start in range(0, len(surface) - 1, self.segment_size):
+            edge = surface[start : start + self.segment_size]
+            edge_triplets = triplets[start : start + self.segment_size]
             for j in range(len(edge) - 1):
                 color = _COMPARISON if is_comparison else _rgb(edge_triplets[j])
                 self._add_curve(

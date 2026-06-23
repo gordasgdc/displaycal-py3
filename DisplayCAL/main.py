@@ -851,6 +851,10 @@ def _get_qt_main(module: str) -> Callable[[], int] | None:
         from DisplayCAL.ui.tools.vrml_to_x3d import main
 
         return main
+    if module == "profile-info":
+        from DisplayCAL.ui.tools.profile_info import main
+
+        return main
     return None
 
 
