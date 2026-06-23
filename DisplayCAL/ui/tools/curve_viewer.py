@@ -70,7 +70,16 @@ _DIRECTION_LABELS = {code: key for key, code in DIRECTIONS.items()}
 
 
 class _MeasuredThread(QThread):
-    """Compute the measured tone response off the GUI thread."""
+    """Compute the measured tone response off the GUI thread.
+
+    Args:
+        profile (ICCProfile): The RGB profile to measure.
+        worker (Worker): The worker driving ``xicclu``.
+        intent (str): Rendering intent (``a``/``r``/``p``/``s``).
+        use_clut (bool): Use the cLUT path when the profile has one.
+        direction (str): Lookup direction (``f``/``if``/``b``/``ib``).
+        parent (QWidget | None): Optional Qt parent.
+    """
 
     #: Emitted with ``curves`` (dict) or, on failure, an ``Exception``.
     done = Signal(object)
@@ -102,7 +111,13 @@ class _MeasuredThread(QThread):
 
 
 class _LutReadThread(QThread):
-    """Read the live video-card LUT off the GUI thread."""
+    """Read the live video-card LUT off the GUI thread.
+
+    Args:
+        worker (Worker): The worker driving ``dispwin``.
+        display_no (int): Argyll display index (1-based).
+        parent (QWidget | None): Optional Qt parent.
+    """
 
     #: Emitted with the read-back profile or, on failure, an ``Exception``.
     done = Signal(object)
@@ -172,7 +187,11 @@ class CurveViewerWindow(BaseWindow):
         self.init_menubar()
 
     def _build_central(self) -> QWidget:
-        """Assemble the control bar and the curve plot."""
+        """Assemble the control bar and the curve plot.
+
+        Returns:
+            QWidget: The central widget holding the controls and curve plot.
+        """
         controls = QHBoxLayout()
         controls.addWidget(QLabel(lang.getstr("mode")))
         controls.addWidget(self.mode_combo)
@@ -211,7 +230,11 @@ class CurveViewerWindow(BaseWindow):
     # -- loading -----------------------------------------------------------
 
     def load_profile(self, path: str) -> None:
-        """Load an ICC profile or ``.cal`` file at ``path`` and show its curves."""
+        """Load an ICC profile or ``.cal`` file at ``path`` and show its curves.
+
+        Args:
+            path (str): Path to an ``.icc``/``.icm`` profile or ``.cal`` file.
+        """
         try:
             profile = load_profile_or_cal(os.path.abspath(path))
         except Exception as exception:  # noqa: BLE001
@@ -228,7 +251,11 @@ class CurveViewerWindow(BaseWindow):
         self._set_profile(profile)
 
     def _set_profile(self, profile: ICCProfile) -> None:
-        """Display ``profile`` (user-loaded or read-back), repopulating modes."""
+        """Display ``profile`` (user-loaded or read-back), repopulating modes.
+
+        Args:
+            profile (ICCProfile): The profile to display.
+        """
         self._profile = profile
         self.setWindowTitle(
             f"{lang.getstr('calibration.lut_viewer.title')} — "
@@ -258,7 +285,11 @@ class CurveViewerWindow(BaseWindow):
         self._redraw()
 
     def _on_actual_lut_toggled(self, checked: bool) -> None:
-        """Switch between the loaded profile and the live video-card LUT."""
+        """Switch between the loaded profile and the live video-card LUT.
+
+        Args:
+            checked (bool): Whether the "show actual LUT" box is checked.
+        """
         if not checked:
             if self._user_profile is not None:
                 self._set_profile(self._user_profile)
@@ -273,7 +304,12 @@ class CurveViewerWindow(BaseWindow):
         self._read_thread.start()
 
     def _on_lut_read(self, result: object) -> None:
-        """Receive the read-back LUT profile on the GUI thread."""
+        """Receive the read-back LUT profile on the GUI thread.
+
+        Args:
+            result (object): The read-back profile, or an ``Exception`` on
+                failure.
+        """
         self._read_thread = None
         if isinstance(result, Exception):
             self.actual_lut_check.blockSignals(True)
@@ -312,7 +348,12 @@ class CurveViewerWindow(BaseWindow):
         self._thread.start()
 
     def _on_measured_ready(self, result: object) -> None:
-        """Receive measured curves on the GUI thread and draw them."""
+        """Receive measured curves on the GUI thread and draw them.
+
+        Args:
+            result (object): The measured curves dict, or an ``Exception`` on
+                failure.
+        """
         self._thread = None
         if isinstance(result, Exception):
             self.plot.draw_curves({})
@@ -323,7 +364,11 @@ class CurveViewerWindow(BaseWindow):
 
 
 def main() -> int:
-    """Entry point for the Qt curve viewer."""
+    """Entry point for the Qt curve viewer.
+
+    Returns:
+        int: The Qt application exit code.
+    """
     config.initcfg("curve-viewer")
     lang.init()
     lang.update_defaults()

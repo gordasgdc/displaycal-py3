@@ -27,7 +27,13 @@ from DisplayCAL.config import PYNAME
 
 
 class Application(QApplication):
-    """DisplayCAL's ``QApplication`` with shared lifecycle helpers."""
+    """DisplayCAL's ``QApplication`` with shared lifecycle helpers.
+
+    Args:
+        argv (list[str] | None): Command-line arguments; defaults to
+            ``sys.argv``.
+        install_sigint (bool): Install a SIGINT handler so Ctrl+C quits cleanly.
+    """
 
     _exithandlers: ClassVar[list[tuple[Callable, tuple, dict]]] = []
 
@@ -52,7 +58,13 @@ class Application(QApplication):
 
     @classmethod
     def register_exitfunc(cls, func: Callable, *args, **kwargs) -> None:
-        """Register ``func`` to run on quit (LIFO order)."""
+        """Register ``func`` to run on quit (LIFO order).
+
+        Args:
+            func (Callable): The callable to run at exit.
+            *args: Positional arguments passed to ``func``.
+            **kwargs: Keyword arguments passed to ``func``.
+        """
         cls._exithandlers.append((func, args, kwargs))
 
     @classmethod
@@ -69,7 +81,11 @@ class Application(QApplication):
     # -- file opening -------------------------------------------------------
 
     def _deliver_paths(self, paths: list[str]) -> None:
-        """Hand dropped/opened ``paths`` to the top window's drop target."""
+        """Hand dropped/opened ``paths`` to the top window's drop target.
+
+        Args:
+            paths (list[str]): File paths to deliver to the top window.
+        """
         target = getattr(self.top_window, "droptarget", None)
         if target is not None and paths:
             target.drop_files(paths)
@@ -78,10 +94,11 @@ class Application(QApplication):
         """Open any file paths passed on the command line.
 
         Args:
-            count: Stop after this many files (0 = all).
+            count (int): Stop after this many files (0 = all).
 
         Returns:
-            The list of opened paths, or ``None`` if there were none.
+            list[str] | None: The list of opened paths, or ``None`` if there
+            were none.
         """
         paths: list[str] = []
         for arg in sys.argv[1:]:
@@ -95,7 +112,15 @@ class Application(QApplication):
         return None
 
     def event(self, event: QEvent) -> bool:
-        """Handle macOS "open file/URL with this app" events."""
+        """Handle macOS "open file/URL with this app" events.
+
+        Args:
+            event (QEvent): The Qt event to handle.
+
+        Returns:
+            bool: True if a file-open event was handled, otherwise the result of
+            the base-class handler.
+        """
         if event.type() == QEvent.FileOpen:
             path = event.file() or event.url().toLocalFile()
             if path:
@@ -106,7 +131,12 @@ class Application(QApplication):
     # -- signals ------------------------------------------------------------
 
     def _signal_handler(self, signum: int, frame: object) -> None:
-        """Quit the application cleanly on SIGINT."""
+        """Quit the application cleanly on SIGINT.
+
+        Args:
+            signum (int): The signal number received.
+            frame (object): The current stack frame (unused).
+        """
         if signum == signal.SIGINT:
             print("Received SIGINT")
             self.quit()

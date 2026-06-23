@@ -30,11 +30,13 @@ class FileDropTarget(QObject):
     """Event filter that routes dropped files to per-suffix handlers.
 
     Args:
-        drophandlers: Mapping of lowercased file suffix (e.g. ``".vrml"``) to a
-            callable invoked with each matching dropped path.
-        unsupported_handler: Optional callable invoked (with the list of
-            unmatched paths) when none of the dropped files are supported.
-        parent: Optional Qt parent for ownership.
+        drophandlers (dict[str, DropHandler] | None): Mapping of lowercased file
+            suffix (e.g. ``".vrml"``) to a callable invoked with each matching
+            dropped path.
+        unsupported_handler (Callable[[list[str]], None] | None): Optional
+            callable invoked (with the list of unmatched paths) when none of the
+            dropped files are supported.
+        parent (QObject | None): Optional Qt parent for ownership.
     """
 
     def __init__(
@@ -48,12 +50,24 @@ class FileDropTarget(QObject):
         self.unsupported_handler = unsupported_handler
 
     def install_on(self, widget: QWidget) -> None:
-        """Enable drops on ``widget`` and route them through this target."""
+        """Enable drops on ``widget`` and route them through this target.
+
+        Args:
+            widget (QWidget): The widget to accept dropped files on.
+        """
         widget.setAcceptDrops(True)
         widget.installEventFilter(self)
 
     def _match(self, path: str) -> DropHandler | None:
-        """Return the handler for ``path`` (longest matching suffix wins)."""
+        """Return the handler for ``path`` (longest matching suffix wins).
+
+        Args:
+            path (str): The dropped file path to match.
+
+        Returns:
+            DropHandler | None: The handler whose suffix matches ``path``, or
+            ``None`` if none do.
+        """
         lower = path.lower()
         for suffix in sorted(self.drophandlers, key=len, reverse=True):
             if lower.endswith(suffix):
@@ -61,7 +75,16 @@ class FileDropTarget(QObject):
         return None
 
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:  # noqa: N802
-        """Accept file drags and dispatch dropped paths to handlers."""
+        """Accept file drags and dispatch dropped paths to handlers.
+
+        Args:
+            obj (QObject): The object the event was sent to.
+            event (QEvent): The Qt event being filtered.
+
+        Returns:
+            bool: True if the drag/drop event was handled here, otherwise the
+            result of the base-class filter.
+        """
         etype = event.type()
         if etype in (QEvent.DragEnter, QEvent.DragMove):
             mime = event.mimeData()
@@ -78,7 +101,14 @@ class FileDropTarget(QObject):
         return super().eventFilter(obj, event)
 
     def _handle_drop(self, event: QEvent) -> bool:
-        """Dispatch a drop event's local files; return True if handled."""
+        """Dispatch a drop event's local files.
+
+        Args:
+            event (QEvent): The Qt drop event.
+
+        Returns:
+            bool: True if a matching or unsupported-handler dispatch occurred.
+        """
         paths = [
             url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile()
         ]
@@ -97,7 +127,11 @@ class FileDropTarget(QObject):
     # Backwards-compatible alias for code paths (e.g. macOS file-open) that call
     # the wx-era entry point with explicit paths.
     def drop_files(self, paths: list[str]) -> None:
-        """Dispatch ``paths`` as if they had been dropped on the widget."""
+        """Dispatch ``paths`` as if they had been dropped on the widget.
+
+        Args:
+            paths (list[str]): File paths to dispatch to their matching handlers.
+        """
         unmatched = []
         for path in paths:
             handler = self._match(path)

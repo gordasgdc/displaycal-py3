@@ -47,7 +47,13 @@ WHITEPOINTS = {"Daylight (CIE 1931)": 1, "Black body (Planckian)": 2, "None": 0}
 
 
 class _GamutThread(QThread):
-    """Compute a profile's gamut samples off the GUI thread."""
+    """Compute a profile's gamut samples off the GUI thread.
+
+    Args:
+        profile (ICCProfile): The profile to sample.
+        worker (Worker): The worker driving ``xicclu``.
+        parent (QWidget | None): Optional Qt parent.
+    """
 
     #: Emitted with ``(triplets, profile)`` or, on failure, ``(exception, None)``.
     done = Signal(object, object)
@@ -108,7 +114,12 @@ class ProfileInfoWindow(BaseWindow):
         self.init_menubar()
 
     def _build_central(self) -> QWidget:
-        """Assemble the control bar, info panel and gamut plot."""
+        """Assemble the control bar, info panel and gamut plot.
+
+        Returns:
+            QWidget: The central widget holding the controls, info panel and
+            gamut plot.
+        """
         controls = QHBoxLayout()
         controls.addWidget(QLabel(lang.getstr("colorspace")))
         controls.addWidget(self.colorspace_combo)
@@ -132,7 +143,11 @@ class ProfileInfoWindow(BaseWindow):
     # -- loading -----------------------------------------------------------
 
     def load_profile(self, path: str) -> None:
-        """Load the profile at ``path`` and start computing its gamut."""
+        """Load the profile at ``path`` and start computing its gamut.
+
+        Args:
+            path (str): Path to the ICC profile to load.
+        """
         if self._thread is not None and self._thread.isRunning():
             return
         try:
@@ -152,7 +167,13 @@ class ProfileInfoWindow(BaseWindow):
         self._thread.start()
 
     def _on_gamut_ready(self, result: object, profile: object) -> None:
-        """Receive computed gamut data on the GUI thread and draw it."""
+        """Receive computed gamut data on the GUI thread and draw it.
+
+        Args:
+            result (object): The gamut triplets, or an ``Exception`` on failure.
+            profile (object): The profile the gamut was computed for (or
+                ``None`` on failure).
+        """
         self._thread = None
         if isinstance(result, Exception):
             self.info.appendPlainText(f"\n{lang.getstr('error')}: {result}")
@@ -175,7 +196,13 @@ class ProfileInfoWindow(BaseWindow):
         )
 
     def _show_info(self, profile: ICCProfile, computing: bool) -> None:
-        """Populate the information panel from ``profile``."""
+        """Populate the information panel from ``profile``.
+
+        Args:
+            profile (ICCProfile): The profile to describe.
+            computing (bool): Whether a gamut computation is in progress (adds a
+                "please wait" note).
+        """
         lines = [
             profile.getDescription(),
             "",
@@ -191,7 +218,11 @@ class ProfileInfoWindow(BaseWindow):
 
 
 def main() -> int:
-    """Entry point for the Qt profile information viewer."""
+    """Entry point for the Qt profile information viewer.
+
+    Returns:
+        int: The Qt application exit code.
+    """
     config.initcfg("profile-info")
     lang.init()
     lang.update_defaults()

@@ -33,12 +33,12 @@ class BaseWindow(QMainWindow):
     """Common base class for DisplayCAL's Qt top-level windows.
 
     Args:
-        parent: Optional parent widget.
-        name: Object name, also used as the ``position.<name>`` config prefix
-            for geometry persistence. Empty disables persistence.
-        title: Window title.
-        icon_name: Themed icon base name (under ``theme/icons``) for the window
-            and taskbar icon.
+        parent (QWidget | None): Optional parent widget.
+        name (str): Object name, also used as the ``position.<name>`` config
+            prefix for geometry persistence. Empty disables persistence.
+        title (str): Window title.
+        icon_name (str): Themed icon base name (under ``theme/icons``) for the
+            window and taskbar icon.
     """
 
     def __init__(
@@ -63,14 +63,19 @@ class BaseWindow(QMainWindow):
 
     @property
     def _pos_prefix(self) -> str:
-        """Config key prefix for this window's saved position."""
+        """Config key prefix for this window's saved position.
+
+        Returns:
+            str: The ``position.<name>`` (or bare ``position``) config key
+            prefix.
+        """
         return f"position.{self._config_name}" if self._config_name else "position"
 
     def restore_position(self) -> bool:
         """Restore the window position from config if one is stored.
 
         Returns:
-            True if a stored position was applied, False otherwise.
+            bool: True if a stored position was applied, False otherwise.
         """
         x = config.getcfg(f"{self._pos_prefix}.x", False)
         y = config.getcfg(f"{self._pos_prefix}.y", False)
@@ -99,6 +104,10 @@ class BaseWindow(QMainWindow):
     # -- lifecycle ---------------------------------------------------------
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
-        """Persist position before closing."""
+        """Persist position before closing.
+
+        Args:
+            event (QCloseEvent): The Qt close event.
+        """
         self.save_position()
         super().closeEvent(event)

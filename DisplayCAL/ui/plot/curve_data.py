@@ -40,6 +40,12 @@ def available_curve_modes(profile: ICCProfile) -> list[str]:
 
     ``"measured"`` is offered for any RGB profile (it is computed live through
     Argyll ``xicclu``); the caller is responsible for handling a missing Argyll.
+
+    Args:
+        profile (ICCProfile): The profile to inspect.
+
+    Returns:
+        list[str]: The available mode keys (subset of ``CURVE_MODES``).
     """
     modes = []
     if "vcgt" in profile.tags:
@@ -66,6 +72,12 @@ def available_directions(profile: ICCProfile) -> list[str]:
     """Return the measured-curve directions usable for ``profile``.
 
     Backward (``b``/``ib``) lookups require a cLUT ``B2A0`` table.
+
+    Args:
+        profile (ICCProfile): The profile to inspect.
+
+    Returns:
+        list[str]: Direction codes (subset of ``f``/``if``/``b``/``ib``).
     """
     if "B2A0" in profile.tags:
         return ["f", "if", "b", "ib"]
@@ -96,15 +108,16 @@ def measured_tone_response(
     versus the colorimetric matrix/shaper path (the ``order`` choice).
 
     Args:
-        profile: An RGB profile to measure.
-        worker: A :class:`DisplayCAL.worker.Worker` driving ``xicclu``.
-        intent: Rendering intent (``a``/``r``/``p``/``s``).
-        use_clut: Use the cLUT path when the profile has one.
-        direction: ``f``/``if``/``b``/``ib`` (see above).
-        size: Number of ramp samples per channel.
+        profile (ICCProfile): An RGB profile to measure.
+        worker (Worker): A :class:`DisplayCAL.worker.Worker` driving ``xicclu``.
+        intent (str): Rendering intent (``a``/``r``/``p``/``s``).
+        use_clut (bool): Use the cLUT path when the profile has one.
+        direction (str): ``f``/``if``/``b``/``ib`` (see above).
+        size (int): Number of ramp samples per channel.
 
     Returns:
-        ``{"R": [...], "G": [...], "B": [...]}`` of normalised ``(x, y)`` points.
+        dict[str, list[tuple[float, float]]]: ``{"R": ..., "G": ..., "B": ...}``
+        of normalised ``(x, y)`` points.
 
     Raises:
         ValueError: If the profile is not an RGB device profile.
@@ -126,7 +139,20 @@ def _forward_tone_response(
     profile: ICCProfile, worker: Worker, intent: str, order: str, direction: str,
     size: int,
 ) -> dict[str, list[tuple[float, float]]]:
-    """Forward measurement: input device value → measured luminance."""
+    """Forward measurement: input device value → measured luminance.
+
+    Args:
+        profile (ICCProfile): The RGB profile to measure.
+        worker (Worker): The worker driving ``xicclu``.
+        intent (str): Rendering intent (``a``/``r``/``p``/``s``).
+        order (str): ``xicclu`` order (``n`` cLUT or ``r`` matrix/shaper).
+        direction (str): Device-input direction (``f`` or ``ib``).
+        size (int): Number of ramp samples per channel.
+
+    Returns:
+        dict[str, list[tuple[float, float]]]: Per-channel ``(input, luminance)``
+        points normalised to 0..1.
+    """
     curves = {}
     for channel, name in enumerate(("R", "G", "B")):
         ramp = []
@@ -143,7 +169,16 @@ def _forward_tone_response(
 def _neutral_lab_ramp(
     profile: ICCProfile, intent: str, size: int
 ) -> list[list[float]]:
-    """Build the neutral L* target ramp fed to the profile inverse."""
+    """Build the neutral L* target ramp fed to the profile inverse.
+
+    Args:
+        profile (ICCProfile): The profile being measured.
+        intent (str): Rendering intent; ``a`` adapts the ramp to profile white.
+        size (int): Number of ramp samples.
+
+    Returns:
+        list[list[float]]: The neutral ``[L*, a*, b*]`` target ramp.
+    """
     ramp = []
     for i in range(size):
         if intent == "a" and "wtpt" in profile.tags:
@@ -167,7 +202,20 @@ def _inverse_tone_response(
     profile: ICCProfile, worker: Worker, intent: str, order: str, direction: str,
     size: int,
 ) -> dict[str, list[tuple[float, float]]]:
-    """Inverse/backward measurement: target luminance → device value."""
+    """Inverse/backward measurement: target luminance → device value.
+
+    Args:
+        profile (ICCProfile): The RGB profile to measure.
+        worker (Worker): The worker driving ``xicclu``.
+        intent (str): Rendering intent (``a``/``r``/``p``/``s``).
+        order (str): ``xicclu`` order (``n`` cLUT or ``r`` matrix/shaper).
+        direction (str): Target-input direction (``if`` or ``b``).
+        size (int): Number of ramp samples.
+
+    Returns:
+        dict[str, list[tuple[float, float]]]: Per-channel
+        ``(target luminance, device value)`` points normalised to 0..1.
+    """
     lab_ramp = _neutral_lab_ramp(profile, intent, size)
     odata = worker.xicclu(
         profile, lab_ramp, intent, direction, order, pcs="l",
@@ -196,6 +244,14 @@ def _clean_inverse_output(
     a clipped final all-ones sample to white. (The wx monotonicity pass that
     follows is dead code — its index is the stale outer-loop value, so its
     guard never holds — and is intentionally not reproduced.)
+
+    Args:
+        odata (list[list[float]]): ``xicclu`` output, possibly with a trailing
+            clip flag per sample.
+        size (int): Number of ramp samples.
+
+    Returns:
+        list[list[float]]: Cleaned RGB device values (clip flags removed).
     """
     cleaned = []
     for i, values in enumerate(odata):
@@ -210,7 +266,15 @@ def _clean_inverse_output(
 
 
 def _normalise_channel(luminance: list[float], size: int) -> list[tuple[float, float]]:
-    """Map a luminance ramp to ``(input, output)`` points normalised to 0..1."""
+    """Map a luminance ramp to ``(input, output)`` points normalised to 0..1.
+
+    Args:
+        luminance (list[float]): The measured luminance per ramp step.
+        size (int): Number of ramp samples.
+
+    Returns:
+        list[tuple[float, float]]: ``(input, output)`` points in 0..1.
+    """
     black, white = luminance[0], luminance[-1]
     span = (white - black) or 1.0
     return [
@@ -225,11 +289,12 @@ def extract_curves(
     """Return ``{channel: [(x, y), ...]}`` (0..1) for ``mode``.
 
     Args:
-        profile: Profile to read curves from.
-        mode: ``"vcgt"`` or ``"trc"``.
+        profile (ICCProfile): Profile to read curves from.
+        mode (str): ``"vcgt"`` or ``"trc"``.
 
     Returns:
-        Channel name → normalised point list. Empty if the mode has no data.
+        dict[str, list[tuple[float, float]]]: Channel name → normalised point
+        list. Empty if the mode has no data.
     """
     if mode == "vcgt" and "vcgt" in profile.tags:
         return _vcgt_curves(profile.tags["vcgt"])
@@ -239,7 +304,14 @@ def extract_curves(
 
 
 def _curve_type_points(curve: CurveType) -> list[tuple[float, float]]:
-    """Normalise a ``CurveType`` (table, single-gamma, or linear) to 0..1."""
+    """Normalise a ``CurveType`` (table, single-gamma, or linear) to 0..1.
+
+    Args:
+        curve (CurveType): The tone-response curve tag.
+
+    Returns:
+        list[tuple[float, float]]: ``(input, output)`` points in 0..1.
+    """
     n = len(curve)
     if n == 0:  # identity / linear
         return [(0.0, 0.0), (1.0, 1.0)]
@@ -250,7 +322,14 @@ def _curve_type_points(curve: CurveType) -> list[tuple[float, float]]:
 
 
 def _trc_curves(profile: ICCProfile) -> dict[str, list[tuple[float, float]]]:
-    """Return the rTRC/gTRC/bTRC tone-response curves."""
+    """Return the rTRC/gTRC/bTRC tone-response curves.
+
+    Args:
+        profile (ICCProfile): Profile carrying the ``*TRC`` tags.
+
+    Returns:
+        dict[str, list[tuple[float, float]]]: Per-channel normalised points.
+    """
     curves = {}
     for tag, name in _TRC_TAGS.items():
         curve = profile.tags.get(tag)
@@ -260,7 +339,14 @@ def _trc_curves(profile: ICCProfile) -> dict[str, list[tuple[float, float]]]:
 
 
 def _vcgt_curves(vcgt: VideoCardGammaType) -> dict[str, list[tuple[float, float]]]:
-    """Return the video-card-gamma calibration curves (table or formula)."""
+    """Return the video-card-gamma calibration curves (table or formula).
+
+    Args:
+        vcgt (VideoCardGammaType): The profile's ``vcgt`` tag.
+
+    Returns:
+        dict[str, list[tuple[float, float]]]: Per-channel normalised points.
+    """
     if "data" in vcgt:  # VideoCardGammaTableType
         data = vcgt["data"]
         n = vcgt["entryCount"]
@@ -293,8 +379,12 @@ def load_profile_or_cal(path: str) -> ICCProfile | None:
     :func:`DisplayCAL.argyll_cgats.cal_to_fake_profile`, mirroring the wx LUT
     viewer's drag-and-drop handling.
 
+    Args:
+        path (str): Path to an ``.icc``/``.icm`` profile or a ``.cal`` file.
+
     Returns:
-        The loaded profile, or ``None`` if it could not be read.
+        ICCProfile | None: The loaded profile, or ``None`` if it could not be
+        read.
     """
     if os.path.splitext(path)[1].lower() == ".cal":
         from DisplayCAL.argyll_cgats import cal_to_fake_profile
@@ -313,11 +403,12 @@ def read_current_lut(worker: Worker, display_no: int = 1) -> ICCProfile:
     equivalent of the wx "show actual LUT" option.
 
     Args:
-        worker: A :class:`DisplayCAL.worker.Worker` to drive ``dispwin``.
-        display_no: Argyll display index (1-based).
+        worker (Worker): A :class:`DisplayCAL.worker.Worker` to drive
+            ``dispwin``.
+        display_no (int): Argyll display index (1-based).
 
     Returns:
-        A fake profile carrying the read-back vcgt.
+        ICCProfile: A fake profile carrying the read-back vcgt.
 
     Raises:
         Exception: If the LUT could not be read or converted.

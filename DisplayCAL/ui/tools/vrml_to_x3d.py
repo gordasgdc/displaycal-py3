@@ -46,7 +46,17 @@ VRML_SUFFIXES = (".vrml.gz", ".wrl.gz", ".vrml", ".wrl", ".wrz")
 
 
 class _ConversionThread(QThread):
-    """Run :func:`DisplayCAL.x3dom.vrmlfile2x3dfile` off the GUI thread."""
+    """Run :func:`DisplayCAL.x3dom.vrmlfile2x3dfile` off the GUI thread.
+
+    Args:
+        vrmlpath (str): Path to the source VRML file.
+        x3dpath (str): Path to write the X3D output to.
+        html (bool): Whether to wrap the X3D in an HTML viewer.
+        embed (bool): Whether to embed the viewer components in the HTML.
+        force (bool): Whether to force a fresh download of viewer components.
+        cache (bool): Whether to use the viewer-components cache.
+        parent (QObject | None): Optional Qt parent.
+    """
 
     #: Emitted with the backend result: ``True``, ``False`` or an ``Exception``.
     done = Signal(object)
@@ -73,7 +83,15 @@ class _ConversionThread(QThread):
 
 
 class VRML2X3DWindow(BaseWindow):
-    """Single-button window that converts dropped/selected VRML files."""
+    """Single-button window that converts dropped/selected VRML files.
+
+    Args:
+        html (bool): Whether to wrap the X3D output in an HTML viewer.
+        embed (bool): Whether to embed the viewer components in the HTML.
+        view (bool): Whether to open the result after a successful conversion.
+        force (bool): Whether to force a fresh download of viewer components.
+        cache (bool): Whether to use the viewer-components cache.
+    """
 
     def __init__(
         self, html: bool, embed: bool, view: bool, force: bool, cache: bool
@@ -120,7 +138,12 @@ class VRML2X3DWindow(BaseWindow):
     # -- conversion --------------------------------------------------------
 
     def convert(self, vrmlpath: str | None) -> None:
-        """Prompt for paths as needed and start a background conversion."""
+        """Prompt for paths as needed and start a background conversion.
+
+        Args:
+            vrmlpath (str | None): The VRML file to convert, or ``None`` to
+                prompt with a file dialog.
+        """
         if self._thread is not None and self._thread.isRunning():
             return  # one conversion at a time
         vrmlpath = self._resolve_input_path(vrmlpath)
@@ -156,7 +179,14 @@ class VRML2X3DWindow(BaseWindow):
         self._thread.start()
 
     def _resolve_input_path(self, vrmlpath: str | None) -> str | None:
-        """Return an existing VRML path, prompting with a dialog if needed."""
+        """Return an existing VRML path, prompting with a dialog if needed.
+
+        Args:
+            vrmlpath (str | None): A candidate path, or ``None`` to prompt.
+
+        Returns:
+            str | None: An existing VRML file path, or ``None`` if cancelled.
+        """
         if vrmlpath and os.path.isfile(vrmlpath):
             return vrmlpath
         default_dir, default_file = config.get_verified_path("last_vrml_path")
@@ -177,7 +207,14 @@ class VRML2X3DWindow(BaseWindow):
         return path
 
     def _resolve_output_path(self, vrmlpath: str) -> str | None:
-        """Return a writable ``.x3d`` output path, prompting if necessary."""
+        """Return a writable ``.x3d`` output path, prompting if necessary.
+
+        Args:
+            vrmlpath (str): The source VRML path the output is derived from.
+
+        Returns:
+            str | None: A writable ``.x3d`` path, or ``None`` if cancelled.
+        """
         filename = os.path.splitext(vrmlpath)[0]
         x3dpath = f"{filename}.x3d"
         if waccess(os.path.dirname(x3dpath), os.W_OK):
@@ -191,7 +228,12 @@ class VRML2X3DWindow(BaseWindow):
         return path or None
 
     def _on_conversion_done(self, result: bool | Exception) -> None:
-        """Handle the background conversion result on the GUI thread."""
+        """Handle the background conversion result on the GUI thread.
+
+        Args:
+            result (bool | Exception): The backend result; an exception on
+                failure, otherwise truthy on success.
+        """
         self.setEnabled(True)
         self._thread = None
         if isinstance(result, Exception):
@@ -200,7 +242,11 @@ class VRML2X3DWindow(BaseWindow):
             launch_file(self._finalpath)
 
     def _on_unsupported(self, paths: list[str]) -> None:
-        """Report files the converter cannot handle."""
+        """Report files the converter cannot handle.
+
+        Args:
+            paths (list[str]): The unsupported dropped file paths.
+        """
         QMessageBox.warning(
             self,
             self.windowTitle(),

@@ -38,13 +38,24 @@ _BACKGROUND = QColor(40, 40, 40)
 
 
 def _rgb(xyz: tuple[float, float, float]) -> QColor:
-    """Return the display QColor for a linear-XYZ triplet."""
+    """Return the display QColor for a linear-XYZ triplet.
+
+    Args:
+        xyz (tuple[float, float, float]): A linear-XYZ triplet.
+
+    Returns:
+        QColor: The corresponding (clamped 0..255) display colour.
+    """
     r, g, b = (max(0, min(255, int(v))) for v in colormath.XYZ2RGB(*xyz, scale=255))
     return QColor(r, g, b)
 
 
 class GamutPlot(pg.PlotWidget):
-    """Plot widget that draws profile gamuts in a chosen 2D projection."""
+    """Plot widget that draws profile gamuts in a chosen 2D projection.
+
+    Args:
+        parent (QWidget | None): Optional parent widget.
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent, background=_BACKGROUND)
@@ -66,7 +77,15 @@ class GamutPlot(pg.PlotWidget):
         profiles: dict[int, object] | None = None,
         size: int = 40,
     ) -> None:
-        """Set the gamut sample data and (optional) profile map."""
+        """Set the gamut sample data and (optional) profile map.
+
+        Args:
+            pcs_data (list[list[tuple[float, float, float]]]): Per-profile lists
+                of linear-XYZ gamut-surface samples.
+            profiles (dict[int, object] | None): Optional ``{index: ICCProfile}``
+                map (for named-colour special-casing).
+            size (int): Segments per primary→secondary edge.
+        """
         self.pcs_data = pcs_data
         self.profiles = profiles or {}
         self.segment_size = size
@@ -82,12 +101,12 @@ class GamutPlot(pg.PlotWidget):
         """Redraw the whole gamut plot.
 
         Args:
-            colorspace: Projection to use (key of ``COLORSPACES``); keeps the
-                current one if omitted.
-            whitepoint: Colour-temperature locus to overlay (0=none, 1=daylight,
-                2=Planckian).
-            show_outline: Whether to draw the spectral-locus / optimal-colour
-                boundary.
+            colorspace (str | None): Projection to use (key of ``COLORSPACES``);
+                keeps the current one if omitted.
+            whitepoint (int): Colour-temperature locus to overlay (0=none,
+                1=daylight, 2=Planckian).
+            show_outline (bool): Whether to draw the spectral-locus /
+                optimal-colour boundary.
         """
         if colorspace:
             self.colorspace = colorspace
@@ -113,7 +132,14 @@ class GamutPlot(pg.PlotWidget):
         width: float,
         fill: QColor | None = None,
     ) -> None:
-        """Add a polyline (optionally closed/filled) to the plot."""
+        """Add a polyline (optionally closed/filled) to the plot.
+
+        Args:
+            points (Sequence[tuple[float, float]]): The polyline vertices.
+            color (QColor): The pen colour.
+            width (float): The pen width.
+            fill (QColor | None): Optional fill brush colour.
+        """
         if not points:
             return
         xs = [p[0] for p in points]
@@ -131,7 +157,14 @@ class GamutPlot(pg.PlotWidget):
         size: float,
         symbol: str,
     ) -> None:
-        """Add scatter markers to the plot."""
+        """Add scatter markers to the plot.
+
+        Args:
+            points (Sequence[tuple[float, float]]): The marker positions.
+            color (QColor): The marker pen colour.
+            size (float): The relative marker size.
+            symbol (str): The pyqtgraph marker symbol (e.g. ``"+"``, ``"x"``).
+        """
         if not points:
             return
         self.addItem(
@@ -151,7 +184,11 @@ class GamutPlot(pg.PlotWidget):
             self._add_curve(curve, _OUTLINE, 1.75)
 
     def _add_locus(self, whitepoint: int) -> None:
-        """Draw the daylight (1) or Planckian (2) colour-temperature locus."""
+        """Draw the daylight (1) or Planckian (2) colour-temperature locus.
+
+        Args:
+            whitepoint (int): 1 for the daylight locus, 2 for the Planckian one.
+        """
         cfg = COLORSPACES[self.colorspace]
         if whitepoint == 1:
             kelvins = range(4000, 25001, 40)
@@ -166,7 +203,13 @@ class GamutPlot(pg.PlotWidget):
     def _add_profile(
         self, index: int, pcs_triplets: Sequence[tuple[float, float, float]]
     ) -> None:
-        """Draw one profile's gamut hull and whitepoint marker."""
+        """Draw one profile's gamut hull and whitepoint marker.
+
+        Args:
+            index (int): Index of the profile in ``pcs_data`` (1 = comparison).
+            pcs_triplets (Sequence[tuple[float, float, float]]): The profile's
+                linear-XYZ gamut-surface samples, whitepoint last.
+        """
         cfg = COLORSPACES[self.colorspace]
         is_comparison = index == 1
         coords = [cfg.convert(*t) for t in pcs_triplets]
@@ -198,7 +241,12 @@ class GamutPlot(pg.PlotWidget):
             self._add_markers([(wx_, wy)], _rgb(pcs_triplets[-1]), 2, "+")
 
     def _autorange(self, view: tuple[float, float, float, float]) -> None:
-        """Fit the view to the data, with the configured minimum extent."""
+        """Fit the view to the data, with the configured minimum extent.
+
+        Args:
+            view (tuple[float, float, float, float]): The minimum
+                ``(min_x, min_y, max_x, max_y)`` extent to include.
+        """
         min_x, min_y, max_x, max_y = view
         for triplets in self.pcs_data:
             cfg = COLORSPACES[self.colorspace]
@@ -213,7 +261,14 @@ class GamutPlot(pg.PlotWidget):
 
 
 def _is_named_color(profile: object) -> bool:
-    """Return True if ``profile`` is a named-colour profile with ncl2 data."""
+    """Return True if ``profile`` is a named-colour profile with ncl2 data.
+
+    Args:
+        profile (object): The profile to test (may be ``None``).
+
+    Returns:
+        bool: True if it is a named-colour (nmcl) profile with ncl2 data.
+    """
     return bool(
         profile is not None
         and getattr(profile, "profileClass", None) == b"nmcl"

@@ -42,11 +42,11 @@ def _scaled(func: Callable, drop_first: bool = True) -> Callable:
     leading lightness component we don't plot.
 
     Args:
-        func: A ``colormath.XYZ2*`` callable.
-        drop_first: Drop the leading (lightness) component of the result.
+        func (Callable): A ``colormath.XYZ2*`` callable.
+        drop_first (bool): Drop the leading (lightness) component of the result.
 
     Returns:
-        ``f(X, Y, Z) -> (x, y)``.
+        Callable: A function ``f(x, y, z) -> (x, y)``.
     """
 
     def convert(x: float, y: float, z: float) -> tuple[float, float]:
@@ -117,10 +117,11 @@ def outline_curves(colorspace: str) -> list[list[tuple[float, float]]]:
     profile gamut. Mirrors the outline branches of the original ``DrawCanvas``.
 
     Args:
-        colorspace: A key of :data:`COLORSPACES`.
+        colorspace (str): A key of :data:`COLORSPACES`.
 
     Returns:
-        A list of point sequences; each is drawn as one connected curve.
+        list[list[tuple[float, float]]]: A list of point sequences; each is
+        drawn as one connected curve.
     """
     cfg = COLORSPACES[colorspace]
     xy = colormath.cie1931_2_xy

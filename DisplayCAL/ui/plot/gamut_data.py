@@ -33,7 +33,14 @@ _CHANNELS = {
 
 
 def is_supported(profile: ICCProfile) -> bool:
-    """Return whether a gamut can be computed for ``profile``."""
+    """Return whether a gamut can be computed for ``profile``.
+
+    Args:
+        profile (ICCProfile): The profile to check.
+
+    Returns:
+        bool: True if a gamut surface can be sampled for the profile.
+    """
     return bool(
         profile
         and profile.profileClass != b"link"
@@ -42,7 +49,15 @@ def is_supported(profile: ICCProfile) -> bool:
 
 
 def _named_color_triplets(profile: ICCProfile, intent: str) -> list[list[float]]:
-    """Return XYZ triplets for a named-colour (nmcl/ncl2) profile."""
+    """Return XYZ triplets for a named-colour (nmcl/ncl2) profile.
+
+    Args:
+        profile (ICCProfile): The named-colour profile.
+        intent (str): Rendering intent (``a``/``r``/``p``/``s``).
+
+    Returns:
+        list[list[float]]: The named colours as linear-XYZ triplets, sorted.
+    """
     triplets = []
     for key in profile.tags.ncl2:
         color = list(profile.tags.ncl2[key].pcs.values())
@@ -63,7 +78,16 @@ def _named_color_triplets(profile: ICCProfile, intent: str) -> list[list[float]]
 def _device_sample_values(
     profile: ICCProfile, channels: int, size: int
 ) -> list[list[float]]:
-    """Build the device-value cube edge samples to look up through ``profile``."""
+    """Build the device-value cube edge samples to look up through ``profile``.
+
+    Args:
+        profile (ICCProfile): The profile being sampled.
+        channels (int): Number of device channels.
+        size (int): Samples per primary→secondary edge.
+
+    Returns:
+        list[list[float]]: Device-value samples (whitepoint sample last).
+    """
     if profile.colorSpace in (b"Lab", b"Luv", b"XYZ", b"Yxy"):
         minv, maxv = 0.0, 0xFFFF / 32768.0  # ICC PCSXYZ encoding range
     else:
@@ -103,15 +127,17 @@ def compute_profile_gamut(
     """Return the profile's gamut-surface samples as linear-XYZ triplets.
 
     Args:
-        profile: The profile to sample.
-        worker: A :class:`DisplayCAL.worker.Worker` used to drive ``xicclu``.
-        intent: Rendering intent (``a``/``r``/``p``/``s``).
-        direction: ``f`` forward, or ``ib`` inverted-backward (round-trip).
-        order: ``n`` normal or ``c`` chromatic-adaptation order.
-        size: Segments per primary→secondary edge.
+        profile (ICCProfile): The profile to sample.
+        worker (Worker): A :class:`DisplayCAL.worker.Worker` used to drive
+            ``xicclu``.
+        intent (str): Rendering intent (``a``/``r``/``p``/``s``).
+        direction (str): ``f`` forward, or ``ib`` inverted-backward (round-trip).
+        order (str): ``n`` normal or ``c`` chromatic-adaptation order.
+        size (int): Segments per primary→secondary edge.
 
     Returns:
-        A list of ``[X, Y, Z]`` triplets; the last is the profile whitepoint.
+        list[list[float]]: A list of ``[X, Y, Z]`` triplets; the last is the
+        profile whitepoint.
 
     Raises:
         ValueError: If the profile's colour space is unsupported.

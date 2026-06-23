@@ -29,7 +29,11 @@ _BACKGROUND = QColor(40, 40, 40)
 
 
 class CurvePlot(pg.PlotWidget):
-    """Plot widget for per-channel tone curves over the unit square."""
+    """Plot widget for per-channel tone curves over the unit square.
+
+    Args:
+        parent (QWidget | None): Optional parent widget.
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent, background=_BACKGROUND)
@@ -49,8 +53,10 @@ class CurvePlot(pg.PlotWidget):
         """Draw the given per-channel curves.
 
         Args:
-            channels: ``{channel_name: [(x, y), ...]}`` with values in 0..1.
-            show_linear: Whether to draw the linear (y=x) reference diagonal.
+            channels (dict[str, list[tuple[float, float]]]):
+                ``{channel_name: [(x, y), ...]}`` with values in 0..1.
+            show_linear (bool): Whether to draw the linear (y=x) reference
+                diagonal.
         """
         self.clear()
         if show_linear:

@@ -23,11 +23,13 @@ def get_theme_pixmap(size: int, name: str) -> QPixmap:
     """Return the themed PNG ``name`` at ``size`` as a ``QPixmap``.
 
     Args:
-        size: Square icon size (must match a ``theme/icons/<size>x<size>`` dir).
-        name: Icon base name without extension.
+        size (int): Square icon size (must match a ``theme/icons/<size>x<size>``
+            dir).
+        name (str): Icon base name without extension.
 
     Returns:
-        The loaded pixmap, or a null ``QPixmap`` if the asset is missing.
+        QPixmap: The loaded pixmap, or a null ``QPixmap`` if the asset is
+        missing.
     """
     path = config.get_data_path(f"theme/icons/{size}x{size}/{name}.png")
     if not path:
@@ -41,11 +43,12 @@ def get_theme_icon(name: str, sizes: tuple[int, ...] = THEME_ICON_SIZES) -> QIco
     Mirrors :func:`DisplayCAL.config.get_icon_bundle` but returns a ``QIcon``.
 
     Args:
-        name: Icon base name without extension.
-        sizes: Candidate sizes to look up; missing ones are skipped.
+        name (str): Icon base name without extension.
+        sizes (tuple[int, ...]): Candidate sizes to look up; missing ones are
+            skipped.
 
     Returns:
-        A ``QIcon`` containing every size that was found (possibly empty).
+        QIcon: A ``QIcon`` containing every size that was found (possibly empty).
     """
     icon = QIcon()
     for size in sizes:
