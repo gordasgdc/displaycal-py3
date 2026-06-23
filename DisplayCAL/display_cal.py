@@ -228,6 +228,7 @@ from DisplayCAL.worker import (
     get_options_from_ti3,
     http_request,
     parse_argument_string,
+    reload_black_videoluts,
     show_result_dialog,
 )
 from DisplayCAL.wx_addons import (
@@ -2526,6 +2527,12 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self._key_is_down = None
         self.check_keydown_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.check_keydown, self.check_keydown_timer)
+
+        # macOS only: watch for the OS clobbering the VideoLUT to black after a
+        # calibration was loaded/installed (issue #694) and re-load it. Only
+        # fires while idle (not measuring), so it can't disturb a measurement.
+        self.lut_watch_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self.check_lut_clobbered, self.lut_watch_timer)
 
     def check_keydown(self, event: wx.TimerEvent) -> None:
         """Check if the ALT key is pressed and update the measurement report button.
@@ -13643,11 +13650,37 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             self.update_profile_name_timer.Start(1000)
         if not self.check_keydown_timer.IsRunning():
             self.check_keydown_timer.Start(250)
+        if (
+            sys.platform == "darwin"
+            and getcfg("profile_loader.macos_reapply_watch")
+            and not self.lut_watch_timer.IsRunning()
+        ):
+            interval = max(
+                1, int(getcfg("profile_loader.macos_reapply_watch_interval"))
+            )
+            self.lut_watch_timer.Start(interval * 1000)
 
     def stop_timers(self) -> None:
         """Stop timers for profile name updates and keydown checks."""
         self.update_profile_name_timer.Stop()
         self.check_keydown_timer.Stop()
+        self.lut_watch_timer.Stop()
+
+    def check_lut_clobbered(self, event: "wx.TimerEvent | None" = None) -> None:
+        """Re-load calibration if macOS has clobbered the VideoLUT (issue #694).
+
+        Idle backstop to the in-session recovery in worker.exec_cmd: runs only on
+        macOS and only while idle (no measurement in progress, so it can never
+        disturb a running calibration). Any display whose VideoLUT has gone black
+        is detected via CoreGraphics and re-loaded with ``dispwin -L``.
+        """
+        if sys.platform != "darwin" or self.worker.is_working():
+            return
+        if not getcfg("profile_loader.macos_reapply_watch"):
+            return
+        dispwin = get_argyll_util("dispwin")
+        if dispwin:
+            reload_black_videoluts(dispwin, log=self.worker.log)
 
     def synthicc_create_handler(self, event: wx.Event) -> None:
         """Assign and initialize the synthetic ICC creation window."""
