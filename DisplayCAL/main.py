@@ -45,15 +45,16 @@ from DisplayCAL.config import (
     RES_FILES,
     RUNTYPE,
     get_data_path,
+    get_ui_toolkit,
     getcfg,
     initcfg,
 )
 from DisplayCAL.debughelpers import ResourceError, handle_error
 from DisplayCAL.log import LOG
-from DisplayCAL.meta import VERSION_STRING
 from DisplayCAL.meta import (
     NAME as APPNAME,
 )
+from DisplayCAL.meta import VERSION_STRING
 from DisplayCAL.multiprocess import mp
 from DisplayCAL.options import VERBOSE
 from DisplayCAL.util_os import FileLock, LockingError, UnlockingError
@@ -64,7 +65,7 @@ elif sys.platform == "darwin":
     from platform import mac_ver
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
     from types import TracebackType
     if sys.version_info >= (3, 11):
         from typing import Self
@@ -834,13 +835,40 @@ def create_main_data_dir() -> None:
             )
 
 
+def _get_qt_main(module: str) -> Callable[[], int] | None:
+    """Return the Qt ``main`` callable for ``module``, or ``None``.
+
+    Maps a module name to its Qt port under :mod:`DisplayCAL.ui`. Modules that
+    have not been ported yet return ``None`` so the caller falls back to wx.
+
+    Args:
+        module (str): Module name.
+
+    Returns:
+        Callable | None: The Qt entry point, or ``None`` if not yet ported.
+    """
+    if module == "VRML-to-X3D-converter":
+        from DisplayCAL.ui.tools.vrml_to_x3d import main
+
+        return main
+    return None
+
+
 def run_app(module: str) -> None:
     """Run the application.
 
     Args:
         module (str): Module name.
     """
-    # Initialize & run
+    # Initialize & run.
+    # During the wx-to-Qt migration (DisplayCAL 4.0) the Qt path is opt-in via
+    # DISPLAYCAL_UI=qt / --qt and only used for modules already ported to Qt.
+    if get_ui_toolkit() == "qt":
+        qt_main = _get_qt_main(module)
+        if qt_main is not None:
+            qt_main()
+            return
+
     if module == "3DLUT-maker":
         from DisplayCAL.wx_lut_3d_frame import main
     elif module == "curve-viewer":

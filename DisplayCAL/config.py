@@ -2531,6 +2531,22 @@ def get_verified_path(cfg_item_name: str, path: None | str = None) -> tuple[str,
     return default_dir, default_file
 
 
+def get_ui_toolkit() -> str:
+    """Return the UI toolkit to use: ``"qt"`` or ``"wx"``.
+
+    During the wx-to-Qt migration for DisplayCAL 4.0 both UI code paths coexist.
+    Qt is opted into via the ``DISPLAYCAL_UI=qt`` environment variable or the
+    ``--qt`` command line flag; otherwise wx (the default) is used. Entry points
+    consult this and dispatch to the Qt implementation only where one exists.
+
+    Returns:
+        str: ``"qt"`` if Qt was requested, ``"wx"`` otherwise.
+    """
+    if "--qt" in sys.argv[1:] or os.getenv("DISPLAYCAL_UI", "").lower() == "qt":
+        return "qt"
+    return "wx"
+
+
 def is_ccxx_testchart(testchart: None | str = None) -> bool:
     """Check whether the testchart is the default chart for CCMX/CCSS creation.
 
