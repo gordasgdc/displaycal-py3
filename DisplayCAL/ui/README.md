@@ -49,6 +49,9 @@ DisplayCAL-specific parts live here:
 - `plot/gamut.py` — `GamutPlot(pg.PlotWidget)`, the gamut renderer.
 - `plot/gamut_data.py` — binding-agnostic gamut sampling via Argyll `xicclu`,
   extracted from `GamutCanvas.setup`.
+- `plot/curve.py` — `CurvePlot(pg.PlotWidget)`, per-channel tone-curve renderer.
+- `plot/curve_data.py` — extracts `vcgt` and `*TRC` curves from a profile
+  (no Argyll), normalised to the unit square.
 
 ## Migration pattern (follow `tools/vrml_to_x3d.py`)
 
@@ -77,13 +80,18 @@ module:
 - **VRML-to-X3D converter** (`tools/vrml_to_x3d.py`) — complete.
 - **Profile info / gamut viewer** (`tools/profile_info.py`) — gamut view with
   colorspace + white-point controls, profile load/drop, info panel. Still to
-  add: tone-response-curve view (needs the `LUTFrame` port), profile comparison
-  overlay, rendering-intent/direction controls, 3D/VRML export.
+  add: tone-response-curve view, profile comparison overlay,
+  rendering-intent/direction controls, 3D/VRML export.
+- **Curve viewer** (`tools/curve_viewer.py`) — calibration (`vcgt`) and
+  tone-response (`*TRC`) curves with a mode selector and profile load/drop.
+  Deferred: the "actual" measured tone-response via `xicclu` (with
+  intent/direction controls), reading the live video-card LUT, curve smoothing.
 
 ## Not yet ported / deliberately deferred
 
-- **Curve / LUT viewer** (`wx_lut_viewer.LUTFrame`) — the tone-curve counterpart
-  of the gamut view; once ported it also completes profile-info's curve tab.
+- **Measured tone-response** (`LUTFrame.lookup_tone_response_curves`) — the
+  `xicclu`-based curve path with intent/direction controls; would complete both
+  the curve viewer and profile-info's curve tab.
 - **Scripting/IPC socket server** (`BaseFrame.listen`/`connection_handler`/
   `message_handler`): binding-agnostic; will move to a reusable mixin when the
   first window that needs it (the main window or scripting client) is ported.

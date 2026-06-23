@@ -855,6 +855,10 @@ def _get_qt_main(module: str) -> Callable[[], int] | None:
         from DisplayCAL.ui.tools.profile_info import main
 
         return main
+    if module == "curve-viewer":
+        from DisplayCAL.ui.tools.curve_viewer import main
+
+        return main
     return None
 
 
