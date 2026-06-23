@@ -7,10 +7,11 @@ Loads an ICC profile and shows its tone curves with
 * ``vcgt`` — calibration video-card-gamma curves (read from the tag),
 * ``trc`` — the ``*TRC`` tone-response tags (read from the tag),
 * ``measured`` — the *measured* tone response, computed live through Argyll
-  ``xicclu`` with rendering-intent and (for cLUT profiles) cLUT/matrix controls.
+  ``xicclu`` with rendering-intent, lookup-direction (forward / inverse, plus
+  backward variants for cLUT profiles) and cLUT/matrix controls.
 
-Deferred from the wx frame (see ``DisplayCAL/ui/README.md``): inverse/backward
-lookup directions, reading the live video-card LUT, and curve smoothing.
+Deferred from the wx frame (see ``DisplayCAL/ui/README.md``): reading the live
+video-card LUT, and curve smoothing.
 """
 
 from __future__ import annotations
@@ -39,7 +40,9 @@ from DisplayCAL.ui.file_drop import FileDropTarget
 from DisplayCAL.ui.plot.curve import CurvePlot
 from DisplayCAL.ui.plot.curve_data import (
     CURVE_MODES,
+    DIRECTIONS,
     available_curve_modes,
+    available_directions,
     extract_curves,
     measured_tone_response,
 )
@@ -56,6 +59,9 @@ INTENTS = {
     "saturation": "s",
 }
 
+#: Direction code -> human label key (inverse of curve_data.DIRECTIONS).
+_DIRECTION_LABELS = {code: key for key, code in DIRECTIONS.items()}
+
 
 class _MeasuredThread(QThread):
     """Compute the measured tone response off the GUI thread."""
@@ -69,16 +75,19 @@ class _MeasuredThread(QThread):
         worker: Worker,
         intent: str,
         use_clut: bool,
+        direction: str,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self._args = (profile, worker, intent, use_clut)
+        self._args = (profile, worker, intent, use_clut, direction)
 
     def run(self) -> None:
-        profile, worker, intent, use_clut = self._args
+        profile, worker, intent, use_clut, direction = self._args
         try:
             self.done.emit(
-                measured_tone_response(profile, worker, intent, use_clut)
+                measured_tone_response(
+                    profile, worker, intent, use_clut, direction
+                )
             )
         except Exception as exception:  # noqa: BLE001  (report on GUI thread)
             self.done.emit(exception)
@@ -108,6 +117,9 @@ class CurveViewerWindow(BaseWindow):
         for key in INTENTS:
             self.intent_combo.addItem(lang.getstr(key), INTENTS[key])
         self.intent_combo.currentIndexChanged.connect(self._redraw)
+        self.direction_label = QLabel(lang.getstr("direction"))
+        self.direction_combo = QComboBox()
+        self.direction_combo.currentIndexChanged.connect(self._redraw)
         self.clut_check = QCheckBox(lang.getstr("use_separate_lut_access"))
         self.clut_check.setChecked(True)
         self.clut_check.toggled.connect(self._redraw)
@@ -134,6 +146,8 @@ class CurveViewerWindow(BaseWindow):
         controls.addSpacing(12)
         controls.addWidget(self.intent_label)
         controls.addWidget(self.intent_combo)
+        controls.addWidget(self.direction_label)
+        controls.addWidget(self.direction_combo)
         controls.addWidget(self.clut_check)
         controls.addStretch(1)
         controls.addWidget(self.status)
@@ -145,14 +159,18 @@ class CurveViewerWindow(BaseWindow):
         return central
 
     def _update_controls_visibility(self) -> None:
-        """Show intent/CLUT controls only in the measured mode."""
+        """Show intent/direction/CLUT controls only in the measured mode."""
         measured = self.mode_combo.currentData() == "measured"
         has_clut = bool(
             self._profile
             and ("A2B0" in self._profile.tags or "B2A0" in self._profile.tags)
         )
+        # Direction is only worth offering when there is more than one.
+        multi_direction = measured and self.direction_combo.count() > 1
         self.intent_label.setVisible(measured)
         self.intent_combo.setVisible(measured)
+        self.direction_label.setVisible(multi_direction)
+        self.direction_combo.setVisible(multi_direction)
         self.clut_check.setVisible(measured and has_clut)
 
     # -- loading -----------------------------------------------------------
@@ -176,6 +194,15 @@ class CurveViewerWindow(BaseWindow):
         for mode in modes:
             self.mode_combo.addItem(lang.getstr(CURVE_MODES[mode]), mode)
         self.mode_combo.blockSignals(False)
+
+        self.direction_combo.blockSignals(True)
+        self.direction_combo.clear()
+        if profile.colorSpace == b"RGB":
+            for code in available_directions(profile):
+                self.direction_combo.addItem(
+                    lang.getstr(_DIRECTION_LABELS[code]), code
+                )
+        self.direction_combo.blockSignals(False)
 
         if not modes:
             self.plot.draw_curves({})
@@ -205,6 +232,7 @@ class CurveViewerWindow(BaseWindow):
             self.worker,
             self.intent_combo.currentData(),
             self.clut_check.isChecked(),
+            self.direction_combo.currentData() or "f",
             parent=self,
         )
         self._thread.done.connect(self._on_measured_ready)

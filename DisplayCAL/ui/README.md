@@ -84,16 +84,13 @@ module:
   add: tone-response-curve view, profile comparison overlay,
   rendering-intent/direction controls, 3D/VRML export.
 - **Curve viewer** (`tools/curve_viewer.py`) — calibration (`vcgt`),
-  tone-response (`*TRC`) and **measured** (live `xicclu`, with intent and
-  cLUT/matrix controls) curves, with a mode selector and profile load/drop.
-  Deferred: inverse/backward lookup directions, live video-card LUT readback,
+  tone-response (`*TRC`) and **measured** curves (live `xicclu`, with intent,
+  lookup-direction — forward/inverse/backward — and cLUT/matrix controls), with
+  a mode selector and profile load/drop. Deferred: live video-card LUT readback,
   curve smoothing.
 
 ## Not yet ported / deliberately deferred
 
-- **Inverse/backward measured curves** — the `direction` (`b`/`if`/`ib`)
-  branches of `LUTFrame.lookup_tone_response_curves` (with their clipping /
-  monotonicity handling); the Qt path currently does the forward measurement.
 - **Scripting/IPC socket server** (`BaseFrame.listen`/`connection_handler`/
   `message_handler`): binding-agnostic; will move to a reusable mixin when the
   first window that needs it (the main window or scripting client) is ported.
