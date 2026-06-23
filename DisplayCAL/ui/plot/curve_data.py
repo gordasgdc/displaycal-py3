@@ -20,22 +20,92 @@ from DisplayCAL.icc_profile import CurveType
 
 if TYPE_CHECKING:
     from DisplayCAL.icc_profile import ICCProfile, VideoCardGammaType
+    from DisplayCAL.worker import Worker
 
 #: Plot mode -> human label key (for UI). Order is the preferred default order.
-CURVE_MODES = {"vcgt": "calibration_curves", "trc": "tone_response_curves"}
+CURVE_MODES = {
+    "vcgt": "calibration_curves",
+    "trc": "tone_response_curves",
+    "measured": "measured_tone_response",
+}
 
 #: TRC tag -> channel name.
 _TRC_TAGS = {"rTRC": "R", "gTRC": "G", "bTRC": "B"}
 
 
 def available_curve_modes(profile: ICCProfile) -> list[str]:
-    """Return the curve modes (``"vcgt"``/``"trc"``) present in ``profile``."""
+    """Return the curve modes present/derivable for ``profile``.
+
+    ``"measured"`` is offered for any RGB profile (it is computed live through
+    Argyll ``xicclu``); the caller is responsible for handling a missing Argyll.
+    """
     modes = []
     if "vcgt" in profile.tags:
         modes.append("vcgt")
     if any(isinstance(profile.tags.get(tag), CurveType) for tag in _TRC_TAGS):
         modes.append("trc")
+    if profile.colorSpace == b"RGB":
+        modes.append("measured")
     return modes
+
+
+def measured_tone_response(
+    profile: ICCProfile,
+    worker: Worker,
+    intent: str = "r",
+    use_clut: bool = True,
+    size: int = 256,
+) -> dict[str, list[tuple[float, float]]]:
+    """Return the *measured* per-channel tone response via Argyll ``xicclu``.
+
+    Unlike the ``vcgt``/``trc`` tags (read straight from the profile), this looks
+    the profile up to get its actual behaviour: each primary is ramped 0→1 and
+    looked up forward to PCS XYZ; the resulting luminance is normalised to that
+    channel's own range. For cLUT profiles the ``use_clut`` flag selects the
+    cLUT (``A2B``) path versus the colorimetric matrix/shaper path — mirroring
+    the ``order`` choice in ``LUTFrame.lookup_tone_response_curves``.
+
+    Args:
+        profile: An RGB profile to measure.
+        worker: A :class:`DisplayCAL.worker.Worker` driving ``xicclu``.
+        intent: Rendering intent (``a``/``r``/``p``/``s``).
+        use_clut: Use the cLUT path when the profile has one.
+        size: Number of ramp samples per channel.
+
+    Returns:
+        ``{"R": [...], "G": [...], "B": [...]}`` of normalised ``(input, output)``
+        points.
+
+    Raises:
+        ValueError: If the profile is not an RGB device profile.
+    """
+    if profile.colorSpace != b"RGB":
+        raise ValueError("Measured tone response requires an RGB profile")
+
+    has_clut = "A2B0" in profile.tags or "B2A0" in profile.tags
+    order = "n" if has_clut and use_clut else "r"
+
+    curves = {}
+    for channel, name in enumerate(("R", "G", "B")):
+        ramp = []
+        for i in range(size):
+            values = [0.0, 0.0, 0.0]
+            values[channel] = i / (size - 1)
+            ramp.append(values)
+        xyz = worker.xicclu(profile, ramp, intent, "f", order, pcs="x")
+        luminance = [triplet[1] for triplet in xyz]
+        curves[name] = _normalise_channel(luminance, size)
+    return curves
+
+
+def _normalise_channel(luminance: list[float], size: int) -> list[tuple[float, float]]:
+    """Map a luminance ramp to ``(input, output)`` points normalised to 0..1."""
+    black, white = luminance[0], luminance[-1]
+    span = (white - black) or 1.0
+    return [
+        (i / (size - 1), max(0.0, min(1.0, (luminance[i] - black) / span)))
+        for i in range(size)
+    ]
 
 
 def extract_curves(
