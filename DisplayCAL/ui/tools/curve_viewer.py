@@ -10,14 +10,15 @@ Loads an ICC profile and shows its tone curves with
   ``xicclu`` with rendering-intent, lookup-direction (forward / inverse, plus
   backward variants for cLUT profiles) and cLUT/matrix controls.
 
-Deferred from the wx frame (see ``DisplayCAL/ui/README.md``): reading the live
-video-card LUT, and curve smoothing.
+It also loads ``.cal`` calibration files and can show the live video-card LUT
+read back from the graphics card ("show actual LUT").
 """
 
 from __future__ import annotations
 
 import os
 import sys
+from typing import TYPE_CHECKING
 
 from qtpy.QtCore import QThread, Signal
 from qtpy.QtWidgets import (
@@ -31,8 +32,7 @@ from qtpy.QtWidgets import (
 
 from DisplayCAL import config
 from DisplayCAL import localization as lang
-from DisplayCAL.config import get_data_path
-from DisplayCAL.icc_profile import ICCProfile
+from DisplayCAL.config import get_data_path, getcfg
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.base_window import BaseWindow
@@ -44,12 +44,18 @@ from DisplayCAL.ui.plot.curve_data import (
     available_curve_modes,
     available_directions,
     extract_curves,
+    load_profile_or_cal,
     measured_tone_response,
+    read_current_lut,
 )
 from DisplayCAL.worker import Worker
 
-#: Profile file suffixes accepted for opening / drag-and-drop.
-PROFILE_SUFFIXES = (".icc", ".icm")
+if TYPE_CHECKING:
+    from DisplayCAL.icc_profile import ICCProfile
+
+#: Profile file suffixes accepted for opening / drag-and-drop (``.cal`` is
+#: wrapped in a fake profile).
+PROFILE_SUFFIXES = (".icc", ".icm", ".cal")
 
 #: Rendering intents offered for the measured tone response.
 INTENTS = {
@@ -95,6 +101,28 @@ class _MeasuredThread(QThread):
             worker.wrapup(False)
 
 
+class _LutReadThread(QThread):
+    """Read the live video-card LUT off the GUI thread."""
+
+    #: Emitted with the read-back profile or, on failure, an ``Exception``.
+    done = Signal(object)
+
+    def __init__(
+        self, worker: Worker, display_no: int, parent: QWidget | None = None
+    ) -> None:
+        super().__init__(parent)
+        self._worker = worker
+        self._display_no = display_no
+
+    def run(self) -> None:
+        try:
+            self.done.emit(read_current_lut(self._worker, self._display_no))
+        except Exception as exception:  # noqa: BLE001  (report on GUI thread)
+            self.done.emit(exception)
+        finally:
+            self._worker.wrapup(False)
+
+
 class CurveViewerWindow(BaseWindow):
     """Window showing a profile's calibration / tone-response curves."""
 
@@ -104,12 +132,17 @@ class CurveViewerWindow(BaseWindow):
             title=lang.getstr("calibration.lut_viewer.title"),
             icon_name=f"{APPNAME}-curve-viewer".lower(),
         )
-        self._profile: ICCProfile | None = None
+        self._profile: ICCProfile | None = None  # currently displayed
+        self._user_profile: ICCProfile | None = None  # last loaded by the user
         self.worker = Worker()
         self._thread: _MeasuredThread | None = None
+        self._read_thread: _LutReadThread | None = None
 
         self.mode_combo = QComboBox()
         self.mode_combo.currentIndexChanged.connect(self._redraw)
+
+        self.actual_lut_check = QCheckBox(lang.getstr("calibration.show_actual_lut"))
+        self.actual_lut_check.toggled.connect(self._on_actual_lut_toggled)
 
         # Controls shown only for the measured tone response.
         self.intent_label = QLabel(lang.getstr("rendering_intent"))
@@ -149,6 +182,8 @@ class CurveViewerWindow(BaseWindow):
         controls.addWidget(self.direction_label)
         controls.addWidget(self.direction_combo)
         controls.addWidget(self.clut_check)
+        controls.addSpacing(12)
+        controls.addWidget(self.actual_lut_check)
         controls.addStretch(1)
         controls.addWidget(self.status)
 
@@ -176,12 +211,24 @@ class CurveViewerWindow(BaseWindow):
     # -- loading -----------------------------------------------------------
 
     def load_profile(self, path: str) -> None:
-        """Load the profile at ``path`` and show its available curves."""
+        """Load an ICC profile or ``.cal`` file at ``path`` and show its curves."""
         try:
-            profile = ICCProfile(os.path.abspath(path))
+            profile = load_profile_or_cal(os.path.abspath(path))
         except Exception as exception:  # noqa: BLE001
             self.status.setText(f"{lang.getstr('error')}: {exception}")
             return
+        if profile is None:
+            self.status.setText(f"{lang.getstr('error.file.open', path)}")
+            return
+        self._user_profile = profile
+        # A freshly loaded profile supersedes any "show actual LUT" view.
+        self.actual_lut_check.blockSignals(True)
+        self.actual_lut_check.setChecked(False)
+        self.actual_lut_check.blockSignals(False)
+        self._set_profile(profile)
+
+    def _set_profile(self, profile: ICCProfile) -> None:
+        """Display ``profile`` (user-loaded or read-back), repopulating modes."""
         self._profile = profile
         self.setWindowTitle(
             f"{lang.getstr('calibration.lut_viewer.title')} — "
@@ -209,6 +256,32 @@ class CurveViewerWindow(BaseWindow):
             self.status.setText(lang.getstr("profile.no_vcgt"))
             return
         self._redraw()
+
+    def _on_actual_lut_toggled(self, checked: bool) -> None:
+        """Switch between the loaded profile and the live video-card LUT."""
+        if not checked:
+            if self._user_profile is not None:
+                self._set_profile(self._user_profile)
+            return
+        if self._read_thread is not None and self._read_thread.isRunning():
+            return
+        self.status.setText(lang.getstr("please_wait"))
+        self._read_thread = _LutReadThread(
+            self.worker, getcfg("display.number") or 1, parent=self
+        )
+        self._read_thread.done.connect(self._on_lut_read)
+        self._read_thread.start()
+
+    def _on_lut_read(self, result: object) -> None:
+        """Receive the read-back LUT profile on the GUI thread."""
+        self._read_thread = None
+        if isinstance(result, Exception):
+            self.actual_lut_check.blockSignals(True)
+            self.actual_lut_check.setChecked(False)
+            self.actual_lut_check.blockSignals(False)
+            self.status.setText(f"{lang.getstr('error')}: {result}")
+            return
+        self._set_profile(result)
 
     def _redraw(self) -> None:
         """Redraw the curves for the selected mode."""

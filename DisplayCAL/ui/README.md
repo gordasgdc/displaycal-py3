@@ -83,11 +83,11 @@ module:
   colorspace + white-point controls, profile load/drop, info panel. Still to
   add: tone-response-curve view, profile comparison overlay,
   rendering-intent/direction controls, 3D/VRML export.
-- **Curve viewer** (`tools/curve_viewer.py`) — calibration (`vcgt`),
+- **Curve viewer** (`tools/curve_viewer.py`) — complete. Calibration (`vcgt`),
   tone-response (`*TRC`) and **measured** curves (live `xicclu`, with intent,
-  lookup-direction — forward/inverse/backward — and cLUT/matrix controls), with
-  a mode selector and profile load/drop. Deferred: live video-card LUT readback,
-  curve smoothing.
+  lookup-direction — forward/inverse/backward — and cLUT/matrix controls);
+  loads `.icc`/`.icm`/`.cal`; and a "show actual LUT" toggle that reads the live
+  video-card LUT back from the graphics card.
 
 ## Not yet ported / deliberately deferred
 

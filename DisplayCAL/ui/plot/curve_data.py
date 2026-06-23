@@ -1,19 +1,20 @@
-"""Extract a profile's tone curves for plotting (no Argyll required).
+"""Extract a profile's tone curves for plotting.
 
-Binding-agnostic counterpart to the point-building parts of
-``wx_lut_viewer.LUTCanvas.DrawLUT``. It pulls directly-plottable curves out of a
-profile and normalises them to the unit square (input and output in 0..1):
+Binding-agnostic counterpart to the curve-building parts of
+``wx_lut_viewer``. Curves are normalised to the unit square (0..1):
 
-* ``vcgt`` — the calibration video-card-gamma curves (table or formula).
-* ``trc`` — the ``rTRC``/``gTRC``/``bTRC`` tone-response tags.
+* ``vcgt`` — the calibration video-card-gamma curves (table or formula),
+* ``trc`` — the ``rTRC``/``gTRC``/``bTRC`` tone-response tags,
+* ``measured`` — the live ``xicclu`` tone response (``measured_tone_response``).
 
-The "actual measured" tone-response path (looking the profile up through
-``xicclu`` with rendering-intent/direction controls, i.e.
-``LUTFrame.lookup_tone_response_curves``) is intentionally not handled here yet.
+It also bridges profile sources that aren't ``.icc``/``.icm`` files: loading a
+``.cal`` calibration file and reading the live video-card LUT, both via
+:func:`DisplayCAL.argyll_cgats.cal_to_fake_profile`.
 """
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 
 from DisplayCAL import colormath
@@ -280,3 +281,57 @@ def _vcgt_curves(vcgt: VideoCardGammaType) -> dict[str, list[tuple[float, float]
             (i / 255.0, vmin + (i / 255.0) ** gamma * (vmax - vmin)) for i in range(256)
         ]
     return curves
+
+
+# -- profile sources ---------------------------------------------------------
+
+
+def load_profile_or_cal(path: str) -> ICCProfile | None:
+    """Load ``path`` as an ICC profile, or a ``.cal`` calibration file.
+
+    ``.cal`` files are wrapped in a fake profile (vcgt only) via
+    :func:`DisplayCAL.argyll_cgats.cal_to_fake_profile`, mirroring the wx LUT
+    viewer's drag-and-drop handling.
+
+    Returns:
+        The loaded profile, or ``None`` if it could not be read.
+    """
+    if os.path.splitext(path)[1].lower() == ".cal":
+        from DisplayCAL.argyll_cgats import cal_to_fake_profile
+
+        return cal_to_fake_profile(path)
+    from DisplayCAL.icc_profile import ICCProfile
+
+    return ICCProfile(path)
+
+
+def read_current_lut(worker: Worker, display_no: int = 1) -> ICCProfile:
+    """Read the live video-card LUT of ``display_no`` as a fake profile.
+
+    Saves the current hardware gamma ramp with Argyll ``dispwin`` and wraps it
+    in a fake profile (vcgt) so its calibration curves can be plotted — the Qt
+    equivalent of the wx "show actual LUT" option.
+
+    Args:
+        worker: A :class:`DisplayCAL.worker.Worker` to drive ``dispwin``.
+        display_no: Argyll display index (1-based).
+
+    Returns:
+        A fake profile carrying the read-back vcgt.
+
+    Raises:
+        Exception: If the LUT could not be read or converted.
+    """
+    from DisplayCAL.argyll_cgats import cal_to_fake_profile
+
+    tmp = worker.create_tempdir()
+    if isinstance(tmp, Exception):
+        raise tmp
+    outfilename = os.path.join(tmp, "Video LUT")
+    result = worker.save_current_video_lut(display_no, outfilename, silent=True)
+    if isinstance(result, Exception):
+        raise result
+    profile = cal_to_fake_profile(outfilename)
+    if not profile:
+        raise ValueError("Could not read the current video card LUT")
+    return profile
