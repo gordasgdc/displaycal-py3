@@ -2168,6 +2168,140 @@ class WPopen(sp.Popen):
         sp.Popen.terminate(self)
 
 
+_coregraphics = None
+
+
+def _get_coregraphics():
+    """Return the CoreGraphics CDLL (macOS only), or None."""
+    global _coregraphics
+    if _coregraphics is None and sys.platform == "darwin":
+        try:
+            _coregraphics = ctypes.CDLL(
+                "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics"
+            )
+        except OSError:
+            _coregraphics = False  # Mark as tried-and-failed
+    return _coregraphics or None
+
+
+def get_macos_videolut_maxima(max_displays=16):
+    """Return the maximum VideoLUT output value for each active display (macOS).
+
+    Used to detect a display whose VideoLUT has been clobbered to all-black
+    (issue #694): a black VideoLUT has a maximum output near 0.0, a normal one
+    near 1.0. The list is indexed in CoreGraphics active-display order, which
+    matches ArgyllCMS' ``dispwin -d`` numbering (both come from
+    CGGetActiveDisplayList).
+
+    Returns:
+        list[None | float]: Per-display maxima (0.0 - 1.0), None for a display
+            that couldn't be read, or [] if CoreGraphics is unavailable.
+    """
+    cg = _get_coregraphics()
+    if cg is None:
+        return []
+    cg.CGGetActiveDisplayList.argtypes = [
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    cg.CGDisplayGammaTableCapacity.restype = ctypes.c_uint32
+    cg.CGDisplayGammaTableCapacity.argtypes = [ctypes.c_uint32]
+    cg.CGGetDisplayTransferByTable.argtypes = [
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    ids = (ctypes.c_uint32 * max_displays)()
+    count = ctypes.c_uint32(0)
+    if cg.CGGetActiveDisplayList(max_displays, ids, ctypes.byref(count)) != 0:
+        return []
+    maxima = []
+    for i in range(count.value):
+        did = ids[i]
+        cap = cg.CGDisplayGammaTableCapacity(did) or 256
+        red = (ctypes.c_float * cap)()
+        green = (ctypes.c_float * cap)()
+        blue = (ctypes.c_float * cap)()
+        nent = ctypes.c_uint32(0)
+        if (
+            cg.CGGetDisplayTransferByTable(
+                did, cap, red, green, blue, ctypes.byref(nent)
+            )
+            != 0
+        ):
+            maxima.append(None)
+            continue
+        channel_max = 0.0
+        for channel in (red, green, blue):
+            for j in range(nent.value):
+                if channel[j] > channel_max:
+                    channel_max = channel[j]
+        maxima.append(channel_max)
+    return maxima
+
+
+def reload_black_videoluts(
+    dispwin,
+    threshold=0.05,
+    retries=4,
+    settle=0.3,
+    log=None,
+    _maxima_fn=None,
+    _run=None,
+    _sleep=None,
+):
+    """Re-load the VideoLUT of any macOS display that has gone black (issue #694).
+
+    On macOS the OS (WindowServer) intermittently resets a display's VideoLUT to
+    all-black when an ArgyllCMS display tool exits, turning the screen black.
+    This detects that via CoreGraphics and re-loads the display's installed
+    calibration with ``dispwin -d{N} -L`` (exactly what un-blacks the screen),
+    retrying until it sticks (the re-load itself can occasionally be clobbered
+    again) or the retries run out.
+
+    Args:
+        dispwin (str): Path to the dispwin executable.
+        threshold (float): VideoLUT max output below which a display is
+            considered black.
+        retries (int): Maximum number of detect/re-load passes.
+        settle (float): Seconds to wait between passes.
+        log (None | Callable): Optional logging callable.
+        _maxima_fn, _run, _sleep: Injection points for testing.
+
+    Returns:
+        list[int]: Zero-based indices of displays that were re-loaded.
+    """
+    if sys.platform != "darwin" or not dispwin:
+        return []
+    maxima_fn = _maxima_fn or get_macos_videolut_maxima
+    run = _run or (lambda cmd: sp.call(cmd))
+    sleep_fn = _sleep or sleep
+    reloaded = []
+    for _ in range(max(1, int(retries))):
+        black = [
+            i
+            for i, m in enumerate(maxima_fn())
+            if m is not None and m < threshold
+        ]
+        if not black:
+            break
+        for i in black:
+            if log:
+                log(
+                    f"{APPNAME}: VideoLUT for display {i + 1:d} is black - "
+                    "re-loading calibration (issue #694)"
+                )
+            run([dispwin, "-v", f"-d{i + 1:d}", "-L"])
+            if i not in reloaded:
+                reloaded.append(i)
+        sleep_fn(settle)
+    return reloaded
+
+
 class Worker(WorkerBase):
     """Worker class for ArgyllCMS.
 
@@ -7709,6 +7843,27 @@ BEGIN_DATA
                             errmsg = errmsg[startpos + 2 :]
                 if errmsg:
                     return UnloggedError(errmsg.strip())
+        # macOS clobbers a display's VideoLUT to all-black when an ArgyllCMS
+        # display tool exits (issue #694). Recover right here, in the worker
+        # thread, after the tool has finished - this is race-free (sequential)
+        # and independent of whether the GUI stays open, so the screen doesn't
+        # stay black through the subsequent profile-creation steps.
+        if (
+            sys.platform == "darwin"
+            and not dry_run
+            and args
+            and "-?" not in args
+            and getcfg("profile_loader.macos_reapply_watch")
+            and cmdname
+            in (
+                get_argyll_utilname("dispcal"),
+                get_argyll_utilname("dispread"),
+                get_argyll_utilname("spotread"),
+                get_argyll_utilname("dispwin"),
+                get_argyll_utilname("colprof"),
+            )
+        ):
+            reload_black_videoluts(get_argyll_util("dispwin"), log=self.log)
         if self.exec_cmd_returnvalue is not None:
             return self.exec_cmd_returnvalue
         return self.retcode == 0
@@ -9256,6 +9411,69 @@ BEGIN_DATA
             stream.close()
             atexit.register(os.remove, profile.filename)
         return profile.filename or arg
+
+    def get_calibration_load_discrepancy(self, dispwin, display_no, profile_arg):
+        """Return how much a display's loaded calibration differs from a profile.
+
+        Runs ``dispwin -d{N} -V <profile>`` which compares the VideoLUT contents
+        currently loaded in the hardware against the given profile's calibration
+        and reports the discrepancy as a percentage. A verify-only run does not
+        open a window nor alter the VideoLUT, so this is safe to call freely.
+        Used to detect the macOS "black screen" condition where the OS clobbers
+        the VideoLUT after it was loaded (issue #694): a clobbered/black VideoLUT
+        yields a very large discrepancy (close to 100%), whereas a correctly
+        loaded calibration is at most a few percent off due to quantization.
+
+        Args:
+            dispwin (str): Path to the dispwin executable.
+            display_no (int): Zero-based display index.
+            profile_arg (str): Profile path to verify against. ``-L`` is not a
+                valid argument here (pass a real profile path).
+
+        Returns:
+            None | float: The discrepancy in percent (0.0 - 100.0), or None if
+                it could not be determined (e.g. no VideoLUT access).
+        """
+        self.exec_cmd(
+            dispwin,
+            ["-v", f"-d{display_no + 1:d}", "-V", profile_arg],
+            capture_output=True,
+            skip_scripts=True,
+            silent=True,
+        )
+        # The 'Verify: ... (discrepancy X%)' message goes to stdout,
+        # other errors go to stderr.
+        output = "\n".join(self.errors + self.output)
+        if "We don't have access to the VideoLUT" in output:
+            return None
+        match = re.search(r"discrepancy\s+([0-9]+(?:\.[0-9]+)?)%", output)
+        if match:
+            return float(match.group(1))
+        return None
+
+    def calibration_is_clobbered(self, dispwin, display_no, profile_arg):
+        """Return True if a display's loaded calibration looks clobbered/black.
+
+        See :meth:`get_calibration_load_discrepancy`. Only a discrepancy above
+        ``profile_loader.clobbered_discrepancy_threshold`` is treated as
+        clobbered, so benign quantization differences don't trigger needless
+        re-loads (which could themselves re-trigger the macOS bug).
+
+        Args:
+            dispwin (str): Path to the dispwin executable.
+            display_no (int): Zero-based display index.
+            profile_arg (str): Profile path to verify against.
+
+        Returns:
+            bool: True if the loaded calibration is considered clobbered.
+        """
+        discrepancy = self.get_calibration_load_discrepancy(
+            dispwin, display_no, profile_arg
+        )
+        if discrepancy is None:
+            return False
+        threshold = float(getcfg("profile_loader.clobbered_discrepancy_threshold"))
+        return discrepancy > threshold
 
     def update_display_name_manufacturer(
         self, ti3, display_name=None, display_manufacturer=None, write=True

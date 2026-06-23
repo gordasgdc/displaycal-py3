@@ -2150,6 +2150,18 @@ class ProfileLoader:
 
         if sys.platform == "win32":
             self.setup_taskbar_icon(app)
+        elif (
+            sys.platform == "darwin"
+            and config.getcfg("profile.load_on_login")
+            and "--force" not in sys.argv[1:]
+            and not self._skip
+            and config.getcfg("profile_loader.macos_reapply_watch")
+        ):
+            # macOS has no persistent calibration loader. Keep this process
+            # running and re-load calibration if the OS clobbers the VideoLUT
+            # (black screen bug, issue #694). A manual one-shot apply (--force)
+            # is left as a one-shot and does not enter the watch loop.
+            self._macos_watch()
 
     def setup_taskbar_icon(self, app: None | BaseApp) -> None:
         """Set up the taskbar icon.
@@ -2248,19 +2260,23 @@ class ProfileLoader:
         # xrandr _ICC_PROFILE property (if xrandr is working) or _ICC_PROFILE(_n)
         # root window atom.
         dispwin = get_argyll_util("dispwin")
-        if index is None:
-            if dispwin:
-                worker.enumerate_displays_and_ports(
-                    silent=True,
-                    check_lut_access=False,
-                    enumerate_ports=False,
-                    include_network_devices=False,
-                )
+        if dispwin:
+            # Always enumerate so that worker.displays is populated, even when
+            # applying to a single display by index (e.g. from the macOS
+            # VideoLUT watch). Without this the per-display loop below would
+            # have nothing to iterate over for an indexed call.
+            worker.enumerate_displays_and_ports(
+                silent=True,
+                check_lut_access=False,
+                enumerate_ports=False,
+                include_network_devices=False,
+            )
+            if index is None:
                 self.monitors = []
                 if sys.platform == "win32" and worker.displays:
                     self._enumerate_monitors()
-            else:
-                errors.append(lang.getstr("argyll.util.not_found", "dispwin"))
+        elif index is None:
+            errors.append(lang.getstr("argyll.util.not_found", "dispwin"))
 
         if sys.platform != "win32":
             # gcm-apply sets the _ICC_PROFILE root window atom for the first screen,
@@ -2326,59 +2342,86 @@ class ProfileLoader:
                     # Only need to run dispwin if under Windows, or if nothing else
                     # has already taken care of display profile and vcgt loading
                     # (e.g. oyranos-monitor with xcalib, or colord)
-                    if worker.exec_cmd(
-                        dispwin,
-                        ["-v", f"-d{i + 1:d}", profile_arg],
-                        capture_output=True,
-                        skip_scripts=True,
-                        silent=False,
-                    ):
-                        errortxt = ""
-                    else:
-                        errortxt = "\n".join(worker.errors).strip()
-                    if errortxt and (
-                        (
-                            "using linear" not in errortxt
-                            and "assuming linear" not in errortxt
-                        )
-                        or len(errortxt.split("\n")) > 1
-                    ):
-                        if "Failed to get the displays current ICC profile" in errortxt:
-                            # Maybe just not configured
-                            continue
-                        if (
-                            sys.platform == "win32"
-                            or "Failed to set VideoLUT" in errortxt
-                            or "We don't have access to the VideoLUT" in errortxt
+                    #
+                    # On macOS the OS (WindowServer) may intermittently clobber
+                    # the VideoLUT to all-black right after loading it, turning
+                    # the display black (issue #694). We therefore verify that
+                    # the calibration was actually loaded and re-try the load a
+                    # few times if it wasn't. Verification is also done on other
+                    # platforms when explicitly enabled.
+                    verify_load = (
+                        sys.platform == "darwin"
+                        or config.getcfg("profile_loader.verify_calibration")
+                        or "--verify" in sys.argv[1:]
+                    ) and profile_arg != "-L"
+                    max_attempts = max(
+                        1, int(config.getcfg("profile_loader.load_retries"))
+                    )
+                    load_error = None
+                    for attempt in range(max_attempts):
+                        if worker.exec_cmd(
+                            dispwin,
+                            ["-v", f"-d{i + 1:d}", profile_arg],
+                            capture_output=True,
+                            skip_scripts=True,
+                            silent=False,
                         ):
-                            errstr = lang.getstr("calibration.load_error")
+                            errortxt = ""
                         else:
-                            errstr = lang.getstr("profile.load_error")
-                        errors.append(f"{display}: {errstr}")
+                            errortxt = "\n".join(worker.errors).strip()
+                        if errortxt and (
+                            (
+                                "using linear" not in errortxt
+                                and "assuming linear" not in errortxt
+                            )
+                            or len(errortxt.split("\n")) > 1
+                        ):
+                            if (
+                                "Failed to get the displays current ICC profile"
+                                in errortxt
+                            ):
+                                # Maybe just not configured
+                                load_error = "skip"
+                                break
+                            if (
+                                sys.platform == "win32"
+                                or "Failed to set VideoLUT" in errortxt
+                                or "We don't have access to the VideoLUT" in errortxt
+                            ):
+                                errstr = lang.getstr("calibration.load_error")
+                            else:
+                                errstr = lang.getstr("profile.load_error")
+                            load_error = f"{display}: {errstr}"
+                            break
+                        # The load command itself succeeded. Verify the
+                        # calibration is actually loaded in the VideoLUT and
+                        # re-try the load if it was clobbered (macOS black
+                        # screen), see issue #694.
+                        if not verify_load:
+                            break
+                        if not worker.calibration_is_clobbered(
+                            dispwin, i, profile_arg
+                        ):
+                            # Loaded OK (or could not be determined)
+                            break
+                        if attempt + 1 < max_attempts:
+                            # Give the OS a moment to settle, then re-load
+                            print(
+                                f"VideoLUT for {display} not loaded "
+                                f"(attempt {attempt + 1:d}/{max_attempts:d}), "
+                                "re-loading calibration"
+                            )
+                            time.sleep(0.5)
+                            continue
+                        load_error = ": ".join(
+                            [display, lang.getstr("calibration.load_error")]
+                        )
+                    if load_error == "skip":
+                        continue
+                    if load_error:
+                        errors.append(load_error)
                         continue
                     results.append(display)
-                if (
-                    config.getcfg("profile_loader.verify_calibration")
-                    or "--verify" in sys.argv[1:]
-                ):
-                    # Verify the calibration was actually loaded
-                    worker.exec_cmd(
-                        dispwin,
-                        ["-v", f"-d{i + 1:d}", "-V", profile_arg],
-                        capture_output=True,
-                        skip_scripts=True,
-                        silent=False,
-                    )
-                    # The 'NOT loaded' message goes to stdout!
-                    # Other errors go to stderr
-                    errortxt = "\n".join(worker.errors + worker.output).strip()
-                    if (
-                        "NOT loaded" in errortxt
-                        or "We don't have access to the VideoLUT" in errortxt
-                    ):
-                        errors.append(
-                            ": ".join([display, lang.getstr("calibration.load_error")])
-                        )
 
         if sys.platform == "win32":
             self.lock.release()
@@ -2386,6 +2429,64 @@ class ProfileLoader:
                 self.notify(results, errors)
 
         return errors
+
+    def _macos_watch(self) -> None:
+        """Keep re-loading calibration on macOS if the VideoLUT gets clobbered.
+
+        macOS (WindowServer) intermittently resets the VideoLUT of a display to
+        all-black some time after the calibration was loaded, turning the
+        display black (issue #694). Unlike Windows, macOS has no persistent
+        calibration loader by default, so this keeps the apply-profiles process
+        running and periodically verifies that each display's calibration is
+        still loaded, re-applying it for any display where it isn't.
+
+        This blocks until ``self._shutdown`` is set, keeping the process alive.
+        """
+        from DisplayCAL.worker import Worker, get_argyll_util
+
+        dispwin = get_argyll_util("dispwin")
+        if not dispwin:
+            return
+        interval = max(
+            1, int(config.getcfg("profile_loader.macos_reapply_watch_interval"))
+        )
+        worker = Worker()
+        debug_print("Starting macOS VideoLUT watch (issue #694 mitigation)")
+        while not self._shutdown:
+            # Sleep in short slices so shutdown is responsive
+            for _ in range(interval * 2):
+                if self._shutdown:
+                    return
+                time.sleep(0.5)
+            # Don't touch the VideoLUT while DisplayCAL itself is calibrating or
+            # profiling - it owns the VideoLUT during that time.
+            if self._is_displaycal_running():
+                continue
+            try:
+                worker.enumerate_displays_and_ports(
+                    silent=True,
+                    check_lut_access=False,
+                    enumerate_ports=False,
+                    include_network_devices=False,
+                )
+            except Exception as exception:
+                print(exception)
+                continue
+            for i in range(len(worker.displays)):
+                if self._shutdown:
+                    return
+                if config.is_virtual_display(i):
+                    continue
+                profile_arg = worker.get_dispwin_display_profile_argument(i)
+                if profile_arg == "-L":
+                    # No installed profile path to verify against
+                    continue
+                if worker.calibration_is_clobbered(dispwin, i, profile_arg):
+                    print(
+                        f"VideoLUT for display {i + 1:d} was clobbered - "
+                        "re-loading calibration"
+                    )
+                    self.apply_profiles(index=i)
 
     def notify(
         self,

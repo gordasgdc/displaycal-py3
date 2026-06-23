@@ -1853,6 +1853,23 @@ DEFAULTS = {
         ]
     ),
     "profile_loader.known_window_classes": "CalClient.exe",
+    # Number of times to (re)try loading calibration when a load doesn't
+    # verify as loaded (e.g. macOS intermittently clobbering the VideoLUT to
+    # black right after loading). See profile_loader.apply_profiles().
+    "profile_loader.load_retries": 3,
+    # macOS only: keep the apply-profiles process running and periodically
+    # re-load calibration if the OS (WindowServer) has clobbered the VideoLUT
+    # (the "black screen" bug). See profile_loader.ProfileLoader._macos_watch().
+    "profile_loader.macos_reapply_watch": 1,
+    "profile_loader.macos_reapply_watch_interval": 5,
+    # VideoLUT verify discrepancy (in percent) above which the loaded
+    # calibration is considered clobbered/degenerate (e.g. a black screen)
+    # rather than just quantization noise. dispwin's own "is loaded" tolerance
+    # (~0.4%) is far too tight for this purpose, so we use the reported
+    # discrepancy with this much more lenient threshold to avoid needlessly
+    # re-loading (and thereby re-triggering the bug). See
+    # profile_loader.ProfileLoader._calibration_load_discrepancy().
+    "profile_loader.clobbered_discrepancy_threshold": 25,
     "profile_loader.quantize_bits": 16,
     "profile_loader.reset_gamma_ramps": 0,
     "profile_loader.show_notifications": 0,
