@@ -235,7 +235,7 @@ def create_app_symlinks(dist_dir: str, scripts: list[tuple[str, str]]) -> None:
         scripts (list[tuple[str, str]]): List of tuples containing script names
             and their descriptions.
     """
-    maincontents_rel = os.path.join(f"{NAME}.app", "Contents")
+    main_contents_rel = os.path.join(f"{NAME}.app", "Contents")
     # Create ref, ReadMe and license symlinks in directory
     # containing the app bundle
     for src, tgt in [
@@ -248,10 +248,10 @@ def create_app_symlinks(dist_dir: str, scripts: list[tuple[str, str]]) -> None:
         tgt = os.path.join(dist_dir, tgt)
         if os.path.islink(tgt):
             os.unlink(tgt)
-        os.symlink(os.path.join(maincontents_rel, "Resources", src), tgt)
+        os.symlink(os.path.join(main_contents_rel, "Resources", src), tgt)
     # Create standalone tools app bundles by symlinking to the main bundle
     scripts = [(script2pywname(script), desc) for script, desc in scripts]
-    toolscripts = [
+    tool_scripts = [
         script for script in [script for script, desc in scripts] if script != NAME
     ]
     for script, desc in scripts:
@@ -261,41 +261,37 @@ def create_app_symlinks(dist_dir: str, scripts: list[tuple[str, str]]) -> None:
             f"{NAME}-eeColor-to-madVR-converter",
         ) or script.endswith("-console"):
             continue
-        toolname = desc.replace(NAME, "").strip()
-        toolapp = os.path.join(dist_dir, f"{toolname}.app")
-        if os.path.isdir(toolapp):
+        tool_name = desc.replace(NAME, "").strip()
+        tool_app = os.path.join(dist_dir, f"{tool_name}.app")
+        if os.path.isdir(tool_app):
             if (
                 input(
-                    f'WARNING: The output directory "{toolapp}" and ALL ITS '
+                    f'WARNING: The output directory "{tool_app}" and ALL ITS '
                     "CONTENTS will be REMOVED! Continue? (y/n)"
                 ).lower()
                 == "y"
             ):
-                print("Removing dir", toolapp)
-                shutil.rmtree(toolapp)
+                print("Removing dir", tool_app)
+                shutil.rmtree(tool_app)
             else:
                 raise SystemExit("User aborted")
-        toolscript = os.path.join(dist_dir, maincontents_rel, "MacOS", script)
-        has_tool_script = os.path.exists(toolscript)
-        if not has_tool_script:
-            # Don't symlink, apps won't be able to run in parallel!
-            shutil.copy(
-                os.path.join(dist_dir, maincontents_rel, "MacOS", appname), toolscript
-            )
-        toolcontents = os.path.join(toolapp, "Contents")
-        os.makedirs(toolcontents)
-        subdirs = ["Frameworks", "Resources"]
-        if has_tool_script:
-            # PyInstaller
-            subdirs.append("MacOS")
-        for entry in os.listdir(os.path.join(dist_dir, maincontents_rel)):
+        tool_script = os.path.join(dist_dir, main_contents_rel, "MacOS", script)
+        has_tool_script = os.path.exists(tool_script)
+        tool_contents = os.path.join(tool_app, "Contents")
+        os.makedirs(tool_contents)
+        # Always include MacOS so the tool binary lives inside the tool app's
+        # own bundle — py2app resolves Resources relative to the executable's
+        # physical location, so placing it in the main app's MacOS would make
+        # it load the main app's Resources instead of the tool's.
+        subdirs = ["Frameworks", "Resources", "MacOS"]
+        for entry in os.listdir(os.path.join(dist_dir, main_contents_rel)):
             if entry in subdirs:
-                os.makedirs(os.path.join(toolcontents, entry))
+                os.makedirs(os.path.join(tool_contents, entry))
                 for subentry in os.listdir(
-                    os.path.join(dist_dir, maincontents_rel, entry)
+                    os.path.join(dist_dir, main_contents_rel, entry)
                 ):
-                    src = os.path.join(dist_dir, maincontents_rel, entry, subentry)
-                    tgt = os.path.join(toolcontents, entry, subentry)
+                    src = os.path.join(dist_dir, main_contents_rel, entry, subentry)
+                    tgt = os.path.join(tool_contents, entry, subentry)
                     if subentry == "main.py":
                         # py2app
                         with open(src) as main_in:
@@ -310,53 +306,62 @@ def create_app_symlinks(dist_dir: str, scripts: list[tuple[str, str]]) -> None:
                     if subentry == f"{NAME}.icns":
                         shutil.copy(
                             os.path.join(pydir, "theme", "icons", f"{script}.icns"),
-                            os.path.join(toolcontents, entry, f"{script}.icns"),
+                            os.path.join(tool_contents, entry, f"{script}.icns"),
                         )
                         continue
                     if subentry == script:
-                        # PyInstaller
+                        # PyInstaller: move binary from main app's MacOS to tool app's MacOS
                         os.rename(src, tgt)
-                    elif subentry not in toolscripts:
+                    elif subentry not in tool_scripts:
                         os.symlink(
                             os.path.join(
-                                "..", "..", "..", maincontents_rel, entry, subentry
+                                "..", "..", "..", main_contents_rel, entry, subentry
                             ),
                             tgt,
                         )
+                if entry == "MacOS" and not has_tool_script:
+                    # py2app: the main app only has one launcher binary (appname).
+                    # Copy it into the tool app's own MacOS directory under the
+                    # tool's name so py2app resolves Resources from the tool app's
+                    # bundle, not the main app's.
+                    shutil.copy(
+                        os.path.join(dist_dir, main_contents_rel, "MacOS", appname),
+                        os.path.join(tool_contents, "MacOS", script),
+                    )
             elif entry == "Info.plist":
                 with open(
-                    os.path.join(dist_dir, maincontents_rel, entry),
+                    os.path.join(dist_dir, main_contents_rel, entry),
                     "r",
                     encoding="utf-8",
                 ) as info_in:
-                    infoxml = info_in.read()
+                    info_xml = info_in.read()
                 # TODO: use an XML library to manipulate the data!
                 # CFBundleName / CFBundleDisplayName
-                infoxml = re.sub(
+                info_xml = re.sub(
                     rf"(Name</key>\s*<string>){NAME}",
-                    lambda match, toolname=toolname: match.group(1) + toolname,
-                    infoxml,
+                    lambda match, toolname=tool_name: match.group(1) + toolname,
+                    info_xml,
                 )
                 # CFBundleIdentifier
-                infoxml = infoxml.replace(f".{NAME}</string>", f".{script}</string>")
+                info_xml = info_xml.replace(f".{NAME}</string>", f".{script}</string>")
                 # CFBundleIconFile
-                infoxml = infoxml.replace(
+                info_xml = info_xml.replace(
                     f"{NAME}.icns</string>", f"{script}.icns</string>"
                 )
                 # CFBundleExecutable
-                infoxml = re.sub(
+                info_xml = re.sub(
                     rf"(Executable</key>\s*<string>){NAME}",
                     lambda match, script=script: match.group(1) + script,
-                    infoxml,
+                    info_xml,
                 )
                 with open(
-                    os.path.join(toolcontents, entry), "w", encoding="utf-8"
+                    os.path.join(tool_contents, entry), "w", encoding="utf-8"
                 ) as info_out:
-                    info_out.write(infoxml)
+                    info_out.write(info_xml)
             else:
                 os.symlink(
-                    os.path.join("..", "..", maincontents_rel, entry),
-                    os.path.join(toolcontents, entry),
+                    os.path.join("..", "..", main_contents_rel, entry),
+                    os.path.join(tool_contents, entry),
                 )
 
 
