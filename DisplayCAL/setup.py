@@ -312,6 +312,22 @@ def create_app_symlinks(dist_dir: str, scripts: list[tuple[str, str]]) -> None:
                     if subentry == script:
                         # PyInstaller: move binary from main app's MacOS to tool app's MacOS
                         os.rename(src, tgt)
+                    elif (
+                        entry == "MacOS"
+                        and not has_tool_script
+                        and subentry != appname
+                        and not os.path.islink(src)
+                    ):
+                        # py2app: the bundled Python interpreter in
+                        # Contents/MacOS (named "python") must be a real file,
+                        # not a symlink. The py2app launcher only sets
+                        # PYTHONHOME to the bundle's Resources when
+                        # Contents/MacOS/python is NOT a symlink (see lstat /
+                        # S_IFLNK check in py2app's main.c). A symlinked
+                        # interpreter makes the tool app fall back to the system
+                        # Python framework and fail to find its stdlib
+                        # ("No module named 'encodings'").
+                        shutil.copy(src, tgt)
                     elif subentry not in tool_scripts:
                         os.symlink(
                             os.path.join(
