@@ -2986,7 +2986,14 @@ class BaseInteractiveDialog(wx.Dialog):
         self._disabler = BetterWindowDisabler(self, self.Parent)
         if hasattr(wx.Dialog, "ShowWindowModal") and sys.platform == "darwin":
             # wx 2.9+
-            wx.Dialog.ShowWindowModal(self)
+            # Use CallAfter so the native macOS sheet animation starts from a
+            # clean event-loop iteration instead of from within a suspended
+            # Python frame.  Without this, the sheet's opening animation runs
+            # a nested Cocoa RunLoop which can dispatch paint events back into
+            # Python; if any paint handler raises an unhandled exception,
+            # CPython 3.11's re-entrant _PyErr_PrintEx / _PyFrame_Clear
+            # crashes with SIGSEGV (issue #709).
+            wx.CallAfter(wx.Dialog.ShowWindowModal, self)
         else:
             self.Show()
 
@@ -3177,7 +3184,11 @@ class BitmapBackgroundBitmapButton(wx.BitmapButton):
         dc = wx.PaintDC(self)
         with contextlib.suppress(Exception):
             dc = wx.GCDC(dc)
-        dc.DrawBitmap(self.Parent.GetBitmap(), 0, -self.GetPosition()[1])
+        parent = self.GetParent()
+        if not parent:
+            return
+        with contextlib.suppress(Exception):
+            dc.DrawBitmap(parent.GetBitmap(), 0, -self.GetPosition()[1])
         dc.DrawBitmap(self.GetBitmapLabel(), 0, 0)
 
 
@@ -4033,7 +4044,10 @@ class FlatShadedButton(GradientButton):
             cls = wx.BufferedPaintDC
         dc = cls(self)
         gc = wx.GraphicsContext.Create(dc)
-        dc.SetBackground(wx.Brush(self.Parent.BackgroundColour))
+        parent = self.GetParent()
+        if not parent:
+            return
+        dc.SetBackground(wx.Brush(parent.BackgroundColour))
         dc.Clear()
 
         clientRect = self.GetClientRect()
@@ -4356,7 +4370,10 @@ class BorderGradientButton(GradientButton):
             cls = wx.BufferedPaintDC
         dc = cls(self)
         gc = wx.GraphicsContext.Create(dc)
-        dc.SetBackground(wx.Brush(self.GetParent().GetBackgroundColour()))
+        parent = self.GetParent()
+        if not parent:
+            return
+        dc.SetBackground(wx.Brush(parent.GetBackgroundColour()))
         dc.Clear()
 
         clientRect = self.GetClientRect()
