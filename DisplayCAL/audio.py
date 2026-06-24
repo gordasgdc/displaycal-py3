@@ -62,8 +62,16 @@ else:
             for ch in list(_CH.values()):
                 if hasattr(ch, "delete"):
                     ch.delete()
-            if pyglet.media.get_audio_driver():
-                pyglet.media.get_audio_driver().delete()
+            # Only touch the audio driver when pyglet.media was actually
+            # imported during this session.  Calling get_audio_driver() when
+            # the module is absent would initialize (and immediately tear down)
+            # the driver, which crashes on macOS via Swift/AVFoundation during
+            # atexit.
+            if "pyglet.media" not in sys.modules:
+                return
+            driver = pyglet.media.get_audio_driver()
+            if driver:
+                driver.delete()
 
     atexit.register(_pyglet_cleanup)
 
