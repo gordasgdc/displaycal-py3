@@ -36,7 +36,7 @@ from DisplayCAL.worker import Worker, check_ti3
 from DisplayCAL.wx_windows import ConfirmDialog, BaseInteractiveDialog
 
 
-@pytest.fixture(scope="class", name="app", autouse=True)
+@pytest.fixture(scope="session", name="app", autouse=True)
 def fixture_app() -> AppConsole:
     """Return app for tests."""
     return wx.GetApp() or wx.App()
@@ -47,13 +47,6 @@ def fixture_mainframe() -> MainFrame:
     """Return mainframe for tests."""
     worker = Worker()
     return display_cal.MainFrame(worker=worker)
-
-@pytest.fixture(scope="session", autouse=True)
-def ensure_wx_app():
-    """Ensure wx.App is created for the tests, even when headless."""
-    if not wx.GetApp():
-        app = wx.App(False)
-        yield app
 
 
 def test_update_colorimeter_correction_matrix_ctrl_items_1(
@@ -116,7 +109,6 @@ def test_donation_message(mainframe: MainFrame, response: int) -> None:
             donation_message(mainframe)
 
 
-# todo: test is working locally but not on CI
 @pytest.mark.skipif(
     os.getenv("GITHUB_ACTIONS") == "true",
     reason="Seems like the first call of ShowWindowModalBlocking always fails on remote."

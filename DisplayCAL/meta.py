@@ -43,7 +43,7 @@ LONG_DESCRIPTION = (
 )
 DOMAIN = "displaycal.net"
 DEVELOPMENT_HOME_PAGE = "https://github.com/eoyilmaz/displaycal-py3"
-github_api_url = "https://api.github.com/repos/eoyilmaz/displaycal-py3"
+GITHUB_API_URL = "https://api.github.com/repos/eoyilmaz/displaycal-py3"
 
 AUTHOR_EMAIL = ", ".join(
     [

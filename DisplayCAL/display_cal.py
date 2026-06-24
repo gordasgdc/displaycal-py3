@@ -167,7 +167,7 @@ from DisplayCAL.meta import (
     DOMAIN,
     VERSION_STRING,
     VERSION_TUPLE,
-    github_api_url,
+    GITHUB_API_URL,
     get_latest_changelog_entry,
 )
 from DisplayCAL.meta import (
@@ -326,6 +326,7 @@ if TYPE_CHECKING:
 webbrowser.PROCESS_CREATION_DELAY = 0
 
 APP_IS_UP_TO_DATE = True
+RELEASE_DATA: dict | None = None
 COMPRESSED_FILE_EXTENSIONS = (".7z", ".tar.gz", ".tgz", ".zip")
 ICCPROFILE_FILE_EXTENSIONS = (".icc", ".icm")
 # Use conservative UI paths by default unless explicitly disabled.
@@ -373,47 +374,52 @@ def show_ccxx_error_dialog(exception: Exception, path: str, parent: wx.Window) -
     show_result_dialog(msg, parent)
 
 
-def swap_dict_keys_values(mydict):
-    """Swap dictionary keys and values"""
-    return dict([(v, k) for (k, v) in mydict.items()])
+def get_download_url(newversion: str) -> str | None:
+    """Return the GitHub release asset download URL for the current platform."""
+    if sys.platform == "win32":
+        suffix = "Windows-Setup.exe"
+    elif sys.platform == "darwin":
+        if platform.processor() == "arm":
+            suffix = "macOS-arm64.dmg"
+        else:
+            suffix = "macOS-x86.dmg"
+    else:
+        suffix = ".tar.gz"
+    for asset in RELEASE_DATA["assets"]:
+        if asset["name"] == f"{APPNAME}-{newversion}-{suffix}":
+            return asset["browser_download_url"]
+    return None
+
 
 def is_new_update():
     """Check for new updates on GitHub.
-    Returns the latest version tuple if a new update is found,
-    returns false otherwise."""
+    Returns the latest version tuple if a new update is available,
+    returns False otherwise."""
+    global RELEASE_DATA
+    print("Checking for updates...")
+    headers = {"User-Agent": "DisplayCAL-updater"}
     try:
-        print("Checking for updates...")
-        headers = {"User-Agent": "DisplayCAL-updater"}
-        response = requests.get(f"{github_api_url}/releases/latest", headers=headers, timeout=10)
-        response.raise_for_status()  # Raises an HTTPError for bad responses
-
-        data = response.json()
-        global RELEASE_DATA
-        RELEASE_DATA = data
-        latest_version_string = data["tag_name"]
-        latest_version = latest_version_string.split('.')
-        latest_version_tuple = tuple(int(n) for n in latest_version)
-        current_version = VERSION_TUPLE[0], VERSION_TUPLE[1], VERSION_TUPLE[2]
-
-        # Compare version numbers
-        for latest, current in zip(latest_version, current_version):
-            if int(latest) > int(current):
-                print("New updates available!")
-                return latest_version_tuple
-            elif int(latest) < int(current):
-                print("No new updates available.")
-                return False
-
-        # If we've gotten here, the versions are equal
-        print("No new updates available.")
-        return False
-
+        response = requests.get(
+            f"{GITHUB_API_URL}/releases/latest", headers=headers, timeout=10
+        )
+        response.raise_for_status()
     except requests.RequestException as e:
         print(f"Error checking for updates: Network error - {str(e)}")
+        return False
+
+    try:
+        data = response.json()
+        RELEASE_DATA = data
+        latest_version_tuple = tuple(int(n) for n in data["tag_name"].split("."))
     except (KeyError, ValueError, IndexError) as e:
         print(f"Error checking for updates: Parsing error - {str(e)}")
-    except Exception as e:
-        print(f"Error checking for updates: Unexpected error - {str(e)}")
+        return False
+
+    current_version = VERSION_TUPLE[:3]
+    if latest_version_tuple > current_version:
+        print("New updates available!")
+        return latest_version_tuple
+    print("No new updates available.")
     return False
 
 def app_update_check(
@@ -748,20 +754,7 @@ def app_update_confirm(
             return
         elif not argyll:
             # Download the update from GitHub based on the user's platform
-            if sys.platform == "win32":
-                suffix = "Windows-Setup.exe"
-            elif sys.platform == "darwin":
-                if platform.processor() == "arm":
-                    suffix = "macOS-arm64.dmg"
-                else:
-                    suffix = "macOS-x86.dmg"
-            else:
-                suffix = ".tar.gz"
-            download_url = None
-            for asset in RELEASE_DATA['assets']:
-                if asset['name'] == f"{'DisplayCAL'}-{newversion}-{suffix}":
-                    download_url = asset['browser_download_url']
-                    break
+            download_url = get_download_url(newversion)
             if download_url is not None:
                 try:
                     webbrowser.open_new_tab(download_url)
