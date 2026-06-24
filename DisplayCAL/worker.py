@@ -3082,7 +3082,7 @@ class Worker(WorkerBase):
             )
             profile1.apply_black_offset(
                 oXYZbp,
-                logfiles=logfiles,
+                logfile=logfiles,
                 thread_abort=self.thread_abort,
                 abortmessage=lang.getstr("aborted"),
             )
@@ -8124,11 +8124,17 @@ BEGIN_DATA
         XYZg = odata[3]
         XYZb = odata[4]
 
-        # Sanity check whitepoint
+        # Sanity check whitepoint - after normalisation it should be close to
+        # D50 (the ICC PCS white). Use a tolerance rather than an exact rounded
+        # match: a real profile's adapted white is routinely off D50 by ~0.001
+        # (chromatic adaptation / measurement / 16-bit encoding) and must not be
+        # rejected. The tolerance still catches a grossly wrong white (e.g. from
+        # a failed inverse lookup, which lands far from D50).
+        D50_wp = colormath.get_whitepoint("D50")
         if (
-            round(XYZwp[0], 3) != 0.964
-            or round(XYZwp[1], 3) != 1
-            or round(XYZwp[2], 3) != 0.825
+            abs(XYZwp[0] - D50_wp[0]) > 0.01
+            or abs(XYZwp[1] - D50_wp[1]) > 0.01
+            or abs(XYZwp[2] - D50_wp[2]) > 0.01
         ):
             raise Error(
                 "Argyll CMS xicclu: Invalid white XYZ: {:.4f} {:.4f} {:.4f}".format(
@@ -12539,13 +12545,18 @@ BEGIN_DATA
 
         if clutres > iclutres:
             # Lookup input RGB to interpolated XYZ
+            # NOTE: step must be (re)computed for the *target* clutres BEFORE
+            # building RGB_in. Otherwise it still holds the previous low-res
+            # iclutres step, so the RGB_in grid coordinates run far past device
+            # 100% (e.g. 32 * 6.25 = 200), which clamps most lookups to the
+            # white corner and produces a grossly corrupt A2B cLUT.
+            step = 100 / (clutres - 1.0)
             RGB_in = [
                 [a * step, b * step, c * step]
                 for a in range(clutres)
                 for b in range(clutres)
                 for c in range(clutres)
             ]
-            step = 100 / (clutres - 1.0)
             XYZ_out = self.xicclu(profile, RGB_in, "a", pcs="X", scale=100)
             profile.filename = None
 

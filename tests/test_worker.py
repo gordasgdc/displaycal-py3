@@ -18,8 +18,9 @@ from DisplayCAL.argyll import (
 )
 from DisplayCAL.cgats import CGATS
 from DisplayCAL.config import initcfg, setcfg
+from DisplayCAL.debughelpers import Error
 from DisplayCAL.dev.mocks import check_call_str
-from DisplayCAL.icc_profile import ICCProfile
+from DisplayCAL.icc_profile import ICCProfile, LUT16Type
 from DisplayCAL.meta import DOMAIN
 from DisplayCAL.worker import (
     add_keywords_to_cgats,
@@ -126,6 +127,150 @@ def test_generate_b2a_from_inverse_table(data_files, setup_argyll):
     logfile = io.StringIO()
     result = worker.generate_B2A_from_inverse_table(icc_profile1, logfile=logfile)
     assert result is True
+
+
+def test_apply_black_offset_signature_uses_logfile() -> None:
+    """ICCProfile/LUT16Type.apply_black_offset keep the ``logfile`` parameter.
+
+    Guards the contract the caller relies on (see the functional test below).
+    """
+    import inspect
+
+    for cls in (ICCProfile, LUT16Type):
+        params = inspect.signature(cls.apply_black_offset).parameters
+        assert "logfile" in params, (
+            f"{cls.__name__}.apply_black_offset lost its 'logfile' parameter"
+        )
+        assert "logfiles" not in params, (
+            f"{cls.__name__}.apply_black_offset must not use 'logfiles'"
+        )
+
+
+def test_blend_profile_blackpoint_calls_apply_black_offset_with_logfile(
+    data_files, monkeypatch
+) -> None:
+    """blend_profile_blackpoint must call apply_black_offset with ``logfile=``.
+
+    Regression: it used ``logfiles=``, which raised
+    ``apply_black_offset() got an unexpected keyword argument 'logfiles'`` and
+    aborted 3D LUT creation whenever a black offset was applied. profile1's
+    apply_black_offset is replaced with a strict-signature stub (mirroring
+    ICCProfile.apply_black_offset) so that a ``logfiles=`` call would raise
+    TypeError here, exactly as it did in production.
+    """
+    icc_path = data_files[
+        "UP2516D #1 2022-03-20 02-08 D6500 2.2 F-S XYZLUT+MTX.icc"
+    ].absolute()
+    profile1 = ICCProfile(profile=icc_path)
+    profile2 = ICCProfile(profile=icc_path)
+
+    received = {}
+
+    def strict_apply_black_offset(
+        XYZbp,
+        power=40.0,
+        include_A2B=True,
+        set_blackpoint=True,
+        logfile=None,
+        thread_abort=None,
+        abortmessage="Aborted",
+        include_trc=True,
+    ):
+        received["logfile"] = logfile
+
+    profile1.apply_black_offset = strict_apply_black_offset
+
+    worker = Worker()
+    monkeypatch.setattr(
+        worker, "xicclu", lambda profile, idata, **kwargs: [[0.0, 0.0, 0.0]]
+    )
+    # apply_trc=False forces the branch that applies the black offset.
+    worker.blend_profile_blackpoint(profile1, profile2, apply_trc=False)
+
+    assert "logfile" in received, "apply_black_offset was not called"
+    assert received["logfile"] is not None
+
+
+def test_generate_b2a_whitepoint_check_tolerance(data_files, monkeypatch) -> None:
+    """The whitepoint sanity check accepts near-D50 and rejects grossly wrong.
+
+    Regression: the check required the normalised white to round to exactly
+    D50 (0.964, 1.0, 0.825), so a real profile whose adapted white was off D50
+    by ~0.001 (chromatic adaptation / measurement / 16-bit encoding) was
+    wrongly rejected with "Invalid white XYZ". It now uses a 0.01 tolerance,
+    which still catches a grossly wrong white from a failed inverse lookup.
+    """
+    import wx
+
+    _ = wx.GetApp() or wx.App()
+    worker = Worker()
+    profile = ICCProfile(
+        profile=data_files[
+            "Monitor 1 #1 2022-03-09 16-13 D6500 2.2 F-S XYZLUT+MTX.icc"
+        ].absolute()
+    )
+    # xicclu returns [black, white, R, G, B] in XYZ for idata
+    # [[0,0,0],[1,1,1],[1,0,0],[0,1,0],[0,0,1]].
+    primaries = [[0.43, 0.22, 0.02], [0.38, 0.71, 0.10], [0.18, 0.07, 0.72]]
+
+    # White ~0.001 off D50 (normalises to ~0.965/1.0/0.824) - must be accepted.
+    def xicclu_near_d50(prof, idata, *args, **kwargs):
+        return [[0.001, 0.001, 0.001], [0.9647, 0.9995, 0.8240], *primaries]
+
+    monkeypatch.setattr(worker, "xicclu", xicclu_near_d50)
+    try:
+        worker.generate_B2A_from_inverse_table(profile, logfile=io.StringIO())
+    except Exception as exc:  # may still fail later for unrelated reasons
+        assert "Invalid white" not in str(exc), (
+            "a near-D50 white was wrongly rejected by the sanity check"
+        )
+
+    # Grossly wrong white (normalises far from D50) - must still be rejected.
+    def xicclu_bad_white(prof, idata, *args, **kwargs):
+        return [[0.0, 0.0, 0.0], [0.5, 0.5, 0.4], *primaries]
+
+    monkeypatch.setattr(worker, "xicclu", xicclu_bad_white)
+    with pytest.raises(Error, match="Invalid white"):
+        worker.generate_B2A_from_inverse_table(profile, logfile=io.StringIO())
+
+
+def test_create_rgb_xyz_clut_fwd_profile_rgb_in_within_device_range(
+    data_files, monkeypatch
+) -> None:
+    """The upsampled cLUT lookup grid must stay within device 0..100%.
+
+    Regression for the stale ``step`` bug in create_RGB_XYZ_cLUT_fwd_profile:
+    RGB_in was built with the previous low-resolution iclutres step, so its
+    coordinates ran far past device 100% (e.g. iclutres=5 -> 32 * 25 = 800).
+    xicclu(scale=100) then clamped those out-of-range inputs to the white
+    corner, filling most of the A2B cLUT with the white point.
+    """
+    setcfg("profile.quality", "h")
+    worker = Worker()
+    ti3 = CGATS(
+        str(
+            data_files[
+                "UP2516D #1 2022-03-20 02-08 D6500 2.2 F-S XYZLUT+MTX.ti3"
+            ].absolute()
+        )
+    )
+
+    captured = {}
+
+    def fake_xicclu(prof, idata, *args, **kwargs):
+        # Capture the first lookup (the upsampling grid) and return in-gamut XYZ
+        captured.setdefault("rgb_in", [list(row) for row in idata])
+        return [[50.0, 50.0, 50.0] for _ in idata]
+
+    monkeypatch.setattr(worker, "xicclu", fake_xicclu)
+    worker.create_RGB_XYZ_cLUT_fwd_profile(ti3, "test", "", "", "")
+
+    assert "rgb_in" in captured, "the cLUT upsampling lookup was never reached"
+    max_value = max(max(row) for row in captured["rgb_in"])
+    assert max_value <= 100.0 + 1e-6, (
+        f"RGB_in grid overshoots device 100% (max={max_value:.2f}) - "
+        "stale-step regression in create_RGB_XYZ_cLUT_fwd_profile"
+    )
 
 
 def test_sudo_class_initialization():
