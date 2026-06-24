@@ -2,8 +2,10 @@ import os
 import platform
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
+import requests
 import wx
 from wx import AppConsole, Button
 
@@ -276,3 +278,79 @@ def test_init_measurement_file_check_sanity_dialog_frame(
     cgats = CGATS(cgats=path)
     with check_call(MeasurementFileCheckSanityDialog, "Center"):
         MeasurementFileCheckSanityDialog(mainframe, cgats[0], check_ti3(cgats), False)
+
+
+# ---------------------------------------------------------------------------
+# is_new_update() unit tests
+# ---------------------------------------------------------------------------
+
+def test_is_new_update_returns_version_when_newer(monkeypatch):
+    """is_new_update() returns a version tuple when a newer release exists."""
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {"tag_name": "99.0.0", "assets": []}
+    monkeypatch.setattr("DisplayCAL.display_cal.requests.get", lambda *a, **kw: mock_resp)
+    result = display_cal.is_new_update()
+    assert result == (99, 0, 0)
+
+
+def test_is_new_update_returns_false_when_current(monkeypatch):
+    """is_new_update() returns False when already on the latest version."""
+    from DisplayCAL.meta import VERSION_TUPLE
+    tag = ".".join(str(n) for n in VERSION_TUPLE[:3])
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {"tag_name": tag, "assets": []}
+    monkeypatch.setattr("DisplayCAL.display_cal.requests.get", lambda *a, **kw: mock_resp)
+    assert display_cal.is_new_update() is False
+
+
+def test_is_new_update_returns_false_on_network_error(monkeypatch):
+    """is_new_update() returns False and does not raise on network failures."""
+    def raise_error(*a, **kw):
+        raise requests.RequestException("connection refused")
+    monkeypatch.setattr("DisplayCAL.display_cal.requests.get", raise_error)
+    assert display_cal.is_new_update() is False
+
+
+def test_is_new_update_returns_false_on_bad_json(monkeypatch):
+    """is_new_update() returns False when the response JSON is missing expected keys."""
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {"unexpected_key": "value"}
+    monkeypatch.setattr("DisplayCAL.display_cal.requests.get", lambda *a, **kw: mock_resp)
+    assert display_cal.is_new_update() is False
+
+
+# ---------------------------------------------------------------------------
+# get_download_url() unit tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("plat,machine,version,expected_filename", [
+    ("win32",  "AMD64",   "3.9.0", "DisplayCAL-3.9.0-Windows-Setup.exe"),
+    ("darwin", "arm64",   "3.9.0", "DisplayCAL-3.9.0-macOS-arm64.dmg"),
+    ("darwin", "aarch64", "3.9.0", "DisplayCAL-3.9.0-macOS-arm64.dmg"),
+    ("darwin", "x86_64",  "3.9.0", "DisplayCAL-3.9.0-macOS-x86.dmg"),
+    ("linux",  "x86_64",  "3.9.0", "displaycal-3.9.0.tar.gz"),
+])
+def test_get_download_url(monkeypatch, plat, machine, version, expected_filename):
+    """get_download_url() returns the correct asset URL for each platform."""
+    fake_assets = [
+        {"name": expected_filename,
+         "browser_download_url": f"https://example.com/{expected_filename}"},
+    ]
+    monkeypatch.setattr(display_cal, "RELEASE_DATA", {"assets": fake_assets})
+    monkeypatch.setattr(display_cal.sys, "platform", plat)
+    monkeypatch.setattr(display_cal.platform, "machine", lambda: machine)
+    assert display_cal.get_download_url(version) == f"https://example.com/{expected_filename}"
+
+
+def test_get_download_url_returns_none_when_no_matching_asset(monkeypatch):
+    """get_download_url() returns None when no asset matches the current platform."""
+    monkeypatch.setattr(display_cal, "RELEASE_DATA", {"assets": []})
+    monkeypatch.setattr(display_cal.sys, "platform", "linux")
+    monkeypatch.setattr(display_cal.platform, "machine", lambda: "x86_64")
+    assert display_cal.get_download_url("3.9.0") is None
+
+
+def test_get_download_url_returns_none_before_release_data_loaded(monkeypatch):
+    """get_download_url() returns None gracefully when called before is_new_update()."""
+    monkeypatch.setattr(display_cal, "RELEASE_DATA", None)
+    assert display_cal.get_download_url("3.9.0") is None

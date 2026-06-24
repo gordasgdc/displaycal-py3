@@ -376,17 +376,20 @@ def show_ccxx_error_dialog(exception: Exception, path: str, parent: wx.Window) -
 
 def get_download_url(newversion: str) -> str | None:
     """Return the GitHub release asset download URL for the current platform."""
+    if RELEASE_DATA is None:
+        return None
     if sys.platform == "win32":
-        suffix = "Windows-Setup.exe"
+        filename = f"{APPNAME}-{newversion}-Windows-Setup.exe"
     elif sys.platform == "darwin":
-        if platform.processor() == "arm":
-            suffix = "macOS-arm64.dmg"
+        machine = platform.machine().lower()
+        if machine in ("arm64", "aarch64"):
+            filename = f"{APPNAME}-{newversion}-macOS-arm64.dmg"
         else:
-            suffix = "macOS-x86.dmg"
+            filename = f"{APPNAME}-{newversion}-macOS-x86.dmg"
     else:
-        suffix = ".tar.gz"
+        filename = f"{APPNAME.lower()}-{newversion}.tar.gz"
     for asset in RELEASE_DATA["assets"]:
-        if asset["name"] == f"{APPNAME}-{newversion}-{suffix}":
+        if asset["name"] == filename:
             return asset["browser_download_url"]
     return None
 
@@ -760,6 +763,8 @@ def app_update_confirm(
                     webbrowser.open_new_tab(download_url)
                 except Exception as e:
                     print(f"Error opening web browser for updates: {str(e)}")
+            else:
+                launch_file(f"{DEVELOPMENT_HOME_PAGE}/releases")
         else:
             # Download ArgyllCMS
             consumer = worker.process_download
