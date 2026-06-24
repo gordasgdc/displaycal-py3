@@ -33,6 +33,7 @@ modules that have been ported; everything else still falls through to wx.
 | `__init__.py` | binding pin (`QT_API`) | — |
 | `application.py` | `Application(QApplication)`: exit handlers, argv/file-open, SIGINT | `wx_windows.BaseApp` |
 | `base_window.py` | `BaseWindow(QMainWindow)`: icon, geometry persistence, menubar | `wx_windows.BaseFrame` (essentials) |
+| `scripting.py` | `ScriptingHostMixin`: scripting/IPC socket server | `wx_windows.BaseFrame` (`listen`/`message_handler`/…) |
 | `assets.py` | themed PNG → `QIcon`/`QPixmap` | `config.get_icon*` |
 | `file_drop.py` | `FileDropTarget` event filter (suffix→handler) | `wx_addons.FileDrop` |
 | `plot/` | pyqtgraph-based plotting (gamut view + colorimetry) | `wx_enhanced_plot`, `GamutCanvas` |
@@ -97,11 +98,27 @@ module:
   HDR roll-off controls are inlined here rather than inherited from the large
   `LUT3DMixin`, and the slow HDR cLUT generation runs on a `QThread`.
 
+### Scripting / IPC server (`scripting.py`)
+
+`ScriptingHostMixin` is the Qt port of the scripting host that lived on
+`wx_windows.BaseFrame`. `BaseWindow` mixes it in, so every Qt window can be
+driven over the line-based TCP protocol (used by the scripting client and the
+`send_command` CLI); each tool's `main()` calls `window.listen()`. The socket
+lifecycle (`listen`/`connection_handler`/`message_handler`) and the non-UI
+commands (`getappname`, `getcfg`, `getcommands`, `getdefault(s)`, `getvalid`,
+`setresponseformat`) are carried over essentially verbatim. The only
+toolkit-specific change is marshalling a received command onto the GUI thread: a
+small `QObject` bridge re-emits it through a queued signal (replacing
+`wx.CallAfter`). `finish_processing` handles the toolkit-agnostic / window-level
+commands (`getstate`, `setcfg`, `refresh`, `restore-defaults`, `setlanguage`,
+`exit`, `close`, `activate`, `getactivewindow`, `getwindows`, `echo`, `abort`)
+and delegates the rest to an overridable `process_data`. The deep per-widget
+introspection commands (`interact`, `getuielement(s)`, `getmenus`/
+`getmenuitems`, `getcellvalues`, `invokemenu`) are inherently window-specific
+and are added per window as those windows are ported.
+
 ## Not yet ported / deliberately deferred
 
-- **Scripting/IPC socket server** (`BaseFrame.listen`/`connection_handler`/
-  `message_handler`): binding-agnostic; will move to a reusable mixin when the
-  first window that needs it (the main window or scripting client) is ported.
 - **The main application window** (`display_cal.MainFrame`, ~22k lines) and its
   custom widgets (grids, gauges, gradient buttons, LUT/plot views). This is the
   bulk of the work and will be tackled in dedicated, refactored pieces — large

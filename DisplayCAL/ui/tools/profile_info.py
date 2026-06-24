@@ -231,6 +231,7 @@ def main() -> int:
     window = ProfileInfoWindow()
     app.top_window = window
     window.show()
+    window.listen()
 
     profiles = [a for a in sys.argv[1:] if os.path.isfile(a)]
     window.load_profile(profiles[0] if profiles else get_data_path("ref/sRGB.icm"))

@@ -24,12 +24,13 @@ from qtpy.QtWidgets import QMainWindow, QWidget
 from DisplayCAL import config
 from DisplayCAL import localization as lang
 from DisplayCAL.ui.assets import get_theme_icon
+from DisplayCAL.ui.scripting import ScriptingHostMixin
 
 if TYPE_CHECKING:
     from qtpy.QtGui import QCloseEvent
 
 
-class BaseWindow(QMainWindow):
+class BaseWindow(ScriptingHostMixin, QMainWindow):
     """Common base class for DisplayCAL's Qt top-level windows.
 
     Args:
@@ -109,5 +110,6 @@ class BaseWindow(QMainWindow):
         Args:
             event (QCloseEvent): The Qt close event.
         """
+        self.stop_listening()
         self.save_position()
         super().closeEvent(event)

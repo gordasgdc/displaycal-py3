@@ -1867,6 +1867,7 @@ def main() -> int:
     window = SynthICCWindow()
     app.top_window = window
     window.show()
+    window.listen()
     app.process_argv()
     return app.exec()
 

@@ -285,6 +285,7 @@ def main() -> int:
     if sys.platform == "darwin":
         window.init_menubar()
     window.show()
+    window.listen()
     app.process_argv()
     return app.exec()
 
