@@ -2041,7 +2041,8 @@ def getcfg(
     if value is None:
         if has_default and fallback:
             value = defval
-            debug_print(name, "- falling back to", value)
+            if defval is not None:
+                debug_print(name, "- falling back to", value)
         elif DEBUG and not has_default:
             print("Warning - unknown option:", name)
     if raw:
@@ -2664,9 +2665,20 @@ def initcfg(
                 if isinstance(val, list):
                     cfg.set(section, name, "\n".join(val))
     finally:
-        if not module and not getcfg("calibration.ambient_viewcond_adjust"):
-            # Reset to default
-            setcfg("calibration.ambient_viewcond_adjust.lux", None, cfg=cfg)
+        if not module:
+            if getcfg("lang", fallback=False) is None:
+                setcfg("lang", DEFAULTS["lang"], cfg=cfg)
+            if getcfg("calibration.ambient_viewcond_adjust", fallback=False) is None:
+                setcfg(
+                    "calibration.ambient_viewcond_adjust",
+                    DEFAULTS["calibration.ambient_viewcond_adjust"],
+                    cfg=cfg,
+                )
+            if not getcfg("calibration.ambient_viewcond_adjust"):
+                # Reset to default
+                setcfg("calibration.ambient_viewcond_adjust.lux", None, cfg=cfg)
+            if getcfg("profile.save_path", fallback=False) is None:
+                setcfg("profile.save_path", STORAGE, cfg=cfg)
 
 
 def fetch_config_files(
