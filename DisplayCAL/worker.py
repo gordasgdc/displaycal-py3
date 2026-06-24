@@ -953,6 +953,25 @@ def create_shaper_curves(
             bwd_mtx, bpc, single_curve, curves, profile, options_dispcal, XYZbp, logfn
         )
 
+    if bwd_mtx * [1, 1, 1] != [1, 1, 1]:
+        # Matrix display profile: the matrix maps device (1, 1, 1) to the PCS
+        # media white, so the shaper (TRC) curves have to reach 1.0 at device
+        # maximum for device white to actually map to media white. The curves
+        # are built (and optimized) from a fit normalized to the matrix white,
+        # which can leave their endpoint slightly below 1.0 when the matrix
+        # white and the gray ramp white are not perfectly consistent. A sub-1.0
+        # endpoint makes device max map to a fraction of media white, which in
+        # turn makes a CMM clip near-white source values to device white when it
+        # inverts the profile at limited (e.g. 8 bit) precision. Normalize each
+        # curve so its endpoint is exactly 1.0 to avoid this near-white crush
+        # (issue #710). This matches what Argyll's colprof does for matrix
+        # profiles. Scaling is uniform, so the curve shape (gamma) and gray
+        # neutrality are preserved.
+        for curve in curves:
+            endpoint = curve[-1]
+            if endpoint and endpoint != 1.0:
+                curve[:] = [min(v / endpoint, 1.0) for v in curve]
+
     return curves
 
 
@@ -7844,6 +7863,27 @@ BEGIN_DATA
                             errmsg = errmsg[startpos + 2 :]
                 if errmsg:
                     return UnloggedError(errmsg.strip())
+        # macOS clobbers a display's VideoLUT to all-black when an ArgyllCMS
+        # display tool exits (issue #694). Recover right here, in the worker
+        # thread, after the tool has finished - this is race-free (sequential)
+        # and independent of whether the GUI stays open, so the screen doesn't
+        # stay black through the subsequent profile-creation steps.
+        if (
+            sys.platform == "darwin"
+            and not dry_run
+            and args
+            and "-?" not in args
+            and getcfg("profile_loader.macos_reapply_watch")
+            and cmdname
+            in (
+                get_argyll_utilname("dispcal"),
+                get_argyll_utilname("dispread"),
+                get_argyll_utilname("spotread"),
+                get_argyll_utilname("dispwin"),
+                get_argyll_utilname("colprof"),
+            )
+        ):
+            reload_black_videoluts(get_argyll_util("dispwin"), log=self.log)
         if self.exec_cmd_returnvalue is not None:
             return self.exec_cmd_returnvalue
         return self.retcode == 0
@@ -8085,11 +8125,17 @@ BEGIN_DATA
         XYZg = odata[3]
         XYZb = odata[4]
 
-        # Sanity check whitepoint
+        # Sanity check whitepoint - after normalisation it should be close to
+        # D50 (the ICC PCS white). Use a tolerance rather than an exact rounded
+        # match: a real profile's adapted white is routinely off D50 by ~0.001
+        # (chromatic adaptation / measurement / 16-bit encoding) and must not be
+        # rejected. The tolerance still catches a grossly wrong white (e.g. from
+        # a failed inverse lookup, which lands far from D50).
+        D50_wp = colormath.get_whitepoint("D50")
         if (
-            round(XYZwp[0], 3) != 0.964
-            or round(XYZwp[1], 3) != 1
-            or round(XYZwp[2], 3) != 0.825
+            abs(XYZwp[0] - D50_wp[0]) > 0.01
+            or abs(XYZwp[1] - D50_wp[1]) > 0.01
+            or abs(XYZwp[2] - D50_wp[2]) > 0.01
         ):
             raise Error(
                 "Argyll CMS xicclu: Invalid white XYZ: {:.4f} {:.4f} {:.4f}".format(
@@ -9391,6 +9437,69 @@ BEGIN_DATA
             stream.close()
             atexit.register(os.remove, profile.filename)
         return profile.filename or arg
+
+    def get_calibration_load_discrepancy(self, dispwin, display_no, profile_arg):
+        """Return how much a display's loaded calibration differs from a profile.
+
+        Runs ``dispwin -d{N} -V <profile>`` which compares the VideoLUT contents
+        currently loaded in the hardware against the given profile's calibration
+        and reports the discrepancy as a percentage. A verify-only run does not
+        open a window nor alter the VideoLUT, so this is safe to call freely.
+        Used to detect the macOS "black screen" condition where the OS clobbers
+        the VideoLUT after it was loaded (issue #694): a clobbered/black VideoLUT
+        yields a very large discrepancy (close to 100%), whereas a correctly
+        loaded calibration is at most a few percent off due to quantization.
+
+        Args:
+            dispwin (str): Path to the dispwin executable.
+            display_no (int): Zero-based display index.
+            profile_arg (str): Profile path to verify against. ``-L`` is not a
+                valid argument here (pass a real profile path).
+
+        Returns:
+            None | float: The discrepancy in percent (0.0 - 100.0), or None if
+                it could not be determined (e.g. no VideoLUT access).
+        """
+        self.exec_cmd(
+            dispwin,
+            ["-v", f"-d{display_no + 1:d}", "-V", profile_arg],
+            capture_output=True,
+            skip_scripts=True,
+            silent=True,
+        )
+        # The 'Verify: ... (discrepancy X%)' message goes to stdout,
+        # other errors go to stderr.
+        output = "\n".join(self.errors + self.output)
+        if "We don't have access to the VideoLUT" in output:
+            return None
+        match = re.search(r"discrepancy\s+([0-9]+(?:\.[0-9]+)?)%", output)
+        if match:
+            return float(match.group(1))
+        return None
+
+    def calibration_is_clobbered(self, dispwin, display_no, profile_arg):
+        """Return True if a display's loaded calibration looks clobbered/black.
+
+        See :meth:`get_calibration_load_discrepancy`. Only a discrepancy above
+        ``profile_loader.clobbered_discrepancy_threshold`` is treated as
+        clobbered, so benign quantization differences don't trigger needless
+        re-loads (which could themselves re-trigger the macOS bug).
+
+        Args:
+            dispwin (str): Path to the dispwin executable.
+            display_no (int): Zero-based display index.
+            profile_arg (str): Profile path to verify against.
+
+        Returns:
+            bool: True if the loaded calibration is considered clobbered.
+        """
+        discrepancy = self.get_calibration_load_discrepancy(
+            dispwin, display_no, profile_arg
+        )
+        if discrepancy is None:
+            return False
+        threshold = float(getcfg("profile_loader.clobbered_discrepancy_threshold"))
+        return discrepancy > threshold
 
     def update_display_name_manufacturer(
         self, ti3, display_name=None, display_manufacturer=None, write=True
