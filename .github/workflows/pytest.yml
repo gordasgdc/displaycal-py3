@@ -307,6 +307,10 @@ jobs:
         curl -L "${{ env.ARGYLL_REPO }}/${{ env.ARGYLL_VERSION }}/Argyll_V${{ env.ARGYLL_VERSION }}_macOS11_arm64_bin.tgz" -o argyll.tgz
         mkdir argyllcms
         tar -xzf argyll.tgz -C argyllcms --strip-components=1
+        # Ad-hoc sign all binaries to prevent macOS Gatekeeper OCSP verification
+        # delays (30-120s per unsigned binary per worker process).
+        xattr -rd com.apple.quarantine argyllcms || true
+        find argyllcms/bin -type f -exec codesign -f -s - {} \;
         echo "$GITHUB_WORKSPACE/argyllcms/bin" >> $GITHUB_PATH
 
     - name: Set up Python ${{ matrix.python-version }}
