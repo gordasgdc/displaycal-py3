@@ -952,6 +952,25 @@ def create_shaper_curves(
             bwd_mtx, bpc, single_curve, curves, profile, options_dispcal, XYZbp, logfn
         )
 
+    if bwd_mtx * [1, 1, 1] != [1, 1, 1]:
+        # Matrix display profile: the matrix maps device (1, 1, 1) to the PCS
+        # media white, so the shaper (TRC) curves have to reach 1.0 at device
+        # maximum for device white to actually map to media white. The curves
+        # are built (and optimized) from a fit normalized to the matrix white,
+        # which can leave their endpoint slightly below 1.0 when the matrix
+        # white and the gray ramp white are not perfectly consistent. A sub-1.0
+        # endpoint makes device max map to a fraction of media white, which in
+        # turn makes a CMM clip near-white source values to device white when it
+        # inverts the profile at limited (e.g. 8 bit) precision. Normalize each
+        # curve so its endpoint is exactly 1.0 to avoid this near-white crush
+        # (issue #710). This matches what Argyll's colprof does for matrix
+        # profiles. Scaling is uniform, so the curve shape (gamma) and gray
+        # neutrality are preserved.
+        for curve in curves:
+            endpoint = curve[-1]
+            if endpoint and endpoint != 1.0:
+                curve[:] = [min(v / endpoint, 1.0) for v in curve]
+
     return curves
 
 

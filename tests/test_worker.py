@@ -28,6 +28,8 @@ from DisplayCAL.worker import (
     check_file_isfile,
     check_profile_isfile,
     check_ti3_criteria1,
+    create_shaper_curves,
+    extract_device_gray_primaries,
     get_argyll_version_string,
     get_options_from_profile,
     Sudo,
@@ -694,3 +696,71 @@ def test_get_technology_strings_parses_ccxxmake_output(monkeypatch):
         "q": "LCD PFS Phosphor TFT",
         "o": "LED OLED",
     }
+
+
+def _build_matrix_from_primaries(RGB_XYZ, remaining, white_scale=1.0):
+    """Build a from-chromaticities matrix profile like ``_create_simple_matrix_profile``.
+
+    ``white_scale`` lets the test simulate an inconsistency between the matrix
+    white and the gray-ramp white, which is what makes the shaper curve endpoint
+    drop below 1.0 (see issue #710).
+    """
+    from DisplayCAL import colormath
+
+    XYZbp = RGB_XYZ[(0, 0, 0)]
+    XYZwp = RGB_XYZ[(100, 100, 100)]
+    xy = []
+    for R, G, B in [(100, 0, 0), (0, 100, 0), (0, 0, 100), (100, 100, 100)]:
+        src = RGB_XYZ if R == G == B else remaining
+        X, Y, Z = src[(R, G, B)]
+        if XYZbp != (0, 0, 0):
+            X, Y, Z = colormath.blend_blackpoint(X, Y, Z, XYZbp, (0, 0, 0), XYZwp)
+        xy.append(colormath.XYZ2xyY(*(v / 100 for v in (X, Y, Z)))[:2])
+    profile = ICCProfile.from_chromaticities(
+        xy[0][0], xy[0][1], xy[1][0], xy[1][1], xy[2][0], xy[2][1],
+        xy[3][0], xy[3][1], 2.2, "t", "c", None, None, cat="Bradford",
+    )
+    if white_scale != 1.0:
+        # Make the matrix map device (1, 1, 1) to a brighter-than-media white,
+        # mimicking a matrix/gray-ramp white inconsistency.
+        for channel in "rgb":
+            tag = profile.tags[channel + "XYZ"]
+            tag.X /= white_scale
+            tag.Y /= white_scale
+            tag.Z /= white_scale
+    return profile
+
+
+@pytest.mark.parametrize("white_scale", [1.0, 0.9757])
+def test_create_shaper_curves_trc_endpoint_reaches_one(data_files, white_scale):
+    """Matrix display shaper curves must reach 1.0 at device max (issue #710).
+
+    A TRC endpoint below 1.0 makes device white map to a fraction of media
+    white, which causes a CMM to clip near-white source values to device white
+    when inverting the profile at limited precision.
+    """
+    from DisplayCAL import colormath
+
+    ti3 = CGATS(
+        str(data_files["UP2516D #1 2022-03-20 02-08 D6500 2.2 F-S XYZLUT+MTX.ti3"])
+    )[0]
+    _, RGB_XYZ, remaining = extract_device_gray_primaries(ti3, True, lambda *a: None)
+    profile = _build_matrix_from_primaries(RGB_XYZ, remaining, white_scale)
+    bwd_mtx = colormath.get_rgb_space(profile.get_rgb_space("pcs", 1))[-1].inverted()
+
+    curves = create_shaper_curves(
+        RGB_XYZ,
+        bwd_mtx,
+        single_curve=True,
+        bpc=False,
+        profile=profile,
+        options_dispcal=[],
+        optimize=True,
+        cat="Bradford",
+    )
+
+    for curve in curves:
+        # Endpoint reaches device max ...
+        assert curve[-1] == pytest.approx(1.0, abs=1e-9)
+        # ... and the curve is still monotonically increasing.
+        assert all(curve[i] <= curve[i + 1] + 1e-9 for i in range(len(curve) - 1))
