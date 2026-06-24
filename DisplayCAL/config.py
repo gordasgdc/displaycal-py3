@@ -2666,18 +2666,18 @@ def initcfg(
                     cfg.set(section, name, "\n".join(val))
     finally:
         if not module:
-            if getcfg("lang", fallback=False) is None:
+            if getcfg("lang", fallback=False, cfg=cfg) is None:
                 setcfg("lang", DEFAULTS["lang"], cfg=cfg)
-            if getcfg("calibration.ambient_viewcond_adjust", fallback=False) is None:
+            if getcfg("calibration.ambient_viewcond_adjust", fallback=False, cfg=cfg) is None:
                 setcfg(
                     "calibration.ambient_viewcond_adjust",
                     DEFAULTS["calibration.ambient_viewcond_adjust"],
                     cfg=cfg,
                 )
-            if not getcfg("calibration.ambient_viewcond_adjust"):
+            if not getcfg("calibration.ambient_viewcond_adjust", cfg=cfg):
                 # Reset to default
                 setcfg("calibration.ambient_viewcond_adjust.lux", None, cfg=cfg)
-            if getcfg("profile.save_path", fallback=False) is None:
+            if getcfg("profile.save_path", fallback=False, cfg=cfg) is None:
                 setcfg("profile.save_path", STORAGE, cfg=cfg)
 
 
