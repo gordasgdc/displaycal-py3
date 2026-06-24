@@ -36,13 +36,13 @@ from DisplayCAL.worker import Worker, check_ti3
 from DisplayCAL.wx_windows import ConfirmDialog, BaseInteractiveDialog
 
 
-@pytest.fixture(scope="class", name="app", autouse=True)
+@pytest.fixture(scope="session", name="app", autouse=True)
 def fixture_app() -> AppConsole:
     """Return app for tests."""
     return wx.GetApp() or wx.App()
 
 
-@pytest.fixture(scope="class", name="mainframe")
+@pytest.fixture(scope="module", name="mainframe")
 def fixture_mainframe() -> MainFrame:
     """Return mainframe for tests."""
     worker = Worker()
