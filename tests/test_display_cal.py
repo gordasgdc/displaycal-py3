@@ -324,7 +324,8 @@ def test_is_new_update_returns_false_on_bad_json(monkeypatch):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("plat,machine,version,expected_filename", [
-    ("win32",  "AMD64",   "3.9.0", "DisplayCAL-3.9.0-Windows-Setup.exe"),
+    ("win32",  "AMD64",   "3.9.0", "DisplayCAL-3.9.0-Windows-x64.exe"),
+    ("win32",  "ARM64",   "3.9.0", "DisplayCAL-3.9.0-Windows-arm64.exe"),
     ("darwin", "arm64",   "3.9.0", "DisplayCAL-3.9.0-macOS-arm64.dmg"),
     ("darwin", "aarch64", "3.9.0", "DisplayCAL-3.9.0-macOS-arm64.dmg"),
     ("darwin", "x86_64",  "3.9.0", "DisplayCAL-3.9.0-macOS-x86.dmg"),

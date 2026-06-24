@@ -379,7 +379,11 @@ def get_download_url(newversion: str) -> str | None:
     if RELEASE_DATA is None:
         return None
     if sys.platform == "win32":
-        filename = f"{APPNAME}-{newversion}-Windows-Setup.exe"
+        machine = platform.machine().lower()
+        if machine in ("arm64", "aarch64"):
+            filename = f"{APPNAME}-{newversion}-Windows-arm64.exe"
+        else:
+            filename = f"{APPNAME}-{newversion}-Windows-x64.exe"
     elif sys.platform == "darwin":
         machine = platform.machine().lower()
         if machine in ("arm64", "aarch64"):
