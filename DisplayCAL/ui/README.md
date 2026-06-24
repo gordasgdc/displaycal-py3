@@ -88,6 +88,14 @@ module:
   lookup-direction — forward/inverse/backward — and cLUT/matrix controls);
   loads `.icc`/`.icm`/`.cal`; and a "show actual LUT" toggle that reads the live
   video-card LUT back from the graphics card.
+- **Synthetic ICC creator** (`tools/synth_profile.py`) — complete. Builds RGB or
+  grayscale synthetic profiles from entered colorimetry (primaries, white/black
+  point, luminance) and a transfer function (gamma, BT.1886, DICOM, L*,
+  Rec. 709/1886, SMPTE 240M, SMPTE 2084/PQ with optional roll-off, HLG, sRGB);
+  seeds from a dropped `.icc`/`.icm`/`.ti3` or a built-in RGB-space preset; has a
+  chromatic-adaptation dialog and metadata (class/technology/CIIS) controls. The
+  HDR roll-off controls are inlined here rather than inherited from the large
+  `LUT3DMixin`, and the slow HDR cLUT generation runs on a `QThread`.
 
 ## Not yet ported / deliberately deferred
 

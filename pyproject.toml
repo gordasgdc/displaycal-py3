@@ -231,6 +231,12 @@ extend-ignore = [
     "S603",  # Subprocess without shell=True
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# Synthetic-ICC tool is color-math heavy: CIE XYZ / RGB names are the correct
+# domain notation (uppercase), and create_profile mirrors the branch-heavy wx
+# backend it ports.
+"DisplayCAL/ui/tools/synth_profile.py" = ["N802", "N803", "N806", "C901"]
+
 [tool.ruff.lint.mccabe]
 max-complexity = 12
 

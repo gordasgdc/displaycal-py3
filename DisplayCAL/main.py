@@ -859,6 +859,10 @@ def _get_qt_main(module: str) -> Callable[[], int] | None:
         from DisplayCAL.ui.tools.curve_viewer import main
 
         return main
+    if module == "synthprofile":
+        from DisplayCAL.ui.tools.synth_profile import main
+
+        return main
     return None
 
 
