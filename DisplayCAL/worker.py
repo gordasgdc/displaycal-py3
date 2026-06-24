@@ -50,7 +50,8 @@ from threading import current_thread, main_thread
 from time import sleep, strftime, time
 from typing import Any, Callable, ClassVar
 
-import distro
+if sys.platform not in ("win32", "darwin"):
+    import distro
 from send2trash import send2trash
 
 if sys.platform == "darwin":
@@ -951,25 +952,6 @@ def create_shaper_curves(
         curves = _create_optimized_shaper_curves(
             bwd_mtx, bpc, single_curve, curves, profile, options_dispcal, XYZbp, logfn
         )
-
-    if bwd_mtx * [1, 1, 1] != [1, 1, 1]:
-        # Matrix display profile: the matrix maps device (1, 1, 1) to the PCS
-        # media white, so the shaper (TRC) curves have to reach 1.0 at device
-        # maximum for device white to actually map to media white. The curves
-        # are built (and optimized) from a fit normalized to the matrix white,
-        # which can leave their endpoint slightly below 1.0 when the matrix
-        # white and the gray ramp white are not perfectly consistent. A sub-1.0
-        # endpoint makes device max map to a fraction of media white, which in
-        # turn makes a CMM clip near-white source values to device white when it
-        # inverts the profile at limited (e.g. 8 bit) precision. Normalize each
-        # curve so its endpoint is exactly 1.0 to avoid this near-white crush
-        # (issue #710). This matches what Argyll's colprof does for matrix
-        # profiles. Scaling is uniform, so the curve shape (gamma) and gray
-        # neutrality are preserved.
-        for curve in curves:
-            endpoint = curve[-1]
-            if endpoint and endpoint != 1.0:
-                curve[:] = [min(v / endpoint, 1.0) for v in curve]
 
     return curves
 
@@ -2187,140 +2169,6 @@ class WPopen(sp.Popen):
         sp.Popen.terminate(self)
 
 
-_coregraphics = None
-
-
-def _get_coregraphics():
-    """Return the CoreGraphics CDLL (macOS only), or None."""
-    global _coregraphics
-    if _coregraphics is None and sys.platform == "darwin":
-        try:
-            _coregraphics = ctypes.CDLL(
-                "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics"
-            )
-        except OSError:
-            _coregraphics = False  # Mark as tried-and-failed
-    return _coregraphics or None
-
-
-def get_macos_videolut_maxima(max_displays=16):
-    """Return the maximum VideoLUT output value for each active display (macOS).
-
-    Used to detect a display whose VideoLUT has been clobbered to all-black
-    (issue #694): a black VideoLUT has a maximum output near 0.0, a normal one
-    near 1.0. The list is indexed in CoreGraphics active-display order, which
-    matches ArgyllCMS' ``dispwin -d`` numbering (both come from
-    CGGetActiveDisplayList).
-
-    Returns:
-        list[None | float]: Per-display maxima (0.0 - 1.0), None for a display
-            that couldn't be read, or [] if CoreGraphics is unavailable.
-    """
-    cg = _get_coregraphics()
-    if cg is None:
-        return []
-    cg.CGGetActiveDisplayList.argtypes = [
-        ctypes.c_uint32,
-        ctypes.POINTER(ctypes.c_uint32),
-        ctypes.POINTER(ctypes.c_uint32),
-    ]
-    cg.CGDisplayGammaTableCapacity.restype = ctypes.c_uint32
-    cg.CGDisplayGammaTableCapacity.argtypes = [ctypes.c_uint32]
-    cg.CGGetDisplayTransferByTable.argtypes = [
-        ctypes.c_uint32,
-        ctypes.c_uint32,
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.POINTER(ctypes.c_uint32),
-    ]
-    ids = (ctypes.c_uint32 * max_displays)()
-    count = ctypes.c_uint32(0)
-    if cg.CGGetActiveDisplayList(max_displays, ids, ctypes.byref(count)) != 0:
-        return []
-    maxima = []
-    for i in range(count.value):
-        did = ids[i]
-        cap = cg.CGDisplayGammaTableCapacity(did) or 256
-        red = (ctypes.c_float * cap)()
-        green = (ctypes.c_float * cap)()
-        blue = (ctypes.c_float * cap)()
-        nent = ctypes.c_uint32(0)
-        if (
-            cg.CGGetDisplayTransferByTable(
-                did, cap, red, green, blue, ctypes.byref(nent)
-            )
-            != 0
-        ):
-            maxima.append(None)
-            continue
-        channel_max = 0.0
-        for channel in (red, green, blue):
-            for j in range(nent.value):
-                if channel[j] > channel_max:
-                    channel_max = channel[j]
-        maxima.append(channel_max)
-    return maxima
-
-
-def reload_black_videoluts(
-    dispwin,
-    threshold=0.05,
-    retries=4,
-    settle=0.3,
-    log=None,
-    _maxima_fn=None,
-    _run=None,
-    _sleep=None,
-):
-    """Re-load the VideoLUT of any macOS display that has gone black (issue #694).
-
-    On macOS the OS (WindowServer) intermittently resets a display's VideoLUT to
-    all-black when an ArgyllCMS display tool exits, turning the screen black.
-    This detects that via CoreGraphics and re-loads the display's installed
-    calibration with ``dispwin -d{N} -L`` (exactly what un-blacks the screen),
-    retrying until it sticks (the re-load itself can occasionally be clobbered
-    again) or the retries run out.
-
-    Args:
-        dispwin (str): Path to the dispwin executable.
-        threshold (float): VideoLUT max output below which a display is
-            considered black.
-        retries (int): Maximum number of detect/re-load passes.
-        settle (float): Seconds to wait between passes.
-        log (None | Callable): Optional logging callable.
-        _maxima_fn, _run, _sleep: Injection points for testing.
-
-    Returns:
-        list[int]: Zero-based indices of displays that were re-loaded.
-    """
-    if sys.platform != "darwin" or not dispwin:
-        return []
-    maxima_fn = _maxima_fn or get_macos_videolut_maxima
-    run = _run or (lambda cmd: sp.call(cmd))
-    sleep_fn = _sleep or sleep
-    reloaded = []
-    for _ in range(max(1, int(retries))):
-        black = [
-            i
-            for i, m in enumerate(maxima_fn())
-            if m is not None and m < threshold
-        ]
-        if not black:
-            break
-        for i in black:
-            if log:
-                log(
-                    f"{APPNAME}: VideoLUT for display {i + 1:d} is black - "
-                    "re-loading calibration (issue #694)"
-                )
-            run([dispwin, "-v", f"-d{i + 1:d}", "-L"])
-            if i not in reloaded:
-                reloaded.append(i)
-        sleep_fn(settle)
-    return reloaded
-
-
 class Worker(WorkerBase):
     """Worker class for ArgyllCMS.
 
@@ -3082,7 +2930,7 @@ class Worker(WorkerBase):
             )
             profile1.apply_black_offset(
                 oXYZbp,
-                logfile=logfiles,
+                logfiles=logfiles,
                 thread_abort=self.thread_abort,
                 abortmessage=lang.getstr("aborted"),
             )
@@ -7862,27 +7710,6 @@ BEGIN_DATA
                             errmsg = errmsg[startpos + 2 :]
                 if errmsg:
                     return UnloggedError(errmsg.strip())
-        # macOS clobbers a display's VideoLUT to all-black when an ArgyllCMS
-        # display tool exits (issue #694). Recover right here, in the worker
-        # thread, after the tool has finished - this is race-free (sequential)
-        # and independent of whether the GUI stays open, so the screen doesn't
-        # stay black through the subsequent profile-creation steps.
-        if (
-            sys.platform == "darwin"
-            and not dry_run
-            and args
-            and "-?" not in args
-            and getcfg("profile_loader.macos_reapply_watch")
-            and cmdname
-            in (
-                get_argyll_utilname("dispcal"),
-                get_argyll_utilname("dispread"),
-                get_argyll_utilname("spotread"),
-                get_argyll_utilname("dispwin"),
-                get_argyll_utilname("colprof"),
-            )
-        ):
-            reload_black_videoluts(get_argyll_util("dispwin"), log=self.log)
         if self.exec_cmd_returnvalue is not None:
             return self.exec_cmd_returnvalue
         return self.retcode == 0
@@ -8124,17 +7951,11 @@ BEGIN_DATA
         XYZg = odata[3]
         XYZb = odata[4]
 
-        # Sanity check whitepoint - after normalisation it should be close to
-        # D50 (the ICC PCS white). Use a tolerance rather than an exact rounded
-        # match: a real profile's adapted white is routinely off D50 by ~0.001
-        # (chromatic adaptation / measurement / 16-bit encoding) and must not be
-        # rejected. The tolerance still catches a grossly wrong white (e.g. from
-        # a failed inverse lookup, which lands far from D50).
-        D50_wp = colormath.get_whitepoint("D50")
+        # Sanity check whitepoint
         if (
-            abs(XYZwp[0] - D50_wp[0]) > 0.01
-            or abs(XYZwp[1] - D50_wp[1]) > 0.01
-            or abs(XYZwp[2] - D50_wp[2]) > 0.01
+            round(XYZwp[0], 3) != 0.964
+            or round(XYZwp[1], 3) != 1
+            or round(XYZwp[2], 3) != 0.825
         ):
             raise Error(
                 "Argyll CMS xicclu: Invalid white XYZ: {:.4f} {:.4f} {:.4f}".format(
@@ -9437,69 +9258,6 @@ BEGIN_DATA
             atexit.register(os.remove, profile.filename)
         return profile.filename or arg
 
-    def get_calibration_load_discrepancy(self, dispwin, display_no, profile_arg):
-        """Return how much a display's loaded calibration differs from a profile.
-
-        Runs ``dispwin -d{N} -V <profile>`` which compares the VideoLUT contents
-        currently loaded in the hardware against the given profile's calibration
-        and reports the discrepancy as a percentage. A verify-only run does not
-        open a window nor alter the VideoLUT, so this is safe to call freely.
-        Used to detect the macOS "black screen" condition where the OS clobbers
-        the VideoLUT after it was loaded (issue #694): a clobbered/black VideoLUT
-        yields a very large discrepancy (close to 100%), whereas a correctly
-        loaded calibration is at most a few percent off due to quantization.
-
-        Args:
-            dispwin (str): Path to the dispwin executable.
-            display_no (int): Zero-based display index.
-            profile_arg (str): Profile path to verify against. ``-L`` is not a
-                valid argument here (pass a real profile path).
-
-        Returns:
-            None | float: The discrepancy in percent (0.0 - 100.0), or None if
-                it could not be determined (e.g. no VideoLUT access).
-        """
-        self.exec_cmd(
-            dispwin,
-            ["-v", f"-d{display_no + 1:d}", "-V", profile_arg],
-            capture_output=True,
-            skip_scripts=True,
-            silent=True,
-        )
-        # The 'Verify: ... (discrepancy X%)' message goes to stdout,
-        # other errors go to stderr.
-        output = "\n".join(self.errors + self.output)
-        if "We don't have access to the VideoLUT" in output:
-            return None
-        match = re.search(r"discrepancy\s+([0-9]+(?:\.[0-9]+)?)%", output)
-        if match:
-            return float(match.group(1))
-        return None
-
-    def calibration_is_clobbered(self, dispwin, display_no, profile_arg):
-        """Return True if a display's loaded calibration looks clobbered/black.
-
-        See :meth:`get_calibration_load_discrepancy`. Only a discrepancy above
-        ``profile_loader.clobbered_discrepancy_threshold`` is treated as
-        clobbered, so benign quantization differences don't trigger needless
-        re-loads (which could themselves re-trigger the macOS bug).
-
-        Args:
-            dispwin (str): Path to the dispwin executable.
-            display_no (int): Zero-based display index.
-            profile_arg (str): Profile path to verify against.
-
-        Returns:
-            bool: True if the loaded calibration is considered clobbered.
-        """
-        discrepancy = self.get_calibration_load_discrepancy(
-            dispwin, display_no, profile_arg
-        )
-        if discrepancy is None:
-            return False
-        threshold = float(getcfg("profile_loader.clobbered_discrepancy_threshold"))
-        return discrepancy > threshold
-
     def update_display_name_manufacturer(
         self, ti3, display_name=None, display_manufacturer=None, write=True
     ):
@@ -9716,21 +9474,27 @@ BEGIN_DATA
                 "s": "DLP Projector RGBCMY Filter Wheel",
                 "u": "Unknown",
             }
-        result = self.exec_cmd(
-            get_argyll_util("ccxxmake"),
-            ["-??"],
-            capture_output=True,
-            skip_scripts=True,
-            silent=True,
-            log_output=False,
-        )
-        if isinstance(result, Exception):
+        ccxxmake = get_argyll_util("ccxxmake")
+        if not ccxxmake:
+            return {}
+        try:
+            proc = sp.run(
+                [ccxxmake, "-??"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            # ccxxmake -?? always exits with code 1 and writes to stderr;
+            # fall back to stderr when stdout is empty so the output is
+            # captured regardless of the OS / wxPython combination in use.
+            raw_output = proc.stdout or proc.stderr
+        except Exception as exception:
             traceback.print_exc()
-            print(result)
+            print(exception)
             return {}
         technology_strings = {}
         in_tech = False
-        for line in self.output:
+        for line in raw_output.splitlines():
             if not (parts := line.strip().split(None, 1)):
                 continue
             if (arg := parts.pop(0)) == "-t":
@@ -12545,18 +12309,13 @@ BEGIN_DATA
 
         if clutres > iclutres:
             # Lookup input RGB to interpolated XYZ
-            # NOTE: step must be (re)computed for the *target* clutres BEFORE
-            # building RGB_in. Otherwise it still holds the previous low-res
-            # iclutres step, so the RGB_in grid coordinates run far past device
-            # 100% (e.g. 32 * 6.25 = 200), which clamps most lookups to the
-            # white corner and produces a grossly corrupt A2B cLUT.
-            step = 100 / (clutres - 1.0)
             RGB_in = [
                 [a * step, b * step, c * step]
                 for a in range(clutres)
                 for b in range(clutres)
                 for c in range(clutres)
             ]
+            step = 100 / (clutres - 1.0)
             XYZ_out = self.xicclu(profile, RGB_in, "a", pcs="X", scale=100)
             profile.filename = None
 
@@ -16279,34 +16038,10 @@ BEGIN_DATA
             capture_output = True
         cmd, args = self.prepare_dispcal()
         if not isinstance(cmd, Exception):
-            max_diffuser_retries = 2
-            diffuser_retries = 0
-            while True:
-                result = self.exec_cmd(cmd, args, capture_output=capture_output)
-                # Argyll's specbos driver spawns a background "Diffuser thread"
-                # that polls the instrument over the same serial port as
-                # measurements, causing a race condition.  When this happens
-                # dispcal exits with "Instrument Access Failed".  Restarting
-                # dispcal opens a fresh serial connection and usually avoids
-                # the race on subsequent attempts.
-                if (
-                    isinstance(result, Exception)
-                    and not self.subprocess_abort
-                    and diffuser_retries < max_diffuser_retries
-                    and "Instrument Access Failed" in str(result)
-                    and any(
-                        "Diffuser thread failed" in line for line in self.output
-                    )
-                ):
-                    diffuser_retries += 1
-                    self.log(
-                        f"{APPNAME}: Calibration failed due to instrument "
-                        "communication issue (Diffuser thread conflict). "
-                        f"Retrying (attempt {diffuser_retries} of "
-                        f"{max_diffuser_retries})..."
-                    )
-                    continue
-                break
+            print(f"cmd: {cmd}")
+            print(f"args: {args}")
+            result = self.exec_cmd(cmd, args, capture_output=capture_output)
+            print(f"result: {result}")
         else:
             result = cmd
         if not isinstance(result, Exception) and result and getcfg("trc"):
@@ -16315,10 +16050,13 @@ BEGIN_DATA
                 getcfg("profile.name.expanded"),
                 getcfg("profile.name.expanded"),
             )
+            print(f"dst_pathname: {dst_pathname}")
             cal = args[-1] + ".cal"
+            print(f"cal         : {cal}")
             result = check_cal_isfile(
                 cal, lang.getstr("error.calibration.file_not_created")
             )
+            print(f"result      : {result}")
             if not isinstance(result, Exception) and result:
                 cal_cgats = add_dispcal_options_to_cal(cal, self.options_dispcal)
                 if cal_cgats:

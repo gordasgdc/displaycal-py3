@@ -591,8 +591,10 @@ def safe_basestring(obj, enc="utf-8", errors="replace"):
                 obj.args = (obj.reason,)
             elif isinstance(obj.reason, bytes):
                 obj.args = (str(obj.reason, enc, errors),)
+            elif isinstance(obj.reason, (list, tuple)):
+                obj.args = tuple(obj.reason)
             else:
-                obj.args = obj.reason
+                obj.args = (str(obj.reason),)
         error = []
         if getattr(obj, "winerror", None) is not None:
             # pywintypes.error or WindowsError

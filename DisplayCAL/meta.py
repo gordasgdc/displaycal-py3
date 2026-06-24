@@ -43,6 +43,7 @@ LONG_DESCRIPTION = (
 )
 DOMAIN = "displaycal.net"
 DEVELOPMENT_HOME_PAGE = "https://github.com/eoyilmaz/displaycal-py3"
+github_api_url = "https://api.github.com/repos/eoyilmaz/displaycal-py3"
 
 AUTHOR_EMAIL = ", ".join(
     [
@@ -55,7 +56,7 @@ NAME = "DisplayCAL"
 APPSTREAM_ID = ".".join(reversed([NAME, *DOMAIN.split(".")]))
 NAME_HTML = '<span class="appname">Display<span>CAL</span></span>'
 
-PY_MINVERSION = (3, 10)
+PY_MINVERSION = (3, 9)
 PY_MAXVERSION = (3, 14)
 
 VERSION_LIN = VERSION_STRING  # Linux

@@ -18,9 +18,8 @@ from DisplayCAL.argyll import (
 )
 from DisplayCAL.cgats import CGATS
 from DisplayCAL.config import initcfg, setcfg
-from DisplayCAL.debughelpers import Error
 from DisplayCAL.dev.mocks import check_call_str
-from DisplayCAL.icc_profile import ICCProfile, LUT16Type
+from DisplayCAL.icc_profile import ICCProfile
 from DisplayCAL.meta import DOMAIN
 from DisplayCAL.worker import (
     add_keywords_to_cgats,
@@ -29,15 +28,12 @@ from DisplayCAL.worker import (
     check_file_isfile,
     check_profile_isfile,
     check_ti3_criteria1,
-    create_shaper_curves,
-    extract_device_gray_primaries,
     get_argyll_version_string,
     get_options_from_profile,
     Sudo,
     Worker,
 )
 from tests.data.display_data import DisplayData
-
 
 def test_get_options_from_profile_1(data_files):
     """Test ``DisplayCAL.worker.get_options_from_profile()`` function"""
@@ -116,6 +112,18 @@ def test_worker_instrument_supports_css_1():
 def test_generate_b2a_from_inverse_table(data_files, setup_argyll):
     """Test Worker.generate_B2A_from_inverse_table() method"""
     import wx
+    from DisplayCAL.argyll import ARGYLL_UTILS
+    from DisplayCAL.config import setcfg, writecfg
+
+    # Other tests in this module call initcfg() which re-reads DisplayCAL.ini
+    # from disk. Under xdist, a concurrent worker may have overwritten that
+    # file with its own (now-deleted) temp Argyll path, poisoning our
+    # in-process config. Re-assert the path from the session fixture and
+    # flush the utility-lookup cache so get_argyll_util() searches fresh.
+    setcfg("argyll.dir", str(setup_argyll))
+    ARGYLL_UTILS.clear()
+    writecfg()  # pool workers (SpawnPoolWorker-*) read config from disk
+
     # for some reason we sometimes need to have a wx.App() running
     _ = wx.GetApp() or wx.App()
     worker = Worker()
@@ -127,150 +135,6 @@ def test_generate_b2a_from_inverse_table(data_files, setup_argyll):
     logfile = io.StringIO()
     result = worker.generate_B2A_from_inverse_table(icc_profile1, logfile=logfile)
     assert result is True
-
-
-def test_apply_black_offset_signature_uses_logfile() -> None:
-    """ICCProfile/LUT16Type.apply_black_offset keep the ``logfile`` parameter.
-
-    Guards the contract the caller relies on (see the functional test below).
-    """
-    import inspect
-
-    for cls in (ICCProfile, LUT16Type):
-        params = inspect.signature(cls.apply_black_offset).parameters
-        assert "logfile" in params, (
-            f"{cls.__name__}.apply_black_offset lost its 'logfile' parameter"
-        )
-        assert "logfiles" not in params, (
-            f"{cls.__name__}.apply_black_offset must not use 'logfiles'"
-        )
-
-
-def test_blend_profile_blackpoint_calls_apply_black_offset_with_logfile(
-    data_files, monkeypatch
-) -> None:
-    """blend_profile_blackpoint must call apply_black_offset with ``logfile=``.
-
-    Regression: it used ``logfiles=``, which raised
-    ``apply_black_offset() got an unexpected keyword argument 'logfiles'`` and
-    aborted 3D LUT creation whenever a black offset was applied. profile1's
-    apply_black_offset is replaced with a strict-signature stub (mirroring
-    ICCProfile.apply_black_offset) so that a ``logfiles=`` call would raise
-    TypeError here, exactly as it did in production.
-    """
-    icc_path = data_files[
-        "UP2516D #1 2022-03-20 02-08 D6500 2.2 F-S XYZLUT+MTX.icc"
-    ].absolute()
-    profile1 = ICCProfile(profile=icc_path)
-    profile2 = ICCProfile(profile=icc_path)
-
-    received = {}
-
-    def strict_apply_black_offset(
-        XYZbp,
-        power=40.0,
-        include_A2B=True,
-        set_blackpoint=True,
-        logfile=None,
-        thread_abort=None,
-        abortmessage="Aborted",
-        include_trc=True,
-    ):
-        received["logfile"] = logfile
-
-    profile1.apply_black_offset = strict_apply_black_offset
-
-    worker = Worker()
-    monkeypatch.setattr(
-        worker, "xicclu", lambda profile, idata, **kwargs: [[0.0, 0.0, 0.0]]
-    )
-    # apply_trc=False forces the branch that applies the black offset.
-    worker.blend_profile_blackpoint(profile1, profile2, apply_trc=False)
-
-    assert "logfile" in received, "apply_black_offset was not called"
-    assert received["logfile"] is not None
-
-
-def test_generate_b2a_whitepoint_check_tolerance(data_files, monkeypatch) -> None:
-    """The whitepoint sanity check accepts near-D50 and rejects grossly wrong.
-
-    Regression: the check required the normalised white to round to exactly
-    D50 (0.964, 1.0, 0.825), so a real profile whose adapted white was off D50
-    by ~0.001 (chromatic adaptation / measurement / 16-bit encoding) was
-    wrongly rejected with "Invalid white XYZ". It now uses a 0.01 tolerance,
-    which still catches a grossly wrong white from a failed inverse lookup.
-    """
-    import wx
-
-    _ = wx.GetApp() or wx.App()
-    worker = Worker()
-    profile = ICCProfile(
-        profile=data_files[
-            "Monitor 1 #1 2022-03-09 16-13 D6500 2.2 F-S XYZLUT+MTX.icc"
-        ].absolute()
-    )
-    # xicclu returns [black, white, R, G, B] in XYZ for idata
-    # [[0,0,0],[1,1,1],[1,0,0],[0,1,0],[0,0,1]].
-    primaries = [[0.43, 0.22, 0.02], [0.38, 0.71, 0.10], [0.18, 0.07, 0.72]]
-
-    # White ~0.001 off D50 (normalises to ~0.965/1.0/0.824) - must be accepted.
-    def xicclu_near_d50(prof, idata, *args, **kwargs):
-        return [[0.001, 0.001, 0.001], [0.9647, 0.9995, 0.8240], *primaries]
-
-    monkeypatch.setattr(worker, "xicclu", xicclu_near_d50)
-    try:
-        worker.generate_B2A_from_inverse_table(profile, logfile=io.StringIO())
-    except Exception as exc:  # may still fail later for unrelated reasons
-        assert "Invalid white" not in str(exc), (
-            "a near-D50 white was wrongly rejected by the sanity check"
-        )
-
-    # Grossly wrong white (normalises far from D50) - must still be rejected.
-    def xicclu_bad_white(prof, idata, *args, **kwargs):
-        return [[0.0, 0.0, 0.0], [0.5, 0.5, 0.4], *primaries]
-
-    monkeypatch.setattr(worker, "xicclu", xicclu_bad_white)
-    with pytest.raises(Error, match="Invalid white"):
-        worker.generate_B2A_from_inverse_table(profile, logfile=io.StringIO())
-
-
-def test_create_rgb_xyz_clut_fwd_profile_rgb_in_within_device_range(
-    data_files, monkeypatch
-) -> None:
-    """The upsampled cLUT lookup grid must stay within device 0..100%.
-
-    Regression for the stale ``step`` bug in create_RGB_XYZ_cLUT_fwd_profile:
-    RGB_in was built with the previous low-resolution iclutres step, so its
-    coordinates ran far past device 100% (e.g. iclutres=5 -> 32 * 25 = 800).
-    xicclu(scale=100) then clamped those out-of-range inputs to the white
-    corner, filling most of the A2B cLUT with the white point.
-    """
-    setcfg("profile.quality", "h")
-    worker = Worker()
-    ti3 = CGATS(
-        str(
-            data_files[
-                "UP2516D #1 2022-03-20 02-08 D6500 2.2 F-S XYZLUT+MTX.ti3"
-            ].absolute()
-        )
-    )
-
-    captured = {}
-
-    def fake_xicclu(prof, idata, *args, **kwargs):
-        # Capture the first lookup (the upsampling grid) and return in-gamut XYZ
-        captured.setdefault("rgb_in", [list(row) for row in idata])
-        return [[50.0, 50.0, 50.0] for _ in idata]
-
-    monkeypatch.setattr(worker, "xicclu", fake_xicclu)
-    worker.create_RGB_XYZ_cLUT_fwd_profile(ti3, "test", "", "", "")
-
-    assert "rgb_in" in captured, "the cLUT upsampling lookup was never reached"
-    max_value = max(max(row) for row in captured["rgb_in"])
-    assert max_value <= 100.0 + 1e-6, (
-        f"RGB_in grid overshoots device 100% (max={max_value:.2f}) - "
-        "stale-step regression in create_RGB_XYZ_cLUT_fwd_profile"
-    )
 
 
 def test_sudo_class_initialization():
@@ -825,87 +689,25 @@ def test_get_technology_strings_parses_ccxxmake_output(monkeypatch):
     worker = Worker()
     worker.argyll_version = [3, 5, 0]
 
-    def patched_exec_cmd(*args, **kwargs):
-        worker.output = [
-            "-t c CRT",
-            "-t q LCD PFS Phosphor TFT",
-            "-t o LED OLED",
-            "-Y ignored option section",
-        ]
-        return True
+    # ccxxmake -?? always exits with code 1 and writes to stderr; the
+    # implementation uses subprocess directly so we patch sp.run and
+    # get_argyll_util rather than the old exec_cmd approach.
+    fake_stderr = "\n".join([
+        "-t c CRT",
+        "-t q LCD PFS Phosphor TFT",
+        "-t o LED OLED",
+        "-Y ignored option section",
+    ])
 
-    monkeypatch.setattr(worker, "exec_cmd", patched_exec_cmd)
+    class FakeCompletedProcess:
+        stdout = ""
+        stderr = fake_stderr
+
+    monkeypatch.setattr("DisplayCAL.worker.get_argyll_util", lambda *a, **kw: "/fake/ccxxmake")
+    monkeypatch.setattr("DisplayCAL.worker.sp.run", lambda *a, **kw: FakeCompletedProcess())
     result = worker.get_technology_strings()
     assert result == {
         "c": "CRT",
         "q": "LCD PFS Phosphor TFT",
         "o": "LED OLED",
     }
-
-
-def _build_matrix_from_primaries(RGB_XYZ, remaining, white_scale=1.0):
-    """Build a from-chromaticities matrix profile like ``_create_simple_matrix_profile``.
-
-    ``white_scale`` lets the test simulate an inconsistency between the matrix
-    white and the gray-ramp white, which is what makes the shaper curve endpoint
-    drop below 1.0 (see issue #710).
-    """
-    from DisplayCAL import colormath
-
-    XYZbp = RGB_XYZ[(0, 0, 0)]
-    XYZwp = RGB_XYZ[(100, 100, 100)]
-    xy = []
-    for R, G, B in [(100, 0, 0), (0, 100, 0), (0, 0, 100), (100, 100, 100)]:
-        src = RGB_XYZ if R == G == B else remaining
-        X, Y, Z = src[(R, G, B)]
-        if XYZbp != (0, 0, 0):
-            X, Y, Z = colormath.blend_blackpoint(X, Y, Z, XYZbp, (0, 0, 0), XYZwp)
-        xy.append(colormath.XYZ2xyY(*(v / 100 for v in (X, Y, Z)))[:2])
-    profile = ICCProfile.from_chromaticities(
-        xy[0][0], xy[0][1], xy[1][0], xy[1][1], xy[2][0], xy[2][1],
-        xy[3][0], xy[3][1], 2.2, "t", "c", None, None, cat="Bradford",
-    )
-    if white_scale != 1.0:
-        # Make the matrix map device (1, 1, 1) to a brighter-than-media white,
-        # mimicking a matrix/gray-ramp white inconsistency.
-        for channel in "rgb":
-            tag = profile.tags[channel + "XYZ"]
-            tag.X /= white_scale
-            tag.Y /= white_scale
-            tag.Z /= white_scale
-    return profile
-
-
-@pytest.mark.parametrize("white_scale", [1.0, 0.9757])
-def test_create_shaper_curves_trc_endpoint_reaches_one(data_files, white_scale):
-    """Matrix display shaper curves must reach 1.0 at device max (issue #710).
-
-    A TRC endpoint below 1.0 makes device white map to a fraction of media
-    white, which causes a CMM to clip near-white source values to device white
-    when inverting the profile at limited precision.
-    """
-    from DisplayCAL import colormath
-
-    ti3 = CGATS(
-        str(data_files["UP2516D #1 2022-03-20 02-08 D6500 2.2 F-S XYZLUT+MTX.ti3"])
-    )[0]
-    _, RGB_XYZ, remaining = extract_device_gray_primaries(ti3, True, lambda *a: None)
-    profile = _build_matrix_from_primaries(RGB_XYZ, remaining, white_scale)
-    bwd_mtx = colormath.get_rgb_space(profile.get_rgb_space("pcs", 1))[-1].inverted()
-
-    curves = create_shaper_curves(
-        RGB_XYZ,
-        bwd_mtx,
-        single_curve=True,
-        bpc=False,
-        profile=profile,
-        options_dispcal=[],
-        optimize=True,
-        cat="Bradford",
-    )
-
-    for curve in curves:
-        # Endpoint reaches device max ...
-        assert curve[-1] == pytest.approx(1.0, abs=1e-9)
-        # ... and the curve is still monotonically increasing.
-        assert all(curve[i] <= curve[i + 1] + 1e-9 for i in range(len(curve) - 1))

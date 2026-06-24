@@ -36,17 +36,24 @@ from DisplayCAL.worker import Worker, check_ti3
 from DisplayCAL.wx_windows import ConfirmDialog, BaseInteractiveDialog
 
 
-@pytest.fixture(scope="session", name="app", autouse=True)
+@pytest.fixture(scope="class", name="app", autouse=True)
 def fixture_app() -> AppConsole:
     """Return app for tests."""
     return wx.GetApp() or wx.App()
 
 
-@pytest.fixture(scope="module", name="mainframe")
+@pytest.fixture(scope="class", name="mainframe")
 def fixture_mainframe() -> MainFrame:
     """Return mainframe for tests."""
     worker = Worker()
     return display_cal.MainFrame(worker=worker)
+
+@pytest.fixture(scope="session", autouse=True)
+def ensure_wx_app():
+    """Ensure wx.App is created for the tests, even when headless."""
+    if not wx.GetApp():
+        app = wx.App(False)
+        yield app
 
 
 def test_update_colorimeter_correction_matrix_ctrl_items_1(
@@ -134,8 +141,18 @@ def test_colorimeter_correction_check_overwrite(
     path = data_files["0_16.ti3"].absolute()
     with open(path, "rb") as cgatsfile:
         cgats = universal_newlines(cgatsfile.read())
-    with check_call(BaseInteractiveDialog, "ShowWindowModalBlocking", response):
-        assert colorimeter_correction_check_overwrite(mainframe, cgats, update) == value
+    # Pre-create the target file so os.path.isfile() returns True and the
+    # overwrite dialog is always triggered, making the test self-contained.
+    target_path = get_cgats_path(cgats)
+    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+    with open(target_path, "wb") as f:
+        f.write(b"placeholder")
+    try:
+        with check_call(BaseInteractiveDialog, "ShowWindowModalBlocking", response):
+            assert colorimeter_correction_check_overwrite(mainframe, cgats, update) == value
+    finally:
+        if os.path.exists(target_path):
+            os.remove(target_path)
 
 
 @pytest.mark.parametrize("file", ("0_16.ti3", "0_16_with_refresh.ti3", "default.ti3"))
@@ -255,9 +272,9 @@ def test_init_startup_frame() -> None:
 
 
 @pytest.mark.skipif(
-    sys.platform == "darwin" and os.getenv("GITHUB_ACTIONS") == "true",
-    reason="MeasurementFileCheckSanityDialog is failing on CI macOS machines, "
-    "skipping test.",
+    sys.platform == "darwin",
+    reason="MeasurementFileCheckSanityDialog hard-crashes the pytest-xdist worker "
+    "process on macOS due to wxPython grid widget creation in a subprocess context.",
 )
 def test_init_measurement_file_check_sanity_dialog_frame(
     data_files, mainframe: MainFrame

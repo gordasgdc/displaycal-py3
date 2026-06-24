@@ -32,6 +32,7 @@ import socket
 import subprocess as sp
 import sys
 import threading
+import requests
 import traceback
 import urllib.error
 import urllib.parse
@@ -166,6 +167,7 @@ from DisplayCAL.meta import (
     DOMAIN,
     VERSION_STRING,
     VERSION_TUPLE,
+    github_api_url,
     get_latest_changelog_entry,
 )
 from DisplayCAL.meta import (
@@ -228,7 +230,6 @@ from DisplayCAL.worker import (
     get_options_from_ti3,
     http_request,
     parse_argument_string,
-    reload_black_videoluts,
     show_result_dialog,
 )
 from DisplayCAL.wx_addons import (
@@ -372,6 +373,49 @@ def show_ccxx_error_dialog(exception: Exception, path: str, parent: wx.Window) -
     show_result_dialog(msg, parent)
 
 
+def swap_dict_keys_values(mydict):
+    """Swap dictionary keys and values"""
+    return dict([(v, k) for (k, v) in mydict.items()])
+
+def is_new_update():
+    """Check for new updates on GitHub.
+    Returns the latest version tuple if a new update is found,
+    returns false otherwise."""
+    try:
+        print("Checking for updates...")
+        headers = {"User-Agent": "DisplayCAL-updater"}
+        response = requests.get(f"{github_api_url}/releases/latest", headers=headers, timeout=10)
+        response.raise_for_status()  # Raises an HTTPError for bad responses
+
+        data = response.json()
+        global RELEASE_DATA
+        RELEASE_DATA = data
+        latest_version_string = data["tag_name"]
+        latest_version = latest_version_string.split('.')
+        latest_version_tuple = tuple(int(n) for n in latest_version)
+        current_version = VERSION_TUPLE[0], VERSION_TUPLE[1], VERSION_TUPLE[2]
+
+        # Compare version numbers
+        for latest, current in zip(latest_version, current_version):
+            if int(latest) > int(current):
+                print("New updates available!")
+                return latest_version_tuple
+            elif int(latest) < int(current):
+                print("No new updates available.")
+                return False
+
+        # If we've gotten here, the versions are equal
+        print("No new updates available.")
+        return False
+
+    except requests.RequestException as e:
+        print(f"Error checking for updates: Network error - {str(e)}")
+    except (KeyError, ValueError, IndexError) as e:
+        print(f"Error checking for updates: Parsing error - {str(e)}")
+    except Exception as e:
+        print(f"Error checking for updates: Unexpected error - {str(e)}")
+    return False
+
 def app_update_check(
     parent: None | wx.Window = None,
     silent: bool = False,
@@ -396,52 +440,83 @@ def app_update_check(
         else:
             argyll_version = intlist(getcfg("argyll.version").split("."))
         curversion_tuple = tuple(argyll_version)
-        version_file = "Argyll/VERSION"
         chglog_file = "Argyll/ChangesSummary.html"
+        # Fetch the latest ArgyllCMS version from argyllcms.com
+        latest_argyll_str = get_argyll_latest_version()
+        try:
+            new_version_tuple = tuple(int(n) for n in latest_argyll_str.split("."))
+        except (ValueError, AttributeError):
+            print(lang.getstr("update_check.fail.version", "ArgyllCMS"))
+            if not silent:
+                wx.CallAfter(
+                    InfoDialog,
+                    parent,
+                    msg=lang.getstr("update_check.fail.version", "ArgyllCMS"),
+                    ok=lang.getstr("ok"),
+                    bitmap=get_icon(32, "dialog-error"),
+                    log=False,
+                )
+                return
+            new_version_tuple = (0, 0, 0, 0)
+        if not wx.GetApp():
+            return
     elif snapshot:
-        # Snapshot
+        # Snapshot — fetch the version file directly from the project domain
         curversion_tuple = VERSION_TUPLE
-        version_file = "SNAPSHOT_VERSION"
         chglog_file = "SNAPSHOT_CHANGES.html"
+        resp = http_request(
+            parent,
+            DOMAIN,
+            "GET",
+            "/SNAPSHOT_VERSION",
+            failure_msg=lang.getstr("update_check.fail"),
+            silent=silent,
+        )
+        if resp is False:
+            if silent:
+                # Check if we need to run instrument setup
+                wx.CallAfter(
+                    parent.check_instrument_setup, check_donation, (parent, snapshot)
+                )
+            return
+        data = resp.read()
+        if not wx.GetApp():
+            return
+        try:
+            new_version_tuple = tuple(int(n) for n in data.decode().split("."))
+        except ValueError:
+            print(lang.getstr("update_check.fail.version", DOMAIN))
+            if not silent:
+                wx.CallAfter(
+                    InfoDialog,
+                    parent,
+                    msg=lang.getstr("update_check.fail.version", DOMAIN),
+                    ok=lang.getstr("ok"),
+                    bitmap=get_icon(32, "dialog-error"),
+                    log=False,
+                )
+                return
+            new_version_tuple = (0, 0, 0, 0)
     else:
         # Stable
         print(lang.getstr("update_check"))
         curversion_tuple = VERSION_TUPLE
-        version_file = "VERSION"
         chglog_file = "CHANGES.html"
-    resp = http_request(
-        parent,
-        DOMAIN,
-        "GET",
-        "/" + version_file,
-        failure_msg=lang.getstr("update_check.fail"),
-        silent=silent,
-    )
-    if resp is False:
-        if silent:
-            # Check if we need to run instrument setup
-            wx.CallAfter(
-                parent.check_instrument_setup, check_donation, (parent, snapshot)
-            )
-        return
-    data = resp.read()
-    if not wx.GetApp():
-        return
-    try:
-        new_version_tuple = tuple(int(n) for n in data.decode().split("."))
-    except ValueError:
-        print(lang.getstr("update_check.fail.version", DOMAIN))
-        if not silent:
-            wx.CallAfter(
-                InfoDialog,
-                parent,
-                msg=lang.getstr("update_check.fail.version", DOMAIN),
-                ok=lang.getstr("ok"),
-                bitmap=get_icon(32, "dialog-error"),
-                log=False,
-            )
+        resp = is_new_update()
+        if resp is False:
+            if silent:
+                # Check if we need to run instrument setup
+                wx.CallAfter(
+                    parent.check_instrument_setup, check_donation, (parent, snapshot)
+                )
+                return
+            # Non-silent with no update available: fall through to the
+            # "up to date" branches below using the current version.
+            resp = curversion_tuple
+        if not wx.GetApp():
             return
-        new_version_tuple = (0, 0, 0, 0)
+        new_version_tuple = resp
+
     if not argyll:
         APP_IS_UP_TO_DATE = new_version_tuple <= curversion_tuple
     if new_version_tuple > curversion_tuple:
@@ -474,8 +549,10 @@ def app_update_check(
                     rf'href="https://{DOMAIN}/\1"',
                     chglog,
                 )
+
         if not wx.GetApp():
             return
+
         wx.CallAfter(
             app_update_confirm,
             parent,
@@ -586,12 +663,7 @@ def app_update_confirm(
             only performs the update check.
     """
     zeroinstall = (
-        not argyll
-        and os.path.exists(
-            os.path.normpath(os.path.join(PYDIR, "..", APPNAME + ".pyw"))
-        )
-        and re.match(r"sha\d+(?:new)?", os.path.basename(os.path.dirname(PYDIR)))
-        and (which("0install-win.exe") or which("0install"))
+        False
     )
     download = argyll and not check_argyll_bin()
     if zeroinstall or sys.platform in ("darwin", "win32") or argyll:
@@ -673,26 +745,30 @@ def app_update_confirm(
         # Snapshot or Stable
         folder = "/snapshot" if snapshot else ""
         if zeroinstall:
-            if parent:
-                parent.Close()
-            else:
-                wx.GetApp().ExitMainLoop()
+            return
+        elif not argyll:
+            # Download the update from GitHub based on the user's platform
             if sys.platform == "win32":
-                kwargs = {"stdin": sp.PIPE, "stdout": sp.PIPE, "stderr": sp.PIPE}
+                suffix = "Windows-Setup.exe"
+            elif sys.platform == "darwin":
+                if platform.processor() == "arm":
+                    suffix = "macOS-arm64.dmg"
+                else:
+                    suffix = "macOS-x86.dmg"
             else:
-                kwargs = {}
-            sp.Popen(
-                [
-                    zeroinstall.encode(FS_ENC),
-                    "run",
-                    "--refresh",
-                    "--version",
-                    newversion,
-                    f"http://{DOMAIN}/0install/{APPNAME}.xml",
-                ],
-                **kwargs,
-            )
+                suffix = ".tar.gz"
+            download_url = None
+            for asset in RELEASE_DATA['assets']:
+                if asset['name'] == f"{'DisplayCAL'}-{newversion}-{suffix}":
+                    download_url = asset['browser_download_url']
+                    break
+            if download_url is not None:
+                try:
+                    webbrowser.open_new_tab(download_url)
+                except Exception as e:
+                    print(f"Error opening web browser for updates: {str(e)}")
         else:
+            # Download ArgyllCMS
             consumer = worker.process_download
             dlname = APPNAME
             sep = "-"
@@ -756,18 +832,8 @@ def app_update_confirm(
                 fancy=False,
             )
         return
-    if result != wx.ID_CANCEL:
-        path = "/"
-        if argyll:
-            path += "argyll"
-            if sys.platform == "darwin":
-                path += "-mac"
-            elif sys.platform == "win32":
-                path += "-win"
-            else:
-                # Linux
-                path += "-linux"
-        launch_file(f"https://{DOMAIN}{path}")
+    elif result != wx.ID_CANCEL:
+        launch_file(DEVELOPMENT_HOME_PAGE)
     elif not argyll:
         # Check for Argyll update
         if check_argyll_bin():
@@ -1227,7 +1293,7 @@ def get_cgats_path(cgats: bytes) -> str:
     name = re.sub(r"[\\/:;*?\"<>|]+", "_", make_argyll_compatible_path(description))[
         :255
     ]
-    extension = cgats[:7].strip().lower().decode("utf-8")
+    extension = cgats.split()[0].lower().decode("utf-8")
     return os.path.join(config.get_argyll_data_dir(), f"{name}.{extension}")
 
 
@@ -2527,12 +2593,6 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self._key_is_down = None
         self.check_keydown_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.check_keydown, self.check_keydown_timer)
-
-        # macOS only: watch for the OS clobbering the VideoLUT to black after a
-        # calibration was loaded/installed (issue #694) and re-load it. Only
-        # fires while idle (not measuring), so it can't disturb a measurement.
-        self.lut_watch_timer = wx.Timer(self)
-        self.Bind(wx.EVT_TIMER, self.check_lut_clobbered, self.lut_watch_timer)
 
     def check_keydown(self, event: wx.TimerEvent) -> None:
         """Check if the ALT key is pressed and update the measurement report button.
@@ -13650,37 +13710,11 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             self.update_profile_name_timer.Start(1000)
         if not self.check_keydown_timer.IsRunning():
             self.check_keydown_timer.Start(250)
-        if (
-            sys.platform == "darwin"
-            and getcfg("profile_loader.macos_reapply_watch")
-            and not self.lut_watch_timer.IsRunning()
-        ):
-            interval = max(
-                1, int(getcfg("profile_loader.macos_reapply_watch_interval"))
-            )
-            self.lut_watch_timer.Start(interval * 1000)
 
     def stop_timers(self) -> None:
         """Stop timers for profile name updates and keydown checks."""
         self.update_profile_name_timer.Stop()
         self.check_keydown_timer.Stop()
-        self.lut_watch_timer.Stop()
-
-    def check_lut_clobbered(self, event: "wx.TimerEvent | None" = None) -> None:
-        """Re-load calibration if macOS has clobbered the VideoLUT (issue #694).
-
-        Idle backstop to the in-session recovery in worker.exec_cmd: runs only on
-        macOS and only while idle (no measurement in progress, so it can never
-        disturb a running calibration). Any display whose VideoLUT has gone black
-        is detected via CoreGraphics and re-loaded with ``dispwin -L``.
-        """
-        if sys.platform != "darwin" or self.worker.is_working():
-            return
-        if not getcfg("profile_loader.macos_reapply_watch"):
-            return
-        dispwin = get_argyll_util("dispwin")
-        if dispwin:
-            reload_black_videoluts(dispwin, log=self.worker.log)
 
     def synthicc_create_handler(self, event: wx.Event) -> None:
         """Assign and initialize the synthetic ICC creation window."""

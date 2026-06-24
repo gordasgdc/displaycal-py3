@@ -28,8 +28,6 @@ if PYVER < PY_MINVERSION or PYVER > PY_MAXVERSION:
         )
     )
 
-import distro
-
 from DisplayCAL import localization as lang
 from DisplayCAL.config import (
     APPBASENAME,
