@@ -2169,6 +2169,140 @@ class WPopen(sp.Popen):
         sp.Popen.terminate(self)
 
 
+_coregraphics = None
+
+
+def _get_coregraphics():
+    """Return the CoreGraphics CDLL (macOS only), or None."""
+    global _coregraphics
+    if _coregraphics is None and sys.platform == "darwin":
+        try:
+            _coregraphics = ctypes.CDLL(
+                "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics"
+            )
+        except OSError:
+            _coregraphics = False  # Mark as tried-and-failed
+    return _coregraphics or None
+
+
+def get_macos_videolut_maxima(max_displays=16):
+    """Return the maximum VideoLUT output value for each active display (macOS).
+
+    Used to detect a display whose VideoLUT has been clobbered to all-black
+    (issue #694): a black VideoLUT has a maximum output near 0.0, a normal one
+    near 1.0. The list is indexed in CoreGraphics active-display order, which
+    matches ArgyllCMS' ``dispwin -d`` numbering (both come from
+    CGGetActiveDisplayList).
+
+    Returns:
+        list[None | float]: Per-display maxima (0.0 - 1.0), None for a display
+            that couldn't be read, or [] if CoreGraphics is unavailable.
+    """
+    cg = _get_coregraphics()
+    if cg is None:
+        return []
+    cg.CGGetActiveDisplayList.argtypes = [
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    cg.CGDisplayGammaTableCapacity.restype = ctypes.c_uint32
+    cg.CGDisplayGammaTableCapacity.argtypes = [ctypes.c_uint32]
+    cg.CGGetDisplayTransferByTable.argtypes = [
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    ids = (ctypes.c_uint32 * max_displays)()
+    count = ctypes.c_uint32(0)
+    if cg.CGGetActiveDisplayList(max_displays, ids, ctypes.byref(count)) != 0:
+        return []
+    maxima = []
+    for i in range(count.value):
+        did = ids[i]
+        cap = cg.CGDisplayGammaTableCapacity(did) or 256
+        red = (ctypes.c_float * cap)()
+        green = (ctypes.c_float * cap)()
+        blue = (ctypes.c_float * cap)()
+        nent = ctypes.c_uint32(0)
+        if (
+            cg.CGGetDisplayTransferByTable(
+                did, cap, red, green, blue, ctypes.byref(nent)
+            )
+            != 0
+        ):
+            maxima.append(None)
+            continue
+        channel_max = 0.0
+        for channel in (red, green, blue):
+            for j in range(nent.value):
+                if channel[j] > channel_max:
+                    channel_max = channel[j]
+        maxima.append(channel_max)
+    return maxima
+
+
+def reload_black_videoluts(
+    dispwin,
+    threshold=0.05,
+    retries=4,
+    settle=0.3,
+    log=None,
+    _maxima_fn=None,
+    _run=None,
+    _sleep=None,
+):
+    """Re-load the VideoLUT of any macOS display that has gone black (issue #694).
+
+    On macOS the OS (WindowServer) intermittently resets a display's VideoLUT to
+    all-black when an ArgyllCMS display tool exits, turning the screen black.
+    This detects that via CoreGraphics and re-loads the display's installed
+    calibration with ``dispwin -d{N} -L`` (exactly what un-blacks the screen),
+    retrying until it sticks (the re-load itself can occasionally be clobbered
+    again) or the retries run out.
+
+    Args:
+        dispwin (str): Path to the dispwin executable.
+        threshold (float): VideoLUT max output below which a display is
+            considered black.
+        retries (int): Maximum number of detect/re-load passes.
+        settle (float): Seconds to wait between passes.
+        log (None | Callable): Optional logging callable.
+        _maxima_fn, _run, _sleep: Injection points for testing.
+
+    Returns:
+        list[int]: Zero-based indices of displays that were re-loaded.
+    """
+    if sys.platform != "darwin" or not dispwin:
+        return []
+    maxima_fn = _maxima_fn or get_macos_videolut_maxima
+    run = _run or (lambda cmd: sp.call(cmd))
+    sleep_fn = _sleep or sleep
+    reloaded = []
+    for _ in range(max(1, int(retries))):
+        black = [
+            i
+            for i, m in enumerate(maxima_fn())
+            if m is not None and m < threshold
+        ]
+        if not black:
+            break
+        for i in black:
+            if log:
+                log(
+                    f"{APPNAME}: VideoLUT for display {i + 1:d} is black - "
+                    "re-loading calibration (issue #694)"
+                )
+            run([dispwin, "-v", f"-d{i + 1:d}", "-L"])
+            if i not in reloaded:
+                reloaded.append(i)
+        sleep_fn(settle)
+    return reloaded
+
+
 class Worker(WorkerBase):
     """Worker class for ArgyllCMS.
 
