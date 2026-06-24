@@ -5,6 +5,7 @@ __pycache__/
 .tox/
 .venv*/
 .vscode/
+.zed/
 *.blend1
 *.code-workspace
 /.coverage*

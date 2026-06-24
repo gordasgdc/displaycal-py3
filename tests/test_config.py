@@ -1,6 +1,8 @@
 from enum import IntEnum
+import configparser
 import os
 import sys
+from unittest.mock import patch, MagicMock
 
 
 import pytest
@@ -184,4 +186,98 @@ def test_get_hidpi_scaling_factor_none(monkeypatch):
     monkeypatch.setattr("DisplayCAL.util_os.which", lambda name: False)
     monkeypatch.setenv("XDG_CURRENT_DESKTOP", "XFCE")
     assert config.get_hidpi_scaling_factor() is None
+
+
+# getcfg debug_print fix (#698)
+
+def test_getcfg_no_debug_print_for_none_default(monkeypatch):
+    """debug_print must not fire when the fallback default value is None."""
+    monkeypatch.setattr(config, "DEBUG", True)
+    mock_debug_print = MagicMock()
+    monkeypatch.setattr(config, "debug_print", mock_debug_print)
+
+    fresh_cfg = config.CaseSensitiveConfigParser()
+    # "argyll.dir" has DEFAULTS["argyll.dir"] = None
+    config.getcfg("argyll.dir", fallback=True, cfg=fresh_cfg)
+
+    mock_debug_print.assert_not_called()
+
+
+def test_getcfg_debug_print_called_for_non_none_default(monkeypatch):
+    """debug_print must fire when the fallback default value is not None."""
+    monkeypatch.setattr(config, "DEBUG", True)
+    mock_debug_print = MagicMock()
+    monkeypatch.setattr(config, "debug_print", mock_debug_print)
+
+    fresh_cfg = config.CaseSensitiveConfigParser()
+    # "calibration.ambient_viewcond_adjust" has DEFAULTS value of 0 (not None)
+    config.getcfg("calibration.ambient_viewcond_adjust", fallback=True, cfg=fresh_cfg)
+
+    mock_debug_print.assert_called_once()
+
+
+# initcfg combined "if not module" block (#698)
+
+def _make_ini(tmp_path: os.PathLike) -> None:
+    """Write a minimal DisplayCAL.ini so fetch_config_files finds it."""
+    ini = tmp_path / "DisplayCAL.ini"
+    ini.write_text("[Default]\n")
+
+
+def test_initcfg_sets_lang_default(monkeypatch, tmp_path):
+    """initcfg() without a module sets lang when absent from config."""
+    _make_ini(tmp_path)
+    monkeypatch.setattr(config, "CONFIG_HOME", str(tmp_path))
+    monkeypatch.setattr(config, "CONFIG_SYS", str(tmp_path))
+
+    fresh_cfg = config.CaseSensitiveConfigParser()
+    config.initcfg(cfg=fresh_cfg)
+
+    assert fresh_cfg.get(configparser.DEFAULTSECT, "lang", fallback=None) is not None
+
+
+def test_initcfg_sets_calibration_ambient_default(monkeypatch, tmp_path):
+    """initcfg() without a module sets calibration.ambient_viewcond_adjust when absent."""
+    _make_ini(tmp_path)
+    monkeypatch.setattr(config, "CONFIG_HOME", str(tmp_path))
+    monkeypatch.setattr(config, "CONFIG_SYS", str(tmp_path))
+
+    fresh_cfg = config.CaseSensitiveConfigParser()
+    config.initcfg(cfg=fresh_cfg)
+
+    value = fresh_cfg.get(
+        configparser.DEFAULTSECT, "calibration.ambient_viewcond_adjust", fallback=None
+    )
+    assert value == config.DEFAULTS["calibration.ambient_viewcond_adjust"]
+
+
+def test_initcfg_sets_profile_save_path_default(monkeypatch, tmp_path):
+    """initcfg() without a module sets profile.save_path to STORAGE when absent."""
+    _make_ini(tmp_path)
+    monkeypatch.setattr(config, "CONFIG_HOME", str(tmp_path))
+    monkeypatch.setattr(config, "CONFIG_SYS", str(tmp_path))
+
+    fresh_cfg = config.CaseSensitiveConfigParser()
+    config.initcfg(cfg=fresh_cfg)
+
+    value = fresh_cfg.get(configparser.DEFAULTSECT, "profile.save_path", fallback=None)
+    assert value == config.STORAGE
+
+
+def test_initcfg_module_skips_defaults(monkeypatch, tmp_path):
+    """initcfg() with a module arg must not touch the module-only defaults."""
+    ini = tmp_path / "DisplayCAL-apply-profiles.ini"
+    ini.write_text("[Default]\n")
+    monkeypatch.setattr(config, "CONFIG_HOME", str(tmp_path))
+
+    fresh_cfg = config.CaseSensitiveConfigParser()
+    mock_setcfg = MagicMock()
+    monkeypatch.setattr(config, "setcfg", mock_setcfg)
+
+    config.initcfg(module="apply-profiles", cfg=fresh_cfg)
+
+    set_keys = {call.args[0] for call in mock_setcfg.call_args_list}
+    assert "lang" not in set_keys
+    assert "calibration.ambient_viewcond_adjust" not in set_keys
+    assert "profile.save_path" not in set_keys
 
