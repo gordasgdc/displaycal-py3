@@ -16279,10 +16279,34 @@ BEGIN_DATA
             capture_output = True
         cmd, args = self.prepare_dispcal()
         if not isinstance(cmd, Exception):
-            print(f"cmd: {cmd}")
-            print(f"args: {args}")
-            result = self.exec_cmd(cmd, args, capture_output=capture_output)
-            print(f"result: {result}")
+            max_diffuser_retries = 2
+            diffuser_retries = 0
+            while True:
+                result = self.exec_cmd(cmd, args, capture_output=capture_output)
+                # Argyll's specbos driver spawns a background "Diffuser thread"
+                # that polls the instrument over the same serial port as
+                # measurements, causing a race condition.  When this happens
+                # dispcal exits with "Instrument Access Failed".  Restarting
+                # dispcal opens a fresh serial connection and usually avoids
+                # the race on subsequent attempts.
+                if (
+                    isinstance(result, Exception)
+                    and not self.subprocess_abort
+                    and diffuser_retries < max_diffuser_retries
+                    and "Instrument Access Failed" in str(result)
+                    and any(
+                        "Diffuser thread failed" in line for line in self.output
+                    )
+                ):
+                    diffuser_retries += 1
+                    self.log(
+                        f"{APPNAME}: Calibration failed due to instrument "
+                        "communication issue (Diffuser thread conflict). "
+                        f"Retrying (attempt {diffuser_retries} of "
+                        f"{max_diffuser_retries})..."
+                    )
+                    continue
+                break
         else:
             result = cmd
         if not isinstance(result, Exception) and result and getcfg("trc"):
@@ -16291,13 +16315,10 @@ BEGIN_DATA
                 getcfg("profile.name.expanded"),
                 getcfg("profile.name.expanded"),
             )
-            print(f"dst_pathname: {dst_pathname}")
             cal = args[-1] + ".cal"
-            print(f"cal         : {cal}")
             result = check_cal_isfile(
                 cal, lang.getstr("error.calibration.file_not_created")
             )
-            print(f"result      : {result}")
             if not isinstance(result, Exception) and result:
                 cal_cgats = add_dispcal_options_to_cal(cal, self.options_dispcal)
                 if cal_cgats:
