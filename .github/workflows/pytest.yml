@@ -105,7 +105,7 @@ jobs:
             wx_name: "wxpython"
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Setup xvfb
       run: |
@@ -134,7 +134,7 @@ jobs:
         echo "$GITHUB_WORKSPACE/argyllcms/bin" >> $GITHUB_PATH
 
     - name: Setup Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -155,7 +155,7 @@ jobs:
         done
 
     - name: Setup uv
-      uses: astral-sh/setup-uv@v5
+      uses: astral-sh/setup-uv@v7
       with:
         enable-cache: true
 
@@ -186,7 +186,7 @@ jobs:
         python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html  --durations=50
 
     - name: Archive code coverage results
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: code-coverage-report-${{ matrix.python-version }}-${{ matrix.wx-version }}-linux
         path: htmlcov
@@ -213,7 +213,7 @@ jobs:
             python-version: "3.9"
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Install ArgyllCMS (Windows)
       run: |
@@ -225,12 +225,12 @@ jobs:
       shell: pwsh
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
 
     - name: Setup uv
-      uses: astral-sh/setup-uv@v5
+      uses: astral-sh/setup-uv@v7
       with:
         enable-cache: true
 
@@ -267,7 +267,7 @@ jobs:
         python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html  --durations=50
 
     - name: Archive code coverage results
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: code-coverage-report-${{ matrix.python-version }}-${{ matrix.wx-version }}-windows
         path: htmlcov
@@ -300,7 +300,7 @@ jobs:
             python-version: "3.14"
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Install ArgyllCMS (macOS arm64)
       run: |
@@ -310,12 +310,12 @@ jobs:
         echo "$GITHUB_WORKSPACE/argyllcms/bin" >> $GITHUB_PATH
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
 
     - name: Setup uv
-      uses: astral-sh/setup-uv@v5
+      uses: astral-sh/setup-uv@v7
       with:
         enable-cache: true
 
@@ -342,7 +342,7 @@ jobs:
         python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html --durations=50
 
     - name: Archive code coverage results
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: code-coverage-report-${{ matrix.python-version }}-${{ matrix.wx-version }}-macos
         path: htmlcov
