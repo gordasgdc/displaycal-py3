@@ -12,4 +12,4 @@ Terminal=false
 Categories=Graphics;
 Comment[de]=Konvertiert VRML-Dateien zu X3D eingebettet in HTML
 Comment=Converts VRML files to X3D embedded in HTML
-MimeType=model/vrml;x-world/x-vrml;
+MimeType=model/vrml;
