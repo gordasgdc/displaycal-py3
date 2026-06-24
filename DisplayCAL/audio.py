@@ -76,6 +76,9 @@ _SERVER = None
 _SND = {}
 _SOUNDS = {}
 
+# Loaded SDL library (set by the _init_sdl_* helpers, read by the Sound class).
+sdl = None
+
 SDL_INIT_AUDIO = 16
 AUDIO_S16LSB = 0x8010
 AUDIO_S16MSB = 0x9010
@@ -225,7 +228,7 @@ def _init_sdl_windows(samplerate: int, channels: int, buffersize: int) -> None:
         channels (int): The number of audio channels.
         buffersize (int): The size of the audio buffer.
     """
-    global _SERVER
+    global _SERVER, sdl
     sdl = None
     pth = getenvu("PATH")
     libpth = os.path.join(PYDIR, "lib")
@@ -260,7 +263,7 @@ def _init_sdl_macos(samplerate: int, channels: int, buffersize: int) -> None:
         channels (int): The number of audio channels.
         buffersize (int): The size of the audio buffer.
     """
-    global _SERVER
+    global _SERVER, sdl
     sdl = None
     if x_framework_pth := os.getenv("X_DYLD_FALLBACK_FRAMEWORK_PATH"):
         if framework_pth := os.getenv("DYLD_FALLBACK_FRAMEWORK_PATH"):
@@ -289,7 +292,7 @@ def _init_sdl_linux(samplerate: int, channels: int, buffersize: int) -> None:
         channels (int): The number of audio channels.
         buffersize (int): The size of the audio buffer.
     """
-    global _SERVER
+    global _SERVER, sdl
     sdl = None
     for libname in ("SDL2", "SDL2_mixer", "SDL", "SDL_mixer"):
         handle = None
