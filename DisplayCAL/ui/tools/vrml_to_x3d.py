@@ -253,6 +253,31 @@ class VRML2X3DWindow(BaseWindow):
             lang.getstr("error.file_type_unsupported") + "\n\n" + "\n".join(paths),
         )
 
+    # -- scripting ---------------------------------------------------------
+
+    def get_commands(self) -> list:
+        """Return the scripting commands this window understands.
+
+        Returns:
+            list: The common commands plus this tool's file-opening commands.
+        """
+        return [
+            *self.get_common_commands(),
+            "VRML-to-X3D-converter [filename...]",
+            "load <filename...>",
+        ]
+
+    def process_data(self, data: list) -> str:
+        """Handle this tool's scripting commands.
+
+        Args:
+            data (list): The split command line.
+
+        Returns:
+            str: ``"ok"``, ``"fail"`` or ``"invalid"``.
+        """
+        return self.open_files_command(data, "VRML-to-X3D-converter", multi=True)
+
 
 def main() -> int:
     """Entry point for the Qt VRML-to-X3D converter.

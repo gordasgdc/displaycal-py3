@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import contextlib
 import errno
+import os
 import socket
 import sys
 import threading
@@ -45,6 +46,7 @@ from DisplayCAL.config import (
     APPBASENAME,
     CONFIG_HOME,
     DEFAULTS,
+    get_data_path,
     getcfg,
     setcfg,
 )
@@ -452,8 +454,6 @@ class ScriptingHostMixin:
         Returns:
             list: ``"ip:port lockfilebasename"`` entries, sorted.
         """
-        import os
-
         scripting_hosts = []
         lock_file_basenames = [APPBASENAME]
         lock_file_basenames.extend(
@@ -642,6 +642,55 @@ class ScriptingHostMixin:
             str: The response, or ``"invalid"`` if unrecognized.
         """
         return "invalid"
+
+    def activate_self(self) -> None:
+        """Bring this window to the front (un-minimize, raise, focus)."""
+        if self.isMinimized():
+            self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def open_files_command(
+        self, data: list, command: str, multi: bool = False
+    ) -> str:
+        """Handle the standard ``<command> [file...]`` / ``load <file...>`` commands.
+
+        Raises the window and routes any supplied paths through its drop target;
+        relative paths that do not exist are resolved via
+        :func:`DisplayCAL.config.get_data_path`. Override hook for file-opening
+        tools whose drop target already maps suffixes to load handlers.
+
+        Args:
+            data (list): The split command line.
+            command (str): This tool's own command name (e.g. ``"curve-viewer"``).
+            multi (bool): Whether more than one filename is accepted.
+
+        Returns:
+            str: ``"ok"``, ``"fail"`` (a path could not be resolved) or
+            ``"invalid"`` (not a recognized command/arity).
+        """
+        if multi:
+            recognized = data[0] in (command, "load") and (
+                data[0] == command or len(data) > 1
+            )
+        else:
+            recognized = (data[0] == command and len(data) < 3) or (
+                data[0] == "load" and len(data) == 2
+            )
+        if not recognized:
+            return "invalid"
+        self.activate_self()
+        paths = []
+        for raw in data[1:]:
+            path = raw
+            if not os.path.isfile(path) and not os.path.isabs(path):
+                path = get_data_path(path)
+            if not path:
+                return "fail"
+            paths.append(path)
+        if paths:
+            self.droptarget.drop_files(paths)
+        return "ok"
 
     # -- UI commands (run on the GUI thread via the bridge) ----------------
 
