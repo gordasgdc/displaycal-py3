@@ -214,3 +214,179 @@ jobs:
           asset_content_type: application/x-apple-diskimage
           max_releases: 1
           ignore_hash: true
+
+  linux:
+    name: Build Linux packages (DEB/RPM)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install system build dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y rpm ruby-dev build-essential
+          sudo gem install fpm --no-document
+
+      - name: Install Python build dependencies
+        run: uv pip install --system wheel
+
+      - name: Build DisplayCAL wheel
+        run: |
+          uv build
+          VERSION=$(cat VERSION)
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+
+      - name: Create package staging directory
+        run: |
+          VERSION=${{ env.VERSION }}
+          STAGING=/tmp/displaycal-staging
+
+          # Wheel (post-install pip-installs it into a venv)
+          mkdir -p "${STAGING}/opt/displaycal"
+          cp dist/displaycal-${VERSION}-*.whl "${STAGING}/opt/displaycal/"
+
+          # Wrapper scripts that delegate to the venv binaries
+          mkdir -p "${STAGING}/usr/bin"
+          for cmd in displaycal displaycal-3dlut-maker displaycal-curve-viewer \
+                     displaycal-eecolor-to-madvr-converter displaycal-profile-info \
+                     displaycal-scripting-client displaycal-synthprofile \
+                     displaycal-testchart-editor displaycal-vrml-to-x3d-converter \
+                     displaycal-vrml-to-x3d-converter-console; do
+            printf '#!/bin/sh\nexec /opt/displaycal/venv/bin/%s "$@"\n' "${cmd}" \
+              > "${STAGING}/usr/bin/${cmd}"
+            chmod 755 "${STAGING}/usr/bin/${cmd}"
+          done
+
+          # Desktop entries
+          mkdir -p "${STAGING}/usr/share/applications"
+          cp misc/displaycal*.desktop "${STAGING}/usr/share/applications/"
+
+          # App icons across all available sizes
+          for size_dir in DisplayCAL/theme/icons/*/; do
+            size=$(basename "${size_dir}")
+            for icon in "${size_dir}"displaycal*.png; do
+              [ -f "${icon}" ] || continue
+              dest="${STAGING}/usr/share/icons/hicolor/${size}/apps"
+              mkdir -p "${dest}"
+              cp "${icon}" "${dest}/$(basename "${icon}")"
+            done
+          done
+
+          # udev rules (installed to the distro-managed location)
+          mkdir -p "${STAGING}/usr/lib/udev/rules.d"
+          cp misc/55-Argyll.rules "${STAGING}/usr/lib/udev/rules.d/"
+          cp misc/45-Argyll.rules "${STAGING}/usr/lib/udev/rules.d/"
+
+          # AppStream metadata
+          mkdir -p "${STAGING}/usr/share/metainfo"
+          cp misc/net.displaycal.DisplayCAL.appdata.xml "${STAGING}/usr/share/metainfo/"
+
+      - name: Write post-install script
+        run: |
+          cat > /tmp/postinstall.sh << 'EOF'
+          #!/bin/sh
+          set -e
+          INSTALL_DIR=/opt/displaycal
+          python3 -m venv "${INSTALL_DIR}/venv"
+          "${INSTALL_DIR}/venv/bin/pip" install --quiet "${INSTALL_DIR}"/displaycal-*.whl
+          if [ -d /etc/udev/rules.d ]; then
+            udevadm control --reload-rules 2>/dev/null || true
+          fi
+          EOF
+          chmod +x /tmp/postinstall.sh
+
+      - name: Write pre-remove script
+        run: |
+          cat > /tmp/preremove.sh << 'EOF'
+          #!/bin/sh
+          rm -rf /opt/displaycal/venv
+          if [ -d /etc/udev/rules.d ]; then
+            udevadm control --reload-rules 2>/dev/null || true
+          fi
+          EOF
+          chmod +x /tmp/preremove.sh
+
+      - name: Build DEB package
+        run: |
+          VERSION=${{ env.VERSION }}
+          fpm \
+            -s dir \
+            -t deb \
+            -n displaycal \
+            -v "${VERSION}" \
+            --description "Display calibration and profiling with a focus on accuracy and versatility" \
+            --url "https://displaycal.net/" \
+            --license "GPL-3.0-or-later" \
+            --maintainer "Erkan Ozgur Yilmaz <eoyilmaz@gmail.com>" \
+            --category graphics \
+            --depends "python3 (>= 3.9)" \
+            --depends "python3-pip" \
+            --depends "python3-venv" \
+            --after-install /tmp/postinstall.sh \
+            --before-remove /tmp/preremove.sh \
+            -C /tmp/displaycal-staging \
+            --package dist/ \
+            .
+          echo "DEB_FILE=$(ls dist/*.deb)" >> $GITHUB_ENV
+
+      - name: Build RPM package
+        run: |
+          VERSION=${{ env.VERSION }}
+          # RPM version must not contain hyphens or + signs
+          RPM_VERSION=$(echo "${VERSION}" | tr '-' '_' | tr '+' '.')
+          fpm \
+            -s dir \
+            -t rpm \
+            -n displaycal \
+            -v "${RPM_VERSION}" \
+            --iteration 1 \
+            --description "Display calibration and profiling with a focus on accuracy and versatility" \
+            --url "https://displaycal.net/" \
+            --license "GPL-3.0-or-later" \
+            --maintainer "Erkan Ozgur Yilmaz <eoyilmaz@gmail.com>" \
+            --rpm-summary "Display calibration and profiling" \
+            --category "Applications/Multimedia" \
+            --depends "python3 >= 3.9" \
+            --depends "python3-pip" \
+            --after-install /tmp/postinstall.sh \
+            --before-remove /tmp/preremove.sh \
+            -C /tmp/displaycal-staging \
+            --package dist/ \
+            .
+          echo "RPM_FILE=$(ls dist/*.rpm)" >> $GITHUB_ENV
+
+      - name: Upload DEB to nightly release
+        uses: WebFreak001/deploy-nightly@v3.2.0
+        with:
+          upload_url: https://uploads.github.com/repos/eoyilmaz/displaycal-py3/releases/291565678/assets{?name,label}
+          release_id: 291565678
+          asset_path: ${{ env.DEB_FILE }}
+          asset_name: DisplayCAL-$$-nightly-Linux-amd64.deb
+          asset_content_type: application/vnd.debian.binary-package
+          max_releases: 1
+          ignore_hash: true
+
+      - name: Upload RPM to nightly release
+        uses: WebFreak001/deploy-nightly@v3.2.0
+        with:
+          upload_url: https://uploads.github.com/repos/eoyilmaz/displaycal-py3/releases/291565678/assets{?name,label}
+          release_id: 291565678
+          asset_path: ${{ env.RPM_FILE }}
+          asset_name: DisplayCAL-$$-nightly-Linux-x86_64.rpm
+          asset_content_type: application/x-rpm
+          max_releases: 1
+          ignore_hash: true
