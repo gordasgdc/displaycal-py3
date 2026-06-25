@@ -50,15 +50,20 @@ jobs:
           $ScriptsPath = python -c "import sysconfig,os; print(sysconfig.get_path('scripts'))"
           Add-Content $env:GITHUB_PATH $ScriptsPath
 
+      - name: Install py2exe from source (ARM64)
+        if: matrix.architecture == 'arm64'
+        run: |
+          # No win_arm64 wheel exists for py2exe and its sdist build fails
+          # because py2exe_setuptools (an undeclared build dep) is not on
+          # sys.path when uv extracts the sdist to a temp dir.
+          # Installing from a local git clone puts py2exe_setuptools on
+          # sys.path via CWD, so the build succeeds.
+          git clone --depth 1 https://github.com/py2exe/py2exe.git C:\py2exe_src
+          uv pip install --system --no-build-isolation C:\py2exe_src
+
       - name: Install Python dependencies
         run: |
           uv pip install --system wheel setuptools
-          if ("${{ matrix.architecture }}" -eq "arm64") {
-            # py2exe has no ARM64 wheel, so uv must build it from source.
-            # py2exe_setuptools is an undeclared build dep that lives inside
-            # the py2exe sdist itself; --no-build-isolation makes it visible.
-            uv pip install --system --no-build-isolation py2exe
-          }
           uv pip install --system -r requirements.txt -r requirements-dev.txt
 
       - name: Fix pywin32
