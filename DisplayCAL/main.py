@@ -230,7 +230,7 @@ def set_high_dpi_awareness() -> None:
     else:
         if hasattr(shcore, "SetProcessDpiAwareness"):
             try:
-                # 1 = System DPI aware (wxWpython currently does not
+                # 1 = System DPI aware (wxPython currently does not
                 # support per-monitor DPI)
                 shcore.SetProcessDpiAwareness(1)
             except Exception as exception:
