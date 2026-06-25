@@ -50,8 +50,7 @@ from threading import current_thread, main_thread
 from time import sleep, strftime, time
 from typing import Any, Callable, ClassVar
 
-if sys.platform not in ("win32", "darwin"):
-    import distro
+import distro
 from send2trash import send2trash
 
 if sys.platform == "darwin":
@@ -3083,7 +3082,7 @@ class Worker(WorkerBase):
             )
             profile1.apply_black_offset(
                 oXYZbp,
-                logfiles=logfiles,
+                logfile=logfiles,
                 thread_abort=self.thread_abort,
                 abortmessage=lang.getstr("aborted"),
             )
@@ -9717,27 +9716,21 @@ BEGIN_DATA
                 "s": "DLP Projector RGBCMY Filter Wheel",
                 "u": "Unknown",
             }
-        ccxxmake = get_argyll_util("ccxxmake")
-        if not ccxxmake:
-            return {}
-        try:
-            proc = sp.run(
-                [ccxxmake, "-??"],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            # ccxxmake -?? always exits with code 1 and writes to stderr;
-            # fall back to stderr when stdout is empty so the output is
-            # captured regardless of the OS / wxPython combination in use.
-            raw_output = proc.stdout or proc.stderr
-        except Exception as exception:
+        result = self.exec_cmd(
+            get_argyll_util("ccxxmake"),
+            ["-??"],
+            capture_output=True,
+            skip_scripts=True,
+            silent=True,
+            log_output=False,
+        )
+        if isinstance(result, Exception):
             traceback.print_exc()
-            print(exception)
+            print(result)
             return {}
         technology_strings = {}
         in_tech = False
-        for line in raw_output.splitlines():
+        for line in self.output:
             if not (parts := line.strip().split(None, 1)):
                 continue
             if (arg := parts.pop(0)) == "-t":
@@ -12552,13 +12545,18 @@ BEGIN_DATA
 
         if clutres > iclutres:
             # Lookup input RGB to interpolated XYZ
+            # NOTE: step must be (re)computed for the *target* clutres BEFORE
+            # building RGB_in. Otherwise it still holds the previous low-res
+            # iclutres step, so the RGB_in grid coordinates run far past device
+            # 100% (e.g. 32 * 6.25 = 200), which clamps most lookups to the
+            # white corner and produces a grossly corrupt A2B cLUT.
+            step = 100 / (clutres - 1.0)
             RGB_in = [
                 [a * step, b * step, c * step]
                 for a in range(clutres)
                 for b in range(clutres)
                 for c in range(clutres)
             ]
-            step = 100 / (clutres - 1.0)
             XYZ_out = self.xicclu(profile, RGB_in, "a", pcs="X", scale=100)
             profile.filename = None
 
@@ -16281,10 +16279,34 @@ BEGIN_DATA
             capture_output = True
         cmd, args = self.prepare_dispcal()
         if not isinstance(cmd, Exception):
-            print(f"cmd: {cmd}")
-            print(f"args: {args}")
-            result = self.exec_cmd(cmd, args, capture_output=capture_output)
-            print(f"result: {result}")
+            max_diffuser_retries = 2
+            diffuser_retries = 0
+            while True:
+                result = self.exec_cmd(cmd, args, capture_output=capture_output)
+                # Argyll's specbos driver spawns a background "Diffuser thread"
+                # that polls the instrument over the same serial port as
+                # measurements, causing a race condition.  When this happens
+                # dispcal exits with "Instrument Access Failed".  Restarting
+                # dispcal opens a fresh serial connection and usually avoids
+                # the race on subsequent attempts.
+                if (
+                    isinstance(result, Exception)
+                    and not self.subprocess_abort
+                    and diffuser_retries < max_diffuser_retries
+                    and "Instrument Access Failed" in str(result)
+                    and any(
+                        "Diffuser thread failed" in line for line in self.output
+                    )
+                ):
+                    diffuser_retries += 1
+                    self.log(
+                        f"{APPNAME}: Calibration failed due to instrument "
+                        "communication issue (Diffuser thread conflict). "
+                        f"Retrying (attempt {diffuser_retries} of "
+                        f"{max_diffuser_retries})..."
+                    )
+                    continue
+                break
         else:
             result = cmd
         if not isinstance(result, Exception) and result and getcfg("trc"):
@@ -16293,13 +16315,10 @@ BEGIN_DATA
                 getcfg("profile.name.expanded"),
                 getcfg("profile.name.expanded"),
             )
-            print(f"dst_pathname: {dst_pathname}")
             cal = args[-1] + ".cal"
-            print(f"cal         : {cal}")
             result = check_cal_isfile(
                 cal, lang.getstr("error.calibration.file_not_created")
             )
-            print(f"result      : {result}")
             if not isinstance(result, Exception) and result:
                 cal_cgats = add_dispcal_options_to_cal(cal, self.options_dispcal)
                 if cal_cgats:

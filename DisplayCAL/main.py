@@ -28,6 +28,9 @@ if PYVER < PY_MINVERSION or PYVER > PY_MAXVERSION:
         )
     )
 
+if sys.platform not in ("win32", "darwin"):
+    import distro
+
 from DisplayCAL import localization as lang
 from DisplayCAL.config import (
     APPBASENAME,
