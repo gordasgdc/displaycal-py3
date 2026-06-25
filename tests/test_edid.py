@@ -652,3 +652,49 @@ def test_parse_manufacturer_id_1():
     manufacturer_id_raw = b"\x10\xac"
     manufacturer_id = parse_manufacturer_id(manufacturer_id_raw)
     assert manufacturer_id == "DEL"
+
+
+def test_get_edid_windows_wmi_returns_bytes():
+    """get_edid_windows_wmi must return bytes not str (Python 3 fix for issue #703).
+
+    WMI returns EDID as a tuple of ints. The old code used
+    ''.join(chr(i) for i in edid[0]) which produces a unicode str in Python 3,
+    causing md5() in parse_edid to raise TypeError (silently suppressed),
+    leaving the monitor with its generic 'Plug and play' device string instead
+    of the real EDID monitor name.
+    """
+    from DisplayCAL.edid import get_edid_windows_wmi
+
+    raw_edid = (
+        b"\x00\xff\xff\xff\xff\xff\xff\x00\x10\xac\xe0@L405\x05\x1b\x01\x04\xb57\x1fx:U"
+        b"\xc5\xafO3\xb8%\x0bPT\xa5K\x00qO\xa9@\x81\x80\xd1\xc0\x01\x01\x01\x01\x01\x01"
+        b"\x01\x01V^\x00\xa0\xa0\xa0)P0 5\x00)7!\x00\x00\x1a\x00\x00\x00\xff\x00"
+        b"TYPR371U504L\n\x00\x00\x00\xfc\x00DELL UP2516D\n\x00\x00\x00\xfd\x002K\x1eX"
+        b"\x19\x01\n      \x01,\x02\x03\x1c\xf1O\x90\x05\x04\x03\x02\x07\x16\x01\x06"
+        b"\x11\x12\x15\x13\x14\x1f#\t\x1f\x07\x83\x01\x00\x00\x02:\x80\x18q8-@X,E"
+        b"\x00)7!\x00\x00\x1e~9\x00\xa0\x808\x1f@0 :\x00)7!\x00\x00\x1a\x01\x1d\x00rQ"
+        b"\xd0\x1e n(U\x00)7!\x00\x00\x1e\xbf\x16\x00\xa0\x808\x13@0 :\x00)7!\x00\x00"
+        b"\x1a\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+        b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x86"
+    )
+    edid_as_ints = tuple(raw_edid)
+
+    class MockMonitor:
+        InstanceName = "DISPLAY\\DELL_UP2516D\\0"
+
+        def WmiGetMonitorRawEEdidV1Block(self, block):
+            return (edid_as_ints, 0)
+
+    class MockWMIConnection:
+        def WmiMonitorDescriptorMethods(self):
+            return [MockMonitor()]
+
+    result = get_edid_windows_wmi("DELL_UP2516D", MockWMIConnection(), False)
+
+    assert isinstance(result, bytes), (
+        f"get_edid_windows_wmi must return bytes, got {type(result).__name__}"
+    )
+    assert result == raw_edid
+
+    parsed = parse_edid(result)
+    assert parsed.get("monitor_name") == "DELL UP2516D"
