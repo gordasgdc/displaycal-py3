@@ -28,6 +28,7 @@ If applicable, add screenshots to help explain your problem.
  - Python Version: [e.g. 3.9, 3.10]
  - ArgyllCMS Version: [e.g. 3.0.2, 3.1.0, 3.2.0]
  - DisplayCAL Version: [e.g. 3.9.12]
+ - Measurement Device/Instrument Brand and Model: [e.g. X-Rite i1Display Pro]
 
 **Additional context**
 Add any other context about the problem here.
