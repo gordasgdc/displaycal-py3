@@ -53,13 +53,14 @@ jobs:
       - name: Install py2exe from source (ARM64)
         if: matrix.architecture == 'arm64'
         run: |
-          # No win_arm64 wheel exists for py2exe and its sdist build fails
-          # because py2exe_setuptools (an undeclared build dep) is not on
-          # sys.path when uv extracts the sdist to a temp dir.
-          # Installing from a local git clone puts py2exe_setuptools on
-          # sys.path via CWD, so the build succeeds.
+          # No win_arm64 wheel exists for py2exe. Its sdist build fails because
+          # py2exe_setuptools is an undeclared build dep that lives only inside
+          # the py2exe source tree. uv always spawns a PEP 517 subprocess for
+          # the build; setting PYTHONPATH to the cloned source tree means that
+          # subprocess finds py2exe_setuptools at startup.
           git clone --depth 1 https://github.com/py2exe/py2exe.git C:\py2exe_src
-          uv pip install --system --no-build-isolation C:\py2exe_src
+          $env:PYTHONPATH = "C:\py2exe_src"
+          uv pip install --system --no-build-isolation py2exe
 
       - name: Install Python dependencies
         run: |
