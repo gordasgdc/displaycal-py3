@@ -14,13 +14,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.11']
         architecture: [x64, arm64]
         include:
           - architecture: x64
             os: windows-latest
+            python-version: '3.11'
           - architecture: arm64
             os: windows-11-arm
+            python-version: '3.13'
     runs-on: ${{ matrix.os }}
 
     steps:
