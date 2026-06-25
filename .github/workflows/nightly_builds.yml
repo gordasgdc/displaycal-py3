@@ -14,9 +14,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest]
-        python-version: ['3.11']
-        architecture: [x64] # Split the build into two architectures
+        architecture: [x64, arm64]
+        include:
+          - architecture: x64
+            os: windows-latest
+            python-version: '3.11'
+          - architecture: arm64
+            os: windows-11-arm
+            python-version: '3.13'
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -29,20 +34,38 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.architecture }}
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
 
+      - name: Install Inno Setup (ARM64 runner)
+        if: matrix.architecture == 'arm64'
+        run: choco install innosetup -y
+
       - name: Fix user Scripts missing from PATH
         run: |
           $ScriptsPath = python -c "import sysconfig,os; print(sysconfig.get_path('scripts'))"
           Add-Content $env:GITHUB_PATH $ScriptsPath
 
+      - name: Install py2exe from source (ARM64)
+        if: matrix.architecture == 'arm64'
+        run: |
+          # No win_arm64 wheel exists for py2exe. Its sdist build fails because
+          # py2exe_setuptools is an undeclared build dep that lives only inside
+          # the py2exe source tree. uv always spawns a PEP 517 subprocess for
+          # the build; setting PYTHONPATH to the cloned source tree means that
+          # subprocess finds py2exe_setuptools at startup.
+          git clone --depth 1 https://github.com/py2exe/py2exe.git C:\py2exe_src
+          uv pip install --system wheel setuptools
+          $env:PYTHONPATH = "C:\py2exe_src"
+          uv pip install --system --no-build-isolation C:\py2exe_src
+
       - name: Install Python dependencies
         run: |
-          uv pip install --system wheel
+          uv pip install --system wheel setuptools
           uv pip install --system -r requirements.txt -r requirements-dev.txt
 
       - name: Fix pywin32
