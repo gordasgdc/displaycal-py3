@@ -1,0 +1,382 @@
+name: Release Builds
+
+# Triggered when `make new-release` pushes a version tag to GitHub.
+# Builds all platform artifacts, then creates the GitHub release and
+# attaches them.  PyPI upload remains in `make new-release` (twine).
+on:
+  push:
+    tags:
+      - '[0-9]*.[0-9]*.[0-9]*'  # e.g. 3.9.18, 3.9.18.1
+
+permissions:
+  contents: write  # required to create GitHub releases
+
+jobs:
+
+  # -----------------------------------------------------------------------
+  # Windows  (x64 + ARM64)
+  # -----------------------------------------------------------------------
+  windows:
+    name: Build on Windows (${{ matrix.architecture }})
+    strategy:
+      fail-fast: false
+      matrix:
+        architecture: [x64, arm64]
+        include:
+          - architecture: x64
+            os: windows-latest
+            python-version: '3.11'
+          - architecture: arm64
+            os: windows-11-arm
+            python-version: '3.13'
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.architecture }}
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install Inno Setup (ARM64 runner)
+        if: matrix.architecture == 'arm64'
+        run: choco install innosetup -y
+
+      - name: Fix user Scripts missing from PATH
+        run: |
+          $ScriptsPath = python -c "import sysconfig,os; print(sysconfig.get_path('scripts'))"
+          Add-Content $env:GITHUB_PATH $ScriptsPath
+
+      - name: Install py2exe from source (ARM64)
+        if: matrix.architecture == 'arm64'
+        run: |
+          git clone --depth 1 https://github.com/py2exe/py2exe.git C:\py2exe_src
+          uv pip install --system wheel setuptools
+          $env:PYTHONPATH = "C:\py2exe_src"
+          uv pip install --system --no-build-isolation C:\py2exe_src
+
+      - name: Install Python dependencies
+        run: |
+          uv pip install --system wheel setuptools
+          uv pip install --system -r requirements.txt -r requirements-dev.txt
+
+      - name: Fix pywin32
+        run: |
+          $ScriptsPath = python -c "import sysconfig,os; print(sysconfig.get_path('scripts'))"
+          python "$ScriptsPath\pywin32_postinstall.py" -install
+
+      - name: Build DisplayCAL
+        run: |
+          uv build
+          $version = Get-Content VERSION
+          $wheel_file = Get-ChildItem dist\*.whl | Select-Object -First 1
+          uv pip install --system $wheel_file
+          copy misc/net.displaycal.DisplayCAL.appdata.xml dist/net.displaycal.DisplayCAL.appdata.xml
+
+      - name: Run freeze.py
+        run: python DisplayCAL\freeze.py
+
+      - name: Create INNO script
+        run: python setup.py inno
+
+      - name: Build Windows Installer
+        run: |
+          cd dist
+          iscc.exe DisplayCAL-Setup-py2exe.win-${{ matrix.architecture == 'x64' && 'amd64' || 'arm64' }}-py${{ matrix.python-version }}.iss
+
+      - name: Rename installer to release name
+        run: |
+          Move-Item dist/DisplayCAL-*-Setup.exe dist/DisplayCAL-${{ github.ref_name }}-Windows-${{ matrix.architecture }}.exe
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.architecture }}
+          path: dist/DisplayCAL-${{ github.ref_name }}-Windows-${{ matrix.architecture }}.exe
+
+  # -----------------------------------------------------------------------
+  # macOS  (arm64 + x86_64)
+  # -----------------------------------------------------------------------
+  macOS:
+    name: Build on macOS (${{ matrix.os }} ${{ matrix.architecture }})
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11']
+        architecture: [arm64, x64]
+        include:
+          - architecture: arm64
+            os: macos-14
+          - architecture: x64
+            os: macos-15-intel
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies (${{ matrix.os }}-${{ matrix.architecture }})
+        run: brew install create-dmg gtk+3
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.architecture }}
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install wheel helper
+        run: uv pip install --system wheel
+
+      - name: Install Python dependencies
+        run: |
+          uv pip install --system --compile-bytecode -r requirements.txt -r requirements-dev.txt
+          uv pip install --system "setuptools<82"
+
+      - name: Build DisplayCAL
+        run: |
+          uv build --no-build-isolation
+          version=$(cat VERSION)
+          uv pip install --system ./dist/displaycal-${version}-*.whl --force-reinstall
+
+      - name: Build macOS APP
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+          ARCHFLAGS: "-arch ${{ matrix.architecture == 'x64' && 'x86_64' || 'arm64' }}"
+        run: |
+          TARGET_ARCH="${{ matrix.architecture == 'x64' && 'x86_64' || 'arm64' }}"
+          python setup.py py2app --arch=$TARGET_ARCH
+
+      - name: Force Ad-Hoc Signing
+        run: |
+          for APP_PATH in dist/*/DisplayCAL-*/*.app; do
+            echo "Signing $APP_PATH..."
+            find -L "$APP_PATH" -type f -name "*.dylib" -exec codesign --remove-signature {} +
+            find -L "$APP_PATH" -type f -name "*.so" -exec codesign --remove-signature {} +
+            find -L "$APP_PATH/Contents" -type f \( -name "*.dylib" -o -name "*.so" \) -exec codesign -s - -f -o linker-signed {} +
+            codesign --force --deep --options runtime --entitlements misc/entitlements.plist --sign - "$APP_PATH"
+          done
+
+      - name: Build macOS DMG
+        run: |
+          version=$(cat VERSION)
+          build_folder=$(ls dist | grep -i py2app.macosx)
+          TARGET_ARCH="${{ matrix.architecture == 'x64' && 'x86_64' || 'arm64' }}"
+
+          STAGING_DIR="dist/dmg_staging"
+          mkdir -p "$STAGING_DIR"
+          mv "dist/${build_folder}/DisplayCAL-${version}" "$STAGING_DIR/DisplayCAL"
+          xattr -cr "$STAGING_DIR/DisplayCAL"
+          ln -s /Applications "$STAGING_DIR/Applications"
+
+          create-dmg \
+            --volname "DisplayCAL-${{ github.ref_name }}" \
+            "dist/DisplayCAL-${{ github.ref_name }}-macOS-${TARGET_ARCH}.dmg" \
+            "$STAGING_DIR"
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.architecture }}
+          path: dist/DisplayCAL-${{ github.ref_name }}-macOS-*.dmg
+
+  # -----------------------------------------------------------------------
+  # Linux  (DEB + RPM, amd64/x86_64)
+  # -----------------------------------------------------------------------
+  linux:
+    name: Build Linux packages (DEB/RPM)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install system build dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y rpm ruby-dev build-essential
+          sudo gem install fpm --no-document
+
+      - name: Install Python build dependencies
+        run: uv pip install --system wheel
+
+      - name: Build DisplayCAL wheel
+        run: |
+          uv build
+          VERSION=$(cat VERSION)
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+
+      - name: Create package staging directory
+        run: |
+          VERSION=${{ env.VERSION }}
+          STAGING=/tmp/displaycal-staging
+
+          mkdir -p "${STAGING}/opt/displaycal"
+          cp dist/displaycal-${VERSION}-*.whl "${STAGING}/opt/displaycal/"
+
+          mkdir -p "${STAGING}/usr/bin"
+          for cmd in displaycal displaycal-3dlut-maker displaycal-curve-viewer \
+                     displaycal-eecolor-to-madvr-converter displaycal-profile-info \
+                     displaycal-scripting-client displaycal-synthprofile \
+                     displaycal-testchart-editor displaycal-vrml-to-x3d-converter \
+                     displaycal-vrml-to-x3d-converter-console; do
+            printf '#!/bin/sh\nexec /opt/displaycal/venv/bin/%s "$@"\n' "${cmd}" \
+              > "${STAGING}/usr/bin/${cmd}"
+            chmod 755 "${STAGING}/usr/bin/${cmd}"
+          done
+
+          mkdir -p "${STAGING}/usr/share/applications"
+          cp misc/displaycal*.desktop "${STAGING}/usr/share/applications/"
+
+          for size_dir in DisplayCAL/theme/icons/*/; do
+            size=$(basename "${size_dir}")
+            for icon in "${size_dir}"displaycal*.png; do
+              [ -f "${icon}" ] || continue
+              dest="${STAGING}/usr/share/icons/hicolor/${size}/apps"
+              mkdir -p "${dest}"
+              cp "${icon}" "${dest}/$(basename "${icon}")"
+            done
+          done
+
+          mkdir -p "${STAGING}/usr/lib/udev/rules.d"
+          cp misc/55-Argyll.rules "${STAGING}/usr/lib/udev/rules.d/"
+          cp misc/45-Argyll.rules "${STAGING}/usr/lib/udev/rules.d/"
+
+          mkdir -p "${STAGING}/usr/share/metainfo"
+          cp misc/net.displaycal.DisplayCAL.appdata.xml "${STAGING}/usr/share/metainfo/"
+
+      - name: Write post-install script
+        run: |
+          cat > /tmp/postinstall.sh << 'EOF'
+          #!/bin/sh
+          set -e
+          INSTALL_DIR=/opt/displaycal
+          python3 -m venv "${INSTALL_DIR}/venv"
+          "${INSTALL_DIR}/venv/bin/pip" install --quiet "${INSTALL_DIR}"/displaycal-*.whl
+          if [ -d /etc/udev/rules.d ]; then
+            udevadm control --reload-rules 2>/dev/null || true
+          fi
+          EOF
+          chmod +x /tmp/postinstall.sh
+
+      - name: Write pre-remove script
+        run: |
+          cat > /tmp/preremove.sh << 'EOF'
+          #!/bin/sh
+          rm -rf /opt/displaycal/venv
+          if [ -d /etc/udev/rules.d ]; then
+            udevadm control --reload-rules 2>/dev/null || true
+          fi
+          EOF
+          chmod +x /tmp/preremove.sh
+
+      - name: Build DEB package
+        run: |
+          VERSION=${{ env.VERSION }}
+          fpm \
+            -s dir \
+            -t deb \
+            -n displaycal \
+            -v "${VERSION}" \
+            --description "Display calibration and profiling with a focus on accuracy and versatility" \
+            --url "https://displaycal.net/" \
+            --license "GPL-3.0-or-later" \
+            --maintainer "Erkan Ozgur Yilmaz <eoyilmaz@gmail.com>" \
+            --category graphics \
+            --depends "python3 (>= 3.9)" \
+            --depends "python3-pip" \
+            --depends "python3-venv" \
+            --after-install /tmp/postinstall.sh \
+            --before-remove /tmp/preremove.sh \
+            -C /tmp/displaycal-staging \
+            --package dist/ \
+            .
+          mv dist/*.deb "dist/DisplayCAL-${{ github.ref_name }}-Linux-amd64.deb"
+
+      - name: Build RPM package
+        run: |
+          VERSION=${{ env.VERSION }}
+          RPM_VERSION=$(echo "${VERSION}" | tr '-' '_' | tr '+' '.')
+          fpm \
+            -s dir \
+            -t rpm \
+            -n displaycal \
+            -v "${RPM_VERSION}" \
+            --iteration 1 \
+            --description "Display calibration and profiling with a focus on accuracy and versatility" \
+            --url "https://displaycal.net/" \
+            --license "GPL-3.0-or-later" \
+            --maintainer "Erkan Ozgur Yilmaz <eoyilmaz@gmail.com>" \
+            --rpm-summary "Display calibration and profiling" \
+            --category "Applications/Multimedia" \
+            --depends "python3 >= 3.9" \
+            --depends "python3-pip" \
+            --after-install /tmp/postinstall.sh \
+            --before-remove /tmp/preremove.sh \
+            -C /tmp/displaycal-staging \
+            --package dist/ \
+            .
+          mv dist/*.rpm "dist/DisplayCAL-${{ github.ref_name }}-Linux-x86_64.rpm"
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            dist/DisplayCAL-${{ github.ref_name }}-Linux-amd64.deb
+            dist/DisplayCAL-${{ github.ref_name }}-Linux-x86_64.rpm
+
+  # -----------------------------------------------------------------------
+  # Create GitHub Release and attach all platform assets
+  # -----------------------------------------------------------------------
+  release:
+    name: Create GitHub Release
+    needs: [windows, macOS, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release with assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: DisplayCAL ${{ github.ref_name }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          files: artifacts/**
