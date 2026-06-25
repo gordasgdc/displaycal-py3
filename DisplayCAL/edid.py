@@ -127,12 +127,14 @@ def get_edid(
 def get_edid_windows(display_no: int, device: str) -> bytes:
     """Get EDID for a Windows display.
 
+    Tries WMI first (Vista+), falls back to the registry on all versions.
+
     Args:
         display_no (int): The display number (zero-based).
         device (str): The device identifier.
 
     Raises:
-        WMIError: If there is an error with WMI.
+        WMIError: If WMI is available but the query fails.
 
     Returns:
         bytes: The EDID data.
@@ -159,11 +161,7 @@ def get_edid_windows(display_no: int, device: str) -> bytes:
 
     if wmi_connection:
         return get_edid_windows_wmi(device_id, wmi_connection, not_main_thread)
-    if sys.getwindowsversion() < (6,):
-        return get_edid_windows_registry(device_id, device)
-    raise WMIError("No WMI connection")
-
-    return edid
+    return get_edid_windows_registry(device_id, device)
 
 
 def get_edid_windows_wmi(
@@ -200,7 +198,7 @@ def get_edid_windows_wmi(
                 # No EDID entry
                 pass
             else:
-                edid = "".join(chr(i) for i in edid[0])
+                edid = bytes(edid[0])
                 break
 
     if not_main_thread:
