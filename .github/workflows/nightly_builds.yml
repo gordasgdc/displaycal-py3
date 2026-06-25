@@ -59,6 +59,7 @@ jobs:
           # the build; setting PYTHONPATH to the cloned source tree means that
           # subprocess finds py2exe_setuptools at startup.
           git clone --depth 1 https://github.com/py2exe/py2exe.git C:\py2exe_src
+          uv pip install --system wheel setuptools
           $env:PYTHONPATH = "C:\py2exe_src"
           uv pip install --system --no-build-isolation py2exe
 
