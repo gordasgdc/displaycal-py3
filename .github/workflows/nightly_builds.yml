@@ -52,6 +52,12 @@ jobs:
       - name: Install Python dependencies
         run: |
           uv pip install --system wheel
+          # py2exe has no ARM64 wheel, so uv builds it from source.
+          # py2exe_setuptools is an undeclared build-time dependency of py2exe
+          # that must be present before the source build starts.
+          if ("${{ matrix.architecture }}" -eq "arm64") {
+            uv pip install --system py2exe_setuptools
+          }
           uv pip install --system -r requirements.txt -r requirements-dev.txt
 
       - name: Fix pywin32
