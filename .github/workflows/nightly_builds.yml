@@ -14,9 +14,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest]
         python-version: ['3.11']
-        architecture: [x64] # Split the build into two architectures
+        architecture: [x64, arm64]
+        include:
+          - architecture: x64
+            os: windows-latest
+          - architecture: arm64
+            os: windows-11-arm
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -29,11 +33,16 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.architecture }}
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
+
+      - name: Install Inno Setup (ARM64 runner)
+        if: matrix.architecture == 'arm64'
+        run: choco install innosetup -y
 
       - name: Fix user Scripts missing from PATH
         run: |
