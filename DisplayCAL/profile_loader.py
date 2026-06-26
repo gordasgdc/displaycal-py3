@@ -3110,6 +3110,7 @@ class ProfileLoader:
         """
         # Check profile associations
         profile_associations_changed = 0
+        apply_profiles = self._should_apply_profiles()
         for i, (display, _edid, moninfo, device) in enumerate(self.monitors):
             display_desc = display.replace("[PRIMARY]", lang.getstr("display.primary"))
             devicekey = device.DeviceKey if device else None
