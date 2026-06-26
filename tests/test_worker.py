@@ -6,6 +6,7 @@ import os
 import shutil
 import sys
 import tempfile
+from unittest.mock import MagicMock
 from urllib.error import URLError
 
 import pytest
@@ -921,3 +922,50 @@ def test_create_shaper_curves_trc_endpoint_reaches_one(data_files, white_scale):
         assert curve[-1] == pytest.approx(1.0, abs=1e-9)
         # ... and the curve is still monotonically increasing.
         assert all(curve[i] <= curve[i + 1] + 1e-9 for i in range(len(curve) - 1))
+
+
+@pytest.mark.parametrize(
+    "viewgam_output,expected_coverage",
+    [
+        # Unix-style paths (forward slash)
+        (
+            [
+                "Intersecting volume = 1198577.5 cubic units",
+                "'/usr/share/DisplayCAL/ref/ClayRGB1998.gam' volume = 1209985.9 cubic units, intersect = 99.06%",
+                "'/home/user/profile.gam' volume = 1411797.2 cubic units, intersect = 84.90%",
+            ],
+            0.9906,
+        ),
+        # Windows-style paths (backslash) -- issue #693
+        (
+            [
+                "Intersecting volume = 1198577.5 cubic units",
+                r"'C:\Program Files\DisplayCAL\ref\ClayRGB1998.gam' volume = 1209985.9 cubic units, intersect = 99.06%",
+                r"'C:\Users\user\profile.gam' volume = 1411797.2 cubic units, intersect = 84.90%",
+            ],
+            0.9906,
+        ),
+    ],
+)
+def test_create_gamut_view_worker_parses_coverage(viewgam_output, expected_coverage):
+    """Coverage percentage is parsed from both Unix and Windows viewgam output paths.
+
+    Regression test for issue #693: on Windows, viewgam outputs backslash paths
+    which the old regex only matched forward slashes and missed Windows paths.
+    """
+    mock_worker = MagicMock()
+    mock_worker.exec_cmd.return_value = True
+    mock_worker.output = viewgam_output
+
+    gamut_coverage = {}
+    Worker.create_gamut_view_worker(
+        mock_worker,
+        viewgam="viewgam",
+        args=[],
+        key="adobe-rgb",
+        src="ClayRGB1998",
+        gamut_coverage=gamut_coverage,
+    )
+
+    assert "adobe-rgb" in gamut_coverage
+    assert gamut_coverage["adobe-rgb"] == pytest.approx(expected_coverage, rel=1e-4)

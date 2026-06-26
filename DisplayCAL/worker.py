@@ -16246,7 +16246,7 @@ BEGIN_DATA
                 # 'path/to/2.gam' volume = xxx.x cubic units, intersect = xx.xx%
                 for line in worker.output:
                     match = re.search(
-                        rf"[\/]{re.escape(src)}.gam'\s+volume\s*=\s*"
+                        rf"[/\\]{re.escape(src)}.gam'\s+volume\s*=\s*"
                         r"\d+(?:\.\d+)?\s+cubic\s+units,?"
                         r"\s+intersect\s*=\s*"
                         r"(\d+(?:\.\d+)?)",
