@@ -994,29 +994,20 @@ def colorimeter_correction_web_check_choose(
         "CCMX": lang.getstr("matrix").replace(":", ""),
     }
     cgats = {}
-    for i, item in enumerate(json):
+    rows_data = []
+    for item in json:
         # CGATS is byte string based, make sure to encode Unicode back to UTF-8
         # for parsing
         # CGATS accepts ``bytes`` data only
-        cgats[i] = item.get("cgats", "").encode("utf-8")
+        cgats_bytes = item.get("cgats", "").encode("utf-8")
         try:
-            ccxx = CGATS(cgats[i])
+            ccxx = CGATS(cgats_bytes)
         except CGATSError as exception:
             print(exception)
-            cgats[i] = b""
+            cgats_bytes = b""
             ccxx = CGATS()
         ccxx = ccxx.get(0, ccxx)
-        index = dlg_list_ctrl.InsertStringItem(i, "")
         ccxx_type = item.get("type", "").upper()
-        col.i = 0
-        dlg_list_ctrl.SetStringItem(index, int(col), types.get(ccxx_type, ccxx_type))
-        dlg_list_ctrl.SetStringItem(
-            index,
-            int(col),
-            get_canonical_instrument_name(
-                item.get("description") or lang.getstr("unknown")
-            ),
-        )
         manufacturer = colord.quirk_manufacturer(
             item.get("manufacturer") or lang.getstr("unknown")
         )
@@ -1025,19 +1016,6 @@ def colorimeter_correction_web_check_choose(
             display = manufacturer
         if not display.lower().startswith(manufacturer.lower()):
             display = f"{manufacturer} {display}"
-        dlg_list_ctrl.SetStringItem(index, int(col), display)
-        # dlg_list_ctrl.SetStringItem(index, int(col),
-        # get_canonical_instrument_name(item.get("instrument") or
-        # lang.getstr("unknown")
-        # if ccxx_type == "CCMX"
-        # else u"i1 DisplayPro, ColorMunki Display, Spyder4/5"))
-        dlg_list_ctrl.SetStringItem(
-            index,
-            int(col),
-            get_canonical_instrument_name(
-                item.get("reference") or lang.getstr("unknown")
-            ),
-        )
         spectral = {}
         for key in ("bands", "start_nm", "end_nm"):
             try:
@@ -1055,7 +1033,6 @@ def colorimeter_correction_web_check_choose(
             )
         else:
             spectral_res = lang.getstr("unknown")
-        dlg_list_ctrl.SetStringItem(index, int(col), spectral_res)
         created = item.get("created")
         if created:
             try:
@@ -1088,45 +1065,55 @@ def colorimeter_correction_web_check_choose(
                         created = strptime(datetmp, "%Y-%m-%d %H:%M:%S")
             if isinstance(created, struct_time):
                 created = strftime("%Y-%m-%d %H:%M:%S", created)
-        dlg_list_ctrl.SetStringItem(
-            index,
-            int(col),
-            parent.observers_ab.get(
-                ccxx.queryv1("REFERENCE_OBSERVER"),
-                lang.getstr("unknown" if ccxx_type == "CCMX" else "not_applicable"),
-            ),
-        )
         fit_method = ccxx.queryv1("FIT_METHOD")
         if fit_method and fit_method != b"xy":
             fit_method = lang.getstr("perceptual")
-        dlg_list_ctrl.SetStringItem(
-            index,
-            int(col),
-            (
-                fit_method or lang.getstr("unknown")
-                if ccxx_type == "CCMX"
-                else lang.getstr("not_applicable")
-            ),
-        )
-        dlg_list_ctrl.SetStringItem(
-            index,
-            int(col),
-            (
-                str(ccxx.queryv1("FIT_AVG_DE00") or lang.getstr("unknown"))
-                if ccxx_type == "CCMX"
-                else lang.getstr("not_applicable")
-            ),
-        )
-        dlg_list_ctrl.SetStringItem(
-            index,
-            int(col),
-            (
-                str(ccxx.queryv1("FIT_MAX_DE00") or lang.getstr("unknown"))
-                if ccxx_type == "CCMX"
-                else lang.getstr("not_applicable")
-            ),
-        )
-        dlg_list_ctrl.SetStringItem(index, int(col), created or lang.getstr("unknown"))
+        rows_data.append({
+            "cgats": cgats_bytes,
+            "columns": [
+                types.get(ccxx_type, ccxx_type),
+                get_canonical_instrument_name(
+                    item.get("description") or lang.getstr("unknown")
+                ),
+                display,
+                get_canonical_instrument_name(
+                    item.get("reference") or lang.getstr("unknown")
+                ),
+                spectral_res,
+                parent.observers_ab.get(
+                    ccxx.queryv1("REFERENCE_OBSERVER"),
+                    lang.getstr("unknown" if ccxx_type == "CCMX" else "not_applicable"),
+                ),
+                (
+                    fit_method or lang.getstr("unknown")
+                    if ccxx_type == "CCMX"
+                    else lang.getstr("not_applicable")
+                ),
+                (
+                    str(ccxx.queryv1("FIT_AVG_DE00") or lang.getstr("unknown"))
+                    if ccxx_type == "CCMX"
+                    else lang.getstr("not_applicable")
+                ),
+                (
+                    str(ccxx.queryv1("FIT_MAX_DE00") or lang.getstr("unknown"))
+                    if ccxx_type == "CCMX"
+                    else lang.getstr("not_applicable")
+                ),
+                created or lang.getstr("unknown"),
+            ],
+        })
+
+    sort_state = [None, True]  # [column_index, ascending]
+
+    def populate_list() -> None:
+        dlg_list_ctrl.DeleteAllItems()
+        for idx, row in enumerate(rows_data):
+            dlg_list_ctrl.InsertStringItem(idx, "")
+            for col_idx, val in enumerate(row["columns"]):
+                dlg_list_ctrl.SetStringItem(idx, col_idx, val)
+            cgats[idx] = row["cgats"]
+
+    populate_list()
 
     def show_ccxx_info(event: wx.Event) -> None:
         """Show colorimeter correction info dialog.
@@ -1151,6 +1138,30 @@ def colorimeter_correction_web_check_choose(
     dlg.Bind(
         wx.EVT_LIST_ITEM_ACTIVATED, lambda event: dlg.EndModal(wx.ID_OK), dlg_list_ctrl
     )
+
+    def on_col_click(event: wx.ListEvent) -> None:
+        clicked_col = event.GetColumn()
+        if sort_state[0] == clicked_col:
+            sort_state[1] = not sort_state[1]
+        else:
+            sort_state[0] = clicked_col
+            sort_state[1] = True
+
+        def _sort_key(val: str) -> tuple:
+            try:
+                return (0, float(val), "")
+            except ValueError:
+                return (1, 0.0, val.lower())
+
+        rows_data.sort(
+            key=lambda r: _sort_key(r["columns"][clicked_col]),
+            reverse=not sort_state[1],
+        )
+        populate_list()
+        dlg.ok.Disable()
+        dlg.info.Disable()
+
+    dlg_list_ctrl.Bind(wx.EVT_LIST_COL_CLICK, on_col_click)
     dlg.sizer3.Add(dlg_list_ctrl, 1, flag=wx.TOP | wx.ALIGN_LEFT, border=12)
     lstr = lang.getstr("colorimeter_correction.web_check.info")
     lstr_en = lang.getstr("colorimeter_correction.web_check.info", lcode="en")
