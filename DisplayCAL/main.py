@@ -205,7 +205,27 @@ def initialize_fault_handler() -> None:
 
 def initialize_wx_module() -> None:
     """Initialize wx module."""
-    from DisplayCAL.wx_addons import wx
+    try:
+        from DisplayCAL.wx_addons import wx
+    except ImportError as e:
+        missing = str(e)
+        msg = f"Failed to import wxPython: {missing}\n"
+        if "libwx_gtk" in missing or ".so" in missing:
+            msg += (
+                "A wxWidgets shared library could not be found. "
+                "This usually means wxPython was compiled from source against a "
+                "system wxWidgets that is missing optional components (e.g. the "
+                "HTML or XRC library).\n"
+                "Try installing the full wxWidgets development package for your "
+                "distribution, then reinstall wxPython:\n"
+                "  Debian/Ubuntu:  sudo apt install libwx-gtk3u-dev\n"
+                "  Fedora/RHEL:    sudo dnf install wxGTK-devel\n"
+                "  Arch:           sudo pacman -S wxwidgets-gtk3\n"
+                "  Slackware:      install the wxGTK3 package with HTML support\n"
+                "Alternatively, install a pre-built wxPython wheel if one is "
+                "available for your platform at https://wxpython.org/pages/downloads/"
+            )
+        sys.exit(msg)
 
     if "phoenix" in wx.PlatformInfo:
         # py2exe helper so wx.xml gets picked up
