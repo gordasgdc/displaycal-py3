@@ -7031,8 +7031,8 @@ class LogWindow(InvincibleFrame):
                     return
         setcfg("last_filedialog_path", path)
         try:
-            with open(path, "w") as file_:
-                file_.write(self.log_txt.GetValue().encode("UTF-8", "replace"))
+            with open(path, "w", encoding="UTF-8", errors="replace") as file_:
+                file_.write(self.log_txt.GetValue())
         except Exception as exception:
             InfoDialog(
                 self,
