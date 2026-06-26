@@ -12428,7 +12428,6 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             allow_show_log (bool): Whether to allow showing the log.
             install_3dlut (bool): Whether to install the 3D LUT.
         """
-        print(f"result (3): {result}")
         if isinstance(result, Exception) or not result:
             if isinstance(result, Exception):
                 show_result_dialog(result, self)
