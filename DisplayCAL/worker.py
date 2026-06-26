@@ -17594,18 +17594,24 @@ BEGIN_DATA
             LoggingHTTPRedirectHandler.newurl = uri
             opener = urllib.request.build_opener(LoggingHTTPRedirectHandler)
             opener.addheaders = list(get_default_headers().items())
+            argyllcms_binaries_base = (
+                "https://github.com/eoyilmaz/argyllcms-binaries/releases/download/"
+            )
             try:
                 response = opener.open(uri)
                 if ALWAYS_FAIL_DOWNLOAD or TEST_BADSSL:
                     raise urllib.error.URLError("")
                 newurl = getattr(LoggingHTTPRedirectHandler, "newurl", uri)
-                if is_main_dl or not newurl.startswith(f"https://{DOMAIN}/"):
+                if not orig_uri.startswith(argyllcms_binaries_base) and (
+                    is_main_dl or not newurl.startswith(f"https://{DOMAIN}/")
+                ):
                     # Get SHA-256 hashes so we can verify the downloaded file.
                     # Only do this for 3rd party hosts/mirrors (no sense
                     # doing it for files downloaded securely directly from
                     # displaycal.net when that is also the source of our hashes
                     # file, unless we are verifying an existing local app setup
-                    # or portable archive)
+                    # or portable archive). argyllcms-binaries uses the GitHub
+                    # API digest field instead (handled below).
                     noredir = urllib.request.build_opener(NoHTTPRedirectHandler)
                     noredir.addheaders = list(get_default_headers().items())
                     hashes = noredir.open(f"https://{DOMAIN}/sha256sums.txt")
@@ -17641,11 +17647,33 @@ BEGIN_DATA
             uri = response.geturl()
             filename = os.path.basename(Path(uri).name)
             actualhash = sha256()
-            # unfortunatelly, we don't have control over DisplayCAL.net
-            # where the hashes stored,
-            # until we setup something else (i.e a GitHub repository to store
-            # hashes) disable checking hashes
-            if False:  # if hashes:
+            if orig_uri.startswith(argyllcms_binaries_base):
+                # Use the GitHub API digest field, available for every release
+                # asset without any separate upload step.
+                # URL: .../releases/download/{version}/{filename}
+                path_tail = orig_uri[len("https://github.com/"):]
+                parts = path_tail.split("/")
+                # parts: ["eoyilmaz", "argyllcms-binaries", "releases", "download", version, filename]
+                if len(parts) >= 6:
+                    version, asset_name = parts[4], parts[5]
+                    api_url = (
+                        "https://api.github.com/repos/eoyilmaz/argyllcms-binaries"
+                        f"/releases/tags/{version}"
+                    )
+                    try:
+                        import json
+
+                        api_resp = urllib.request.urlopen(api_url, timeout=20)  # noqa: S310
+                        release_data = json.loads(api_resp.read())
+                        for asset in release_data.get("assets", []):
+                            if asset["name"] == asset_name:
+                                digest = asset.get("digest", "")
+                                if digest.startswith("sha256:"):
+                                    expectedhash_hex = digest[7:].lower()
+                                break
+                    except (urllib.error.URLError, OSError, KeyError, ValueError):
+                        pass
+            if hashes:
                 # Read max. 64 KB hashes
                 hashesdata = hashes.read(1024 * 64)
                 hashes.close()
@@ -17689,9 +17717,9 @@ BEGIN_DATA
                         total_size = None
             contentdispo = response.info().get("Content-Disposition")
             if contentdispo:
-                filename = re.search(r'filename="([^"]+)"', contentdispo)
-                if filename:
-                    filename = filename.groups()[0]
+                m = re.search(r'filename[*]?=(?:"([^"]+)"|([^\s;]+))', contentdispo, re.I)
+                if m:
+                    filename = (m.group(1) or m.group(2)).strip()
             if not filename:
                 filename = make_filename_safe(uri.rstrip("/"), concat=False)
                 content_type = response.info().get("Content-Type")

@@ -1611,7 +1611,7 @@ DEFAULTS = {
     "argyll.debug": 0,
     "argyll.dir": None,
     "argyll.version": "0.0.0",
-    "argyll.domain": "https://www.argyllcms.com",
+    "argyll.domain": "https://github.com/eoyilmaz/argyllcms-binaries",
     "drift_compensation.blacklevel": 0,
     "drift_compensation.whitelevel": 0,
     "calibration.ambient_viewcond_adjust": 0,

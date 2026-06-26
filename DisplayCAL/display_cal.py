@@ -773,17 +773,10 @@ def app_update_confirm(
             else:
                 launch_file(f"{DEVELOPMENT_HOME_PAGE}/releases")
         else:
-            # Download ArgyllCMS
-            consumer = worker.process_download
-            dlname = APPNAME
-            sep = "-"
-            domain = DOMAIN
+            # Download ArgyllCMS or DisplayCAL update
             if argyll:
                 consumer = worker.process_argyll_download
-                # force Argyll downloads
-                domain = config.DEFAULTS.get("argyll.domain").split("/")[-1]
-                dlname = "Argyll"
-                sep = "_V"
+                argyll_domain = config.DEFAULTS.get("argyll.domain")
                 machine = platform.machine().lower()
                 if sys.platform == "win32":
                     # Determine 32 or 64 bit OS
@@ -822,17 +815,21 @@ def app_update_confirm(
                 else:
                     # Assume x86
                     suffix = "_linux_x86_bin.tgz"
-            elif sys.platform == "win32":
-                # Snapshots are only avaialble as ZIP
-                # or Regular stable versions are available as setup
-                suffix = "-win32.zip" if snapshot else "-Setup.exe"
+                url = f"{argyll_domain}/releases/download/{newversion}/Argyll_V{newversion}{suffix}"
             else:
-                suffix = ".dmg"
+                consumer = worker.process_download
+                # Snapshots are only available as ZIP
+                # or Regular stable versions are available as setup
+                if sys.platform == "win32":
+                    suffix = "-win32.zip" if snapshot else "-Setup.exe"
+                else:
+                    suffix = ".dmg"
+                url = f"https://{DOMAIN}/{folder}/{APPNAME}-{newversion}{suffix}"
             worker.start(
                 consumer,
                 worker.download,
-                ckwargs={"exit_": dlname == APPNAME},
-                wargs=(f"https://{domain}/{folder}/{dlname}{sep}{newversion}{suffix}",),
+                ckwargs={"exit_": not argyll},
+                wargs=(url,),
                 progress_msg=lang.getstr("downloading"),
                 fancy=False,
             )

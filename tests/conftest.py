@@ -134,9 +134,9 @@ def setup_argyll():
         else "osx10.6_x86_64_bin.tgz"
     )
     argyll_download_url = {
-        "win32": f"{argyll_domain}/Argyll_V{argyll_version}_win64_exe.zip",
-        "darwin": f"{argyll_domain}/Argyll_V{argyll_version}_{mac_suffix}",
-        "linux": f"{argyll_domain}/Argyll_V{argyll_version}_linux_x86_64_bin.tgz",
+        "win32": f"{argyll_domain}/releases/download/{argyll_version}/Argyll_V{argyll_version}_win64_exe.zip",
+        "darwin": f"{argyll_domain}/releases/download/{argyll_version}/Argyll_V{argyll_version}_{mac_suffix}",
+        "linux": f"{argyll_domain}/releases/download/{argyll_version}/Argyll_V{argyll_version}_linux_x86_64_bin.tgz",
     }
 
     url = argyll_download_url[sys.platform]
