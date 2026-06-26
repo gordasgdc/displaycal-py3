@@ -217,6 +217,30 @@ def initialize_fault_handler() -> None:
             print("Faulthandler", getattr(faulthandler, "__version__", ""))
 
 
+def initialize_qt_module() -> None:
+    """Initialize Qt module (qtpy + PySide6)."""
+    try:
+        import qtpy  # noqa: F401
+    except ImportError as e:
+        missing = str(e)
+        msg = f"Failed to import Qt bindings: {missing}\n"
+        if "qtpy" in missing:
+            msg += "Install qtpy:   pip install qtpy\n"
+        elif "PySide6" in missing or "pyside6" in missing:
+            msg += "Install PySide6:  pip install PySide6\n"
+        elif ".so" in missing or ".dylib" in missing or ".dll" in missing:
+            msg += (
+                "A Qt shared library could not be loaded. "
+                "Try reinstalling PySide6:\n"
+                "  pip install --force-reinstall PySide6\n"
+            )
+        sys.exit(msg)
+
+    import qtpy
+
+    print(f"Qt {qtpy.QtCore.__version__} via {qtpy.API_NAME}")
+
+
 def initialize_wx_module() -> None:
     """Initialize wx module."""
     try:
@@ -876,6 +900,7 @@ def run_app(module: str) -> None:
     # During the wx-to-Qt migration (DisplayCAL 4.0) the Qt path is opt-in via
     # DISPLAYCAL_UI=qt / --qt and only used for modules already ported to Qt.
     if get_ui_toolkit() == "qt":
+        initialize_qt_module()
         qt_main = _get_qt_main(module)
         if qt_main is not None:
             qt_main()
