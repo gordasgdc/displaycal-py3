@@ -679,11 +679,12 @@ def setup():
                 print(f"inno_template_path: {inno_template_path}")
                 template = inno_template.read()
                 # print(template)
-                inno_arch = "x64" if arch == "amd64" else arch
+                inno_arch_raw = arch or get_platform().split("-")[1]
+                inno_arch = "x64" if inno_arch_raw == "amd64" else inno_arch_raw
                 inno_script = template % {
                     "AppCopyright": f"© {strftime('%Y')} {AUTHOR}",
                     "AppName": NAME,
-                    "AppArch": arch,
+                    "AppArch": inno_arch_raw,
                     "InnoArch": inno_arch,
                     "AppVerName": VERSION_STRING,
                     "AppPublisher": AUTHOR,
