@@ -17641,11 +17641,36 @@ BEGIN_DATA
             uri = response.geturl()
             filename = os.path.basename(Path(uri).name)
             actualhash = sha256()
-            # unfortunatelly, we don't have control over DisplayCAL.net
-            # where the hashes stored,
-            # until we setup something else (i.e a GitHub repository to store
-            # hashes) disable checking hashes
-            if False:  # if hashes:
+            argyllcms_binaries_base = (
+                "https://github.com/eoyilmaz/argyllcms-binaries/releases/download/"
+            )
+            if orig_uri.startswith(argyllcms_binaries_base):
+                # Use the GitHub API digest field, available for every release
+                # asset without any separate upload step.
+                # URL: .../releases/download/{version}/{filename}
+                path_tail = orig_uri[len("https://github.com/"):]
+                parts = path_tail.split("/")
+                # parts: ["eoyilmaz", "argyllcms-binaries", "releases", "download", version, filename]
+                if len(parts) >= 6:
+                    version, asset_name = parts[4], parts[5]
+                    api_url = (
+                        "https://api.github.com/repos/eoyilmaz/argyllcms-binaries"
+                        f"/releases/tags/{version}"
+                    )
+                    try:
+                        import json
+
+                        api_resp = urllib.request.urlopen(api_url, timeout=20)  # noqa: S310
+                        release_data = json.loads(api_resp.read())
+                        for asset in release_data.get("assets", []):
+                            if asset["name"] == asset_name:
+                                digest = asset.get("digest", "")
+                                if digest.startswith("sha256:"):
+                                    expectedhash_hex = digest[7:].lower()
+                                break
+                    except (urllib.error.URLError, OSError, KeyError, ValueError):
+                        pass
+            if hashes:
                 # Read max. 64 KB hashes
                 hashesdata = hashes.read(1024 * 64)
                 hashes.close()

@@ -7,6 +7,7 @@ The utilities that were previously spread around are gathered here.
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import re
 import string
@@ -560,21 +561,26 @@ def parse_argyll_version_string(argyll_version_string: str) -> list[int | str]:
     return argyll_version
 
 
+ARGYLLCMS_BINARIES_API_URL = (
+    "https://api.github.com/repos/eoyilmaz/argyllcms-binaries/releases/latest"
+)
+
+
 @cache
 def get_argyll_latest_version() -> str:
-    """Return the latest ArgyllCMS version from argyllcms.com.
+    """Return the latest ArgyllCMS version from the argyllcms-binaries GitHub releases API.
 
     Returns:
-        str: The latest version number. Returns
+        str: The latest version number.
     """
-    argyll_domain = config.DEFAULTS.get("argyll.domain", "")
     default_version = config.DEFAULTS.get("argyll.version")
-    # Try multiple times to fetch the version in case of transient network issues...
     retries = 3
     while retries > 0:
         try:
-            response = urllib.request.urlopen(f"{argyll_domain}/log.txt", timeout=20)  # noqa: S310
-            data = response.read(512).decode("utf-8", "replace")
+            response = urllib.request.urlopen(  # noqa: S310
+                ARGYLLCMS_BINARIES_API_URL, timeout=20
+            )
+            data = json.loads(response.read())
             break
         except (urllib.error.URLError, OSError, TimeoutError) as exception:
             retries -= 1
@@ -586,19 +592,15 @@ def get_argyll_latest_version() -> str:
                     f"Error fetching ArgyllCMS latest version: {exception}. Retrying..."
                 )
             time.sleep(5)
-    changelog = re.search(r"Version\s+([0-9][0-9A-Za-z.\-_]*)", data)
-    if not changelog:
+    tag_name = data.get("tag_name", "")
+    if not re.match(r"^\d+\.\d+", tag_name):
         print(
-            "Could not parse ArgyllCMS latest version from "
-            f"{argyll_domain}/log.txt, falling back to {default_version}"
+            f"Could not parse ArgyllCMS latest version from "
+            f"{ARGYLLCMS_BINARIES_API_URL}, falling back to {default_version}"
         )
         return default_version
-    result = changelog.group(1)
-    print(f"Latest ArgyllCMS version: {result} (from {argyll_domain}/log.txt)")
-    if not result:
-        # no version found
-        return default_version
-    return result
+    print(f"Latest ArgyllCMS version: {tag_name}")
+    return tag_name
 
 
 @overload
