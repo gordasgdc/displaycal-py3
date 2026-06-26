@@ -1103,7 +1103,9 @@ def _create_optimized_shaper_curves(
                 # zero black luminance
                 if gamma_type == "g":
                     gamma = egamma
-                trc.set_trc(gamma, 1)
+                # Use multi-entry curve (not single-entry gamma) so the
+                # v / 65535 conversion below stays in [0, 1] range.
+                trc.set_trc(gamma)
             # Complex or gamma with offset
             elif gamma == -1023:
                 # DICOM is a special case
