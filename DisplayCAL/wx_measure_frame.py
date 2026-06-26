@@ -494,6 +494,10 @@ class MeasureFrame(InvincibleFrame):
         if DEBUG:
             print("[D]  measureframe_size:", size)
         size[0] = size[1] = int(max(size))
+        # Save the size we're about to set (in wx.Display.Geometry coordinate units).
+        # get_dimensions() uses this to detect and correct for any mismatch between
+        # Display.Geometry and GetSize()/GetScreenPosition() on Windows with DPI scaling.
+        self._last_set_size = size[0]
         if (
             sys.platform not in ("darwin", "win32")
             and os.getenv("XDG_SESSION_TYPE") != "wayland"
@@ -874,6 +878,23 @@ class MeasureFrame(InvincibleFrame):
         size = floatlist(self.GetSize())
         if DEBUG:
             print(" size:", size)
+        # On Windows with certain wxPython versions, wx.Display.Geometry returns
+        # DIP (logical) pixels while GetSize()/GetScreenPosition() return physical
+        # pixels. This causes the computed x, y fractions to be wrong (e.g. the
+        # window at the display center maps to x=1.0 instead of x=0.5 at 175% DPI).
+        # Detect this by comparing GetSize() against the size we passed to SetSize()
+        # during place_n_zoom() - both should be in the same coordinate system as
+        # Display.Geometry. If they differ, apply the ratio as a correction factor.
+        last_set_size = getattr(self, "_last_set_size", None)
+        if last_set_size and size[0] and abs(size[0] - last_set_size) > 1:
+            coord_scale = last_set_size / size[0]
+            measureframe_pos = [p * coord_scale for p in measureframe_pos]
+            size = [s * coord_scale for s in size]
+            if DEBUG:
+                print(
+                    f"[D]  coord_scale {coord_scale:.4f} applied "
+                    f"(last_set_size={last_set_size}, GetSize={size[0] / coord_scale:.0f})"
+                )
         if max(size) >= max(display_client_size) - 50:
             # Fullscreen?
             scale = 50.0  # Argyll max is 50
