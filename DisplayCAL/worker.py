@@ -17717,9 +17717,9 @@ BEGIN_DATA
                         total_size = None
             contentdispo = response.info().get("Content-Disposition")
             if contentdispo:
-                filename = re.search(r'filename="([^"]+)"', contentdispo)
-                if filename:
-                    filename = filename.groups()[0]
+                m = re.search(r'filename[*]?=(?:"([^"]+)"|([^\s;]+))', contentdispo, re.I)
+                if m:
+                    filename = (m.group(1) or m.group(2)).strip()
             if not filename:
                 filename = make_filename_safe(uri.rstrip("/"), concat=False)
                 content_type = response.info().get("Content-Type")
