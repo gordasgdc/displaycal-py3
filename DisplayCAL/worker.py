@@ -17594,18 +17594,24 @@ BEGIN_DATA
             LoggingHTTPRedirectHandler.newurl = uri
             opener = urllib.request.build_opener(LoggingHTTPRedirectHandler)
             opener.addheaders = list(get_default_headers().items())
+            argyllcms_binaries_base = (
+                "https://github.com/eoyilmaz/argyllcms-binaries/releases/download/"
+            )
             try:
                 response = opener.open(uri)
                 if ALWAYS_FAIL_DOWNLOAD or TEST_BADSSL:
                     raise urllib.error.URLError("")
                 newurl = getattr(LoggingHTTPRedirectHandler, "newurl", uri)
-                if is_main_dl or not newurl.startswith(f"https://{DOMAIN}/"):
+                if not orig_uri.startswith(argyllcms_binaries_base) and (
+                    is_main_dl or not newurl.startswith(f"https://{DOMAIN}/")
+                ):
                     # Get SHA-256 hashes so we can verify the downloaded file.
                     # Only do this for 3rd party hosts/mirrors (no sense
                     # doing it for files downloaded securely directly from
                     # displaycal.net when that is also the source of our hashes
                     # file, unless we are verifying an existing local app setup
-                    # or portable archive)
+                    # or portable archive). argyllcms-binaries uses the GitHub
+                    # API digest field instead (handled below).
                     noredir = urllib.request.build_opener(NoHTTPRedirectHandler)
                     noredir.addheaders = list(get_default_headers().items())
                     hashes = noredir.open(f"https://{DOMAIN}/sha256sums.txt")
@@ -17641,9 +17647,6 @@ BEGIN_DATA
             uri = response.geturl()
             filename = os.path.basename(Path(uri).name)
             actualhash = sha256()
-            argyllcms_binaries_base = (
-                "https://github.com/eoyilmaz/argyllcms-binaries/releases/download/"
-            )
             if orig_uri.startswith(argyllcms_binaries_base):
                 # Use the GitHub API digest field, available for every release
                 # asset without any separate upload step.
