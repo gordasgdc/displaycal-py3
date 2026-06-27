@@ -6114,16 +6114,16 @@ def fancytext_renderer_getCurrentFont(self) -> wx.Font:
     """
     # Use system font instead of fancytext default font
     font = self.fonts[-1]
-    _font = self._font or wx.SystemSettings_GetFont(wx.SYS_DEFAULT_GUI_FONT)
+    _font = wx.Font(self._font or wx.SystemSettings_GetFont(wx.SYS_DEFAULT_GUI_FONT))
     if "encoding" in font:
         _font.SetEncoding(font["encoding"])
     if "family" in font:
         _font.SetFamily(font["family"])
     if "size" in font:
         _font.SetPointSize(font["size"])
-    if "gtk3" in wx.PlatformInfo:
+    if sys.platform == "win32" or "gtk3" in wx.PlatformInfo:
         scale = getcfg("app.dpi") / get_default_dpi()
-        _font.SetPointSize(_font.GetPointSize() * scale)
+        _font.SetPointSize(max(round(_font.GetPointSize() * scale), 1))
     if "style" in font:
         _font.SetStyle(font["style"])
     if "weight" in font:
