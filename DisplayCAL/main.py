@@ -84,6 +84,19 @@ def _excepthook(
         value (BaseException): Exception instance.
         tb (TracebackType): Traceback object.
     """
+    # Suppress a known wxWidgets/macOS bug: when a wx.FileDialog is dismissed
+    # on macOS, the re-activation of the parent window causes wxWidgets to
+    # access wxArrayString with an invalid index inside the ActivateEvent
+    # dispatch. The Python ActivateEvent wrapper is returned successfully but
+    # with a pending exception, which CPython promotes to SystemError. The
+    # underlying file operation completes normally; this error is purely
+    # cosmetic and confusing to the user.
+    if (
+        etype is SystemError
+        and "ActivateEvent" in str(value)
+        and type(getattr(value, "__cause__", None)).__name__ == "wxAssertionError"
+    ):
+        return
     handle_error((etype, value, tb))
 
 
