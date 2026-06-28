@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import configparser
 import io
 import pathlib
 import os
@@ -18,7 +19,7 @@ from DisplayCAL.argyll import (
     make_argyll_compatible_path,
 )
 from DisplayCAL.cgats import CGATS
-from DisplayCAL.config import initcfg, setcfg
+from DisplayCAL.config import getcfg, initcfg, setcfg
 from DisplayCAL.debughelpers import Error
 from DisplayCAL.dev.mocks import check_call_str
 from DisplayCAL.icc_profile import ICCProfile, LUT16Type
@@ -720,12 +721,10 @@ def test_get_argyll_latest_version_returns_the_default_version_if_no_internet_co
         )
 
     monkeypatch.setattr("DisplayCAL.argyll.urllib.request.urlopen", patched_urlopen)
-    # print(dir(get_argyll_latest_version))
-    # clear the cache
+    monkeypatch.setattr("DisplayCAL.argyll.time.sleep", lambda _: None)
     get_argyll_latest_version.cache_clear()
     result = get_argyll_latest_version()
     assert result == config.DEFAULTS.get("argyll.version")
-    # assert False
 
 
 @pytest.mark.skipif(
@@ -969,3 +968,79 @@ def test_create_gamut_view_worker_parses_coverage(viewgam_output, expected_cover
 
     assert "adobe-rgb" in gamut_coverage
     assert gamut_coverage["adobe-rgb"] == pytest.approx(expected_coverage, rel=1e-4)
+
+
+@pytest.mark.parametrize(
+    "old_value, expected",
+    [
+        ("2012_2", "2015_2"),
+        ("2012_10", "2015_10"),
+    ],
+    ids=["2012_2->2015_2", "2012_10->2015_10"],
+)
+def test_enumerate_displays_migrates_cie2012_observer_names_for_argyll_34(
+    monkeypatch, request, old_value, expected
+):
+    """ArgyllCMS 3.4.0 renamed the "2012_*" observers to "2015_*".
+
+    Stored config values must be migrated automatically on first run with the new
+    ArgyllCMS so they don't silently revert to the default "1931_2" observer.
+    Without migration, getcfg("observer") sees "2012_2" as invalid (not in
+    VALID_VALUES) and returns the default "1931_2", which means the -Q flag is never
+    passed to dispcal/dispread, producing wrong calibration and measurement results
+    (issue #623).
+    """
+    from DisplayCAL import config as _config
+
+    observer_keys = [
+        "observer",
+        "colorimeter_correction.observer",
+        "colorimeter_correction.observer.reference",
+    ]
+
+    # Save existing CFG values so the test doesn't pollute global config state.
+    originals = {
+        k: _config.CFG.get(configparser.DEFAULTSECT, k, fallback=None)
+        for k in observer_keys
+    }
+
+    def restore_cfg():
+        for key, val in originals.items():
+            if val is None:
+                _config.CFG.remove_option(configparser.DEFAULTSECT, key)
+            else:
+                _config.CFG.set(configparser.DEFAULTSECT, key, val)
+
+    request.addfinalizer(restore_cfg)
+
+    # Preserve VALID_VALUES entries so monkeypatch restores them after the test.
+    for key in observer_keys:
+        monkeypatch.setitem(
+            _config.VALID_VALUES, key, list(_config.VALID_VALUES.get(key, []))
+        )
+
+    # Write old-style names directly to CFG, bypassing VALID_VALUES validation,
+    # to simulate a config saved with ArgyllCMS < 3.4.0.
+    for key in observer_keys:
+        _config.CFG.set(configparser.DEFAULTSECT, key, old_value)
+
+    worker = Worker()
+    monkeypatch.setattr("DisplayCAL.worker.check_argyll_bin", lambda: True)
+    monkeypatch.setattr("DisplayCAL.worker.writecfg", lambda *a, **kw: None)
+
+    def fake_exec_cmd(*args, **kwargs):
+        worker.output = ["dispcal  - Display calibration  Version 3.4.0"]
+        return True
+
+    monkeypatch.setattr(worker, "exec_cmd", fake_exec_cmd)
+
+    worker.enumerate_displays_and_ports(
+        silent=True, check_lut_access=False, enumerate_ports=False
+    )
+
+    for key in observer_keys:
+        result = getcfg(key)
+        assert result == expected, (
+            f"{key!r} should have been migrated from {old_value!r} "
+            f"to {expected!r}, got {result!r}"
+        )

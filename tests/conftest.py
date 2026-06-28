@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import zipfile
 
 from urllib.error import URLError
@@ -154,10 +155,23 @@ def setup_argyll():
         print(f"Downloading: {argyll_package_file_name}")
         print(f"URL: {url}")
         worker = Worker()
-        result = worker.download(url, download_dir=argyll_temp_path)
-        if isinstance(result, (DownloadError, HTTPError, PermissionError, URLError)):
-            print(f"Error downloading {url}: {result}")
-            raise result
+        max_download_retries = 3
+        base_delay = 10
+        for download_attempt in range(max_download_retries):
+            result = worker.download(url, download_dir=argyll_temp_path)
+            if isinstance(result, (DownloadError, HTTPError, PermissionError, URLError)):
+                delay = base_delay * (2**download_attempt)
+                if download_attempt < max_download_retries - 1:
+                    print(
+                        f"Error downloading {url}: {result}. "
+                        f"Waiting {delay}s before retry..."
+                    )
+                    time.sleep(delay)
+                else:
+                    print(f"Error downloading {url}: {result}")
+                    raise result
+            else:
+                break
         download_path = result
         print(f"Downloaded to: {download_path}")
         if os.path.exists(download_path):

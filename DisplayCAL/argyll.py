@@ -574,24 +574,39 @@ def get_argyll_latest_version() -> str:
         str: The latest version number.
     """
     default_version = config.DEFAULTS.get("argyll.version")
-    retries = 3
-    while retries > 0:
+    max_retries = 5
+    base_delay = 5
+    for attempt in range(max_retries):
         try:
             response = urllib.request.urlopen(  # noqa: S310
                 ARGYLLCMS_BINARIES_API_URL, timeout=20
             )
             data = json.loads(response.read())
             break
-        except (urllib.error.URLError, OSError, TimeoutError) as exception:
-            retries -= 1
-            if retries == 0:
+        except urllib.error.HTTPError as exception:
+            delay = base_delay * (2**attempt)
+            if attempt < max_retries - 1:
+                print(
+                    f"HTTP {exception.code} fetching ArgyllCMS latest version: "
+                    f"{exception}. Waiting {delay}s before retry..."
+                )
+                time.sleep(delay)
+            else:
                 print(f"Could not fetch ArgyllCMS latest version: {exception}")
                 return default_version
-            else:
+        except (urllib.error.URLError, OSError, TimeoutError) as exception:
+            delay = base_delay * (2**attempt)
+            if attempt < max_retries - 1:
                 print(
-                    f"Error fetching ArgyllCMS latest version: {exception}. Retrying..."
+                    f"Error fetching ArgyllCMS latest version: {exception}. "
+                    f"Waiting {delay}s before retry..."
                 )
-            time.sleep(5)
+                time.sleep(delay)
+            else:
+                print(f"Could not fetch ArgyllCMS latest version: {exception}")
+                return default_version
+    else:
+        return default_version
     tag_name = data.get("tag_name", "")
     if not re.match(r"^\d+\.\d+", tag_name):
         print(
