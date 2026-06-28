@@ -721,12 +721,10 @@ def test_get_argyll_latest_version_returns_the_default_version_if_no_internet_co
         )
 
     monkeypatch.setattr("DisplayCAL.argyll.urllib.request.urlopen", patched_urlopen)
-    # print(dir(get_argyll_latest_version))
-    # clear the cache
+    monkeypatch.setattr("DisplayCAL.argyll.time.sleep", lambda _: None)
     get_argyll_latest_version.cache_clear()
     result = get_argyll_latest_version()
     assert result == config.DEFAULTS.get("argyll.version")
-    # assert False
 
 
 @pytest.mark.skipif(
