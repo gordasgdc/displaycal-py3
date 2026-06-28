@@ -5899,8 +5899,12 @@ END_DATA
                             # Add CIE 2012 observers
                             valid_observers = natsort([*OBSERVERS, "2012_2", "2012_10"])
                         else:
-                            # Add CIE 2015 observers
+                            # Add CIE 2015 observers (renamed from "2012_*" in
+                            # ArgyllCMS 3.4.0; migrate any stored "2012_*" values
+                            # so they don't silently fall back to the default
+                            # "1931_2" observer and produce wrong results).
                             valid_observers = natsort([*OBSERVERS, "2015_2", "2015_10"])
+                            observer_rename = {"2012_2": "2015_2", "2012_10": "2015_10"}
                     else:
                         valid_observers = OBSERVERS
                     for key in [
@@ -5910,6 +5914,10 @@ END_DATA
                     ]:
                         key = key.format("observer")
                         config.VALID_VALUES[key] = valid_observers
+                        if self.argyll_version >= [3, 4, 0]:
+                            stored = getcfg(key, fallback=False, raw=True)
+                            if stored in observer_rename:
+                                setcfg(key, observer_rename[stored])
                     continue
                 line = line.split(None, 1)
                 if len(line) and line[0][0] == "-":
