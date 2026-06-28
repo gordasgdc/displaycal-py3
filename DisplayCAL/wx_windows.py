@@ -6992,13 +6992,13 @@ class LogWindow(InvincibleFrame):
             get_verified_path("last_filedialog_path")[0],
             APPNAME,
         )
-        dlg = wx.FileDialog(
+        dlg = _FileDialog(
             self,
             lang.getstr("save_as"),
             defaultDir=defaultDir,
             defaultFile=defaultFile,
             wildcard=lang.getstr("filetype.log") + "|*.log",
-            style=wx.SAVE | wx.OVERWRITE_PROMPT,
+            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
         )
         dlg.Center(wx.BOTH)
         result = dlg.ShowModal()
@@ -7066,13 +7066,13 @@ class LogWindow(InvincibleFrame):
             get_verified_path("last_filedialog_path")[0],
             APPNAME + "-logs",
         )
-        dlg = wx.FileDialog(
+        dlg = _FileDialog(
             self,
             lang.getstr("save_as"),
             defaultDir=defaultDir,
             defaultFile=defaultFile,
             wildcard=wildcard,
-            style=wx.SAVE | wx.OVERWRITE_PROMPT,
+            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
         )
         dlg.Center(wx.BOTH)
         result = dlg.ShowModal()
