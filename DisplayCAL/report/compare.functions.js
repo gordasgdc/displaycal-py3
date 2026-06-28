@@ -371,6 +371,20 @@ p.generate_report = function(set_delta_calc_method) {
 		'		</tr>',
 		'	</table></div>'
 	]);
+	// Warn when the profile white point differs significantly from the measured
+	// display white point (> 300 K).  This typically means the profile was built
+	// from uncalibrated measurements, e.g. the calibration video LUT was not
+	// active during profiling or no colorimeter correction file was applied.
+	if (profile_colortemp && colortemp && Math.abs(profile_colortemp - colortemp) > 300) {
+		this.report_html.push(
+			'<p class="warning-banner">Warning: The profile white point (' + profile_colortemp + ' K) ' +
+			'differs significantly from the measured display white point (' + colortemp + ' K). ' +
+			'The display profile was likely built from uncalibrated measurements. ' +
+			'Common causes: the calibration video LUT was not active during profiling, ' +
+			'or no colorimeter correction file was applied. ' +
+			'Re-calibrating and re-profiling the display should fix this.</p>'
+		);
+	}
 	var result_start = this.report_html.length;
 	this.report_html = this.report_html.concat([
 		'	<div class="summary">',

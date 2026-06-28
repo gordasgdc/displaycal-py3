@@ -93,6 +93,15 @@ p.error {
 	color: #c00;
 	font-weight: bold;
 }
+p.warning-banner {
+	background: #fff3cd;
+	border: 1px solid #ffc107;
+	border-left: 4px solid #ff9800;
+	color: #664d03;
+	font-weight: bold;
+	margin: 10px 0;
+	padding: 10px 15px;
+}
 #report {
 	/* display: none; oddly cuts off part of the summary in IE6 */
 	visibility: hidden;
