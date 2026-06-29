@@ -1044,3 +1044,86 @@ def test_enumerate_displays_migrates_cie2012_observer_names_for_argyll_34(
             f"{key!r} should have been migrated from {old_value!r} "
             f"to {expected!r}, got {result!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# check_instrument_calibration tests (issue #617 – ColorMunki infinite loop)
+# ---------------------------------------------------------------------------
+
+COLORMUNKI_CAL_MSG = "Set instrument sensor to calibration position"
+
+
+def _make_worker_for_cal_test(monkeypatch):
+    """Return a Worker with do_instrument_calibration and safe_send mocked."""
+    worker = Worker()
+    # These attributes are normally set in the worker-thread setup; init them
+    # manually so the calibration method can be called without a running subprocess.
+    worker.instrument_calibration_complete = False
+    worker._last_calibration_msg = None
+    worker.do_instrument_calibration_calls = []
+    worker.safe_send_calls = []
+
+    def fake_do_instrument_calibration(failed=False):
+        worker.do_instrument_calibration_calls.append(failed)
+
+    def fake_safe_send(data):
+        worker.safe_send_calls.append(data)
+
+    monkeypatch.setattr(worker, "do_instrument_calibration", fake_do_instrument_calibration)
+    monkeypatch.setattr(worker, "safe_send", fake_safe_send)
+    return worker
+
+
+def test_check_instrument_calibration_first_prompt_shows_dialog(monkeypatch):
+    """First occurrence of a calibration prompt must show the dialog."""
+    worker = _make_worker_for_cal_test(monkeypatch)
+    worker.check_instrument_calibration(COLORMUNKI_CAL_MSG)
+    assert len(worker.do_instrument_calibration_calls) == 1
+    assert worker.do_instrument_calibration_calls[0] is False
+    assert worker.safe_send_calls == []
+    assert worker._last_calibration_msg == COLORMUNKI_CAL_MSG
+
+
+def test_check_instrument_calibration_duplicate_prompt_auto_retries(monkeypatch):
+    """Second occurrence of the same prompt must auto-send a space, not show dialog."""
+    worker = _make_worker_for_cal_test(monkeypatch)
+    worker.check_instrument_calibration(COLORMUNKI_CAL_MSG)
+    worker.check_instrument_calibration(COLORMUNKI_CAL_MSG)
+    # Dialog shown only once; second call triggers a silent keypress
+    assert len(worker.do_instrument_calibration_calls) == 1
+    assert worker.safe_send_calls == [" "]
+
+
+def test_check_instrument_calibration_complete_stops_further_dialogs(monkeypatch):
+    """After calibration complete, subsequent prompts must be ignored."""
+    worker = _make_worker_for_cal_test(monkeypatch)
+    worker.check_instrument_calibration(COLORMUNKI_CAL_MSG)
+    worker.check_instrument_calibration("Calibration complete")
+    assert worker.instrument_calibration_complete is True
+    assert worker._last_calibration_msg is None
+    # A further prompt arrives – must be silently ignored
+    worker.check_instrument_calibration(COLORMUNKI_CAL_MSG)
+    assert len(worker.do_instrument_calibration_calls) == 1
+    assert worker.safe_send_calls == []
+
+
+def test_check_instrument_calibration_failure_allows_retry_dialog(monkeypatch):
+    """After a calibration failure, the next calibration prompt must show a dialog.
+
+    The duplicate-suppression state is reset on failure so the user is not stuck
+    in a silent auto-retry loop after a failed calibration attempt.
+    """
+    worker = _make_worker_for_cal_test(monkeypatch)
+    # First prompt: dialog shown, duplicate tracking starts
+    worker.check_instrument_calibration(COLORMUNKI_CAL_MSG)
+    assert len(worker.do_instrument_calibration_calls) == 1
+    # Simulate duplicate that would normally be auto-retried silently
+    worker.check_instrument_calibration(COLORMUNKI_CAL_MSG)
+    assert worker.safe_send_calls == [" "]
+    # Calibration fails: reset state so the NEXT prompt opens the dialog again
+    worker._last_calibration_msg = None  # mirrors what do_instrument_calibration does on cancel
+    worker.check_instrument_calibration(COLORMUNKI_CAL_MSG)
+    assert len(worker.do_instrument_calibration_calls) == 2
+    assert worker.do_instrument_calibration_calls[1] is False
+    # No additional silent retries should have been sent
+    assert len(worker.safe_send_calls) == 1
