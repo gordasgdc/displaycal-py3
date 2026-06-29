@@ -2219,6 +2219,12 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self.update_displays(update_ccmx_items=False)
         self.update_comports()
         self.mr_init_controls()
+        # If a previous session crashed during a CCXX measurement, the config
+        # retains testchart.file set to the CCXX testchart and backup keys set,
+        # causing is_ccxx_testchart() to return True and hiding the correction
+        # section. Restore backed-up values before update_controls() runs.
+        self.restore_measurement_mode()
+        self.restore_testchart()
         self.update_controls(update_ccmx_items=False)
         scrollrate_x = 2 if self.calpanel.VirtualSize[0] > self.calpanel.Size[0] else 0
         self.calpanel.SetScrollRate(scrollrate_x, 2)
@@ -15281,8 +15287,9 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 white_abs = []
                 for _j, meas in enumerate((reference_ti3, colorimeter_ti3)):
                     # Get absolute whitepoint
-                    white = meas.queryv1("LUMINANCE_XYZ_CDM2").decode(
-                        "utf-8"
+                    _lum = meas.queryv1("LUMINANCE_XYZ_CDM2")
+                    white = (
+                        _lum.decode("utf-8") if _lum is not None else None
                     ) or meas.queryi1({"RGB_R": 100, "RGB_G": 100, "RGB_B": 100})
                     if isinstance(white, str):
                         white = [float(v) for v in white.split()]
