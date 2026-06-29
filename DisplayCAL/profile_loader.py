@@ -4118,17 +4118,21 @@ class ProfileLoader:
                     exception,
                 )
                 device0 = None
-            debug_print(f"Monitor {i:d} 1st display device name:", device0.DeviceName)
-            debug_print(
-                f"Monitor {i:d} 1st display device string:", device0.DeviceString
-            )
-            debug_print(
-                f"Monitor {i:d} 1st display device state flags: "
-                f"0x{device0.StateFlags:x}"
-            )
-            debug_print(f"Monitor {i:d} 1st display device ID:", device0.DeviceID)
-            debug_print(f"Monitor {i:d} 1st display device key:", device0.DeviceKey)
             if device0:
+                debug_print(
+                    f"Monitor {i:d} 1st display device name:", device0.DeviceName
+                )
+                debug_print(
+                    f"Monitor {i:d} 1st display device string:", device0.DeviceString
+                )
+                debug_print(
+                    f"Monitor {i:d} 1st display device state flags: "
+                    f"0x{device0.StateFlags:x}"
+                )
+                debug_print(f"Monitor {i:d} 1st display device ID:", device0.DeviceID)
+                debug_print(
+                    f"Monitor {i:d} 1st display device key:", device0.DeviceKey
+                )
                 display0, edid0 = get_display_name_edid(device0)
                 debug_print(f"Monitor {i:d} 1st display description:", display0)
             if (
@@ -4161,7 +4165,7 @@ class ProfileLoader:
     def _print_display_device_info(self) -> None:
         """Print information about display devices."""
         for display, _edid, device, device0 in self.display_devices.values():
-            if device.DeviceKey == device0.DeviceKey:
+            if device0 and device.DeviceKey == device0.DeviceKey:
                 device_name = "\\".join(device.DeviceName.split("\\")[:-1])
                 print(
                     self.adapters.get(
