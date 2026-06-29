@@ -1,5 +1,6 @@
 """This module contains tests for the EDID parsing functionality in DisplayCAL."""
 
+import binascii
 import codecs
 import platform
 
@@ -49,7 +50,7 @@ def test_get_edid_1(clear_displays, monkeypatch, patch_subprocess, data_files):
     assert "checksum" in result
     assert result["checksum"] > 0
     assert "checksum_valid" in result
-    assert result["checksum_valid"] is False
+    assert result["checksum_valid"] is True
     assert "edid" in result
     assert isinstance(result["edid"], bytes)
     assert "edid_revision" in result
@@ -70,8 +71,8 @@ def test_get_edid_1(clear_displays, monkeypatch, patch_subprocess, data_files):
     assert isinstance(result["hash"], str)
     assert "header" in result
     assert isinstance(result["header"], bytes)
-    assert "manufacturer" not in result
-    # assert isinstance(result["manufacturer"], str)
+    assert "manufacturer" in result
+    assert isinstance(result["manufacturer"], str)
     assert "manufacturer_id" in result
     assert isinstance(result["manufacturer_id"], str)
     assert "max_h_size_cm" in result
@@ -119,6 +120,98 @@ def test_get_edid_1(clear_displays, monkeypatch, patch_subprocess, data_files):
 #     )
 
 
+_VP2768A_HEX = (
+    "00ffffffffffff005a633a7a0f010101"
+    "311e0104b53c22783bb091ab524ea026"
+    "0f5054bfef80e1c0d100d1c0b300a940"
+    "8180810081c0565e00a0a0a029503020"
+    "350055502100001a000000ff00573855"
+    "3230343930303130340a000000fd0018"
+    "4b0f5a1e000a202020202020000000fc"
+    "00565032373638610a2020202020017b"
+    "020322f155901f05145a5904131e1d0f"
+    "0e07061211161503020123097f078301"
+    "0000023a801871382d40582c45005550"
+    "2100001e011d8018711c1620582c2500"
+    "55502100009e023a80d072382d40102c"
+    "458055502100001e011d007251d01e20"
+    "6e28550055502100001e584d00b8a138"
+    "1440f82c4b0055502100001e000000d2"
+)
+_VP2768A_EDID = binascii.unhexlify(_VP2768A_HEX)
+
+_U28E590_HEX = (
+    "00ffffffffffff004c2d4d0c46584d30"
+    "231a0104b53d23783a5fb1a2574fa228"
+    "0f5054bfef80714f810081c08180a9c0"
+    "b300950001014dd000a0f0703e803020"
+    "35005f592100001a000000fd00384b1e"
+    "873c000a202020202020000000fc0055"
+    "3238453539300a2020202020000000ff"
+    "00485450483930303130330a20200166"
+    "02030ef041102309070783010000023a"
+    "801871382d40582c45005f592100001e"
+    "565e00a0a0a02950302035005f592100"
+    "001a04740030f2705a80b0588a005f59"
+    "2100001e000000000000000000000000"
+    "00000000000000000000000000000000"
+    "00000000000000000000000000000000"
+    "00000000000000000000000000000052"
+)
+_U28E590_EDID = binascii.unhexlify(_U28E590_HEX)
+
+_ACER_ET430K_HEX = (
+    "00ffffffffffff0004725805436e6072"
+    "1a1b0103805e35782aa191a9544d9c26"
+    "0f5054bfef80714f8140818081c08100"
+    "9500b300d1c04dd000a0f0703e803020"
+    "3500ad113200001a565e00a0a0a02950"
+    "2f203500ad113200001a000000fd0032"
+    "3c1e8c3c000a202020202020000000fc"
+    "00416365722045543433304b0a200129"
+    "020341f1506101600304121305141f10"
+    "0706026b5f23090707830100006b030c"
+    "002000383c2000200167d85dc4017880"
+    "00e305e001e40f050000e60607016060"
+    "45023a801871382d40582c4500ad1132"
+    "00001e011d007251d01e206e285500ad"
+    "113200001e8c0ad08a20e02d10103e96"
+    "00ad1132000018000000000000000088"
+)
+_ACER_ET430K_EDID = binascii.unhexlify(_ACER_ET430K_HEX)
+
+_VP2768A_RESULT = {
+    "edid": _VP2768A_EDID,
+    "hash": "c809a7de5f47319307d2358f3d578078",
+    "header": b"\x00\xff\xff\xff\xff\xff\xff\x00",
+    "manufacturer": "ViewSonic Corporation",
+    "manufacturer_id": "VSC",
+    "product_id": 31290,
+    "serial_32": 16843023,
+    "serial_ascii": "W8U204900104",
+    "week_of_manufacture": 49,
+    "year_of_manufacture": 2020,
+    "edid_version": 1,
+    "edid_revision": 4,
+    "max_h_size_cm": 60,
+    "max_v_size_cm": 34,
+    "gamma": 2.2,
+    "features": 59,
+    "red_x": 0.669921875,
+    "red_y": 0.3232421875,
+    "green_x": 0.3046875,
+    "green_y": 0.625,
+    "blue_x": 0.150390625,
+    "blue_y": 0.0595703125,
+    "white_x": 0.3125,
+    "white_y": 0.3291015625,
+    "ext_flag": 1,
+    "checksum": 123,
+    "checksum_valid": True,
+    "monitor_name": "VP2768a",
+}
+
+
 @pytest.mark.parametrize(
     "xrandr_data_file_name,dispwin_data_file_name,getcfg_displays_output,display_no,expected_result",
     [
@@ -127,66 +220,14 @@ def test_get_edid_1(clear_displays, monkeypatch, patch_subprocess, data_files):
             "dispwin_output_1.txt",
             ["DP-4 @ 0, 0, 2560x1440 [PRIMARY]"],
             0,
-            {
-                "edid": b"00ffffffffffff005a633a7a0f010101311e0104b53c22783bb091ab524ea0260f5054bfef80e1c0d100d1c0b300a9408180810081c0565e00a0a0a029503020350055502100001a000000ff005738553230343930303130340a000000fd00184b0f5a1e000a202020202020000000fc00565032373638610a2020202020017b020322f155901f05145a5904131e1d0f0e07061211161503020123097f0783010000023a801871382d40582c450055502100001e011d8018711c1620582c250055502100009e023a80d072382d40102c458055502100001e011d007251d01e206e28550055502100001e584d00b8a1381440f82c4b0055502100001e000000d2",
-                "hash": "aee2b726b409d9d54ed5924ad309781d",
-                "header": b"00ffffff",
-                "manufacturer_id": "YSF",
-                "product_id": 26214,
-                "serial_32": 808478310,
-                "week_of_manufacture": 53,
-                "year_of_manufacture": 2087,
-                "edid_version": 54,
-                "edid_revision": 51,
-                "max_h_size_cm": 97,
-                "max_v_size_cm": 55,
-                "gamma": 1.97,
-                "features": 48,
-                "red_x": 0.1923828125,
-                "red_y": 0.189453125,
-                "green_x": 0.1923828125,
-                "green_y": 0.189453125,
-                "blue_x": 0.19140625,
-                "blue_y": 0.2021484375,
-                "white_x": 0.19140625,
-                "white_y": 0.19140625,
-                "ext_flag": 50,
-                "checksum": 48,
-                "checksum_valid": False,
-            },
+            _VP2768A_RESULT,
         ],
         [
             "xrandr_output_2.txt",
             "dispwin_output_2.txt",
             ["DP-4 @ 0, 0, 2560x1440 [PRIMARY]", "DP-2 @ 2160, 0, 3840x2160"],
             0,
-            {
-                "edid": b"00ffffffffffff005a633a7a0f010101311e0104b53c22783bb091ab524ea0260f5054bfef80e1c0d100d1c0b300a9408180810081c0565e00a0a0a029503020350055502100001a000000ff005738553230343930303130340a000000fd00184b0f5a1e000a202020202020000000fc00565032373638610a2020202020017b020322f155901f05145a5904131e1d0f0e07061211161503020123097f0783010000023a801871382d40582c450055502100001e011d8018711c1620582c250055502100009e023a80d072382d40102c458055502100001e011d007251d01e206e28550055502100001e584d00b8a1381440f82c4b0055502100001e000000d2",
-                "hash": "aee2b726b409d9d54ed5924ad309781d",
-                "header": b"00ffffff",
-                "manufacturer_id": "YSF",
-                "product_id": 26214,
-                "serial_32": 808478310,
-                "week_of_manufacture": 53,
-                "year_of_manufacture": 2087,
-                "edid_version": 54,
-                "edid_revision": 51,
-                "max_h_size_cm": 97,
-                "max_v_size_cm": 55,
-                "gamma": 1.97,
-                "features": 48,
-                "red_x": 0.1923828125,
-                "red_y": 0.189453125,
-                "green_x": 0.1923828125,
-                "green_y": 0.189453125,
-                "blue_x": 0.19140625,
-                "blue_y": 0.2021484375,
-                "white_x": 0.19140625,
-                "white_y": 0.19140625,
-                "ext_flag": 50,
-                "checksum": 48,
-                "checksum_valid": False,
-            },
+            _VP2768A_RESULT,
         ],
         [
             "xrandr_output_2.txt",
@@ -194,31 +235,34 @@ def test_get_edid_1(clear_displays, monkeypatch, patch_subprocess, data_files):
             ["DP-4 @ 0, 0, 2560x1440 [PRIMARY]", "DP-2 @ 2160, 0, 3840x2160"],
             1,
             {
-                "edid": b"00ffffffffffff004c2d4d0c46584d30231a0104b53d23783a5fb1a2574fa2280f5054bfef80714f810081c08180a9c0b300950001014dd000a0f0703e80302035005f592100001a000000fd00384b1e873c000a202020202020000000fc00553238453539300a2020202020000000ff00485450483930303130330a2020016602030ef041102309070783010000023a801871382d40582c45005f592100001e565e00a0a0a02950302035005f592100001a04740030f2705a80b0588a005f592100001e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000052",
-                "hash": "ce204468c25bc6df152fba3b1237c286",
-                "header": b"00ffffff",
-                "manufacturer_id": "YSF",
-                "product_id": 26214,
-                "serial_32": 808478310,
-                "week_of_manufacture": 52,
-                "year_of_manufacture": 2089,
-                "edid_version": 50,
-                "edid_revision": 100,
-                "max_h_size_cm": 100,
-                "max_v_size_cm": 48,
-                "gamma": 1.99,
-                "features": 52,
-                "red_x": 0.21875,
-                "red_y": 0.2060546875,
-                "green_x": 0.3916015625,
-                "green_y": 0.201171875,
-                "blue_x": 0.1875,
-                "blue_y": 0.1982421875,
-                "white_x": 0.2001953125,
-                "white_y": 0.1923828125,
-                "ext_flag": 50,
-                "checksum": 48,
-                "checksum_valid": False,
+                "edid": _U28E590_EDID,
+                "hash": "a719d259d3e729176b9f56e1c875e8c1",
+                "header": b"\x00\xff\xff\xff\xff\xff\xff\x00",
+                "manufacturer": "Samsung Electric Company",
+                "manufacturer_id": "SAM",
+                "product_id": 3149,
+                "serial_32": 810375238,
+                "serial_ascii": "HTPH900103",
+                "week_of_manufacture": 35,
+                "year_of_manufacture": 2016,
+                "edid_version": 1,
+                "edid_revision": 4,
+                "max_h_size_cm": 61,
+                "max_v_size_cm": 35,
+                "gamma": 2.2,
+                "features": 58,
+                "red_x": 0.6337890625,
+                "red_y": 0.3408203125,
+                "green_x": 0.3115234375,
+                "green_y": 0.6357421875,
+                "blue_x": 0.158203125,
+                "blue_y": 0.0615234375,
+                "white_x": 0.3125,
+                "white_y": 0.3291015625,
+                "ext_flag": 1,
+                "checksum": 102,
+                "checksum_valid": True,
+                "monitor_name": "U28E590",
             },
         ],
         [
@@ -227,32 +271,44 @@ def test_get_edid_1(clear_displays, monkeypatch, patch_subprocess, data_files):
             ["HDMI-A-0 @ 0, 0, 3840x2160 [PRIMARY]"],
             0,
             {
-                "edid": b"00ffffffffffff0004725805436e60721a1b0103805e35782aa191a9544d9c260f5054bfef80714f8140818081c081009500b300d1c04dd000a0f0703e8030203500ad113200001a565e00a0a0a029502f203500ad113200001a000000fd00323c1e8c3c000a202020202020000000fc00416365722045543433304b0a200129020341f1506101600304121305141f100706026b5f23090707830100006b030c002000383c2000200167d85dc401788000e305e001e40f050000e6060701606045023a801871382d40582c4500ad113200001e011d007251d01e206e285500ad113200001e8c0ad08a20e02d10103e9600ad1132000018000000000000000088",
-                "hash": "2f78783c69d1a435d655b34dc64c2b51",
-                "header": b"00ffffff",
-                "manufacturer_id": "YSF",
-                "product_id": 26214,
-                "serial_32": 808478310,
-                "week_of_manufacture": 48,
-                "year_of_manufacture": 2042,
-                "edid_version": 55,
-                "edid_revision": 50,
-                "max_h_size_cm": 56,
-                "max_v_size_cm": 48,
-                "gamma": 1.53,
-                "features": 52,
-                "red_x": 0.39453125,
-                "red_y": 0.2138671875,
-                "green_x": 0.1875,
-                "green_y": 0.2177734375,
-                "blue_x": 0.1953125,
-                "blue_y": 0.1943359375,
-                "white_x": 0.3798828125,
-                "white_y": 0.193359375,
-                "ext_flag": 50,
-                "checksum": 48,
-                "checksum_valid": False,
+                "edid": _ACER_ET430K_EDID,
+                "hash": "23d07c7921998829a4b68374e1000cfe",
+                "header": b"\x00\xff\xff\xff\xff\xff\xff\x00",
+                "manufacturer": "Acer Technologies",
+                "manufacturer_id": "ACR",
+                "product_id": 1368,
+                "serial_32": 1918922307,
+                "week_of_manufacture": 26,
+                "year_of_manufacture": 2017,
+                "edid_version": 1,
+                "edid_revision": 3,
+                "max_h_size_cm": 94,
+                "max_v_size_cm": 53,
+                "gamma": 2.2,
+                "features": 42,
+                "red_x": 0.662109375,
+                "red_y": 0.330078125,
+                "green_x": 0.30078125,
+                "green_y": 0.6103515625,
+                "blue_x": 0.150390625,
+                "blue_y": 0.0595703125,
+                "white_x": 0.3125,
+                "white_y": 0.3291015625,
+                "ext_flag": 1,
+                "checksum": 41,
+                "checksum_valid": True,
+                "monitor_name": "Acer ET430K",
             },
+        ],
+        # ArgyllCMS >= 3.3.0 reports just the xrandr output name ("DP-2"), but
+        # xrandr may show the output as "Monitor 1, Output DP-2 connected".
+        # Verify that the ", Output <name> connected" fallback matching works.
+        [
+            "xrandr_output_4.txt",
+            "dispwin_output_5.txt",
+            ["DP-2 @ 0, 0, 1280x1024 [PRIMARY]"],
+            0,
+            _VP2768A_RESULT,
         ],
     ],
 )
