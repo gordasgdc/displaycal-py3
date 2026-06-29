@@ -3383,12 +3383,32 @@ class Worker(WorkerBase):
         if "calibration complete" in txt.lower():
             self.log(f"{APPNAME}: Detected instrument calibration complete message")
             self.instrument_calibration_complete = True
+            self._last_calibration_msg = None
         else:
             for calmsg in INST_CAL_MSGS:
                 if calmsg not in txt and "calibration failed" not in txt.lower():
                     continue
-                self.log(f"{APPNAME}: Detected instrument calibration message")
-                self.do_instrument_calibration("calibration failed" in txt.lower())
+                failed = "calibration failed" in txt.lower()
+                if failed:
+                    self._last_calibration_msg = None
+                if (
+                    calmsg == self._last_calibration_msg
+                    and not failed
+                ):
+                    # Same calibration prompt seen again after already sending a
+                    # keypress (e.g. ArgyllCMS 3.4.1 race condition with ColorMunki
+                    # where the prompt echoes before the device completes its single
+                    # calibration step). Auto-retry silently to avoid an infinite
+                    # dialog loop.
+                    self.log(
+                        f"{APPNAME}: Duplicate calibration prompt detected, "
+                        "auto-retrying without dialog"
+                    )
+                    self.safe_send(" ")
+                else:
+                    self.log(f"{APPNAME}: Detected instrument calibration message")
+                    self._last_calibration_msg = calmsg
+                    self.do_instrument_calibration(failed)
                 break
 
     def check_instrument_calibration_file(self):
@@ -3919,6 +3939,7 @@ END_DATA
             return None
         if dlg_result != wx.ID_OK:
             self.log(f"{APPNAME}: Canceled instrument calibration prompt")
+            self._last_calibration_msg = None
             self.abort_subprocess()
             return False
         self.log(f"{APPNAME}: About to calibrate instrument")
@@ -15760,6 +15781,7 @@ BEGIN_DATA
         self.cmdrun = False
         self.finished = False
         self.instrument_calibration_complete = False
+        self._last_calibration_msg = None
         if not resume:
             self.instrument_on_screen = False
         self.instrument_place_on_screen_msg = False
