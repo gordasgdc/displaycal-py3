@@ -6,6 +6,7 @@ platforms, as well as parsing the EDID data into a structured format.
 
 from __future__ import annotations
 
+import binascii
 import contextlib
 import math
 import os
@@ -34,8 +35,6 @@ if sys.platform == "win32":
     else:
         # Use registry as fallback for Win2k/XP/2003
         import winreg
-elif sys.platform == "darwin":
-    import binascii
 
 from DisplayCAL import config, real_display_size_mm
 from DisplayCAL.util_os import which
@@ -326,6 +325,11 @@ def get_edid_from_xrandr(display_no: int) -> bytes:
     if not display:
         return None
 
+    # EDID already fetched (e.g. via Wayland DBus in get_wayland_display)
+    edid = display.get("edid")
+    if edid:
+        return edid
+
     p = subprocess.Popen([which("xrandr"), "--verbose"], stdout=subprocess.PIPE)
     stdout, stderr = p.communicate()
 
@@ -335,6 +339,7 @@ def get_edid_from_xrandr(display_no: int) -> bytes:
     found_display = False
     found_edid = False
     edid_data = []
+    name = display["name"]
     for line in stdout.splitlines():
         if found_edid:
             if line.startswith(b"\t\t"):
@@ -345,11 +350,22 @@ def get_edid_from_xrandr(display_no: int) -> bytes:
                 break
         if found_display and b"EDID" in line:  # try to find EDID
             found_edid = True
-        # try to find the display
-        if (display["name"] + b" connected") in line:
-            found_display = True
+        # try to find the display by name.
+        # ArgyllCMS >= 3.3.0 reports just the xrandr output name (e.g. "DP-2"),
+        # but xrandr may render it as "Monitor 1, Output DP-2 connected".
+        if not found_display:
+            if (name + b" connected") in line:
+                found_display = True
+            elif (b", Output " + name + b" connected") in line:
+                found_display = True
 
-    return b"".join(edid_data)
+    hex_data = b"".join(edid_data)
+    if not hex_data:
+        return None
+    try:
+        return binascii.unhexlify(hex_data)
+    except Exception:
+        return None
 
 
 def parse_manufacturer_id(block: bytes) -> str:
