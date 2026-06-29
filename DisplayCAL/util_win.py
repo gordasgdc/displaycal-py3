@@ -632,6 +632,171 @@ def win_ver() -> tuple[str, int, str, str]:
     return pname, csd, release, build
 
 
+def is_advanced_color_enabled(gdi_device_name: str) -> bool | None:
+    """Check if Advanced Color (HDR) is enabled for a GDI display device.
+
+    Uses the Windows QueryDisplayConfig API to determine whether the named
+    display device has Advanced Color mode active. Returns None if the state
+    cannot be determined (older drivers, pre-Win8.1, or API error).
+
+    Args:
+        gdi_device_name (str): The GDI device name, e.g. '\\\\.\\DISPLAY1'.
+
+    Returns:
+        bool | None: True if Advanced Color is enabled, False if not,
+            None if the state could not be determined.
+    """
+    if sys.getwindowsversion() < (6, 2):
+        return None
+
+    try:
+        QDC_ONLY_ACTIVE_PATHS = 0x00000002
+        DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_GDI_DEVICE_NAME = 3
+        DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO = 9
+        CCHDEVICENAME = 32
+        ADVANCED_COLOR_ENABLED_BIT = 0x2
+
+        class _LUID(ctypes.Structure):
+            _fields_ = [
+                ("LowPart", wintypes.DWORD),
+                ("HighPart", wintypes.LONG),
+            ]
+
+        class _RATIONAL(ctypes.Structure):
+            _fields_ = [
+                ("Numerator", wintypes.UINT),
+                ("Denominator", wintypes.UINT),
+            ]
+
+        class _PATH_SOURCE_INFO(ctypes.Structure):
+            _fields_ = [
+                ("adapterId", _LUID),
+                ("id", wintypes.UINT),
+                ("modeInfoIdx", wintypes.UINT),
+                ("statusFlags", wintypes.UINT),
+            ]
+
+        class _PATH_TARGET_INFO(ctypes.Structure):
+            _fields_ = [
+                ("adapterId", _LUID),
+                ("id", wintypes.UINT),
+                ("modeInfoIdx", wintypes.UINT),
+                ("outputTechnology", wintypes.UINT),
+                ("rotation", wintypes.UINT),
+                ("scaling", wintypes.UINT),
+                ("refreshRate", _RATIONAL),
+                ("scanLineOrdering", wintypes.UINT),
+                ("targetAvailable", wintypes.BOOL),
+                ("statusFlags", wintypes.UINT),
+            ]
+
+        class _PATH_INFO(ctypes.Structure):
+            _fields_ = [
+                ("sourceInfo", _PATH_SOURCE_INFO),
+                ("targetInfo", _PATH_TARGET_INFO),
+                ("flags", wintypes.UINT),
+            ]
+
+        class _DEVICE_INFO_HEADER(ctypes.Structure):
+            _fields_ = [
+                ("type", wintypes.UINT),
+                ("size", wintypes.UINT),
+                ("adapterId", _LUID),
+                ("id", wintypes.UINT),
+            ]
+
+        class _SOURCE_DEVICE_NAME(ctypes.Structure):
+            _fields_ = [
+                ("header", _DEVICE_INFO_HEADER),
+                ("viewGdiDeviceName", ctypes.c_wchar * CCHDEVICENAME),
+            ]
+
+        class _ADVANCED_COLOR_INFO(ctypes.Structure):
+            _fields_ = [
+                ("header", _DEVICE_INFO_HEADER),
+                ("value", wintypes.UINT),
+                ("colorEncoding", wintypes.UINT),
+                ("bitsPerColorChannel", wintypes.UINT),
+            ]
+
+        # DISPLAYCONFIG_MODE_INFO is a union-containing struct; its size is
+        # 64 bytes on both 32-bit and 64-bit Windows.
+        class _MODE_INFO(ctypes.Structure):
+            _fields_ = [("_data", ctypes.c_uint8 * 64)]
+
+        user32 = ctypes.windll.user32
+        num_paths = wintypes.UINT(0)
+        num_modes = wintypes.UINT(0)
+
+        if user32.GetDisplayConfigBufferSizes(
+            QDC_ONLY_ACTIVE_PATHS,
+            ctypes.byref(num_paths),
+            ctypes.byref(num_modes),
+        ) != 0:
+            return None
+
+        paths = (_PATH_INFO * num_paths.value)()
+        modes = (_MODE_INFO * num_modes.value)()
+
+        if user32.QueryDisplayConfig(
+            QDC_ONLY_ACTIVE_PATHS,
+            ctypes.byref(num_paths),
+            paths,
+            ctypes.byref(num_modes),
+            modes,
+            None,
+        ) != 0:
+            return None
+
+        gdi_name_lower = gdi_device_name.lower()
+        for i in range(num_paths.value):
+            path = paths[i]
+
+            src_name = _SOURCE_DEVICE_NAME()
+            src_name.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_GDI_DEVICE_NAME
+            src_name.header.size = ctypes.sizeof(_SOURCE_DEVICE_NAME)
+            src_name.header.adapterId = path.sourceInfo.adapterId
+            src_name.header.id = path.sourceInfo.id
+
+            if user32.DisplayConfigGetDeviceInfo(ctypes.byref(src_name)) != 0:
+                continue
+
+            if src_name.viewGdiDeviceName.lower() != gdi_name_lower:
+                continue
+
+            adv_color = _ADVANCED_COLOR_INFO()
+            adv_color.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO
+            adv_color.header.size = ctypes.sizeof(_ADVANCED_COLOR_INFO)
+            adv_color.header.adapterId = path.targetInfo.adapterId
+            adv_color.header.id = path.targetInfo.id
+
+            if user32.DisplayConfigGetDeviceInfo(ctypes.byref(adv_color)) != 0:
+                return None
+
+            return bool(adv_color.value & ADVANCED_COLOR_ENABLED_BIT)
+
+        return None
+
+    except Exception:
+        return None
+
+
+def get_gdi_device_name_for_devicekey(devicekey: str) -> str | None:
+    """Return the GDI device name (e.g. '\\\\.\\DISPLAY1') for a device key.
+
+    Args:
+        devicekey (str): The registry device key.
+
+    Returns:
+        str | None: The GDI device name, or None if not found.
+    """
+    for moninfo in get_real_display_devices_info():
+        device = get_active_display_device(moninfo["Device"])
+        if device and device.DeviceKey == devicekey:
+            return moninfo["Device"]
+    return None
+
+
 USE_NTDLL_LDR = False
 
 

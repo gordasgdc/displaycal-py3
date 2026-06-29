@@ -2369,6 +2369,7 @@ def _winreg_get_display_profile(
     current_user: bool = False,
     path_only: bool = False,
     use_cache: bool = True,
+    advanced_color_active: bool | None = None,
 ) -> None | str | ICCProfile:
     """Get display profile from Windows registry.
 
@@ -2379,13 +2380,21 @@ def _winreg_get_display_profile(
         path_only (bool): If True, return the profile path as a string,
             otherwise return an ICCProfile object.
         use_cache (bool): If True, use cached profile if available.
+        advanced_color_active (bool | None): Whether the display is currently
+            in Advanced Color (HDR) mode.  If explicitly False, the
+            ICMProfileAC (Windows HDR Calibration) profile is excluded so the
+            SDR profile is returned instead.  None means unknown (include all).
 
     Returns:
         None | str | ICCProfile: The display profile path as a string or
             an ICCProfile object, or None if no profile is found.
     """
     filename = None
-    filenames = _winreg_get_display_profiles(monkey, current_user)
+    filenames = _winreg_get_display_profiles(
+        monkey,
+        current_user,
+        exclude_advanced_color=advanced_color_active is False,
+    )
     if filenames:
         # last existing file in the list is active
         filename = filenames.pop()
@@ -2402,6 +2411,7 @@ def _winreg_get_display_profile(
 def _winreg_get_display_profiles(
     monkey: list,
     current_user: bool = False,
+    exclude_advanced_color: bool = False,
 ) -> list:
     """Get display profile filenames from Windows registry.
 
@@ -2409,6 +2419,10 @@ def _winreg_get_display_profiles(
         monkey (list): Registry key path components for the display.
         current_user (bool): If True, use HKEY_CURRENT_USER, otherwise
             HKEY_LOCAL_MACHINE.
+        exclude_advanced_color (bool): If True, skip profiles stored under
+            ICMProfileAC (the Windows HDR Calibration / Advanced Color profile
+            slot).  Pass True when the display is not currently in HDR mode so
+            the SDR profile is used instead.
 
     Returns:
         list: List of profile filenames.
@@ -2442,6 +2456,8 @@ def _winreg_get_display_profiles(
         for i in range(numvalues):
             name, value, type_ = winreg.EnumValue(key, i)
             if name not in ["ICMProfile", "ICMProfileAC"] or not value:
+                continue
+            if name == "ICMProfileAC" and exclude_advanced_color:
                 continue
 
             if type_ == winreg.REG_BINARY:
@@ -2542,11 +2558,13 @@ def get_display_profile_windows(
     profile = None
     if "win32api" not in sys.modules:
         raise ImportError("pywin32 not available")
+    gdi_device_name = None
     if not devicekey:
         # The ordering will work as long as Argyll continues using
         # EnumDisplayMonitors
         monitors = util_win.get_real_display_devices_info()
         moninfo = monitors[display_no]
+        gdi_device_name = moninfo["Device"]
     if not mscms and not devicekey:
         # Via GetICMProfile. Sucks royally in a multi-monitor setup
         # where one monitor is disabled, because it'll always get
@@ -2603,11 +2621,29 @@ def get_display_profile_windows(
         monkey = devicekey.split("\\")[-2:]  # pun totally intended
         # Current user scope
         current_user = scope == WCS_PROFILE_MANAGEMENT_SCOPE["CURRENT_USER"]
+        # Detect Advanced Color (HDR) state so we can skip the ICMProfileAC
+        # entry when the display is in SDR mode (issue #627).
+        if gdi_device_name is None:
+            gdi_device_name = util_win.get_gdi_device_name_for_devicekey(devicekey)
+        advanced_color_active = (
+            util_win.is_advanced_color_enabled(gdi_device_name)
+            if gdi_device_name
+            else None
+        )
         if current_user:
-            profile = _winreg_get_display_profile(monkey, True, path_only=path_only)
+            profile = _winreg_get_display_profile(
+                monkey,
+                True,
+                path_only=path_only,
+                advanced_color_active=advanced_color_active,
+            )
         else:
             # System scope
-            profile = _winreg_get_display_profile(monkey, path_only=path_only)
+            profile = _winreg_get_display_profile(
+                monkey,
+                path_only=path_only,
+                advanced_color_active=advanced_color_active,
+            )
 
     return profile
 
