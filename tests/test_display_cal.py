@@ -11,7 +11,7 @@ from wx import AppConsole, Button
 
 from DisplayCAL import display_cal, config
 from DisplayCAL.cgats import CGATS
-from DisplayCAL.config import get_icon
+from DisplayCAL.config import get_ccxx_testchart, get_icon, getcfg, setcfg
 from DisplayCAL.dev.mocks import check_call, check_call_str
 from DisplayCAL.display_cal import (
     app_update_check,
@@ -186,6 +186,56 @@ def test_get_cgats_path(data_files) -> None:
     ) / "Argyll Calibration Target chart information 3.cti3" == Path(
         get_cgats_path(cgats)
     )
+
+
+def test_restore_testchart_clears_crash_state(mainframe: MainFrame) -> None:
+    """restore_testchart() should clear testchart.file.backup left by a crash.
+
+    If DisplayCAL crashes during a CCXX measurement, testchart.file is set to
+    the CCXX testchart and testchart.file.backup holds the original path.
+    restore_testchart() must restore the original and clear the backup so that
+    is_ccxx_testchart() returns False and the correction section is shown.
+    """
+    from DisplayCAL.config import is_ccxx_testchart
+
+    original_testchart = getcfg("testchart.file")
+    ccxx_testchart = get_ccxx_testchart()
+
+    # Simulate the config state left after a crash mid-CCXX measurement.
+    setcfg("testchart.file.backup", original_testchart)
+    setcfg("testchart.file", ccxx_testchart)
+
+    try:
+        assert is_ccxx_testchart(), "Pre-condition: should look like a CCXX testchart"
+        mainframe.restore_testchart()
+        assert not is_ccxx_testchart(), "After restore, should no longer be CCXX testchart"
+        assert getcfg("testchart.file") == original_testchart
+        assert getcfg("testchart.file.backup", False) is None
+    finally:
+        # Ensure clean state for other tests regardless of assertion outcome.
+        setcfg("testchart.file", original_testchart)
+        setcfg("testchart.file.backup", None)
+
+
+def test_restore_measurement_mode_clears_crash_state(mainframe: MainFrame) -> None:
+    """restore_measurement_mode() should clear backup values left by a crash.
+
+    If DisplayCAL crashes during a CCXX measurement, measurement_mode.backup
+    holds the original mode. restore_measurement_mode() must restore it and
+    clear the backup.
+    """
+    original_mode = getcfg("measurement_mode")
+
+    setcfg("measurement_mode.backup", original_mode)
+    setcfg("measurement_mode", "c")  # Simulate mode changed for CCXX measurement.
+
+    try:
+        mainframe.restore_measurement_mode()
+        assert getcfg("measurement_mode") == original_mode
+        assert getcfg("measurement_mode.backup", False) is None
+    finally:
+        setcfg("measurement_mode", original_mode)
+        setcfg("measurement_mode.backup", None)
 
 
 def test_get_profile_load_on_login_label() -> None:
