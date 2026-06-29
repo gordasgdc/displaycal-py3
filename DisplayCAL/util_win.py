@@ -474,12 +474,16 @@ def get_real_display_devices_info() -> list[dict]:
     """
     # See Argyll source spectro/dispwin.c MonitorEnumProc, get_displays
     monitors = []
-    for monitor in win32api.EnumDisplayMonitors(None, None):
+    try:
+        monitor_list = win32api.EnumDisplayMonitors(None, None)
+    except Exception:
+        return monitors
+    for monitor in monitor_list:
         try:
             # Convert PyHANDLE to int using the .handle attribute
             hMonitor = monitor[0].handle
             moninfo = win32api.GetMonitorInfo(hMonitor)
-        except pywintypes.error:
+        except Exception:
             pass
         else:
             if moninfo and not moninfo["Device"].startswith("\\\\.\\DISPLAYV"):
