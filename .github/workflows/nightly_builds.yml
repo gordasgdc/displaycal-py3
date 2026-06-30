@@ -84,6 +84,7 @@ jobs:
         run: |
           uv build
           $version = Get-Content VERSION
+          echo "VERSION=$version" >> $env:GITHUB_ENV
           $wheel_file = Get-ChildItem dist\*.whl | Select-Object -First 1
           uv pip install --system $wheel_file
           copy misc/net.displaycal.DisplayCAL.appdata.xml dist/net.displaycal.DisplayCAL.appdata.xml
@@ -116,7 +117,7 @@ jobs:
           upload_url: https://uploads.github.com/repos/eoyilmaz/displaycal-py3/releases/291565678/assets{?name,label}
           release_id: 291565678
           asset_path: dist\DisplayCAL-Setup.exe
-          asset_name: DisplayCAL-$$-nightly-Windows-${{ matrix.architecture }}.exe
+          asset_name: DisplayCAL-${{ env.VERSION }}-nightly-Windows-${{ matrix.architecture }}.exe
           asset_content_type: application/x-msdownload
           max_releases: 1
           ignore_hash: true
@@ -179,6 +180,7 @@ jobs:
         run: |
           uv build --no-build-isolation;
           version=$(cat VERSION)
+          echo "VERSION=${version}" >> $GITHUB_ENV
           uv pip install --system ./dist/displaycal-${version}-*.whl --force-reinstall;
 
       - name: Build macOS APP
@@ -233,7 +235,7 @@ jobs:
           upload_url: https://uploads.github.com/repos/eoyilmaz/displaycal-py3/releases/291565678/assets{?name,label}
           release_id: 291565678
           asset_path: ./dist/DisplayCAL-macOS-${{ matrix.architecture == 'x64' && 'x86_64' || 'arm64' }}.dmg
-          asset_name: DisplayCAL-$$-nightly-macOS-${{ matrix.architecture == 'x64' && 'x86_64' || 'arm64' }}.dmg
+          asset_name: DisplayCAL-${{ env.VERSION }}-nightly-macOS-${{ matrix.architecture == 'x64' && 'x86_64' || 'arm64' }}.dmg
           asset_content_type: application/x-apple-diskimage
           max_releases: 1
           ignore_hash: true
@@ -398,7 +400,7 @@ jobs:
           upload_url: https://uploads.github.com/repos/eoyilmaz/displaycal-py3/releases/291565678/assets{?name,label}
           release_id: 291565678
           asset_path: ${{ env.DEB_FILE }}
-          asset_name: DisplayCAL-$$-nightly-Linux-amd64.deb
+          asset_name: DisplayCAL-${{ env.VERSION }}-nightly-Linux-amd64.deb
           asset_content_type: application/vnd.debian.binary-package
           max_releases: 1
           ignore_hash: true
@@ -409,7 +411,7 @@ jobs:
           upload_url: https://uploads.github.com/repos/eoyilmaz/displaycal-py3/releases/291565678/assets{?name,label}
           release_id: 291565678
           asset_path: ${{ env.RPM_FILE }}
-          asset_name: DisplayCAL-$$-nightly-Linux-x86_64.rpm
+          asset_name: DisplayCAL-${{ env.VERSION }}-nightly-Linux-x86_64.rpm
           asset_content_type: application/x-rpm
           max_releases: 1
           ignore_hash: true
