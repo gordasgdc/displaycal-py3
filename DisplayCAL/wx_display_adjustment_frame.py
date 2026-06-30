@@ -1788,6 +1788,12 @@ class DisplayAdjustmentFrame(windowcls):
                 self.is_measuring = False
                 self.indicator_ctrl.SetBitmap(get_icon(10, "empty", use_mask=True))
             self.calibration_btn.Enable()
+            # Ensure frame is visible in case it was hidden (e.g. by
+            # swap_progress_wnds during a measurement sub-step), and try to
+            # bring it to the front so the user can interact with it.
+            if not self.IsShownOnScreen():
+                self.Show()
+            self.Raise()
             self.lb.SetFocus()  # Make frame receive EVT_CHAR_HOOK events under Linux
         elif "initial measurements" in txt or "check measurements" in txt:
             self.is_busy = True
