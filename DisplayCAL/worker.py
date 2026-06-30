@@ -15058,6 +15058,7 @@ BEGIN_DATA
             and time() > self.starttime + 3
             and self.progress_wnd is getattr(self, "terminal", None)
             and not self._detecting_video_levels
+            and not getattr(getattr(self, "terminal", None), "is_measuring", False)
         ):
             # We no longer need keyboard interaction, switch over to
             # progress dialog
