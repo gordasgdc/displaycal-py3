@@ -111,6 +111,16 @@ jobs:
         run: |
             Move-Item dist/DisplayCAL-*-Setup.exe dist/DisplayCAL-Setup.exe
 
+      - name: Delete old nightly Windows assets (${{ matrix.architecture }})
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $assets = gh api /repos/${{ github.repository }}/releases/291565678/assets | ConvertFrom-Json
+          $assets | Where-Object { $_.name -match "nightly-Windows-${{ matrix.architecture }}" } | ForEach-Object {
+            Write-Host "Deleting old asset: $($_.name)"
+            gh api --method DELETE /repos/${{ github.repository }}/releases/assets/$($_.id)
+          }
+
       - name: Update nightly Windows release
         uses: WebFreak001/deploy-nightly@v3.2.0
         with:
@@ -228,6 +238,18 @@ jobs:
 
           ln -s /Applications "$STAGING_DIR/Applications"
           create-dmg --volname DisplayCAL-${version} dist/DisplayCAL-macOS-${TARGET_ARCH}.dmg "$STAGING_DIR"
+
+      - name: Delete old nightly macOS assets (${{ matrix.architecture }})
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARCH="${{ matrix.architecture == 'x64' && 'x86_64' || 'arm64' }}"
+          gh api "/repos/${{ github.repository }}/releases/291565678/assets" \
+            --jq ".[] | select(.name | test(\"nightly-macOS-${ARCH}\")) | .id" \
+            | while read -r id; do
+              echo "Deleting old asset ID: $id"
+              gh api --method DELETE "/repos/${{ github.repository }}/releases/assets/$id"
+            done
 
       - name: Update nightly macOS release
         uses: WebFreak001/deploy-nightly@v3.2.0
@@ -393,6 +415,17 @@ jobs:
             --package dist/ \
             .
           echo "RPM_FILE=$(ls dist/*.rpm)" >> $GITHUB_ENV
+
+      - name: Delete old nightly Linux assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "/repos/${{ github.repository }}/releases/291565678/assets" \
+            --jq '.[] | select(.name | test("nightly-Linux")) | .id' \
+            | while read -r id; do
+              echo "Deleting old asset ID: $id"
+              gh api --method DELETE "/repos/${{ github.repository }}/releases/assets/$id"
+            done
 
       - name: Upload DEB to nightly release
         uses: WebFreak001/deploy-nightly@v3.2.0
