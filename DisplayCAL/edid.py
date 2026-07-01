@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import binascii
 import contextlib
+import json
 import math
 import os
 import re
@@ -98,12 +99,13 @@ def get_edid(
 ) -> dict:
     """Get and parse EDID. Return dict.
 
-    On Mac OS X, you need to specify a display name.
-    On all other platforms, you need to specify a display number (zero-based).
+    On all platforms, display_no (zero-based) is used for index-based lookup.
+    On Mac OS X, display_name is tried first for name-based matching; if no
+    name match is found, falls back to the display at position display_no.
 
     Args:
         display_no (int): The display number (zero-based).
-        display_name (None | str): The display name (for Mac OS X).
+        display_name (None | str): The display name (preferred match on macOS).
         device (None | str): The device identifier.
 
     Returns:
@@ -113,7 +115,7 @@ def get_edid(
     if sys.platform == "win32":
         edid = get_edid_windows(display_no, device)
     elif sys.platform == "darwin":
-        edid = get_edid_darwin(display_name)
+        edid = get_edid_darwin(display_name, display_no)
     else:
         edid = get_edid_from_xrandr(display_no)
 
@@ -279,14 +281,20 @@ def get_edid_windows_registry(id_: str, device: str) -> bytes:
     return edid
 
 
-def get_edid_darwin(display_name: str) -> None | bytes:
+def get_edid_darwin(display_name: str, display_no: int = 0) -> None | bytes:
     """Get EDID via ioreg on macOS.
 
+    Tries to match by EDID monitor_name == display_name first.  When that
+    fails (e.g. because ArgyllCMS returns a generic name such as "Display #1"
+    on macOS Tahoe / Apple Silicon), falls back to returning the EDID at
+    position display_no from the list of valid EDIDs found in ioreg.
+
     Args:
-        display_name (str): The display name.
+        display_name (str): The display name reported by ArgyllCMS.
+        display_no (int): Zero-based display index used as a fallback.
 
     Returns:
-        None | bytes: Parsed EDID data or None.
+        None | bytes: Raw EDID bytes or None.
     """
     # Get EDID via ioreg
     p = subprocess.Popen(
@@ -296,6 +304,7 @@ def get_edid_darwin(display_name: str) -> None | bytes:
     stdout, stderr = p.communicate()
     if not stdout:
         return None
+    all_edids = []
     for edid in [
         binascii.unhexlify(edid_hex)
         for edid_hex in re.findall(
@@ -304,16 +313,85 @@ def get_edid_darwin(display_name: str) -> None | bytes:
     ]:
         if not edid or len(edid) < 128:
             continue
+        all_edids.append(edid)
         parsed_edid = parse_edid(edid)
         if parsed_edid.get("monitor_name", parsed_edid.get("ascii")) == display_name:
-            # On Mac OS X, you need to specify a display name
-            # because the order is unknown
             return edid
+    # Name-based match failed (ArgyllCMS gave a generic name like "Display #1").
+    # Fall back to the display at the given index so that the EDID monitor name
+    # can still be used for profile naming and display identification.
+    if 0 <= display_no < len(all_edids):
+        return all_edids[display_no]
+    return None
+
+
+def get_display_name_from_system_profiler(width: int, height: int) -> str | None:
+    """Return the display model name from system_profiler on macOS.
+
+    Used as a last-resort fallback when ioreg does not expose IODisplayEDID
+    (e.g. Apple Silicon Macs running macOS Tahoe with external displays).
+
+    Matches by display resolution because system_profiler and ArgyllCMS may
+    enumerate displays in different orders.  When multiple displays share the
+    same resolution the first match is returned.
+
+    Resolution strings like "1920 x 1080 (3840 x 2160 HiDPI)" contain multiple
+    pairs; all pairs are tried so that both logical and physical resolutions match.
+    Multiple resolution keys are checked in case macOS changes the key name.
+
+    Args:
+        width (int): Display width in pixels as reported by ArgyllCMS.
+        height (int): Display height in pixels as reported by ArgyllCMS.
+
+    Returns:
+        str | None: Display model name, or None if not determinable.
+    """
+    try:
+        p = subprocess.Popen(  # noqa: S607
+            ["system_profiler", "SPDisplaysDataType", "-json"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        stdout, _ = p.communicate()
+        if not stdout:
+            return None
+        data = json.loads(stdout)
+    except Exception:
+        return None
+
+    for gpu in data.get("SPDisplaysDataType", []):
+        for display in gpu.get("spdisplays_ndrvs", []):
+            name = display.get("_name", "").strip()
+            if not name:
+                continue
+            for res_key in (
+                "spdisplays_resolution",
+                "_spdisplays_resolution",  # macOS Tahoe uses underscore prefix
+                "spdisplays_native-resolution",
+                "spdisplays_ui-resolution",
+                "spdisplays_pixelresolution",
+                "_spdisplays_pixels",  # macOS Tahoe physical pixel count
+            ):
+                resolution = display.get(res_key, "")
+                if not resolution:
+                    continue
+                # findall captures every (w, h) pair in strings like
+                # "1920 x 1080 (3840 x 2160 HiDPI)" or "spdisplays_3840x2160"
+                for w, h in re.findall(r"(\d+)\s*[xX×]\s*(\d+)", resolution):
+                    if int(w) == width and int(h) == height:
+                        return name
     return None
 
 
 def get_edid_from_xrandr(display_no: int) -> bytes:
     """Get EDID using `xrandr` utility.
+
+    Tries to find the EDID by matching the xrandr output name stored in the
+    display dict.  When that name-based match fails (e.g. because ArgyllCMS
+    reports a generic name such as "Monitor 1" or "Display #1" that does not
+    appear in xrandr output, or because geometry-based display lookup returned
+    nothing), falls back to collecting all EDID blocks from xrandr in output
+    order and returning the block at position display_no.
 
     Args:
         display_no (int): The display number (zero-based).
@@ -322,50 +400,85 @@ def get_edid_from_xrandr(display_no: int) -> bytes:
         bytes: The EDID data.
     """
     display = real_display_size_mm.get_display(display_no)
-    if not display:
-        return None
+    if display:
+        # EDID already fetched (e.g. via Wayland DBus in get_wayland_display)
+        edid = display.get("edid")
+        if edid:
+            return edid
 
-    # EDID already fetched (e.g. via Wayland DBus in get_wayland_display)
-    edid = display.get("edid")
-    if edid:
-        return edid
-
-    p = subprocess.Popen([which("xrandr"), "--verbose"], stdout=subprocess.PIPE)
+    p = subprocess.Popen([which("xrandr"), "--verbose"], stdout=subprocess.PIPE)  # noqa: S607
     stdout, stderr = p.communicate()
 
     if not stdout:
         return None
 
-    found_display = False
-    found_edid = False
+    name = display["name"] if display else None
+
+    # Pass 1: name-based match (fast path - exits early on success).
+    # ArgyllCMS >= 3.3.0 reports just the xrandr output name (e.g. "DP-2"),
+    # but xrandr may render it as "Monitor 1, Output DP-2 connected".
+    if name is not None:
+        found_display = False
+        found_edid = False
+        edid_data = []
+        for line in stdout.splitlines():
+            if found_edid:
+                if line.startswith(b"\t\t"):
+                    edid_data.append(line.strip())
+                else:
+                    break
+            if found_display and b"EDID" in line:
+                found_edid = True
+            if not found_display:
+                if (name + b" connected") in line:
+                    found_display = True
+                elif (b", Output " + name + b" connected") in line:
+                    found_display = True
+
+        hex_data = b"".join(edid_data)
+        if hex_data:
+            try:
+                return binascii.unhexlify(hex_data)
+            except Exception:
+                pass
+
+    # Pass 2: index-based fallback.  Collect every EDID block that appears in
+    # xrandr output (in the order xrandr lists them) and return the one at
+    # display_no.  This handles cases where the name match above failed, e.g.
+    # because ArgyllCMS used a generic label ("Monitor 1") that does not appear
+    # as an xrandr output name.  Ordering may not match for multi-display
+    # setups when xrandr and ArgyllCMS enumerate differently, but for single-
+    # display configurations this is always correct.
+    all_edids = []
+    in_edid = False
     edid_data = []
-    name = display["name"]
     for line in stdout.splitlines():
-        if found_edid:
+        if in_edid:
             if line.startswith(b"\t\t"):
-                # extract the edid data
                 edid_data.append(line.strip())
             else:
-                # read all data, exit
-                break
-        if found_display and b"EDID" in line:  # try to find EDID
-            found_edid = True
-        # try to find the display by name.
-        # ArgyllCMS >= 3.3.0 reports just the xrandr output name (e.g. "DP-2"),
-        # but xrandr may render it as "Monitor 1, Output DP-2 connected".
-        if not found_display:
-            if (name + b" connected") in line:
-                found_display = True
-            elif (b", Output " + name + b" connected") in line:
-                found_display = True
+                hex_data = b"".join(edid_data)
+                if hex_data:
+                    try:
+                        all_edids.append(binascii.unhexlify(hex_data))
+                    except Exception:
+                        all_edids.append(None)
+                edid_data = []
+                in_edid = False
+        if b"EDID" in line and not in_edid:
+            in_edid = True
+            edid_data = []
+    if edid_data:
+        hex_data = b"".join(edid_data)
+        if hex_data:
+            try:
+                all_edids.append(binascii.unhexlify(hex_data))
+            except Exception:
+                all_edids.append(None)
 
-    hex_data = b"".join(edid_data)
-    if not hex_data:
-        return None
-    try:
-        return binascii.unhexlify(hex_data)
-    except Exception:
-        return None
+    if 0 <= display_no < len(all_edids) and all_edids[display_no]:
+        return all_edids[display_no]
+    return None
 
 
 def parse_manufacturer_id(block: bytes) -> str:
