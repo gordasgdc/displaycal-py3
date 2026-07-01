@@ -2,6 +2,7 @@
 
 import binascii
 import codecs
+import json
 import platform
 
 import pytest
@@ -9,7 +10,14 @@ import pytest
 from DisplayCAL import real_display_size_mm, config
 from DisplayCAL.config import getcfg
 from DisplayCAL.dev.mocks import check_call
-from DisplayCAL.edid import get_edid, parse_edid, parse_manufacturer_id
+from DisplayCAL.edid import (
+    get_display_name_from_system_profiler,
+    get_edid,
+    get_edid_darwin,
+    get_edid_from_xrandr,
+    parse_edid,
+    parse_manufacturer_id,
+)
 
 from tests.data.display_data import DisplayData
 
@@ -754,3 +762,371 @@ def test_get_edid_windows_wmi_returns_bytes():
 
     parsed = parse_edid(result)
     assert parsed.get("monitor_name") == "DELL UP2516D"
+
+
+def _make_ioreg_output(*edid_hex_list):
+    """Build a fake ioreg output string containing the given EDID hex blobs."""
+    lines = []
+    for edid_hex in edid_hex_list:
+        lines.append(f'"IODisplayEDID" = <{edid_hex}>')
+    return "\n".join(lines).encode()
+
+
+def test_get_edid_darwin_name_match(monkeypatch, patch_subprocess):
+    """get_edid_darwin() returns the EDID whose monitor_name matches display_name."""
+    monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
+    patch_subprocess.output["ioreg-cIODisplay-S-w0"] = _make_ioreg_output(_VP2768A_HEX)
+
+    result = get_edid_darwin("VP2768a", display_no=0)
+
+    assert result == _VP2768A_EDID
+
+
+def test_get_edid_darwin_index_fallback(monkeypatch, patch_subprocess):
+    """get_edid_darwin() falls back to display_no index when name does not match.
+
+    Covers the case where ArgyllCMS returns a generic name such as "Display #1"
+    on macOS Tahoe / Apple Silicon (issue #773).
+    """
+    monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
+    patch_subprocess.output["ioreg-cIODisplay-S-w0"] = _make_ioreg_output(_VP2768A_HEX)
+
+    result = get_edid_darwin("Display #1", display_no=0)
+
+    assert result == _VP2768A_EDID
+    parsed = parse_edid(result)
+    assert parsed.get("monitor_name") == "VP2768a"
+
+
+def test_get_edid_darwin_index_out_of_range(monkeypatch, patch_subprocess):
+    """get_edid_darwin() returns None when display_no exceeds available EDIDs."""
+    monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
+    patch_subprocess.output["ioreg-cIODisplay-S-w0"] = _make_ioreg_output(_VP2768A_HEX)
+
+    result = get_edid_darwin("Display #2", display_no=1)
+
+    assert result is None
+
+
+def test_get_edid_darwin_multi_display_index_fallback(monkeypatch, patch_subprocess):
+    """get_edid_darwin() selects the correct EDID by index for multi-display setups."""
+    monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
+    patch_subprocess.output["ioreg-cIODisplay-S-w0"] = _make_ioreg_output(
+        _VP2768A_HEX, _U28E590_HEX
+    )
+
+    result0 = get_edid_darwin("Display #1", display_no=0)
+    result1 = get_edid_darwin("Display #2", display_no=1)
+
+    assert result0 == _VP2768A_EDID
+    assert result1 == _U28E590_EDID
+
+
+# ---------------------------------------------------------------------------
+# Linux (xrandr) fallback tests
+# ---------------------------------------------------------------------------
+
+def _make_xrandr_output(*entries):
+    """Build a minimal fake xrandr --verbose output.
+
+    Each entry is a (output_name, edid_hex) tuple.  Connected outputs are
+    listed in order with their EDID blocks embedded.
+    """
+    lines = [b"Screen 0: minimum 8 x 8, current 2560 x 1440, maximum 32767 x 32767"]
+    for i, (output_name, edid_hex) in enumerate(entries):
+        name = output_name.encode() if isinstance(output_name, str) else output_name
+        primary = b" primary" if i == 0 else b""
+        lines.append(name + b" connected" + primary + b" 2560x1440+0+0 (normal) 597mm x 336mm")
+        lines.append(b"\tEDID:")
+        # Split hex into 32-char rows (16 bytes each) as xrandr does
+        for j in range(0, len(edid_hex), 32):
+            lines.append(b"\t\t" + edid_hex[j : j + 32].encode())
+    return b"\n".join(lines)
+
+
+def test_get_edid_from_xrandr_index_fallback_no_display(monkeypatch, patch_subprocess):
+    """get_edid_from_xrandr() falls back to index when get_display() returns None.
+
+    This covers the case where the geometry-based display lookup fails
+    (e.g. stale getcfg('displays') on first run).
+    """
+    monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
+    monkeypatch.setattr("DisplayCAL.edid.which", lambda x: "xrandr")
+    monkeypatch.setattr("DisplayCAL.edid.real_display_size_mm.get_display", lambda n: None)
+    patch_subprocess.output["xrandr--verbose"] = _make_xrandr_output(
+        ("DP-4", _VP2768A_HEX)
+    )
+
+    result = get_edid_from_xrandr(0)
+
+    assert result == _VP2768A_EDID
+    parsed = parse_edid(result)
+    assert parsed.get("monitor_name") == "VP2768a"
+
+
+def test_get_edid_from_xrandr_index_fallback_name_mismatch(monkeypatch, patch_subprocess):
+    """get_edid_from_xrandr() falls back to index when xrandr name does not match.
+
+    This covers the case where ArgyllCMS provides a generic name (e.g. "Monitor 1")
+    that does not appear in xrandr output as an output name (issue #773 on Linux).
+    """
+    monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
+    monkeypatch.setattr("DisplayCAL.edid.which", lambda x: "xrandr")
+    monkeypatch.setattr(
+        "DisplayCAL.edid.real_display_size_mm.get_display",
+        lambda n: {"name": b"Monitor 1", "description": b"Monitor 1 @ 0, 0, 2560x1440"},
+    )
+    patch_subprocess.output["xrandr--verbose"] = _make_xrandr_output(
+        ("DP-4", _VP2768A_HEX)
+    )
+
+    result = get_edid_from_xrandr(0)
+
+    assert result == _VP2768A_EDID
+    parsed = parse_edid(result)
+    assert parsed.get("monitor_name") == "VP2768a"
+
+
+def test_get_edid_from_xrandr_index_fallback_multi_display(monkeypatch, patch_subprocess):
+    """get_edid_from_xrandr() fallback selects the Nth EDID for multi-display setups."""
+    monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
+    monkeypatch.setattr("DisplayCAL.edid.which", lambda x: "xrandr")
+    monkeypatch.setattr("DisplayCAL.edid.real_display_size_mm.get_display", lambda n: None)
+    patch_subprocess.output["xrandr--verbose"] = _make_xrandr_output(
+        ("DP-4", _VP2768A_HEX),
+        ("DP-2", _U28E590_HEX),
+    )
+
+    result0 = get_edid_from_xrandr(0)
+    result1 = get_edid_from_xrandr(1)
+
+    assert result0 == _VP2768A_EDID
+    assert result1 == _U28E590_EDID
+
+
+def test_get_edid_from_xrandr_index_out_of_range(monkeypatch, patch_subprocess):
+    """get_edid_from_xrandr() returns None when display_no exceeds available EDIDs."""
+    monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
+    monkeypatch.setattr("DisplayCAL.edid.which", lambda x: "xrandr")
+    monkeypatch.setattr("DisplayCAL.edid.real_display_size_mm.get_display", lambda n: None)
+    patch_subprocess.output["xrandr--verbose"] = _make_xrandr_output(
+        ("DP-4", _VP2768A_HEX)
+    )
+
+    result = get_edid_from_xrandr(1)
+
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# system_profiler fallback tests (macOS Tahoe / Apple Silicon)
+# ---------------------------------------------------------------------------
+
+_SYSTEM_PROFILER_JSON = json.dumps(
+    {
+        "SPDisplaysDataType": [
+            {
+                "_name": "Apple M4 Max",
+                "spdisplays_ndrvs": [
+                    {
+                        "_name": "Built-in Retina Display",
+                        "spdisplays_resolution": "3024 x 1964 Retina",
+                    },
+                    {
+                        "_name": "LG UltraFine 4K",
+                        "spdisplays_resolution": "3840 x 2160 (UHD 4K)",
+                    },
+                ],
+            }
+        ]
+    }
+).encode()
+
+# Reflects the actual macOS Tahoe / M1 Pro format seen in the field:
+# resolution keys are underscore-prefixed (_spdisplays_resolution, _spdisplays_pixels)
+_SYSTEM_PROFILER_JSON_TAHOE = json.dumps(
+    {
+        "SPDisplaysDataType": [
+            {
+                "_name": "Apple M1 Pro",
+                "spdisplays_ndrvs": [
+                    {
+                        "_name": "Color LCD",
+                        "_spdisplays_pixels": "3456 x 2234",
+                        "_spdisplays_resolution": "1728 x 1117 @ 120.00Hz",
+                        "spdisplays_pixelresolution": "spdisplays_3456x2234Retina",
+                        "spdisplays_connection_type": "spdisplays_internal",
+                    },
+                ],
+            }
+        ]
+    }
+).encode()
+
+
+def test_get_display_name_from_system_profiler_match(monkeypatch, patch_subprocess):
+    """get_display_name_from_system_profiler() returns name matched by resolution."""
+    monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
+    patch_subprocess.output[
+        "system_profilerSPDisplaysDataType-json"
+    ] = _SYSTEM_PROFILER_JSON
+
+    result = get_display_name_from_system_profiler(3840, 2160)
+
+    assert result == "LG UltraFine 4K"
+
+
+def test_get_display_name_from_system_profiler_builtin(monkeypatch, patch_subprocess):
+    """get_display_name_from_system_profiler() matches built-in display by resolution."""
+    monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
+    patch_subprocess.output[
+        "system_profilerSPDisplaysDataType-json"
+    ] = _SYSTEM_PROFILER_JSON
+
+    result = get_display_name_from_system_profiler(3024, 1964)
+
+    assert result == "Built-in Retina Display"
+
+
+def test_get_display_name_from_system_profiler_no_match(monkeypatch, patch_subprocess):
+    """get_display_name_from_system_profiler() returns None when resolution not found."""
+    monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
+    patch_subprocess.output[
+        "system_profilerSPDisplaysDataType-json"
+    ] = _SYSTEM_PROFILER_JSON
+
+    result = get_display_name_from_system_profiler(1920, 1080)
+
+    assert result is None
+
+
+def test_get_display_name_from_system_profiler_hidpi_physical(
+    monkeypatch, patch_subprocess
+):
+    """Physical (3840x2160) pixels match inside a HiDPI resolution string."""
+    data = json.dumps(
+        {
+            "SPDisplaysDataType": [
+                {
+                    "_name": "Apple M4 Max",
+                    "spdisplays_ndrvs": [
+                        {
+                            "_name": "LG UltraFine 5K",
+                            "spdisplays_resolution": "2560 x 1440 (3840 x 2160 HiDPI)",
+                        },
+                    ],
+                }
+            ]
+        }
+    ).encode()
+    monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
+    patch_subprocess.output["system_profilerSPDisplaysDataType-json"] = data
+
+    assert get_display_name_from_system_profiler(3840, 2160) == "LG UltraFine 5K"
+
+
+def test_get_display_name_from_system_profiler_hidpi_logical(
+    monkeypatch, patch_subprocess
+):
+    """Logical (2560x1440) pixels match inside a HiDPI resolution string."""
+    data = json.dumps(
+        {
+            "SPDisplaysDataType": [
+                {
+                    "_name": "Apple M4 Max",
+                    "spdisplays_ndrvs": [
+                        {
+                            "_name": "LG UltraFine 5K",
+                            "spdisplays_resolution": "2560 x 1440 (3840 x 2160 HiDPI)",
+                        },
+                    ],
+                }
+            ]
+        }
+    ).encode()
+    monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
+    patch_subprocess.output["system_profilerSPDisplaysDataType-json"] = data
+
+    assert get_display_name_from_system_profiler(2560, 1440) == "LG UltraFine 5K"
+
+
+def test_get_display_name_from_system_profiler_pixelresolution_key(
+    monkeypatch, patch_subprocess
+):
+    """spdisplays_pixelresolution key (format 'spdisplays_3840x2160') is used as fallback."""
+    data = json.dumps(
+        {
+            "SPDisplaysDataType": [
+                {
+                    "_name": "Apple M4 Max",
+                    "spdisplays_ndrvs": [
+                        {
+                            "_name": "ASUS ProArt PA329CV",
+                            "spdisplays_pixelresolution": "spdisplays_3840x2160",
+                        },
+                    ],
+                }
+            ]
+        }
+    ).encode()
+    monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
+    patch_subprocess.output["system_profilerSPDisplaysDataType-json"] = data
+
+    assert get_display_name_from_system_profiler(3840, 2160) == "ASUS ProArt PA329CV"
+
+
+def test_get_display_name_from_system_profiler_native_resolution_key(
+    monkeypatch, patch_subprocess
+):
+    """spdisplays_native-resolution key is checked when spdisplays_resolution missing."""
+    data = json.dumps(
+        {
+            "SPDisplaysDataType": [
+                {
+                    "_name": "Apple M4 Max",
+                    "spdisplays_ndrvs": [
+                        {
+                            "_name": "Dell U2723QE",
+                            "spdisplays_native-resolution": "3840 x 2160",
+                        },
+                    ],
+                }
+            ]
+        }
+    ).encode()
+    monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
+    patch_subprocess.output["system_profilerSPDisplaysDataType-json"] = data
+
+    assert get_display_name_from_system_profiler(3840, 2160) == "Dell U2723QE"
+
+
+def test_get_display_name_from_system_profiler_tahoe_underscore_resolution(
+    monkeypatch, patch_subprocess
+):
+    """macOS Tahoe uses _spdisplays_resolution (underscore prefix) for the resolution key."""
+    monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
+    patch_subprocess.output[
+        "system_profilerSPDisplaysDataType-json"
+    ] = _SYSTEM_PROFILER_JSON_TAHOE
+
+    # 1728x1117 is what Argyll (dispwin) reports; it matches _spdisplays_resolution
+    result = get_display_name_from_system_profiler(1728, 1117)
+
+    assert result == "Color LCD"
+
+
+def test_get_display_name_from_system_profiler_tahoe_no_match(
+    monkeypatch, patch_subprocess
+):
+    """_spdisplays_pixels (physical 2x) does not match Argyll logical resolution."""
+    monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
+    patch_subprocess.output[
+        "system_profilerSPDisplaysDataType-json"
+    ] = _SYSTEM_PROFILER_JSON_TAHOE
+
+    # Physical pixel count (3456x2234) — Argyll reports logical (1728x1117),
+    # so asking for physical should NOT match via _spdisplays_resolution but WILL
+    # match via _spdisplays_pixels.
+    result = get_display_name_from_system_profiler(3456, 2234)
+
+    assert result == "Color LCD"

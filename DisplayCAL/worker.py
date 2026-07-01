@@ -157,7 +157,7 @@ from DisplayCAL.debughelpers import (
     Warn,
     handle_error,
 )
-from DisplayCAL.edid import WMIError, get_edid
+from DisplayCAL.edid import WMIError, get_display_name_from_system_profiler, get_edid
 from DisplayCAL.icc_profile import (
     GAMUT_VOLUME_SRGB,
     ChromaticAdaptionTag,
@@ -6139,6 +6139,17 @@ END_DATA
                             desc = [monitor]
                     else:
                         manufacturer = []
+                        if sys.platform == "darwin" and i < len(self.display_rects):
+                            rect = self.display_rects[i]
+                            sp_name = get_display_name_from_system_profiler(
+                                rect.width, rect.height
+                            )
+                            if sp_name:
+                                if sp_name in ("Color LCD", "iMac"):
+                                    model_id = get_model_id()
+                                    if model_id:
+                                        sp_name = model_id
+                                desc = [sp_name]
                     if desc and desc[-1] not in display:
                         # Only replace the description if it not already
                         # contains the monitor model
