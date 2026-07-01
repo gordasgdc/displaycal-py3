@@ -8787,6 +8787,13 @@ BEGIN_DATA
                     if round(fit, 2) >= 1:
                         rgb_space = rgb_space_inner
                         break
+                if rgb_space is None:
+                    if not pcs_candidates:
+                        raise Error(lang.getstr("profile.no_suitable_pcs_candidate"))
+                    # None of the reference gamuts fully encompass the
+                    # display's actual primaries. Fall back to the
+                    # candidate that clips the least instead of crashing.
+                    rgb_space = max(pcs_candidates, key=lambda row_: row_[1])[2]
                 if logfile:
                     logfile.write(f"Using primaries: {rgb_space[-1]}\n")
                 for _, components in rgb:

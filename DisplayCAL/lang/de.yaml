@@ -2910,6 +2910,9 @@
 "profile.no_embedded_ti3": |-
   Das Profil enthält keine Argyll-kompatiblen Messwerte.
 
+"profile.no_suitable_pcs_candidate": |-
+  Kein passender PCS-Kandidat für die Grundfarbwerte des Displays gefunden.
+
 "profile.no_targ": |-
   Das Profil enthält keine Zielinformationen.
 

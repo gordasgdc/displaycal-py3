@@ -1964,6 +1964,8 @@
   %Y	Año con el siglo
 "profile.no_embedded_ti3": |-
   El perfil no contiene datos de medicion compatibles con Argyll.
+"profile.no_suitable_pcs_candidate": |-
+  No se encontró ningún candidato de PCS adecuado para los primarios de la pantalla.
 "profile.no_targ": |-
   El perfil no contiene información de objetivo.
 "profile.no_vcgt": |-

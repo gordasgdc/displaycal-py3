@@ -2905,6 +2905,9 @@
 "profile.no_embedded_ti3": |-
   Le profil ne contient pas de donnée de mesure compatible avec Argyll.
 
+"profile.no_suitable_pcs_candidate": |-
+  Aucun candidat PCS approprié n'a été trouvé pour les primaires de l'écran.
+
 "profile.no_targ": |-
   Le profil ne contient pas d'informations de cible.
 

@@ -2926,6 +2926,9 @@
 "profile.no_embedded_ti3": |-
   配置文件不包含与 Argyll 兼容的测量数据。
 
+"profile.no_suitable_pcs_candidate": |-
+  未找到适合该显示器原色的合适 PCS 候选项。
+
 "profile.no_targ": |-
   配置文件不包含目标信息。
 
