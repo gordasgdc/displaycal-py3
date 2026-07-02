@@ -8,6 +8,7 @@ __pycache__/
 .zed/
 *.blend1
 *.code-workspace
+*.swp
 /.coverage*
 /.pytest_cache/
 /.venv/

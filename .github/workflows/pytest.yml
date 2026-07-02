@@ -171,6 +171,8 @@ jobs:
         uv pip install --system $wheel_file
 
     - name: Test with pytest
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html  --durations=50
 
@@ -248,6 +250,8 @@ jobs:
         uv pip install --system $wheel_file
 
     - name: Test with pytest
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html  --durations=50
 
@@ -327,6 +331,8 @@ jobs:
         uv pip install --system "$wheel_file"
 
     - name: Test with pytest
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html --durations=50
 
