@@ -18266,9 +18266,12 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 profile_name = profile_name.replace("%ds", "\0")
         # CRC32
         if "%crc32" in profile_name:
-            if edid.get("edid"):
+            raw_edid = edid.get("edid")
+            if isinstance(raw_edid, str):
+                raw_edid = raw_edid.encode("utf-8")
+            if raw_edid:
                 profile_name = profile_name.replace(
-                    "%crc32", "%X" % (crc32(edid["edid"].encode()) & 0xFFFFFFFF)
+                    "%crc32", "%X" % (crc32(raw_edid) & 0xFFFFFFFF)
                 )
             else:
                 profile_name = profile_name.replace("%crc32", "\0")
