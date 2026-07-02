@@ -3,6 +3,7 @@ import platform
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
+from zlib import crc32
 
 import pytest
 import requests
@@ -405,3 +406,38 @@ def test_get_download_url_returns_none_before_release_data_loaded(monkeypatch):
     """get_download_url() returns None gracefully when called before is_new_update()."""
     monkeypatch.setattr(display_cal, "RELEASE_DATA", None)
     assert display_cal.get_download_url("3.9.0") is None
+
+
+def test_create_profile_name_crc32_with_bytes_edid(
+    mainframe: MainFrame, monkeypatch
+) -> None:
+    """create_profile_name() resolves %crc32 when EDID data is bytes (#776)."""
+    raw_edid = b"\x00\xff\xff\xff\xff\xff\xff\x00test-edid-payload"
+    monkeypatch.setattr(
+        mainframe.worker, "get_display_edid", lambda: {"edid": raw_edid}
+    )
+    mainframe.profile_name_textctrl.SetValue("%crc32")
+    expected = "%X" % (crc32(raw_edid) & 0xFFFFFFFF)
+    assert mainframe.create_profile_name() == expected
+
+
+def test_create_profile_name_crc32_with_str_edid(
+    mainframe: MainFrame, monkeypatch
+) -> None:
+    """create_profile_name() resolves %crc32 when EDID data is a str."""
+    raw_edid = "test-edid-payload"
+    monkeypatch.setattr(
+        mainframe.worker, "get_display_edid", lambda: {"edid": raw_edid}
+    )
+    mainframe.profile_name_textctrl.SetValue("%crc32")
+    expected = "%X" % (crc32(raw_edid.encode("utf-8")) & 0xFFFFFFFF)
+    assert mainframe.create_profile_name() == expected
+
+
+def test_create_profile_name_crc32_without_edid(
+    mainframe: MainFrame, monkeypatch
+) -> None:
+    """create_profile_name() strips %crc32 when no EDID data is available."""
+    monkeypatch.setattr(mainframe.worker, "get_display_edid", lambda: {})
+    mainframe.profile_name_textctrl.SetValue("name-%crc32-suffix")
+    assert mainframe.create_profile_name() == "name-suffix"
