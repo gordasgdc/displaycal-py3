@@ -45,9 +45,16 @@ def fixture_app() -> AppConsole:
     return wx.GetApp() or wx.App()
 
 
-@pytest.fixture(scope="class", name="mainframe")
+@pytest.fixture(scope="module", name="mainframe")
 def fixture_mainframe() -> MainFrame:
-    """Return mainframe for tests."""
+    """Return mainframe for tests.
+
+    Module-scoped (not class-scoped) because MainFrame() also creates hidden
+    child top-level windows (infoframe, measureframe, ...) that wx never
+    fully releases without a running MainLoop(); building a fresh MainFrame()
+    per test function leaked dozens of native windows over the file and
+    caused multi-minute stalls on macOS CI runners (#778).
+    """
     worker = Worker()
     return display_cal.MainFrame(worker=worker)
 
