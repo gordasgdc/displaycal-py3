@@ -85,7 +85,7 @@ def setup_argyll():
     can not find it, it will download from the source.
     """
     # check if ArgyllCMS is already installed
-    xicclu_path = which("xicclu")
+    xicclu_path = which(f"xicclu{config.EXE_EXT}")
     if xicclu_path:
         # ArgyllCMS is already installed
         argyll_path = pathlib.Path(xicclu_path).parent
@@ -128,6 +128,19 @@ def setup_argyll():
     # download from source
     get_argyll_latest_version.cache_clear()
     argyll_version = get_argyll_latest_version()
+    if argyll_version == config.DEFAULTS.get("argyll.version"):
+        # get_argyll_latest_version() couldn't reach the GitHub API (e.g. rate
+        # limited) and fell back to the unusable placeholder version, which
+        # would otherwise produce a guaranteed 404 download URL below. Fall
+        # back to the version pinned in the CI workflow (the same version
+        # used to pre-install ArgyllCMS on the runners) instead of giving up.
+        env_version = os.environ.get("ARGYLL_VERSION")
+        if env_version:
+            print(
+                f"Could not determine latest ArgyllCMS version, falling back "
+                f"to $ARGYLL_VERSION={env_version!r}"
+            )
+            argyll_version = env_version
     argyll_domain = config.DEFAULTS.get("argyll.domain", "")
     mac_suffix = (
         "macOS11_arm64_bin.tgz"

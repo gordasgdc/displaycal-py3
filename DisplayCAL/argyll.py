@@ -576,11 +576,17 @@ def get_argyll_latest_version() -> str:
     default_version = config.DEFAULTS.get("argyll.version")
     max_retries = 5
     base_delay = 5
+    request = urllib.request.Request(ARGYLLCMS_BINARIES_API_URL)
+    # Authenticated GitHub API requests get a 5000/hour rate limit instead of
+    # the 60/hour applied per-IP to anonymous requests, which CI runners can
+    # exhaust quickly since they share IP pools. GITHUB_TOKEN is provided for
+    # free by GitHub Actions when explicitly passed through to the job env.
+    github_token = os.environ.get("GITHUB_TOKEN")
+    if github_token:
+        request.add_header("Authorization", f"Bearer {github_token}")
     for attempt in range(max_retries):
         try:
-            response = urllib.request.urlopen(  # noqa: S310
-                ARGYLLCMS_BINARIES_API_URL, timeout=20
-            )
+            response = urllib.request.urlopen(request, timeout=20)  # noqa: S310
             data = json.loads(response.read())
             break
         except urllib.error.HTTPError as exception:
