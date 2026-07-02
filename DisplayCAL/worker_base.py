@@ -210,6 +210,17 @@ def _mp_generate_B2A_clut(
     m2i = m2
     if profile.connectionColorSpace == b"XYZ":
         m2i = m2.inverted()
+    # Accumulate points and hand them to xicclu in batches instead of one at
+    # a time. Each call writes to and flushes the xicclu subprocess's stdin
+    # pipe, so calling it per grid point (up to clutres**3 times) turns into
+    # a syscall-bound hot loop. Flush each batch once it reaches
+    # xicclu_batch_size rather than waiting for the whole worker chunk, so
+    # xicclu1 and xicclu2 (which run as separate subprocesses and can
+    # compute concurrently) both keep receiving work throughout the loop
+    # instead of xicclu2 sitting idle until all of xicclu1's input is sent.
+    xicclu_batch_size = 1000
+    xicclu1_batch = []
+    xicclu2_batch = []
     for a in chunk:
         if thread_abort_event.is_set():
             if use_cam_clipping:
@@ -243,17 +254,27 @@ def _mp_generate_B2A_clut(
                 if not use_cam_clipping or (
                     pcs == "x" and a <= threshold and b <= threshold and c <= threshold
                 ):
-                    xicclu1(v)
+                    xicclu1_batch.append(v)
+                    if len(xicclu1_batch) >= xicclu_batch_size:
+                        xicclu1(xicclu1_batch)
+                        xicclu1_batch = []
                 if use_cam_clipping and (
                     pcs == "l" or a > threshold2 or b > threshold2 or c > threshold2
                 ):
-                    xicclu2(v)
+                    xicclu2_batch.append(v)
+                    if len(xicclu2_batch) >= xicclu_batch_size:
+                        xicclu2(xicclu2_batch)
+                        xicclu2_batch = []
                 count += 1.0
             perc = round(count / (chunksize * clutres**2) * 100)
             if progress_queue and perc > prevperc:
                 progress_queue.put(perc - prevperc)
                 prevperc = perc
+    if xicclu1_batch:
+        xicclu1(xicclu1_batch)
     if use_cam_clipping:
+        if xicclu2_batch:
+            xicclu2(xicclu2_batch)
         xicclu2.exit()
         data2 = xicclu2.get()
     else:
