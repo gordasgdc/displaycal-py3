@@ -893,6 +893,10 @@ def _get_qt_main(module: str) -> Callable[[], int] | None:
         from DisplayCAL.ui.tools.synth_profile import main
 
         return main
+    if module == "testchart-editor":
+        from DisplayCAL.ui.tools.testchart_editor import main
+
+        return main
     return None
 
 

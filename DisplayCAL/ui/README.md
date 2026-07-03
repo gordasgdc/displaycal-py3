@@ -150,6 +150,22 @@ module:
   (the **Measure** button, which called the parent's `ambient_measure_handler`,
   and the network **pattern-generator** patch output) are dropped, to return with
   the Qt main window.
+- **Testchart editor** (`tools/testchart_editor.py`) — **Stage 1 (core editor)**.
+  Builds/edits Argyll TI1 charts: a patch grid (R/G/B % columns plus a colour
+  swatch marked W/K/R/G/B/C/M/Y like the wx `tc_getcolorlabel`) driven by the
+  `targen` parameter controls (white/black/single/gray/multi-dim/full-spread
+  counts, the distribution algorithm and its adaption/angle/gamma/neutral-axis/
+  dark-region emphasis). Generation runs Argyll `targen` via
+  `worker.Worker.prepare_targen` (fully config-driven, binding-agnostic) on a
+  `QThread`, reading `temp.ti1` back as a `CGATS`; loading (`.ti1`/`.ti3`/
+  `.cgats`/`.txt`/ICC) runs on a background thread and reconstructs the control
+  values from the chart's keywords; charts save as `.ti1` (`bytes(cgats)`). The
+  custom wx spinners/sliders/`CustomGrid` are replaced by native
+  `QSpinBox`/`QSlider`/`QTableWidget`. **Deferred to later stages** (and to the
+  Qt main window for parent integration): multi-format **export**, the **3D
+  view/export**, **saturation sweeps**, **TI3/CSV/image** patch import, the
+  23-way **patch reordering**, the **precondition-profile / CIE filter**
+  controls, and exact parameter reconstruction for keyword-less charts.
 
 ### Scripting / IPC server (`scripting.py`)
 
