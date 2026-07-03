@@ -131,7 +131,7 @@ clean Pile 1 — they read **live wx widget state** (`self.whitepoint_ctrl
 config), so they belong with the Qt widget layer, not a neutral module. They
 move in Stage 3 as the Qt controls are built.
 
-### Stage 1 — MeasureFrame (measure-frame geometry) → Qt
+### Stage 1 — MeasureFrame (measure-frame geometry) → Qt — **DONE**
 
 Port `wx_measure_frame.py::MeasureFrame` (959 lines) to
 `DisplayCAL/ui/measure_frame.py`. This is the shared dependency that unblocks
@@ -144,7 +144,29 @@ Port `wx_measure_frame.py::MeasureFrame` (959 lines) to
 Geometry persists to the Pile-3 `dimensions.measureframe*` /
 `measureframe.*` config keys, so the Qt frame stays interchangeable with the wx
 one. Self-contained (no giant `MainFrame` dependency), so it's a clean first
-Qt slice. **Verify** headless + against the three consuming tools.
+Qt slice.
+
+**Landed:** `DisplayCAL/ui/measure_frame.py` (`MeasureFrame(BaseWindow)` plus a
+`_MeasurePanel` central widget). The load-bearing relative<->pixel geometry
+maths is factored out into three toolkit-neutral module-level functions
+(`default_measureframe_size`, `compute_frame_geometry` from `place_n_zoom`,
+`compute_dimensions` from `get_dimensions`), unit-tested without a screen in
+`tests/test_ui_measure_frame.py` (10 tests, exact place->read-back round-trips).
+The window uses Qt `QScreen` for display enumeration in place of `wx.Display`,
+native widgets for the zoom/centre/darken/measure controls, `show_controls()`
+to blank the patch during measurement, and `show_rgb()` (numpy ordered dither
+for sub-integer 8-bit levels) for pattern-window output. Verified headless
+(`QT_QPA_PLATFORM=offscreen`) construct-and-exercise: show, zoom in/normal/max,
+centre, `show_rgb` (dithered + exact), close.
+
+**Parent integration deferred to the Qt main window:** the wx tool called
+`self.Parent.call_pending_function()` / `get_set_display()` /
+`restore_measurement_mode()` etc. directly. The Qt port exposes a
+`measure_requested` (and `pattern_shown`) **signal** instead, so the main window
+wires the Measure button to its flow later; standalone, the signal just closes
+the window. **Dropped wx-only workarounds:** the `_last_set_size` DPI-correction
+hack and the multi-X-screen / TwinView heuristics in `get_display` (Qt works in
+logical high-DPI coordinates), matching the other tools' simplifications.
 
 ### Stage 2 — Measurement flow orchestration
 
