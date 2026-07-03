@@ -357,7 +357,18 @@ class ProfileInfoWindow(BaseWindow):
         header.setSectionResizeMode(0, QHeaderView.Interactive)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
         header.resizeSection(0, 180)
-        table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        row_header = table.verticalHeader()
+        row_header.setSectionResizeMode(QHeaderView.ResizeToContents)
+        # Drop the per-row divider lines the Fusion style draws on the
+        # row-number sections (they render as thin white lines); keep a flat
+        # palette-driven background so it still adapts to light/dark.
+        row_header.setStyleSheet(
+            "QHeaderView::section {"
+            " border: none;"
+            " background-color: palette(window);"
+            " padding: 0 4px;"
+            " }"
+        )
         table.setMinimumWidth(320)
         return table
 
