@@ -236,6 +236,9 @@ extend-ignore = [
 # domain notation (uppercase), and create_profile mirrors the branch-heavy wx
 # backend it ports.
 "DisplayCAL/ui/tools/synth_profile.py" = ["N802", "N803", "N806", "C901"]
+# 3D-LUT maker is color-math heavy (CIE XYZ / xyY naming) and reimplements the
+# branch-heavy wx LUT3DMixin handlers it ports.
+"DisplayCAL/ui/tools/lut3d.py" = ["N806", "C901"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 12

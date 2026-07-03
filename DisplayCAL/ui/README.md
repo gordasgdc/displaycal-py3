@@ -119,6 +119,20 @@ module:
   chromatic-adaptation dialog and metadata (class/technology/CIIS) controls. The
   HDR roll-off controls are inlined here rather than inherited from the large
   `LUT3DMixin`, and the slow HDR cLUT generation runs on a `QThread`.
+- **3D LUT maker** (`tools/lut3d.py`) — complete. Builds a 3D LUT mapping a
+  source colorspace (input profile) through to a display (output profile), with
+  an optional abstract profile, TRC apply-mode (unmodified / black-offset only /
+  applied tone curve: gamma 2.2, BT.1886, SMPTE 2084 hard-clip & roll-off, HLG,
+  custom), HDR roll-off controls (peak/min/max mastering luminance, saturation,
+  hue, ambient, content colorspace), gamut-mapping mode (inverse A2B vs. B2A),
+  rendering intent, output format (`.cube`/`.3dl`/eeColor/madVR/mga/`.png`/
+  ReShade/dcl/spi3d/icc), encoding, size and bit-depth. The actual Argyll
+  `collink` run goes through `worker.Worker.create_3dlut` on a `QThread` with an
+  indeterminate progress dialog. The standalone-tool behaviour is reimplemented
+  here against the binding-agnostic backend rather than moving the wx-shared
+  `LUT3DMixin` (which the still-wx main window also uses); the
+  main-window-only create paths (copying an existing LUT, the non-linear
+  videoLUT warning) are dropped.
 
 ### Scripting / IPC server (`scripting.py`)
 
