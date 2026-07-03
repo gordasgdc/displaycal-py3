@@ -8,6 +8,7 @@ In most cases, unless otherwise stated RGB is R'G'B' (gamma-compressed)
 from __future__ import annotations
 
 import colorsys
+import functools
 import logging
 import math
 import sys
@@ -4776,6 +4777,25 @@ def XYZ2Lab(  # noqa: N802
     return l, a, b
 
 
+@functools.cache
+def _lpt_observer_name() -> str:
+    """Return the CIE observer used for Lpt, caching the Argyll version lookup.
+
+    ``get_argyll_version("dispwin")`` can spawn a subprocess; ``XYZ2Lpt`` /
+    ``Lpt2XYZ`` call it on every invocation, which — applied per point in a
+    gamut projection — froze the UI. The installed Argyll version can't change
+    within a session, so the observer choice is resolved once and cached.
+
+    Returns:
+        str: ``"CIE2012_2"`` (Argyll < 3.4.0) or ``"CIE2015_2"``.
+    """
+    from DisplayCAL import argyll
+
+    if argyll.get_argyll_version("dispwin") < [3, 4, 0]:
+        return "CIE2012_2"
+    return "CIE2015_2"
+
+
 def XYZ2Lpt(  # noqa: N802
     X: float,  # noqa: N803
     Y: float,  # noqa: N803
@@ -4812,13 +4832,7 @@ def XYZ2Lpt(  # noqa: N802
         Matrix3x3: Lpt values.
     """
     # Adapted from Argyll/icc/icc.c
-    from DisplayCAL import argyll
-
-    if argyll.get_argyll_version("dispwin") < [3, 4, 0]:
-        observer_name = "CIE2012_2"
-    else:
-        observer_name = "CIE2015_2"
-    xyz2lms = get_cat_matrix(observer_name)
+    xyz2lms = get_cat_matrix(_lpt_observer_name())
 
     wlms = xyz2lms * get_whitepoint(whitepoint, 100)
 
@@ -4874,15 +4888,7 @@ def Lpt2XYZ(  # noqa: N802
         Matrix3x3: XYZ values.
     """
     # Adapted from Argyll/icc/icc.c
-
-    from DisplayCAL import argyll
-
-    if argyll.get_argyll_version("dispwin") < [3, 4, 0]:
-        observer_name = "CIE2012_2"
-    else:
-        observer_name = "CIE2015_2"
-
-    xyz2lms = get_cat_matrix(observer_name)
+    xyz2lms = get_cat_matrix(_lpt_observer_name())
     lms2xyz = xyz2lms.inverted()
 
     wlms = xyz2lms * get_whitepoint(whitepoint, scale)
