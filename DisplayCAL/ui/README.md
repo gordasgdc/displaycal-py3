@@ -133,6 +133,23 @@ module:
   `LUT3DMixin` (which the still-wx main window also uses); the
   main-window-only create paths (copying an existing LUT, the non-linear
   videoLUT warning) are dropped.
+- **Visual whitepoint editor** (`tools/visual_whitepoint_editor.py`) — complete.
+  Pick a neutral white by eye: an HSV colour wheel plus two brightness bars
+  (foreground patch and surround) drive a large colour patch, with RGB/HSV spin
+  boxes for fine tuning and a "measurement area" section that sizes/positions the
+  patch. The chosen RGB, background brightness and patch geometry persist to the
+  same `whitepoint.visual_editor.*` /
+  `dimensions.measureframe.whitepoint.visual_editor` config keys as the wx tool.
+  While open, `_ProfileManager` clears the calibration on the window's display
+  (installs a temporary sRGB profile via Argyll `dispwin`, restoring on
+  close/display-change) and seeds the initial whitepoint from the display
+  profile's `vcgt`; it is inert when no Argyll display is enumerated. The wx
+  `Colour` conversion maths are reused verbatim; the custom wx spinners/sliders
+  and AUI docking are replaced by native `QSpinBox`/`QSlider`, and the wheel and
+  brightness bars are re-drawn in Qt `paintEvent`s. The main-window-only paths
+  (the **Measure** button, which called the parent's `ambient_measure_handler`,
+  and the network **pattern-generator** patch output) are dropped, to return with
+  the Qt main window.
 
 ### Scripting / IPC server (`scripting.py`)
 
