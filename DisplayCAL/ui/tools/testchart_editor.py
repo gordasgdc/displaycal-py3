@@ -1,4 +1,4 @@
-"""Testchart editor — Qt port (Stage 1: core editor).
+"""Testchart editor — Qt port (Stages 1-2).
 
 Qt equivalent of :mod:`DisplayCAL.wx_testchart_editor` (the ``testchart-editor``
 tool). It builds and edits Argyll TI1 test charts: a grid of RGB patches plus
@@ -14,16 +14,25 @@ reads a ``.ti1`` / ``.ti3`` / ``.cgats`` / ``.txt`` (or an ICC's embedded chart)
 and reconstructs the control values from the chart's keywords, on a background
 thread. Charts save as ``.ti1`` (``bytes(cgats)``).
 
-This is **Stage 1** of the port. Deliberately deferred to later stages (and to
-the not-yet-ported main window for its parent integration): multi-format
-**export**, the **3D view/export**, **saturation sweeps**, **TI3 / CSV / image**
-patch import, the 23-way **patch reordering**, and the **precondition-profile /
-CIE filter** controls. The per-parameter reconstruction of hand-authored charts
-that carry no ``targen`` keywords is also approximate for now.
+**Stage 2** adds the self-contained output paths: **CSV export** (0..100 /
+0..255 / 0..1023 device-value scaling) and the **3D view / export** (VRML / X3D /
+HTML via :meth:`DisplayCAL.cgats.CGATS.export_3d`, with the device / CIE
+colorspace selection, black-point offset, D50 normalization and gzip
+compression). Both run off a :class:`QThread` behind an indeterminate progress
+dialog.
+
+Still deferred to later stages (and to the not-yet-ported main window for its
+parent integration): the **image / DPX video-pattern export** (it depends on the
+measurement-frame display geometry that lives in the measurement flow),
+**saturation sweeps**, **TI3 / CSV / image** patch import, the 23-way **patch
+reordering**, and the **precondition-profile / CIE filter** controls. The
+per-parameter reconstruction of hand-authored charts that carry no ``targen``
+keywords is also approximate for now.
 """
 
 from __future__ import annotations
 
+import csv
 import math
 import os
 import sys
@@ -42,6 +51,7 @@ from qtpy.QtWidgets import (
     QHeaderView,
     QLabel,
     QMessageBox,
+    QProgressDialog,
     QPushButton,
     QSlider,
     QSpinBox,
@@ -58,6 +68,7 @@ from DisplayCAL.argyll_cgats import ti3_to_ti1, verify_cgats
 from DisplayCAL.cgats import CGATS, CGATSError, CGATSKeyError
 from DisplayCAL.config import (
     DEFAULTS,
+    VALID_VALUES,
     get_data_path,
     get_total_patches,
     get_verified_path,
@@ -70,7 +81,7 @@ from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
 from DisplayCAL.util_dict import swap_dict_keys_values
-from DisplayCAL.util_os import waccess
+from DisplayCAL.util_os import launch_file, waccess
 from DisplayCAL.worker import Error, Worker, check_file_isfile
 
 if TYPE_CHECKING:
@@ -78,6 +89,13 @@ if TYPE_CHECKING:
 
 #: File suffixes accepted for loading (drag-and-drop / open).
 LOAD_SUFFIXES = (".ti1", ".ti3", ".cgats", ".txt", ".icc", ".icm")
+
+#: CSV export formats offered by the export dialog: (label, device-value scale).
+CSV_EXPORT_FORMATS = (
+    ("CSV (0.0..100.0)", 100),
+    ("CSV (0..255)", 255),
+    ("CSV (0..1023)", 1023),
+)
 
 #: Fullspread-algorithm TI1 keyword → targen algo code, for load reconstruction.
 FULLSPREAD_KEYWORD_TO_ALGO = {
@@ -147,8 +165,69 @@ class _LoadThread(QThread):
         self.done.emit(result)
 
 
+class _ExportThread(QThread):
+    """Export the chart to CSV off the GUI thread.
+
+    Args:
+        window (TestchartEditorWindow): The owning window (provides ``tc_export``).
+        path (str): Destination file path.
+        scale (int): Device-value scale (100, 255 or 1023).
+        parent (QWidget | None): Optional Qt parent.
+    """
+
+    #: Emitted with ``None`` on success, or an ``Exception`` on failure.
+    done = Signal(object)
+
+    def __init__(
+        self,
+        window: TestchartEditorWindow,
+        path: str,
+        scale: int,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._window = window
+        self._path = path
+        self._scale = scale
+
+    def run(self) -> None:
+        try:
+            self._window.tc_export(self._path, self._scale)
+            result: object = None
+        except Exception as exception:  # noqa: BLE001  (report on GUI thread)
+            result = exception
+        self.done.emit(result)
+
+
+class _View3DThread(QThread):
+    """Generate the 3D representation(s) off the GUI thread.
+
+    Args:
+        window (TestchartEditorWindow): The owning window (provides ``tc_save_3d``).
+        base (str): The output path with neither colorspace suffix nor extension.
+        parent (QWidget | None): Optional Qt parent.
+    """
+
+    #: Emitted with the list of written paths, or an ``Exception`` on failure.
+    done = Signal(object)
+
+    def __init__(
+        self, window: TestchartEditorWindow, base: str, parent: QWidget | None = None
+    ) -> None:
+        super().__init__(parent)
+        self._window = window
+        self._base = base
+
+    def run(self) -> None:
+        try:
+            result: object = self._window.tc_save_3d(self._base)
+        except Exception as exception:  # noqa: BLE001  (report on GUI thread)
+            result = exception
+        self.done.emit(result)
+
+
 class TestchartEditorWindow(BaseWindow):
-    """Standalone testchart editor window (Stage 1 core)."""
+    """Standalone testchart editor window (Stages 1-2)."""
 
     #: Grid columns holding editable device values.
     _RGB_COLUMNS = ("R %", "G %", "B %")
@@ -168,6 +247,9 @@ class TestchartEditorWindow(BaseWindow):
         self._loading = False
         self._gen_thread: _GenerateThread | None = None
         self._load_thread: _LoadThread | None = None
+        self._export_thread: _ExportThread | None = None
+        self._view_thread: _View3DThread | None = None
+        self._progress: QProgressDialog | None = None
 
         self.tc_algos_ab = {
             "": lang.getstr("tc.ofp"),
@@ -339,6 +421,9 @@ class TestchartEditorWindow(BaseWindow):
         if self.tc_black_patches is not None:
             self.tc_black_patches.valueChanged.connect(self._on_patch_count)
 
+        # 3D view / export controls.
+        root.addLayout(self._build_3d_row())
+
         # Buttons.
         buttons = QHBoxLayout()
         buttons.addStretch(1)
@@ -348,12 +433,15 @@ class TestchartEditorWindow(BaseWindow):
         self.save_btn.clicked.connect(self.tc_save)
         self.save_as_btn = QPushButton(lang.getstr("save_as"))
         self.save_as_btn.clicked.connect(lambda: self.tc_save_as())
+        self.export_btn = QPushButton(lang.getstr("export"))
+        self.export_btn.clicked.connect(self.tc_export_handler)
         self.clear_btn = QPushButton(lang.getstr("testchart.discard"))
         self.clear_btn.clicked.connect(self.tc_clear)
         for button in (
             self.preview_btn,
             self.save_btn,
             self.save_as_btn,
+            self.export_btn,
             self.clear_btn,
         ):
             buttons.addWidget(button)
@@ -460,6 +548,66 @@ class TestchartEditorWindow(BaseWindow):
             layout.addWidget(QLabel(suffix))
         return layout
 
+    def _build_3d_row(self) -> QHBoxLayout:
+        """Build the diagnostic-3D controls row (view button + VRML options).
+
+        Returns:
+            QHBoxLayout: The assembled row.
+        """
+        row = QHBoxLayout()
+        self.view_3d_btn = QPushButton(lang.getstr("view.3d"))
+        self.view_3d_btn.setToolTip(lang.getstr("tc.3d"))
+        self.view_3d_btn.clicked.connect(self.tc_view_3d)
+        row.addWidget(self.view_3d_btn)
+
+        self.view_3d_format_ctrl = QComboBox()
+        self.view_3d_format_ctrl.addItems(VALID_VALUES["3d.format"])
+        self.view_3d_format_ctrl.currentTextChanged.connect(self._on_3d_format)
+        row.addWidget(self.view_3d_format_ctrl)
+
+        row.addSpacing(8)
+        self.tc_vrml_device = QCheckBox(lang.getstr("device"))
+        self.tc_vrml_device.setToolTip(lang.getstr("tc.3d"))
+        self.tc_vrml_device.toggled.connect(self.tc_vrml_handler)
+        row.addWidget(self.tc_vrml_device)
+        self.tc_vrml_device_colorspace_ctrl = QComboBox()
+        self.tc_vrml_device_colorspace_ctrl.addItems(
+            VALID_VALUES["tc_vrml_device_colorspace"]
+        )
+        self.tc_vrml_device_colorspace_ctrl.currentTextChanged.connect(
+            self.tc_vrml_handler
+        )
+        row.addWidget(self.tc_vrml_device_colorspace_ctrl)
+
+        self.tc_vrml_cie = QCheckBox("CIE")
+        self.tc_vrml_cie.setToolTip(lang.getstr("tc.3d"))
+        self.tc_vrml_cie.toggled.connect(self.tc_vrml_handler)
+        row.addWidget(self.tc_vrml_cie)
+        self.tc_vrml_cie_colorspace_ctrl = QComboBox()
+        self.tc_vrml_cie_colorspace_ctrl.addItems(
+            VALID_VALUES["tc_vrml_cie_colorspace"]
+        )
+        self.tc_vrml_cie_colorspace_ctrl.currentTextChanged.connect(
+            self.tc_vrml_handler
+        )
+        row.addWidget(self.tc_vrml_cie_colorspace_ctrl)
+
+        row.addSpacing(8)
+        row.addWidget(QLabel(lang.getstr("tc.vrml.black_offset")))
+        self.tc_vrml_black_offset_intctrl = self._spin(0, 40)
+        self.tc_vrml_black_offset_intctrl.valueChanged.connect(self.tc_vrml_handler)
+        row.addWidget(self.tc_vrml_black_offset_intctrl)
+
+        self.tc_vrml_use_D50_cb = QCheckBox(lang.getstr("tc.vrml.use_D50"))
+        self.tc_vrml_use_D50_cb.toggled.connect(self.tc_vrml_handler)
+        row.addWidget(self.tc_vrml_use_D50_cb)
+
+        self.tc_vrml_compress_cb = QCheckBox(lang.getstr("compression.gzip"))
+        self.tc_vrml_compress_cb.toggled.connect(self.tc_vrml_handler)
+        row.addWidget(self.tc_vrml_compress_cb)
+        row.addStretch(1)
+        return row
+
     # -- config sync -------------------------------------------------------
 
     def tc_update_controls(self) -> None:
@@ -498,10 +646,23 @@ class TestchartEditorWindow(BaseWindow):
                 self.tc_dark_emphasis_intctrl.setValue(
                     int(getcfg("tc_dark_emphasis") * 100)
                 )
+            self.view_3d_format_ctrl.setCurrentText(getcfg("3d.format"))
+            self.tc_vrml_device.setChecked(bool(int(getcfg("tc_vrml_device"))))
+            self.tc_vrml_device_colorspace_ctrl.setCurrentText(
+                getcfg("tc_vrml_device_colorspace")
+            )
+            self.tc_vrml_cie.setChecked(bool(int(getcfg("tc_vrml_cie"))))
+            self.tc_vrml_cie_colorspace_ctrl.setCurrentText(
+                getcfg("tc_vrml_cie_colorspace")
+            )
+            self.tc_vrml_black_offset_intctrl.setValue(getcfg("tc_vrml_black_offset"))
+            self.tc_vrml_use_D50_cb.setChecked(bool(int(getcfg("tc_vrml_use_D50"))))
+            self.tc_vrml_compress_cb.setChecked(bool(int(getcfg("vrml.compress"))))
         finally:
             self._loading = False
         self._update_multi_patches_label()
         self._update_enabled_states()
+        self.tc_vrml_update_enabled()
 
     def tc_save_cfg(self) -> None:
         """Persist the core control values to configuration."""
@@ -539,7 +700,7 @@ class TestchartEditorWindow(BaseWindow):
         config.writecfg(
             module="testchart-editor",
             options=(
-                "3d_format",
+                "3d.",
                 "last_ti1_path",
                 "last_testchart_export_path",
                 "last_vrml_path",
@@ -547,6 +708,7 @@ class TestchartEditorWindow(BaseWindow):
                 "size.tcgen",
                 "tc.",
                 "tc_",
+                "vrml.",
             ),
         )
 
@@ -587,6 +749,41 @@ class TestchartEditorWindow(BaseWindow):
     def _on_dark_emphasis(self) -> None:
         """React to a dark-region-emphasis change."""
         self._save_and_check()
+
+    def tc_vrml_handler(self, *_args) -> None:
+        """Persist the diagnostic-3D options and refresh the view button state."""
+        if self._loading:
+            return
+        setcfg("tc_vrml_device", int(self.tc_vrml_device.isChecked()))
+        setcfg("tc_vrml_cie", int(self.tc_vrml_cie.isChecked()))
+        setcfg(
+            "tc_vrml_device_colorspace",
+            self.tc_vrml_device_colorspace_ctrl.currentText(),
+        )
+        setcfg(
+            "tc_vrml_cie_colorspace", self.tc_vrml_cie_colorspace_ctrl.currentText()
+        )
+        setcfg("tc_vrml_black_offset", self.tc_vrml_black_offset_intctrl.value())
+        setcfg("tc_vrml_use_D50", int(self.tc_vrml_use_D50_cb.isChecked()))
+        setcfg("vrml.compress", int(self.tc_vrml_compress_cb.isChecked()))
+        self.tc_vrml_update_enabled()
+
+    def _on_3d_format(self, text: str) -> None:
+        """Persist the selected diagnostic-3D file format.
+
+        Args:
+            text (str): The chosen format (``HTML`` / ``VRML`` / ``X3D``).
+        """
+        if self._loading:
+            return
+        setcfg("3d.format", text)
+
+    def tc_vrml_update_enabled(self) -> None:
+        """Enable the 3D-view button only for a chart with a colorspace chosen."""
+        enabled = self.ti1 is not None and (
+            self.tc_vrml_device.isChecked() or self.tc_vrml_cie.isChecked()
+        )
+        self.view_3d_btn.setEnabled(enabled)
 
     def _update_multi_patches_label(self) -> None:
         """Show the patch count implied by the multi-dimensional steps."""
@@ -742,7 +939,9 @@ class TestchartEditorWindow(BaseWindow):
         self.preview_btn.setEnabled(can_create)
         self.clear_btn.setEnabled(self.ti1 is not None)
         self.save_as_btn.setEnabled(self.ti1 is not None)
+        self.export_btn.setEnabled(self.ti1 is not None)
         self.tc_save_check()
+        self.tc_vrml_update_enabled()
         self.tc_set_default_status()
 
     def tc_save_check(self) -> None:
@@ -1189,6 +1388,221 @@ class TestchartEditorWindow(BaseWindow):
         self.setWindowTitle(lang.getstr("testchart.edit"))
         self.tc_update_controls()
         self.tc_check()
+
+    # -- export ------------------------------------------------------------
+
+    def tc_export_handler(self) -> None:
+        """Prompt for a CSV destination and export the chart (off-thread)."""
+        if self.ti1 is None:
+            return
+        if self._export_thread is not None and self._export_thread.isRunning():
+            return
+        default_dir = get_verified_path("last_testchart_export_path")[0]
+        default_file = os.path.basename(
+            os.path.splitext(
+                self.ti1.filename or DEFAULTS["last_testchart_export_path"]
+            )[0]
+        )
+        labels = {f"{label} (*.csv)": scale for label, scale in CSV_EXPORT_FORMATS}
+        path, selected = QFileDialog.getSaveFileName(
+            self,
+            lang.getstr("export"),
+            os.path.join(default_dir, default_file),
+            ";;".join(labels),
+        )
+        if not path:
+            return
+        if os.path.splitext(path)[1].lower() != ".csv":
+            path += ".csv"
+        if not waccess(path, os.W_OK):
+            QMessageBox.critical(
+                self,
+                self.windowTitle(),
+                lang.getstr("error.access_denied.write", path),
+            )
+            return
+        setcfg("last_testchart_export_path", path)
+        self.writecfg()
+        self.export_btn.setEnabled(False)
+        self._progress = self._make_progress(lang.getstr("export"))
+        self._export_thread = _ExportThread(
+            self, path, labels.get(selected, 100), parent=self
+        )
+        self._export_thread.done.connect(self._on_exported)
+        self._export_thread.start()
+
+    def tc_export(self, path: str, scale: int) -> None:
+        """Write the chart's device values to ``path`` as CSV.
+
+        Args:
+            path (str): Destination file.
+            scale (int): Device-value scale (100 for 0..100, 255 or 1023).
+        """
+        data = self.ti1.queryv1("DATA")
+        with open(path, "w", newline="") as handle:
+            writer = csv.writer(handle)
+            for index in range(self.ti1.queryv1("NUMBER_OF_SETS")):
+                sample = data[index]
+                rgb = [sample["RGB_R"], sample["RGB_G"], sample["RGB_B"]]
+                if scale != 100:
+                    # Scale carefully: round(v / 100.0 * scale), not v * (scale / 100).
+                    rgb = [round(v / 100.0 * scale) for v in rgb]
+                writer.writerow([index, *rgb])
+
+    def _on_exported(self, result: object) -> None:
+        """Finish a CSV export on the GUI thread.
+
+        Args:
+            result (object): ``None`` on success, or an ``Exception``.
+        """
+        self._export_thread = None
+        self._close_progress()
+        self.export_btn.setEnabled(self.ti1 is not None)
+        if isinstance(result, Exception):
+            QMessageBox.critical(self, self.windowTitle(), str(result))
+
+    # -- 3D view -----------------------------------------------------------
+
+    def tc_view_3d(self) -> None:
+        """Generate and open the diagnostic 3D file(s) for the chart."""
+        if self.ti1 is None:
+            return
+        if self._view_thread is not None and self._view_thread.isRunning():
+            return
+        filename = self.ti1.filename
+        if (
+            filename
+            and not (self.worker.tempdir and filename.startswith(self.worker.tempdir))
+            and waccess(os.path.dirname(filename) or ".", os.W_OK)
+        ):
+            base = os.path.splitext(filename)[0]
+        else:
+            base = self._prompt_3d_basepath()
+            if base is None:
+                return
+        self.view_3d_btn.setEnabled(False)
+        self._progress = self._make_progress(lang.getstr("view.3d"))
+        self._view_thread = _View3DThread(self, base, parent=self)
+        self._view_thread.done.connect(self._on_view_3d_done)
+        self._view_thread.start()
+
+    def _prompt_3d_basepath(self) -> str | None:
+        """Prompt for a 3D output location, returning its extension-less base.
+
+        Returns:
+            str | None: The chosen path without extension, or ``None`` if cancelled.
+        """
+        formatext = self._view_3d_formatext()
+        if (
+            self.ti1 is not None
+            and self.ti1.filename
+            and os.path.isfile(self.ti1.filename)
+        ):
+            default_dir = os.path.dirname(self.ti1.filename)
+            default_file = os.path.basename(self.ti1.filename)
+        else:
+            default_dir = get_verified_path("last_vrml_path")[0]
+            default_file = os.path.basename(DEFAULTS["last_vrml_path"])
+        default_file = os.path.splitext(default_file)[0] + formatext
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            lang.getstr("save_as"),
+            os.path.join(default_dir, default_file),
+            f"{lang.getstr('view.3d')} (*{formatext})",
+        )
+        if not path:
+            return None
+        filename, ext = os.path.splitext(path)
+        if ext.lower() != formatext:
+            path += formatext
+        setcfg("last_vrml_path", path)
+        return filename
+
+    def _view_3d_formatext(self) -> str:
+        """Return the file extension for the configured 3D format.
+
+        Returns:
+            str: ``.wrz`` / ``.wrl`` for VRML, ``.x3d`` for X3D, ``.x3d.html``
+            for HTML.
+        """
+        view_3d_format = getcfg("3d.format")
+        if view_3d_format == "VRML":
+            return ".wrz" if getcfg("vrml.compress") else ".wrl"
+        formatext = ".x3d"
+        if view_3d_format == "HTML":
+            formatext += ".html"
+        return formatext
+
+    def tc_save_3d(self, base: str) -> list[str]:
+        """Write the diagnostic 3D file(s) and return their paths.
+
+        Runs on a worker thread; overwrites any existing per-colorspace files.
+
+        Args:
+            base (str): Output path without colorspace suffix or extension.
+
+        Returns:
+            list[str]: The written file paths.
+        """
+        view_3d_format = getcfg("3d.format")
+        formatext = self._view_3d_formatext()
+        colorspaces = []
+        if getcfg("tc_vrml_device"):
+            colorspaces.append(getcfg("tc_vrml_device_colorspace"))
+        if getcfg("tc_vrml_cie"):
+            colorspaces.append(getcfg("tc_vrml_cie_colorspace"))
+        paths = []
+        for colorspace in colorspaces:
+            path = f"{base} {colorspace}{formatext}"
+            self.ti1[0].export_3d(
+                path,
+                colorspace,
+                rgb_black_offset=getcfg("tc_vrml_black_offset"),
+                normalize_rgb_white=bool(getcfg("tc_vrml_use_D50")),
+                compress=formatext == ".wrz",
+                file_format=view_3d_format,
+            )
+            paths.append(path)
+        return paths
+
+    def _on_view_3d_done(self, result: object) -> None:
+        """Open the generated 3D file(s), or report an error (GUI thread).
+
+        Args:
+            result (object): The list of written paths, or an ``Exception``.
+        """
+        self._view_thread = None
+        self._close_progress()
+        self.tc_vrml_update_enabled()
+        if isinstance(result, Exception):
+            QMessageBox.critical(self, self.windowTitle(), str(result))
+            return
+        for path in result:
+            launch_file(path)
+
+    # -- progress helpers --------------------------------------------------
+
+    def _make_progress(self, message: str) -> QProgressDialog:
+        """Return a shown, indeterminate, un-cancellable modal progress dialog.
+
+        Args:
+            message (str): The label text.
+
+        Returns:
+            QProgressDialog: The dialog.
+        """
+        progress = QProgressDialog(message, "", 0, 0, self)
+        progress.setWindowTitle(self.windowTitle())
+        progress.setCancelButton(None)
+        progress.setWindowModality(Qt.WindowModal)
+        progress.show()
+        return progress
+
+    def _close_progress(self) -> None:
+        """Close and drop the active progress dialog, if any."""
+        if self._progress is not None:
+            self._progress.close()
+            self._progress = None
 
     # -- scripting ---------------------------------------------------------
 
