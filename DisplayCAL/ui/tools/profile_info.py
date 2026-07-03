@@ -433,15 +433,16 @@ class ProfileInfoWindow(BaseWindow):
         Returns:
             QWidget: The central widget holding the toolbar, views and table.
         """
-        # Top toolbar: view/mode selector, help (?) and save-plot buttons on
-        # the left, 3D export on the right (wx: [mode] [?] [Save] [3D] [v]).
+        # Top toolbar: all controls kept together and centred, in wx order —
+        # [mode] [?] [Save] [3D view] [format v].
         toolbar = QHBoxLayout()
+        toolbar.addStretch(1)
         toolbar.addWidget(self.view_combo)
         toolbar.addWidget(self.help_button)
         toolbar.addWidget(self.save_button)
-        toolbar.addStretch(1)
-        toolbar.addWidget(self.view_3d_format_combo)
         toolbar.addWidget(self.view_3d_button)
+        toolbar.addWidget(self.view_3d_format_combo)
+        toolbar.addStretch(1)
         # Give every toolbar control the same height (native combos and buttons
         # otherwise report slightly different heights).
         toolbar_widgets = (
