@@ -42,6 +42,10 @@ class Application(QApplication):
     ) -> None:
         super().__init__(argv if argv is not None else sys.argv)
         self.setApplicationName(PYNAME)
+        # Install the DisplayCAL palette/font (wx-style, keyed on OS theme).
+        from DisplayCAL.ui.theme import apply_theme
+
+        apply_theme(self)
         #: The primary window; set by the tool/frame that owns the app.
         self.top_window = None
         self.aboutToQuit.connect(self._run_exitfuncs)

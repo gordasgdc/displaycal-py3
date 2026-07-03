@@ -4,6 +4,10 @@ Draws per-channel input→output curves (calibration vcgt or tone-response) in t
 unit square, over a faint grid box and an optional linear reference diagonal.
 The point extraction lives in :mod:`DisplayCAL.ui.plot.curve_data`; this widget
 only renders.
+
+Background / grid / axis colours follow the OS light/dark theme (see
+:mod:`DisplayCAL.ui.theme`); the per-channel pen colours are data colours and
+stay constant.
 """
 
 from __future__ import annotations
@@ -14,18 +18,11 @@ import pyqtgraph as pg
 from qtpy.QtCore import Qt
 from qtpy.QtGui import QColor
 
-if TYPE_CHECKING:
-    from qtpy.QtWidgets import QWidget
+from DisplayCAL.ui.theme import CHANNEL_COLORS, plot_colors
 
-#: Pen colour per channel name.
-CHANNEL_COLORS = {
-    "R": QColor(229, 73, 73),
-    "G": QColor(73, 200, 73),
-    "B": QColor(96, 96, 255),
-    "Gray": QColor(204, 204, 204),
-}
-_LINEAR = QColor(128, 128, 128, 160)
-_BACKGROUND = QColor(40, 40, 40)
+if TYPE_CHECKING:
+    from qtpy.QtCore import QEvent
+    from qtpy.QtWidgets import QWidget
 
 
 class CurvePlot(pg.PlotWidget):
@@ -36,7 +33,10 @@ class CurvePlot(pg.PlotWidget):
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent, background=_BACKGROUND)
+        # Guards changeEvent, which pyqtgraph's base __init__ can trigger
+        # (via setBackgroundRole) before the plot item exists.
+        self._ready = False
+        super().__init__(parent)
         plot_item = self.getPlotItem()
         plot_item.showGrid(x=True, y=True, alpha=0.25)
         plot_item.hideButtons()
@@ -44,6 +44,43 @@ class CurvePlot(pg.PlotWidget):
         plot_item.setLabels(bottom="Input", left="Output")
         self.setXRange(0, 1, padding=0)
         self.setYRange(0, 1, padding=0)
+        self._channels: dict[str, list[tuple[float, float]]] = {}
+        self._show_linear = True
+        self._ready = True
+        self._apply_theme()
+
+    # -- theming -----------------------------------------------------------
+
+    def _apply_theme(self) -> None:
+        """Recolour the canvas, axes and grid from the current OS theme."""
+        colors = plot_colors(self)
+        self.setBackground(colors.background)
+        plot_item = self.getPlotItem()
+        for name in ("left", "bottom", "right", "top"):
+            axis = plot_item.getAxis(name)
+            axis.setPen(colors.foreground)
+            axis.setTextPen(colors.foreground)
+
+    def changeEvent(self, event: QEvent) -> None:  # noqa: N802 (Qt override)
+        """Re-theme and redraw when the application palette changes.
+
+        Args:
+            event (QEvent): The Qt change event.
+        """
+        from qtpy.QtCore import QEvent
+
+        super().changeEvent(event)
+        if not self._ready:
+            return
+        if event.type() in (
+            QEvent.PaletteChange,
+            QEvent.ApplicationPaletteChange,
+            QEvent.ThemeChange,
+        ):
+            self._apply_theme()
+            self.draw_curves(self._channels, self._show_linear)
+
+    # -- drawing -----------------------------------------------------------
 
     def draw_curves(
         self,
@@ -58,13 +95,16 @@ class CurvePlot(pg.PlotWidget):
             show_linear (bool): Whether to draw the linear (y=x) reference
                 diagonal.
         """
+        self._channels = channels
+        self._show_linear = show_linear
+        colors = plot_colors(self)
         self.clear()
         if show_linear:
             self.addItem(
                 pg.PlotCurveItem(
                     [0.0, 1.0],
                     [0.0, 1.0],
-                    pen=pg.mkPen(_LINEAR, width=1, style=Qt.DashLine),
+                    pen=pg.mkPen(colors.linear, width=1, style=Qt.DashLine),
                 )
             )
         for name, points in channels.items():
@@ -75,7 +115,7 @@ class CurvePlot(pg.PlotWidget):
                 pg.PlotCurveItem(
                     [p[0] for p in points],
                     [p[1] for p in points],
-                    pen=pg.mkPen(color, width=2),
+                    pen=pg.mkPen(QColor(color), width=2),
                     name=name,
                 )
             )

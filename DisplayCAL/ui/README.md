@@ -36,8 +36,23 @@ modules that have been ported; everything else still falls through to wx.
 | `scripting.py` | `ScriptingHostMixin`: scripting/IPC socket server | `wx_windows.BaseFrame` (`listen`/`message_handler`/…) |
 | `assets.py` | themed PNG → `QIcon`/`QPixmap` | `config.get_icon*` |
 | `file_drop.py` | `FileDropTarget` event filter (suffix→handler) | `wx_addons.FileDrop` |
+| `theme.py` | OS light/dark detection + plot colours | wx `BGCOLOUR`/`FGCOLOUR`/`GRIDCOLOUR` |
 | `plot/` | pyqtgraph-based plotting (gamut view + colorimetry) | `wx_enhanced_plot`, `GamutCanvas` |
 | `tools/` | standalone tools (one window + `main()` each) | `wx_*` tool modules |
+
+## Theming (`theme.py`)
+
+The legacy wx UI is hard-coded to a dark scheme (`BGCOLOUR = "#333333"`,
+`FGCOLOUR = "#999999"`, `GRIDCOLOUR = "#444444"`) regardless of the OS. The Qt
+UI instead **follows the operating system's light/dark preference**: the native
+Qt style themes the window chrome (panels, combos, labels, the info panel) from
+the OS automatically, so `theme.py` only supplies what pyqtgraph can't derive —
+the plot background/grid/axis/locus colours, picked from the *current* palette
+via `plot_colors(widget)`. In dark mode these mirror the old wx values; in light
+mode they invert to a light canvas. Plots re-theme live on OS-theme change (see
+each plot widget's `changeEvent`). Per-datum colours (RGB curve pens in
+`CHANNEL_COLORS`, gamut-hull vertex colours) are inherent to the data and stay
+constant in both schemes.
 
 ### Plotting (`plot/`)
 
@@ -80,15 +95,22 @@ module:
 ## Ported tools
 
 - **VRML-to-X3D converter** (`tools/vrml_to_x3d.py`) — complete.
-- **Profile info / gamut viewer** (`tools/profile_info.py`) — gamut view with
-  colorspace + white-point controls, profile load/drop, info panel. Still to
-  add: tone-response-curve view, profile comparison overlay,
-  rendering-intent/direction controls, 3D/VRML export.
+- **Profile info / gamut viewer** (`tools/profile_info.py`) — complete. Gamut
+  view with colorspace, white-point, rendering-intent and lookup-direction
+  controls; a comparison-profile overlay (built-in standard profiles or a
+  browsed one, drawn per `plot/gamut.py`'s existing index-1 styling); a
+  "Curves" view that embeds `tools/curve_viewer.py`'s `CurvePanel` for the
+  tone-response view; and 3D export (VRML/X3D/HTML) via
+  `worker.Worker.calculate_gamut` + `x3dom.vrmlfile2x3dfile`, run on a
+  `QThread`.
 - **Curve viewer** (`tools/curve_viewer.py`) — complete. Calibration (`vcgt`),
   tone-response (`*TRC`) and **measured** curves (live `xicclu`, with intent,
   lookup-direction — forward/inverse/backward — and cLUT/matrix controls);
   loads `.icc`/`.icm`/`.cal`; and a "show actual LUT" toggle that reads the live
-  video-card LUT back from the graphics card.
+  video-card LUT back from the graphics card. The controls-and-plot view
+  itself is a standalone `QWidget`, `CurvePanel`, so other tools can embed it
+  (see profile-info below); `CurveViewerWindow` is a thin window wrapper
+  adding the drop target and scripting.
 - **Synthetic ICC creator** (`tools/synth_profile.py`) — complete. Builds RGB or
   grayscale synthetic profiles from entered colorimetry (primaries, white/black
   point, luminance) and a transfer function (gamma, BT.1886, DICOM, L*,

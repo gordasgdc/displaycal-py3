@@ -23,18 +23,21 @@ from qtpy.QtGui import QColor
 
 from DisplayCAL import colormath
 from DisplayCAL.ui.plot.colorspaces import COLORSPACES, outline_curves
+from DisplayCAL.ui.theme import plot_colors
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from qtpy.QtCore import QEvent
     from qtpy.QtWidgets import QWidget
 
-#: Greys/whites reused from the wx canvas.
+#: Neutral greys reused from the wx canvas; legible in both light and dark
+#: themes (the spectral-locus outline and comparison-profile hull/whitepoint).
+#: The colour-temperature locus and canvas/axis colours instead come from
+#: :func:`DisplayCAL.ui.theme.plot_colors` so they follow the OS theme.
 _OUTLINE = QColor(102, 102, 102, 153)
-_LOCUS = QColor(255, 255, 255, 204)
 _COMPARISON = QColor(102, 102, 102, 255)
 _COMPARISON_WP = QColor(204, 204, 204, 102)
-_BACKGROUND = QColor(40, 40, 40)
 
 
 def _rgb(xyz: tuple[float, float, float]) -> QColor:
@@ -58,18 +61,59 @@ class GamutPlot(pg.PlotWidget):
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent, background=_BACKGROUND)
+        # Guards changeEvent, which pyqtgraph's base __init__ can trigger
+        # (via setBackgroundRole) before the plot item exists.
+        self._ready = False
+        super().__init__(parent)
         self.colorspace = "a*b*"
         self.pcs_data: list[list[tuple[float, float, float]]] = []
         self.profiles: dict[int, object] = {}
         # Segments per primary→secondary edge. NB: not named ``size`` because
         # that would shadow ``QWidget.size()``.
         self.segment_size = 40
+        # Remembered draw parameters, so a live OS theme change can redraw.
+        self._whitepoint = 1
+        self._show_outline = True
         plot_item = self.getPlotItem()
         plot_item.setAspectLocked(True)
         plot_item.showGrid(x=True, y=True, alpha=0.25)
         plot_item.hideButtons()
         plot_item.setMenuEnabled(False)
+        self._ready = True
+        self._apply_theme()
+
+    # -- theming -----------------------------------------------------------
+
+    def _apply_theme(self) -> None:
+        """Recolour the canvas and axes from the current OS theme."""
+        colors = plot_colors(self)
+        self.setBackground(colors.background)
+        plot_item = self.getPlotItem()
+        for name in ("left", "bottom", "right", "top"):
+            axis = plot_item.getAxis(name)
+            axis.setPen(colors.foreground)
+            axis.setTextPen(colors.foreground)
+
+    def changeEvent(self, event: QEvent) -> None:  # noqa: N802 (Qt override)
+        """Re-theme and redraw when the application palette changes.
+
+        Args:
+            event (QEvent): The Qt change event.
+        """
+        from qtpy.QtCore import QEvent
+
+        super().changeEvent(event)
+        if not self._ready:
+            return
+        if event.type() in (
+            QEvent.PaletteChange,
+            QEvent.ApplicationPaletteChange,
+            QEvent.ThemeChange,
+        ):
+            self._apply_theme()
+            if self.pcs_data:
+                self.draw_gamut(whitepoint=self._whitepoint,
+                                show_outline=self._show_outline)
 
     def set_data(
         self,
@@ -110,6 +154,8 @@ class GamutPlot(pg.PlotWidget):
         """
         if colorspace:
             self.colorspace = colorspace
+        self._whitepoint = whitepoint
+        self._show_outline = show_outline
         cfg = COLORSPACES[self.colorspace]
         self.clear()
         self.getPlotItem().setLabels(bottom=cfg.label_x, left=cfg.label_y)
@@ -197,7 +243,7 @@ class GamutPlot(pg.PlotWidget):
             kelvins = range(1667, 25001, 38)
             xyz = colormath.planckianCT2XYZ
         self._add_curve(
-            [cfg.convert(*xyz(k)) for k in kelvins], _LOCUS, 1.5
+            [cfg.convert(*xyz(k)) for k in kelvins], plot_colors(self).locus, 1.5
         )
 
     def _add_profile(

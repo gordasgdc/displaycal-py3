@@ -12,6 +12,11 @@ Loads an ICC profile and shows its tone curves with
 
 It also loads ``.cal`` calibration files and can show the live video-card LUT
 read back from the graphics card ("show actual LUT").
+
+The curve-and-controls view itself lives in :class:`CurvePanel`, a plain
+``QWidget`` with no window chrome, so other tools (e.g.
+:mod:`DisplayCAL.ui.tools.profile_info`) can embed the same tone-response view
+without depending on this module's standalone window.
 """
 
 from __future__ import annotations
@@ -57,12 +62,12 @@ if TYPE_CHECKING:
 #: wrapped in a fake profile).
 PROFILE_SUFFIXES = (".icc", ".icm", ".cal")
 
-#: Rendering intents offered for the measured tone response.
+#: Rendering intents offered for the measured tone response: lang key -> code.
 INTENTS = {
-    "relative_colorimetric": "r",
-    "absolute_colorimetric": "a",
-    "perceptual": "p",
-    "saturation": "s",
+    "gamap.intents.r": "r",
+    "gamap.intents.a": "a",
+    "gamap.intents.p": "p",
+    "gamap.intents.s": "s",
 }
 
 #: Direction code -> human label key (inverse of curve_data.DIRECTIONS).
@@ -138,15 +143,23 @@ class _LutReadThread(QThread):
             self._worker.wrapup(False)
 
 
-class CurveViewerWindow(BaseWindow):
-    """Window showing a profile's calibration / tone-response curves."""
+class CurvePanel(QWidget):
+    """Embeddable calibration / tone-response / measured curve view.
 
-    def __init__(self) -> None:
-        super().__init__(
-            name="curve-viewer",
-            title=lang.getstr("calibration.lut_viewer.title"),
-            icon_name=f"{APPNAME}-curve-viewer".lower(),
-        )
+    Owns its own :class:`~DisplayCAL.worker.Worker` and background threads, so
+    it can be dropped into any window (standalone or as one view among
+    several) without the host needing to know about ``xicclu`` or LUT
+    readback.
+
+    Args:
+        parent (QWidget | None): Optional parent widget.
+    """
+
+    #: Emitted whenever a new profile is displayed (user-loaded or read-back).
+    profile_changed = Signal(object)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
         self._profile: ICCProfile | None = None  # currently displayed
         self._user_profile: ICCProfile | None = None  # last loaded by the user
         self.worker = Worker()
@@ -175,27 +188,20 @@ class CurveViewerWindow(BaseWindow):
         self.status = QLabel("")
         self.plot = CurvePlot()
 
-        self.setCentralWidget(self._build_central())
-        self.resize(820, 720)
-        self._update_controls_visibility()
+        # Matches wx_lut_viewer.LUTFrame: a small top toolbar with just the
+        # mode selector, the plot filling the remaining space, and the
+        # rendering-intent/direction/CLUT/actual-LUT controls in a row below
+        # the plot (not above it).
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        mode_row = QHBoxLayout()
+        mode_row.addWidget(QLabel(lang.getstr("mode")))
+        mode_row.addWidget(self.mode_combo)
+        mode_row.addStretch(1)
+        layout.addLayout(mode_row)
+        layout.addWidget(self.plot, 1)
 
-        self.droptarget = FileDropTarget(
-            drophandlers=dict.fromkeys(PROFILE_SUFFIXES, self.load_profile),
-            parent=self,
-        )
-        self.droptarget.install_on(self)
-        self.init_menubar()
-
-    def _build_central(self) -> QWidget:
-        """Assemble the control bar and the curve plot.
-
-        Returns:
-            QWidget: The central widget holding the controls and curve plot.
-        """
         controls = QHBoxLayout()
-        controls.addWidget(QLabel(lang.getstr("mode")))
-        controls.addWidget(self.mode_combo)
-        controls.addSpacing(12)
         controls.addWidget(self.intent_label)
         controls.addWidget(self.intent_combo)
         controls.addWidget(self.direction_label)
@@ -205,12 +211,9 @@ class CurveViewerWindow(BaseWindow):
         controls.addWidget(self.actual_lut_check)
         controls.addStretch(1)
         controls.addWidget(self.status)
-
-        central = QWidget(self)
-        layout = QVBoxLayout(central)
         layout.addLayout(controls)
-        layout.addWidget(self.plot, 1)
-        return central
+
+        self._update_controls_visibility()
 
     def _update_controls_visibility(self) -> None:
         """Show intent/direction/CLUT controls only in the measured mode."""
@@ -227,7 +230,7 @@ class CurveViewerWindow(BaseWindow):
         self.direction_combo.setVisible(multi_direction)
         self.clut_check.setVisible(measured and has_clut)
 
-    # -- loading -----------------------------------------------------------
+    # -- loading -------------------------------------------------------------
 
     def load_profile(self, path: str) -> None:
         """Load an ICC profile or ``.cal`` file at ``path`` and show its curves.
@@ -248,25 +251,25 @@ class CurveViewerWindow(BaseWindow):
         self.actual_lut_check.blockSignals(True)
         self.actual_lut_check.setChecked(False)
         self.actual_lut_check.blockSignals(False)
-        self._set_profile(profile)
+        self.set_profile(profile)
 
-    def _set_profile(self, profile: ICCProfile) -> None:
+    def set_profile(self, profile: ICCProfile) -> None:
         """Display ``profile`` (user-loaded or read-back), repopulating modes.
 
         Args:
             profile (ICCProfile): The profile to display.
         """
         self._profile = profile
-        self.setWindowTitle(
-            f"{lang.getstr('calibration.lut_viewer.title')} — "
-            f"{profile.getDescription()}"
-        )
+        self.profile_changed.emit(profile)
 
         modes = available_curve_modes(profile)
         self.mode_combo.blockSignals(True)
         self.mode_combo.clear()
         for mode in modes:
-            self.mode_combo.addItem(lang.getstr(CURVE_MODES[mode]), mode)
+            label = lang.getstr(
+                CURVE_MODES[mode], default="Measured tone response"
+            )
+            self.mode_combo.addItem(label, mode)
         self.mode_combo.blockSignals(False)
 
         self.direction_combo.blockSignals(True)
@@ -292,7 +295,7 @@ class CurveViewerWindow(BaseWindow):
         """
         if not checked:
             if self._user_profile is not None:
-                self._set_profile(self._user_profile)
+                self.set_profile(self._user_profile)
             return
         if self._read_thread is not None and self._read_thread.isRunning():
             return
@@ -317,7 +320,7 @@ class CurveViewerWindow(BaseWindow):
             self.actual_lut_check.blockSignals(False)
             self.status.setText(f"{lang.getstr('error')}: {result}")
             return
-        self._set_profile(result)
+        self.set_profile(result)
 
     def _redraw(self) -> None:
         """Redraw the curves for the selected mode."""
@@ -361,6 +364,47 @@ class CurveViewerWindow(BaseWindow):
             return
         self.plot.draw_curves(result)
         self.status.setText(self._profile.getDescription())
+
+
+class CurveViewerWindow(BaseWindow):
+    """Standalone window wrapping :class:`CurvePanel` with file drop/scripting."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="curve-viewer",
+            title=lang.getstr("calibration.lut_viewer.title"),
+            icon_name=f"{APPNAME}-curve-viewer".lower(),
+        )
+        self.panel = CurvePanel(self)
+        self.panel.profile_changed.connect(self._on_profile_changed)
+        self.setCentralWidget(self.panel)
+        self.resize(820, 720)
+
+        self.droptarget = FileDropTarget(
+            drophandlers=dict.fromkeys(PROFILE_SUFFIXES, self.load_profile),
+            parent=self,
+        )
+        self.droptarget.install_on(self)
+        self.init_menubar()
+
+    def _on_profile_changed(self, profile: ICCProfile) -> None:
+        """Update the window title to reflect the displayed profile.
+
+        Args:
+            profile (ICCProfile): The newly displayed profile.
+        """
+        self.setWindowTitle(
+            f"{lang.getstr('calibration.lut_viewer.title')} — "
+            f"{profile.getDescription()}"
+        )
+
+    def load_profile(self, path: str) -> None:
+        """Load an ICC profile or ``.cal`` file at ``path``.
+
+        Args:
+            path (str): Path to an ``.icc``/``.icm`` profile or ``.cal`` file.
+        """
+        self.panel.load_profile(path)
 
     # -- scripting ---------------------------------------------------------
 

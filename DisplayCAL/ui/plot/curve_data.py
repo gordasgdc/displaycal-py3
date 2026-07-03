@@ -25,9 +25,14 @@ if TYPE_CHECKING:
     from DisplayCAL.worker import Worker
 
 #: Plot mode -> human label key (for UI). Order is the preferred default order.
+#: Mode key -> lang key. "vcgt"/"trc" reuse wx_lut_viewer's own labels
+#: ("Calibration curves"/"Tone response curves"); "measured" has no wx
+#: equivalent (wx always computes its "[rgb]TRC" curve via a live xicclu
+#: lookup, it doesn't distinguish a separate "raw tag data" vs. "measured"
+#: mode), so there's no existing translation for it.
 CURVE_MODES = {
-    "vcgt": "calibration_curves",
-    "trc": "tone_response_curves",
+    "vcgt": "vcgt",
+    "trc": "[rgb]TRC",
     "measured": "measured_tone_response",
 }
 
