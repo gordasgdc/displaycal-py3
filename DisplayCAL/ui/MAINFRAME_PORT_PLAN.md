@@ -168,13 +168,43 @@ the window. **Dropped wx-only workarounds:** the `_last_set_size` DPI-correction
 hack and the multi-X-screen / TwinView heuristics in `get_display` (Qt works in
 logical high-DPI coordinates), matching the other tools' simplifications.
 
-### Stage 2 — Measurement flow orchestration
+### Stage 2 — Measurement flow orchestration — **DONE**
 
 Port `setup_measurement`, `setup_patterngenerator`, the `measureframe`
 subprocess trio (`start_measureframe_subprocess`, `measureframe_subprocess`,
 `measureframe_consumer`), `setup_observer_ctrl`, `set_pending_function` /
 `call_pending_function`, against the Stage-0 extracted settings. No full main
 window yet — expose it as the engine the Qt main window and tools drive.
+
+**Landed:** `DisplayCAL/ui/measurement_flow.py`, a toolkit-neutral engine
+covered by `tests/test_ui_measurement_flow.py` (28 tests, no display/QApplication
+needed). It holds the load-bearing, testable core of the flow cluster:
+
+- `decide_presentation()` — the `setup_measurement` branch logic returning a
+  `PresentationMode` (`CALL_PENDING` for virtual/dry-run displays,
+  `SHOW_FRAME` in-process on macOS/Windows/frozen/Wayland-patch, `SUBPROCESS`
+  otherwise).
+- `build_measureframe_command()` / `run_measureframe_subprocess()` /
+  `interpret_measureframe_result()` — the subprocess trio's toolkit-neutral
+  parts. The command now launches the **Qt** `DisplayCAL.ui.measure_frame`, and
+  the `255` (Measure) / `0` (clean close) exit-code contract is honoured by that
+  frame's `main()` (updated in Stage 1's file). `run_measureframe_subprocess`
+  takes an `on_start` callback so the caller keeps the `Popen` for cancellation.
+- `observer_items()` — `setup_observer_ctrl`'s Argyll-version-dependent observer
+  label map, derived from `config.VALID_VALUES["observer"]`.
+- `MeasurementFlow` — the `set_pending_function` / `call_pending_function` state
+  machine (`set` / `take` / `clear` / `has_pending_function`) plus
+  `plan_measurement()`, which stages the pending function and returns the
+  presentation decision, keeping the `wrapup` flag out of the pending kwargs.
+
+**Deferred to the Qt main window (Pile 2 / window layer):** the pattern-generator
+setup **dialogs** (Prisma host prompt, madTPG / Resolve / Chromecast wait
+dialogs) are wx widget glue rebuilt natively later; `patterngenerator_kind()`
+captures only the toolkit-neutral choice of *which* flow a display needs. The
+threading around the subprocess (wx `delayedresult` → Qt `QThread`) and the
+`call_pending_function` window side-effects (hide/blank the frame, the 100 ms
+deferral → `QTimer.singleShot`) also belong to that layer, so the engine just
+holds and hands back the pending function.
 
 ### Stage 3 — Qt main window shell + settings tabs
 

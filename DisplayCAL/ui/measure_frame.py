@@ -799,8 +799,14 @@ class MeasureFrame(BaseWindow):
 def main() -> int:
     """Run the standalone Qt measurement-area frame.
 
+    This is the entry point the measurement-flow subprocess drives (see
+    :mod:`DisplayCAL.ui.measurement_flow`). The exit code is the contract with
+    the parent process: ``255`` means the user pressed **Measure** (proceed to
+    the pending measurement), ``0`` means the frame was closed/cancelled
+    cleanly. That mirrors the wx :mod:`DisplayCAL.wx_measure_frame` behaviour.
+
     Returns:
-        int: The Qt application exit code.
+        int: The measure-frame exit code (see :attr:`MeasureFrame.exitcode`).
     """
     config.initcfg()
     lang.init()
@@ -812,11 +818,22 @@ def main() -> int:
         check_lut_access=False, enumerate_ports=False
     )
     window = MeasureFrame()
-    window.measure_requested.connect(window.close)
+
+    def _request_measure() -> None:
+        """Signal the parent to run the pending measurement, then close."""
+        MeasureFrame.exitcode = 255
+        window.close()
+
+    window.measure_requested.connect(_request_measure)
     app.top_window = window
     window.show()
     window.listen()
-    return app.exec()
+    app.exec()
+    if MeasureFrame.exitcode != 255:
+        # A plain close/cancel reports success (0); the default of 1 only
+        # survives if the process is killed before the event loop returns.
+        MeasureFrame.exitcode = 0
+    return MeasureFrame.exitcode
 
 
 if __name__ == "__main__":
