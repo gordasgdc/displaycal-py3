@@ -206,13 +206,43 @@ threading around the subprocess (wx `delayedresult` → Qt `QThread`) and the
 deferral → `QTimer.singleShot`) also belong to that layer, so the engine just
 holds and hands back the pending function.
 
-### Stage 3 — Qt main window shell + settings tabs
+### Stage 3 — Qt main window shell + settings tabs — **shell landed**
 
 Build `DisplayCAL/ui/main_window.py` (`MainWindow(BaseWindow)`): the tabbed
 layout, menubar, display/instrument selectors, and the calibration/profiling
 settings controls, wired to the Stage-0 settings module and Stage-2 flow.
 Embeds the already-ported tool panels (curve viewer's `CurvePanel`, profile
 info, etc.) where the wx UI opens child frames. Gated behind `--qt`.
+
+Because `MainFrame` is ~19,700 lines, Stage 3 lands as vertical sub-slices that
+each populate one tab; the shell + first tab are the first slice.
+
+**Landed (shell + Display & Instrument tab):** `DisplayCAL/ui/main_window.py`,
+covered by `tests/test_ui_main_window.py` (10 tests, headless offscreen). It
+provides:
+
+- `MainWindow(BaseWindow)` with menubar and geometry persistence (from
+  `BaseWindow`), a header-less vertical layout of tab bar + stacked panels +
+  action-button bar.
+- A tab bar of exclusive `QToolButton` toggles (Display, Calibration, Profiling,
+  3D LUT) switching a `QStackedWidget` — the Qt equivalent of the wx custom
+  `TabButton` / show-hide-settings-panel mechanism.
+- The **Display & Instrument** tab fully wired: display / instrument (comport) /
+  observer `QComboBox`es populated from `Worker.enumerate_displays_and_ports`
+  and `config`, persisting `display.number` / `comport.number` / `observer`
+  through an `_updating` re-entrancy guard (so repopulation never clobbers the
+  stored selection). The name-marshalling (`display_items`, `instrument_items`)
+  is factored into pure module functions and unit-tested; observer items reuse
+  Stage-2 `observer_items()`.
+- The calibrate / calibrate&profile / profile action buttons (present but
+  disabled — Stage 4 wires them to `flow`, a `MeasurementFlow`).
+- Gated behind `--qt`: `DisplayCAL/main.py::_get_qt_main(None)` now returns this
+  window's `main`, so `DISPLAYCAL_UI=qt` launches it instead of the wx frame.
+
+**Follow-up slices (next):** populate the Calibration, Profiling and 3D LUT tabs
+(currently scaffolded placeholder panels), embed the ported tool panels, and
+build the header / menu detail. The `get_*` settings getters deferred from
+Stage 0 land here as their Qt controls are added.
 
 ### Stage 4 — Calibrate / measure / profile actions
 

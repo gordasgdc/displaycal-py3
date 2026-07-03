@@ -873,6 +873,11 @@ def _get_qt_main(module: str) -> Callable[[], int] | None:
     Returns:
         Callable | None: The Qt entry point, or ``None`` if not yet ported.
     """
+    if not module:
+        # The main application window (Stage 3 shell).
+        from DisplayCAL.ui.main_window import main
+
+        return main
     if module == "VRML-to-X3D-converter":
         from DisplayCAL.ui.tools.vrml_to_x3d import main
 
