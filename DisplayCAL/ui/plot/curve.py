@@ -45,9 +45,37 @@ class CurvePlot(pg.PlotWidget):
         self.setXRange(0, 1, padding=0)
         self.setYRange(0, 1, padding=0)
         self._channels: dict[str, list[tuple[float, float]]] = {}
+        self._hidden: set[str] = set()
         self._show_linear = True
+        self._x_range = (0.0, 1.0)
+        self._y_range = (0.0, 1.0)
+        self._x_label = "Input"
+        self._y_label = "Output"
         self._ready = True
         self._apply_theme()
+
+    def set_channel_hidden(self, name: str, hidden: bool) -> None:
+        """Show or hide a single channel curve without recomputing its data.
+
+        Lets a channel-toggle checkbox filter the already-drawn curves (e.g. the
+        measured tone response, which is expensive to recompute).
+
+        Args:
+            name (str): Channel name (``"R"``/``"G"``/``"B"`` …).
+            hidden (bool): Whether to hide the channel.
+        """
+        if hidden:
+            self._hidden.add(name)
+        else:
+            self._hidden.discard(name)
+        self.draw_curves(
+            self._channels,
+            self._show_linear,
+            self._x_range,
+            self._y_range,
+            self._x_label,
+            self._y_label,
+        )
 
     # -- theming -----------------------------------------------------------
 
@@ -78,7 +106,14 @@ class CurvePlot(pg.PlotWidget):
             QEvent.ThemeChange,
         ):
             self._apply_theme()
-            self.draw_curves(self._channels, self._show_linear)
+            self.draw_curves(
+                self._channels,
+                self._show_linear,
+                self._x_range,
+                self._y_range,
+                self._x_label,
+                self._y_label,
+            )
 
     # -- drawing -----------------------------------------------------------
 
@@ -86,29 +121,41 @@ class CurvePlot(pg.PlotWidget):
         self,
         channels: dict[str, list[tuple[float, float]]],
         show_linear: bool = True,
+        x_range: tuple[float, float] = (0.0, 1.0),
+        y_range: tuple[float, float] = (0.0, 1.0),
+        x_label: str = "Input",
+        y_label: str = "Output",
     ) -> None:
         """Draw the given per-channel curves.
 
         Args:
             channels (dict[str, list[tuple[float, float]]]):
-                ``{channel_name: [(x, y), ...]}`` with values in 0..1.
-            show_linear (bool): Whether to draw the linear (y=x) reference
-                diagonal.
+                ``{channel_name: [(x, y), ...]}`` in the axis units below.
+            show_linear (bool): Whether to draw the linear reference diagonal.
+            x_range (tuple[float, float]): X-axis ``(min, max)``.
+            y_range (tuple[float, float]): Y-axis ``(min, max)``.
+            x_label (str): X-axis label.
+            y_label (str): Y-axis label.
         """
         self._channels = channels
         self._show_linear = show_linear
+        self._x_range = x_range
+        self._y_range = y_range
+        self._x_label = x_label
+        self._y_label = y_label
         colors = plot_colors(self)
         self.clear()
+        self.getPlotItem().setLabels(bottom=x_label, left=y_label)
         if show_linear:
             self.addItem(
                 pg.PlotCurveItem(
-                    [0.0, 1.0],
-                    [0.0, 1.0],
+                    [x_range[0], x_range[1]],
+                    [y_range[0], y_range[1]],
                     pen=pg.mkPen(colors.linear, width=1, style=Qt.DashLine),
                 )
             )
         for name, points in channels.items():
-            if not points:
+            if not points or name in self._hidden:
                 continue
             color = CHANNEL_COLORS.get(name, CHANNEL_COLORS["Gray"])
             self.addItem(
@@ -119,5 +166,5 @@ class CurvePlot(pg.PlotWidget):
                     name=name,
                 )
             )
-        self.setXRange(0, 1, padding=0)
-        self.setYRange(0, 1, padding=0)
+        self.setXRange(*x_range, padding=0)
+        self.setYRange(*y_range, padding=0)

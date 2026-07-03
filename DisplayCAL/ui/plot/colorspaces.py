@@ -56,20 +56,15 @@ def _scaled(func: Callable, drop_first: bool = True) -> Callable:
     return convert
 
 
-#: Registry of supported gamut projections, keyed by colorspace name.
+#: Registry of supported gamut projections, keyed by colorspace name. Ordered
+#: to match wx_profile_info's colorspace choice list (CIE spaces first, then
+#: DIN99*, ICtCp, IPT, Lpt).
 COLORSPACES: dict[str, GamutColorspace] = {
     "a*b*": GamutColorspace(
         "a*", "b*", (-150.0, -150.0, 150.0, 150.0), 50, _scaled(colormath.XYZ2Lab)
     ),
-    "Lpt": GamutColorspace(
-        "p", "t", (-150.0, -150.0, 150.0, 150.0), 50, _scaled(colormath.XYZ2Lpt)
-    ),
-    "xy": GamutColorspace(
-        "x",
-        "y",
-        (-0.05, -0.05, 0.75, 0.85),
-        0.1,
-        lambda x, y, z: tuple(colormath.XYZ2xyY(x, y, z)[:2]),
+    "u*v*": GamutColorspace(
+        "u*", "v*", (-150.0, -150.0, 150.0, 150.0), 50, _scaled(colormath.XYZ2Luv)
     ),
     "u'v'": GamutColorspace(
         "u'",
@@ -78,8 +73,12 @@ COLORSPACES: dict[str, GamutColorspace] = {
         0.1,
         lambda x, y, z: tuple(colormath.XYZ2Lu_v_(x, y, z)[1:]),
     ),
-    "u*v*": GamutColorspace(
-        "u*", "v*", (-150.0, -150.0, 150.0, 150.0), 50, _scaled(colormath.XYZ2Luv)
+    "xy": GamutColorspace(
+        "x",
+        "y",
+        (-0.05, -0.05, 0.75, 0.85),
+        0.1,
+        lambda x, y, z: tuple(colormath.XYZ2xyY(x, y, z)[:2]),
     ),
     "DIN99": GamutColorspace(
         "a99", "b99", (-50.0, -50.0, 50.0, 50.0), 25, _scaled(colormath.XYZ2DIN99)
@@ -106,6 +105,9 @@ COLORSPACES: dict[str, GamutColorspace] = {
         (-1.0, -1.0, 1.0, 1.0),
         0.25,
         lambda x, y, z: tuple(colormath.XYZ2IPT(x, y, z)[1:]),
+    ),
+    "Lpt": GamutColorspace(
+        "p", "t", (-150.0, -150.0, 150.0, 150.0), 50, _scaled(colormath.XYZ2Lpt)
     ),
 }
 

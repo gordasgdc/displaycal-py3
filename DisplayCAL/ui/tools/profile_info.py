@@ -44,6 +44,7 @@ from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
 from DisplayCAL.ui.plot.colorspaces import COLORSPACES
+from DisplayCAL.ui.plot.curve_data import CURVE_MODES, available_curve_modes
 from DisplayCAL.ui.plot.gamut import GamutPlot
 from DisplayCAL.ui.plot.gamut_data import compute_profile_gamut, is_supported
 from DisplayCAL.ui.theme import label_color
@@ -270,10 +271,13 @@ class ProfileInfoWindow(BaseWindow):
             self._on_comparison_selected
         )
 
-        self.view_combo = _bounded_combo(contents_length=8)
-        self.view_combo.addItem(lang.getstr("gamut"), "gamut")
-        self.view_combo.addItem(lang.getstr("calibration.lut_viewer.title"), "curves")
-        self.view_combo.currentIndexChanged.connect(self._on_view_changed)
+        # Single plot-mode combo, matching wx ``plot_mode_select``: one entry
+        # per available tone-curve mode (vcgt / [rgb]TRC / measured) followed
+        # by a trailing ``gamut`` entry. Populated per profile in
+        # ``_populate_mode_combo``; gamut is always last.
+        self.mode_combo = _bounded_combo(contents_length=8)
+        self.mode_combo.addItem(lang.getstr("gamut"), "gamut")
+        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
 
         # Toolbar help (?) and save-plot buttons, matching wx's [?] [Save].
         self.help_button = QPushButton("?")
@@ -294,7 +298,15 @@ class ProfileInfoWindow(BaseWindow):
         self.gamut_status_label.setAlignment(Qt.AlignCenter)
 
         self.info = self._build_info_table()
-        self.curve_panel = CurvePanel()
+        # The embedded curve panel is driven by the shared mode combo above, so
+        # hide its own mode selector. The "show actual LUT" option is a
+        # standalone curve-viewer feature only (wx's profile-info omits it). The
+        # cursor readout is shown in this window's shared ``coords_label`` (same
+        # place as the gamut view), not the panel's own, so hide the latter.
+        self.curve_panel = CurvePanel(
+            show_mode_selector=False, show_actual_lut=False, show_coords=False
+        )
+        self.curve_panel.cursor_moved.connect(self.coords_label.setText)
 
         self.view_3d_format_combo = _bounded_combo(contents_length=6)
         self.view_3d_format_combo.addItems(config.VALID_VALUES["3d.format"])
@@ -381,30 +393,50 @@ class ProfileInfoWindow(BaseWindow):
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(4, 1)
 
-        legend = QLabel(
-            "+  {}        ×  {} ({})".format(  # noqa: RUF001 (cross marker glyph)
-                lang.getstr("whitepoint"),
+        # Whitepoint legend, split so the comparison (cross) part can be hidden
+        # independently of the profile (plus) part (wx whitepoint_legend vs.
+        # comparison_whitepoint_legend).
+        self.whitepoint_legend = QLabel(f"+  {lang.getstr('whitepoint')}")
+        self.comparison_whitepoint_legend = QLabel(
+            "×  {} ({})".format(  # noqa: RUF001 (cross marker glyph)
                 lang.getstr("whitepoint"),
                 lang.getstr("comparison_profile"),
             )
         )
-        legend.setStyleSheet(f"color: {label_color(self).name()};")
-        legend.setAlignment(Qt.AlignCenter)
-        grid.addWidget(legend, 0, 1, 1, 3)
+        for legend in (self.whitepoint_legend, self.comparison_whitepoint_legend):
+            legend.setStyleSheet(f"color: {label_color(self).name()};")
+        legend_row = QHBoxLayout()
+        legend_row.addStretch(1)
+        legend_row.addWidget(self.whitepoint_legend)
+        legend_row.addSpacing(20)
+        legend_row.addWidget(self.comparison_whitepoint_legend)
+        legend_row.addStretch(1)
+        grid.addLayout(legend_row, 0, 1, 1, 3)
+
+        # Line-style markers kept as attributes so their visibility can track
+        # the relevant control (wx colorspace_outline_bmp / whitepoint_bmp /
+        # comparison_profile_bmp).
+        self.colorspace_marker = self._marker("—")
+        self.whitepoint_marker = self._marker("—")
+        self.comparison_marker = self._marker("=")
 
         rows = [
-            ("—", lang.getstr("colorspace"), self.colorspace_combo),
-            ("", "", self.outline_check),
+            (self.colorspace_marker, lang.getstr("colorspace"), self.colorspace_combo),
+            (None, "", self.outline_check),
             (
-                "",
+                self.whitepoint_marker,
                 lang.getstr("whitepoint.colortemp.locus.curve"),
                 self.whitepoint_combo,
             ),
-            ("=", lang.getstr("comparison_profile"), self.comparison_combo),
-            ("", lang.getstr("rendering_intent"), self.intent_combo),
+            (
+                self.comparison_marker,
+                lang.getstr("comparison_profile"),
+                self.comparison_combo,
+            ),
+            (None, lang.getstr("rendering_intent"), self.intent_combo),
             # wx gives the gamut direction combo no label; its items
             # ("Device → A2B → PCS" …) are self-describing.
-            ("", "", self.direction_combo),
+            (None, "", self.direction_combo),
         ]
         for field in (
             self.colorspace_combo,
@@ -415,12 +447,28 @@ class ProfileInfoWindow(BaseWindow):
         ):
             field.setMinimumWidth(240)
         for row, (marker, label, field) in enumerate(rows, start=1):
-            if marker:
-                grid.addWidget(self._marker(marker), row, 1)
+            if marker is not None:
+                grid.addWidget(marker, row, 1)
             if label:
                 grid.addWidget(QLabel(label), row, 2)
             grid.addWidget(field, row, 3)
+        self._update_gamut_legend()
         return grid
+
+    def _update_gamut_legend(self) -> None:
+        """Show/hide the gamut legend markers to match wx.
+
+        * colorspace outline marker — only when "show outline" is checked,
+        * whitepoint locus marker — only when a colour-temperature locus is set,
+        * comparison marker and its comparison-whitepoint legend — only when a
+          comparison profile is selected.
+        """
+        self.colorspace_marker.setVisible(self.outline_check.isChecked())
+        has_locus = WHITEPOINTS.get(self.whitepoint_combo.currentText(), 0) != 0
+        self.whitepoint_marker.setVisible(has_locus)
+        has_comparison = self._comparison_profile is not None
+        self.comparison_marker.setVisible(has_comparison)
+        self.comparison_whitepoint_legend.setVisible(has_comparison)
 
     def _build_central(self) -> QWidget:
         """Assemble the toolbar, plot/curve views, controls and info table.
@@ -437,7 +485,7 @@ class ProfileInfoWindow(BaseWindow):
         # [mode] [?] [Save] [3D view] [format v].
         toolbar = QHBoxLayout()
         toolbar.addStretch(1)
-        toolbar.addWidget(self.view_combo)
+        toolbar.addWidget(self.mode_combo)
         toolbar.addWidget(self.help_button)
         toolbar.addWidget(self.save_button)
         toolbar.addWidget(self.view_3d_button)
@@ -446,7 +494,7 @@ class ProfileInfoWindow(BaseWindow):
         # Give every toolbar control the same height (native combos and buttons
         # otherwise report slightly different heights).
         toolbar_widgets = (
-            self.view_combo,
+            self.mode_combo,
             self.help_button,
             self.save_button,
             self.view_3d_format_combo,
@@ -528,6 +576,7 @@ class ProfileInfoWindow(BaseWindow):
             return
         self._show_info(profile, computing=True)
         self.curve_panel.set_profile(profile)
+        self._populate_mode_combo(profile)
         if not is_supported(profile):
             self._show_info(profile, computing=False)
             return
@@ -590,6 +639,7 @@ class ProfileInfoWindow(BaseWindow):
 
     def _recompute(self) -> None:
         """Recompute the gamut(s) for the current profile/intent/direction."""
+        self._update_gamut_legend()
         if self._profile is None or not is_supported(self._profile):
             return
         if self._thread is not None and self._thread.isRunning():
@@ -662,6 +712,7 @@ class ProfileInfoWindow(BaseWindow):
 
     def _redraw(self) -> None:
         """Redraw the gamut for the current control selections."""
+        self._update_gamut_legend()
         if not self._pcs_data:
             return
         self.plot.draw_gamut(
@@ -670,16 +721,49 @@ class ProfileInfoWindow(BaseWindow):
             show_outline=self.outline_check.isChecked(),
         )
 
-    def _on_view_changed(self) -> None:
-        """Switch the central stack between the gamut and curves pages.
+    def _populate_mode_combo(self, profile: ICCProfile) -> None:
+        """Rebuild the plot-mode combo for ``profile`` (curve modes + gamut).
 
-        Each page owns its own controls (the gamut page's colorspace/
-        whitepoint/intent/direction/comparison row are laid out inside it),
-        so switching pages hides/shows them automatically — no separate
-        visibility bookkeeping needed.
+        Mirrors wx ``plot_mode_select``: one entry per available tone-curve
+        mode (vcgt / [rgb]TRC / measured), then a trailing ``gamut`` entry.
+        Preserves the current selection where possible, else falls back to
+        gamut (the last entry), as in wx.
+
+        Args:
+            profile (ICCProfile): The profile whose modes to offer.
         """
-        is_curves = self.view_combo.currentData() == "curves"
-        self.views.setCurrentIndex(1 if is_curves else 0)
+        previous = self.mode_combo.currentData()
+        self.mode_combo.blockSignals(True)
+        self.mode_combo.clear()
+        for mode in available_curve_modes(profile):
+            label = lang.getstr(CURVE_MODES[mode], default="Measured tone response")
+            self.mode_combo.addItem(label, mode)
+        self.mode_combo.addItem(lang.getstr("gamut"), "gamut")
+        index = self.mode_combo.findData(previous)
+        self.mode_combo.setCurrentIndex(
+            index if index >= 0 else self.mode_combo.count() - 1
+        )
+        self.mode_combo.blockSignals(False)
+        self._on_mode_changed()
+
+    def _on_mode_changed(self) -> None:
+        """Switch the central stack to the gamut or curve view for the mode.
+
+        Gamut mode shows the gamut page and its 3D-export controls; a curve
+        mode shows the embedded ``CurvePanel`` driven to that mode and hides
+        the 3D controls — matching wx ``plot_mode_select``. Each page owns its
+        own controls, so switching pages hides/shows them automatically.
+        """
+        mode = self.mode_combo.currentData()
+        is_gamut = mode == "gamut"
+        self.views.setCurrentIndex(0 if is_gamut else 1)
+        self.view_3d_button.setVisible(is_gamut)
+        self.view_3d_format_combo.setVisible(is_gamut)
+        # Clear the shared readout so the previous view's last cursor position
+        # doesn't linger until the mouse moves over the newly shown plot.
+        self.coords_label.setText("")
+        if not is_gamut:
+            self.curve_panel.set_mode(mode)
 
     def _on_mouse_moved(self, pos: object) -> None:
         """Update the coordinate readout as the mouse moves over the plot.
@@ -740,7 +824,7 @@ class ProfileInfoWindow(BaseWindow):
         """Save the current plot view as an image (the wx ``Save`` button)."""
         # Grab whichever plot is showing (gamut page vs the curve panel).
         target = self.plot if self.views.currentIndex() == 0 else self.curve_panel.plot
-        default = f"{self.view_combo.currentText()}.png"
+        default = f"{self.mode_combo.currentText()}.png"
         path, _ = QFileDialog.getSaveFileName(
             self,
             lang.getstr("save_as"),

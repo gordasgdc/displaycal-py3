@@ -25,7 +25,7 @@ import os
 import sys
 from typing import TYPE_CHECKING
 
-from qtpy.QtCore import QThread, Signal
+from qtpy.QtCore import Qt, QThread, Signal
 from qtpy.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -48,6 +48,7 @@ from DisplayCAL.ui.plot.curve_data import (
     DIRECTIONS,
     available_curve_modes,
     available_directions,
+    curve_display,
     extract_curves,
     load_profile_or_cal,
     measured_tone_response,
@@ -153,15 +154,32 @@ class CurvePanel(QWidget):
 
     Args:
         parent (QWidget | None): Optional parent widget.
+        show_mode_selector (bool): Show the built-in mode (vcgt / [rgb]TRC /
+            measured) selector row. Hosts that drive the mode from their own
+            combo (e.g. :mod:`DisplayCAL.ui.tools.profile_info`) pass ``False``
+            and call :meth:`set_mode`.
     """
 
     #: Emitted whenever a new profile is displayed (user-loaded or read-back).
     profile_changed = Signal(object)
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    #: Emitted with the formatted ``"x   y"`` cursor readout ("" when off-plot),
+    #: so a host can show it in its own status area instead of the built-in one.
+    cursor_moved = Signal(str)
+
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        show_mode_selector: bool = True,
+        show_actual_lut: bool = True,
+        show_coords: bool = True,
+    ) -> None:
         super().__init__(parent)
         self._profile: ICCProfile | None = None  # currently displayed
         self._user_profile: ICCProfile | None = None  # last loaded by the user
+        # Last drawn curves in normalised (0..1) form, so re-scaling the axes
+        # (e.g. toggling L*) doesn't recompute the measured response.
+        self._raw_curves: dict[str, list[tuple[float, float]]] = {}
         self.worker = Worker()
         self._thread: _MeasuredThread | None = None
         self._read_thread: _LutReadThread | None = None
@@ -169,8 +187,26 @@ class CurvePanel(QWidget):
         self.mode_combo = QComboBox()
         self.mode_combo.currentIndexChanged.connect(self._redraw)
 
+        # wx "L* →": plot the tone response against perceptual L* (default) or
+        # linear luminance. Re-scales the axes only, so no recompute.
+        self.show_as_L = QCheckBox("L* →")
+        self.show_as_L.setChecked(True)
+        self.show_as_L.toggled.connect(self._render)
+
+        self._show_actual_lut = show_actual_lut
         self.actual_lut_check = QCheckBox(lang.getstr("calibration.show_actual_lut"))
         self.actual_lut_check.toggled.connect(self._on_actual_lut_toggled)
+
+        # Per-channel R/G/B toggles (wx ``add_toggles``): filter which primaries
+        # are drawn without recomputing the (possibly expensive) curve data.
+        self.channel_checks: dict[str, QCheckBox] = {}
+        for name in ("R", "G", "B"):
+            check = QCheckBox(name)
+            check.setChecked(True)
+            check.toggled.connect(
+                lambda checked, n=name: self.plot.set_channel_hidden(n, not checked)
+            )
+            self.channel_checks[name] = check
 
         # Controls shown only for the measured tone response.
         self.intent_label = QLabel(lang.getstr("rendering_intent"))
@@ -186,7 +222,13 @@ class CurvePanel(QWidget):
         self.clut_check.toggled.connect(self._redraw)
 
         self.status = QLabel("")
+        # Live input/output readout under the cursor (wx point labels). Shown in
+        # the panel's own controls row unless a host opts to display it itself
+        # (``show_coords=False``) via the ``cursor_moved`` signal.
+        self._show_coords = show_coords
+        self.coords_label = QLabel("")
         self.plot = CurvePlot()
+        self.plot.scene().sigMouseMoved.connect(self._on_mouse_moved)
 
         # Matches wx_lut_viewer.LUTFrame: a small top toolbar with just the
         # mode selector, the plot filling the remaining space, and the
@@ -194,25 +236,75 @@ class CurvePanel(QWidget):
         # the plot (not above it).
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        mode_row = QHBoxLayout()
+        self.mode_row = QWidget()
+        mode_row = QHBoxLayout(self.mode_row)
+        mode_row.setContentsMargins(0, 0, 0, 0)
         mode_row.addWidget(QLabel(lang.getstr("mode")))
         mode_row.addWidget(self.mode_combo)
         mode_row.addStretch(1)
-        layout.addLayout(mode_row)
+        self.mode_row.setVisible(show_mode_selector)
+        layout.addWidget(self.mode_row)
         layout.addWidget(self.plot, 1)
 
+        # Centred L*/channel toggles below the plot (wx cbox_sizer): the L*
+        # toggle first, then the R/G/B primaries.
+        self.channel_row = QWidget()
+        channel_row = QHBoxLayout(self.channel_row)
+        channel_row.setContentsMargins(0, 0, 0, 0)
+        channel_row.addStretch(1)
+        channel_row.addWidget(self.show_as_L)
+        channel_row.addSpacing(12)
+        for check in self.channel_checks.values():
+            channel_row.addWidget(check)
+        channel_row.addStretch(1)
+        layout.addWidget(self.channel_row)
+
+        # Measured-only controls, stacked vertically (each label/field on its
+        # own row) so they don't widen the panel the way a single side-by-side
+        # row does. Centred as a block under the channel toggles.
+        self.intent_row = QWidget()
+        intent_row = QHBoxLayout(self.intent_row)
+        intent_row.setContentsMargins(0, 0, 0, 0)
+        intent_row.addWidget(self.intent_label)
+        intent_row.addWidget(self.intent_combo, 1)
+        self.direction_row = QWidget()
+        direction_row = QHBoxLayout(self.direction_row)
+        direction_row.setContentsMargins(0, 0, 0, 0)
+        direction_row.addWidget(self.direction_label)
+        direction_row.addWidget(self.direction_combo, 1)
+
+        # Right-align both labels to a common width so their combos line up.
+        label_width = max(
+            self.intent_label.sizeHint().width(),
+            self.direction_label.sizeHint().width(),
+        )
+        for label in (self.intent_label, self.direction_label):
+            label.setMinimumWidth(label_width)
+            label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+        self.measured_controls = QWidget()
+        measured_controls = QVBoxLayout(self.measured_controls)
+        measured_controls.setContentsMargins(0, 0, 0, 0)
+        measured_controls.addWidget(self.intent_row)
+        measured_controls.addWidget(self.direction_row)
+        measured_controls.addWidget(self.clut_check)
+
+        measured_row = QHBoxLayout()
+        measured_row.addStretch(1)
+        measured_row.addWidget(self.measured_controls)
+        measured_row.addStretch(1)
+        layout.addLayout(measured_row)
+
         controls = QHBoxLayout()
-        controls.addWidget(self.intent_label)
-        controls.addWidget(self.intent_combo)
-        controls.addWidget(self.direction_label)
-        controls.addWidget(self.direction_combo)
-        controls.addWidget(self.clut_check)
-        controls.addSpacing(12)
+        if show_coords:
+            controls.addWidget(self.coords_label)
+        controls.addStretch(1)
         controls.addWidget(self.actual_lut_check)
         controls.addStretch(1)
         controls.addWidget(self.status)
         layout.addLayout(controls)
 
+        self.actual_lut_check.setVisible(show_actual_lut)
         self._update_controls_visibility()
 
     def _update_controls_visibility(self) -> None:
@@ -224,11 +316,39 @@ class CurvePanel(QWidget):
         )
         # Direction is only worth offering when there is more than one.
         multi_direction = measured and self.direction_combo.count() > 1
-        self.intent_label.setVisible(measured)
-        self.intent_combo.setVisible(measured)
-        self.direction_label.setVisible(multi_direction)
-        self.direction_combo.setVisible(multi_direction)
+        self.intent_row.setVisible(measured)
+        self.direction_row.setVisible(multi_direction)
         self.clut_check.setVisible(measured and has_clut)
+        self.measured_controls.setVisible(measured)
+        # L* toggle only applies to the tone response (trc/measured), whose
+        # X axis is the perceptual/linear response; vcgt is device in/out.
+        self.show_as_L.setVisible(self.mode_combo.currentData() in ("trc", "measured"))
+
+    def _update_channel_row(self) -> None:
+        """Show a channel toggle only for channels currently plotted.
+
+        Called after each draw, once ``CurvePlot`` holds the new curve data.
+        """
+        channels = self.plot._channels
+        for name, check in self.channel_checks.items():
+            check.setVisible(name in channels)
+        self.channel_row.setVisible(any(n in channels for n in self.channel_checks))
+
+    def _on_mouse_moved(self, pos: object) -> None:
+        """Update the input/output readout as the cursor moves over the plot.
+
+        Args:
+            pos (object): The scene position emitted by pyqtgraph.
+        """
+        plot_item = self.plot.getPlotItem()
+        if plot_item.sceneBoundingRect().contains(pos):
+            point = plot_item.vb.mapSceneToView(pos)
+            text = f"{point.x():.1f}   {point.y():.1f}"
+        else:
+            text = ""
+        if self._show_coords:
+            self.coords_label.setText(text)
+        self.cursor_moved.emit(text)
 
     # -- loading -------------------------------------------------------------
 
@@ -283,9 +403,33 @@ class CurvePanel(QWidget):
 
         if not modes:
             self.plot.draw_curves({})
+            self._update_channel_row()
             self.status.setText(lang.getstr("profile.no_vcgt"))
             return
         self._redraw()
+
+    def set_mode(self, mode: str) -> bool:
+        """Select a tone-curve mode by key, redrawing if it changed.
+
+        Lets a host that hides the built-in selector (``show_mode_selector=
+        False``) drive the mode from its own combo.
+
+        Args:
+            mode (str): A ``CURVE_MODES`` key (``vcgt`` / ``trc`` / ``measured``).
+
+        Returns:
+            bool: ``True`` if the mode is available and selected, else ``False``.
+        """
+        index = self.mode_combo.findData(mode)
+        if index < 0:
+            return False
+        if index == self.mode_combo.currentIndex():
+            # currentIndexChanged won't fire; redraw explicitly (the host may
+            # have switched away and back to this already-current mode).
+            self._redraw()
+        else:
+            self.mode_combo.setCurrentIndex(index)
+        return True
 
     def _on_actual_lut_toggled(self, checked: bool) -> None:
         """Switch between the loaded profile and the live video-card LUT.
@@ -323,7 +467,7 @@ class CurvePanel(QWidget):
         self.set_profile(result)
 
     def _redraw(self) -> None:
-        """Redraw the curves for the selected mode."""
+        """Recompute the raw curves for the selected mode, then render them."""
         if self._profile is None or self.mode_combo.count() == 0:
             return
         self._update_controls_visibility()
@@ -331,8 +475,30 @@ class CurvePanel(QWidget):
         if mode == "measured":
             self._draw_measured()
             return
-        self.plot.draw_curves(extract_curves(self._profile, mode))
+        self._raw_curves = extract_curves(self._profile, mode)
+        self._render()
         self.status.setText(self._profile.getDescription())
+
+    def _render(self) -> None:
+        """Draw the cached raw curves on wx's per-mode display axes.
+
+        Applies :func:`curve_display` (device 0..255 for vcgt; L*/Y 0..100 vs
+        device 0..255 for trc/measured), so toggling ``L* →`` only re-scales the
+        axes without recomputing the (possibly expensive) curve data.
+        """
+        mode = self.mode_combo.currentData()
+        channels, x_max, y_max, x_label, y_label = curve_display(
+            mode, self._raw_curves, self.show_as_L.isChecked()
+        )
+        self.plot.draw_curves(
+            channels,
+            show_linear=True,
+            x_range=(0.0, x_max),
+            y_range=(0.0, y_max),
+            x_label=f"{x_label} {lang.getstr('in')}",
+            y_label=f"{y_label} {lang.getstr('out')}",
+        )
+        self._update_channel_row()
 
     def _draw_measured(self) -> None:
         """Compute the measured tone response on a worker thread, then draw."""
@@ -359,10 +525,13 @@ class CurvePanel(QWidget):
         """
         self._thread = None
         if isinstance(result, Exception):
+            self._raw_curves = {}
             self.plot.draw_curves({})
+            self._update_channel_row()
             self.status.setText(f"{lang.getstr('error')}: {result}")
             return
-        self.plot.draw_curves(result)
+        self._raw_curves = result
+        self._render()
         self.status.setText(self._profile.getDescription())
 
 

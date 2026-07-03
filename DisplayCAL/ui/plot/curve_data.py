@@ -43,8 +43,11 @@ _TRC_TAGS = {"rTRC": "R", "gTRC": "G", "bTRC": "B"}
 def available_curve_modes(profile: ICCProfile) -> list[str]:
     """Return the curve modes present/derivable for ``profile``.
 
-    ``"measured"`` is offered for any RGB profile (it is computed live through
-    Argyll ``xicclu``); the caller is responsible for handling a missing Argyll.
+    ``"measured"`` is offered only for RGB profiles that ``xicclu`` can actually
+    look up: a colorimetric matrix (``rXYZ``/``gXYZ``/``bXYZ``) or a cLUT
+    (``A2B0``). Vcgt-only "fake" profiles (e.g. the video-card LUT read back for
+    "show actual LUT") have neither and no media white point, so ``xicclu``
+    would fail with "missing Media White Point Tag"; measured is skipped there.
 
     Args:
         profile (ICCProfile): The profile to inspect.
@@ -57,7 +60,9 @@ def available_curve_modes(profile: ICCProfile) -> list[str]:
         modes.append("vcgt")
     if any(isinstance(profile.tags.get(tag), CurveType) for tag in _TRC_TAGS):
         modes.append("trc")
-    if profile.colorSpace == b"RGB":
+    has_matrix = all(tag in profile.tags for tag in ("rXYZ", "gXYZ", "bXYZ"))
+    has_clut = "A2B0" in profile.tags
+    if profile.colorSpace == b"RGB" and (has_matrix or has_clut):
         modes.append("measured")
     return modes
 
@@ -306,6 +311,49 @@ def extract_curves(
     if mode == "trc":
         return _trc_curves(profile)
     return {}
+
+
+def curve_display(
+    mode: str,
+    curves: dict[str, list[tuple[float, float]]],
+    show_as_l: bool = True,
+) -> tuple[dict[str, list[tuple[float, float]]], float, float, str, str]:
+    """Map normalised (input, output) curves onto wx's display axes.
+
+    Mirrors ``wx_lut_viewer.LUTCanvas.DrawLUT``:
+
+    * ``vcgt`` — device in / device out, both ``0..255`` ("RGB" / "RGB").
+    * ``trc`` / ``measured`` — the response, plotted with the device value on
+      the Y axis (``0..255``, "RGB") against the response on the X axis: either
+      perceptual L* (``0..100``, "L*") when ``show_as_l`` else linear luminance
+      Y (``0..100``, "Y"). Note the axes are transposed relative to ``vcgt``.
+
+    Args:
+        mode (str): ``"vcgt"``, ``"trc"`` or ``"measured"``.
+        curves (dict[str, list[tuple[float, float]]]): Normalised (0..1) points.
+        show_as_l (bool): For trc/measured, map luminance to L* (else linear Y).
+
+    Returns:
+        tuple: ``(channels, x_max, y_max, x_label, y_label)`` where ``channels``
+        holds the display-scaled points and the labels have no in/out suffix.
+    """
+    if mode == "vcgt":
+        scaled = {
+            name: [(x * 255.0, y * 255.0) for x, y in points]
+            for name, points in curves.items()
+        }
+        return scaled, 255.0, 255.0, "RGB", "RGB"
+    # trc / measured: transpose (device on Y) and map luminance to L*/Y on X.
+    display: dict[str, list[tuple[float, float]]] = {}
+    for name, points in curves.items():
+        row = []
+        for value_in, value_out in points:
+            device = value_in * 255.0
+            luminance = value_out * 100.0
+            x = colormath.XYZ2Lab(0, luminance, 0)[0] if show_as_l else luminance
+            row.append((x, device))
+        display[name] = row
+    return display, 100.0, 255.0, ("L*" if show_as_l else "Y"), "RGB"
 
 
 def _curve_type_points(curve: CurveType) -> list[tuple[float, float]]:
