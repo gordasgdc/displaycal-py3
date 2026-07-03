@@ -569,6 +569,8 @@ Transform {{
                 out = x3d.html(title=os.path.basename(filename))
             else:
                 out = x3d.x3d()
+        else:
+            out = self.vrml
         writer = GzipFileProper if compress else open
         safe_print("Writing", filename)
         with writer(filename, "wb") as outfile:
