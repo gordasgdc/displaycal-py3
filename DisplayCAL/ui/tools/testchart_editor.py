@@ -1,4 +1,4 @@
-"""Testchart editor — Qt port (Stages 1-2).
+"""Testchart editor — Qt port (Stages 1-3).
 
 Qt equivalent of :mod:`DisplayCAL.wx_testchart_editor` (the ``testchart-editor``
 tool). It builds and edits Argyll TI1 test charts: a grid of RGB patches plus
@@ -21,13 +21,20 @@ colorspace selection, black-point offset, D50 normalization and gzip
 compression). Both run off a :class:`QThread` behind an indeterminate progress
 dialog.
 
+**Stage 3** adds the patch-*adding* paths, all gated on a **preconditioning
+profile** (also new here, alongside its **CIE-sphere filter** controls that feed
+``targen``): **saturation sweeps** towards the RGB/CMY primaries or a custom
+target, and **reference-patch import** from TI3 / CGATS / CIE / GAM / Named-Color
+ICC files and from **images** (whose pixels are converted through ``cctiff`` and
+averaged into weighted Lab points). Dropping a **CSV** converts it to a temporary
+TI1 and loads it. The lookups run off a :class:`QThread` behind a progress
+dialog.
+
 Still deferred to later stages (and to the not-yet-ported main window for its
 parent integration): the **image / DPX video-pattern export** (it depends on the
-measurement-frame display geometry that lives in the measurement flow),
-**saturation sweeps**, **TI3 / CSV / image** patch import, the 23-way **patch
-reordering**, and the **precondition-profile / CIE filter** controls. The
-per-parameter reconstruction of hand-authored charts that carry no ``targen``
-keywords is also approximate for now.
+measurement-frame display geometry that lives in the measurement flow) and the
+23-way **patch reordering**. The per-parameter reconstruction of hand-authored
+charts that carry no ``targen`` keywords is also approximate for now.
 """
 
 from __future__ import annotations
@@ -39,7 +46,7 @@ import sys
 from typing import TYPE_CHECKING, Callable
 
 from qtpy.QtCore import Qt, QThread, Signal
-from qtpy.QtGui import QColor
+from qtpy.QtGui import QColor, QImage
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -61,9 +68,9 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from DisplayCAL import argyll_rgb2xyz, config
+from DisplayCAL import argyll_rgb2xyz, colormath, config
 from DisplayCAL import localization as lang
-from DisplayCAL.argyll import check_set_argyll_bin
+from DisplayCAL.argyll import check_set_argyll_bin, get_argyll_util
 from DisplayCAL.argyll_cgats import ti3_to_ti1, verify_cgats
 from DisplayCAL.cgats import CGATS, CGATSError, CGATSKeyError
 from DisplayCAL.config import (
@@ -75,20 +82,45 @@ from DisplayCAL.config import (
     getcfg,
     setcfg,
 )
-from DisplayCAL.icc_profile import ICCProfile
+from DisplayCAL.icc_profile import (
+    ICCProfile,
+    ICCProfileInvalidError,
+    NamedColor2Type,
+)
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
 from DisplayCAL.util_dict import swap_dict_keys_values
 from DisplayCAL.util_os import launch_file, waccess
-from DisplayCAL.worker import Error, Worker, check_file_isfile
+from DisplayCAL.worker import (
+    Error,
+    Worker,
+    check_file_isfile,
+    get_current_profile_path,
+)
 
 if TYPE_CHECKING:
     from qtpy.QtGui import QCloseEvent
 
-#: File suffixes accepted for loading (drag-and-drop / open).
+#: File suffixes accepted for loading (drag-and-drop / open), replacing the chart.
 LOAD_SUFFIXES = (".ti1", ".ti3", ".cgats", ".txt", ".icc", ".icm")
+
+#: Image suffixes whose pixels are sampled into reference patches.
+IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".tif", ".tiff")
+
+#: File suffixes whose patches are *added* to the chart (needs a precond profile).
+ADD_TI3_SUFFIXES = (".cie", ".gam", *IMAGE_SUFFIXES)
+
+#: (R, G, B) primaries/secondaries offered as saturation-sweep buttons.
+SATURATION_SWEEP_RGB = {
+    "R": (1, 0, 0),
+    "G": (0, 1, 0),
+    "B": (0, 0, 1),
+    "C": (0, 1, 1),
+    "M": (1, 0, 1),
+    "Y": (1, 1, 0),
+}
 
 #: CSV export formats offered by the export dialog: (label, device-value scale).
 CSV_EXPORT_FORMATS = (
@@ -226,8 +258,76 @@ class _View3DThread(QThread):
         self.done.emit(result)
 
 
+class _AddPatchesThread(QThread):
+    """Look up reference / image patches through the profile off the GUI thread.
+
+    Args:
+        window (TestchartEditorWindow): The owning window (provides ``tc_add_ti3``).
+        chart (str | list): A path, or the CGATS lines describing the reference.
+        image (QImage | None): The loaded image when importing image patches.
+        use_gamut (bool): Whether to run the image through ``tiffgamut``.
+        profile (ICCProfile): The preconditioning profile.
+        parent (QWidget | None): Optional Qt parent.
+    """
+
+    #: Emitted with the looked-up :class:`CGATS`, or an ``Exception`` on failure.
+    done = Signal(object)
+
+    def __init__(
+        self,
+        window: TestchartEditorWindow,
+        chart: object,
+        image: QImage | None,
+        use_gamut: bool,
+        profile: ICCProfile,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._window = window
+        self._chart = chart
+        self._image = image
+        self._use_gamut = use_gamut
+        self._profile = profile
+
+    def run(self) -> None:
+        try:
+            result: object = self._window.tc_add_ti3(
+                self._chart, self._image, self._use_gamut, self._profile
+            )
+        except Exception as exception:  # noqa: BLE001  (report on GUI thread)
+            result = exception
+        self.done.emit(result)
+
+
+class _CSVConvertThread(QThread):
+    """Convert a CSV file to a temporary TI1 off the GUI thread.
+
+    Args:
+        window (TestchartEditorWindow): The owning window (provides ``csv_convert``).
+        path (str): The CSV file to convert.
+        parent (QWidget | None): Optional Qt parent.
+    """
+
+    #: Emitted with the converted :class:`CGATS`, or an ``Exception`` on failure.
+    done = Signal(object)
+
+    def __init__(
+        self, window: TestchartEditorWindow, path: str, parent: QWidget | None = None
+    ) -> None:
+        super().__init__(parent)
+        self._window = window
+        self._path = path
+
+    def run(self) -> None:
+        try:
+            result: object = self._window.csv_convert(self._path)
+        except Exception as exception:  # noqa: BLE001  (report on GUI thread)
+            result = exception
+        self.done.emit(result)
+
+
 class TestchartEditorWindow(BaseWindow):
-    """Standalone testchart editor window (Stages 1-2)."""
+    """Standalone testchart editor window (Stages 1-3)."""
 
     #: Grid columns holding editable device values.
     _RGB_COLUMNS = ("R %", "G %", "B %")
@@ -249,6 +349,8 @@ class TestchartEditorWindow(BaseWindow):
         self._load_thread: _LoadThread | None = None
         self._export_thread: _ExportThread | None = None
         self._view_thread: _View3DThread | None = None
+        self._add_thread: _AddPatchesThread | None = None
+        self._csv_thread: _CSVConvertThread | None = None
         self._progress: QProgressDialog | None = None
 
         self.tc_algos_ab = {
@@ -266,9 +368,10 @@ class TestchartEditorWindow(BaseWindow):
 
         self._build_ui()
 
-        self.droptarget = FileDropTarget(
-            drophandlers=dict.fromkeys(LOAD_SUFFIXES, self.load_file), parent=self
-        )
+        drophandlers = dict.fromkeys(LOAD_SUFFIXES, self.load_file)
+        drophandlers[".csv"] = self.csv_drop_handler
+        drophandlers.update(dict.fromkeys(ADD_TI3_SUFFIXES, self.tc_drop_ti3_handler))
+        self.droptarget = FileDropTarget(drophandlers=drophandlers, parent=self)
         self.droptarget.install_on(self)
         self.init_menubar()
         self.resize(760, 640)
@@ -421,6 +524,10 @@ class TestchartEditorWindow(BaseWindow):
         if self.tc_black_patches is not None:
             self.tc_black_patches.valueChanged.connect(self._on_patch_count)
 
+        # Preconditioning profile + CIE-sphere filter.
+        root.addLayout(self._build_precond_row())
+        root.addLayout(self._build_filter_row())
+
         # 3D view / export controls.
         root.addLayout(self._build_3d_row())
 
@@ -447,6 +554,10 @@ class TestchartEditorWindow(BaseWindow):
             buttons.addWidget(button)
         buttons.addStretch(1)
         root.addLayout(buttons)
+
+        # Add-patches controls (saturation sweeps + reference/image import).
+        root.addLayout(self._build_saturation_row())
+        root.addLayout(self._build_add_ti3_row())
 
         # Grid.
         self.grid = QTableWidget(0, len(self._RGB_COLUMNS) + 1)
@@ -608,6 +719,149 @@ class TestchartEditorWindow(BaseWindow):
         row.addStretch(1)
         return row
 
+    def _build_precond_row(self) -> QHBoxLayout:
+        """Build the preconditioning-profile row (checkbox + path + browse).
+
+        Returns:
+            QHBoxLayout: The assembled row.
+        """
+        row = QHBoxLayout()
+        self.tc_precond = QCheckBox(lang.getstr("tc.precond"))
+        self.tc_precond.setEnabled(False)
+        self.tc_precond.toggled.connect(self._on_precond)
+        row.addWidget(self.tc_precond)
+
+        #: Editable combo seeded with the reference profiles shipped with Argyll.
+        self.tc_precond_profile = QComboBox()
+        self.tc_precond_profile.setEditable(True)
+        self.tc_precond_profile.setInsertPolicy(QComboBox.NoInsert)
+        self.tc_precond_profile.lineEdit().setReadOnly(True)
+        self.tc_precond_profile.setToolTip(lang.getstr("tc.precond"))
+        history = get_data_path("ref", r"\.(icm|icc)$") or []
+        if isinstance(history, str):
+            history = [history]
+        for path in history:
+            self.tc_precond_profile.addItem(os.path.basename(path), path)
+        self.tc_precond_profile.currentIndexChanged.connect(
+            self._on_precond_profile_index
+        )
+        # Dropping a profile onto the combo sets it as the preconditioning
+        # profile (a chart-replacing load, as elsewhere, needs the main window).
+        self.precond_droptarget = FileDropTarget(
+            drophandlers=dict.fromkeys(
+                (".icc", ".icm"), self.precond_profile_drop_handler
+            ),
+            parent=self,
+        )
+        self.precond_droptarget.install_on(self.tc_precond_profile)
+        row.addWidget(self.tc_precond_profile, 1)
+
+        self.tc_precond_profile_browse_btn = QPushButton("...")
+        self.tc_precond_profile_browse_btn.setToolTip(lang.getstr("tc.precond"))
+        self.tc_precond_profile_browse_btn.clicked.connect(
+            self._on_precond_profile_browse
+        )
+        row.addWidget(self.tc_precond_profile_browse_btn)
+
+        self.tc_precond_profile_current_btn = QPushButton(
+            lang.getstr("profile.current")
+        )
+        self.tc_precond_profile_current_btn.clicked.connect(
+            self._on_precond_profile_current
+        )
+        row.addWidget(self.tc_precond_profile_current_btn)
+        return row
+
+    def _build_filter_row(self) -> QHBoxLayout:
+        """Build the "limit samples to Lab sphere" filter row.
+
+        Returns:
+            QHBoxLayout: The assembled row.
+        """
+        row = QHBoxLayout()
+        self.tc_filter = QCheckBox(lang.getstr("tc.limit.sphere"))
+        self.tc_filter.toggled.connect(self._on_filter)
+        row.addWidget(self.tc_filter)
+        row.addWidget(QLabel("L"))
+        self.tc_filter_L = self._spin(0, 100)
+        self.tc_filter_L.valueChanged.connect(self._on_filter)
+        row.addWidget(self.tc_filter_L)
+        row.addWidget(QLabel("a"))
+        self.tc_filter_a = self._spin(-128, 127)
+        self.tc_filter_a.valueChanged.connect(self._on_filter)
+        row.addWidget(self.tc_filter_a)
+        row.addWidget(QLabel("b"))
+        self.tc_filter_b = self._spin(-128, 127)
+        self.tc_filter_b.valueChanged.connect(self._on_filter)
+        row.addWidget(self.tc_filter_b)
+        row.addWidget(QLabel(lang.getstr("tc.limit.sphere_radius")))
+        self.tc_filter_rad = self._spin(1, 255)
+        self.tc_filter_rad.valueChanged.connect(self._on_filter)
+        row.addWidget(self.tc_filter_rad)
+        row.addStretch(1)
+        return row
+
+    def _build_saturation_row(self) -> QHBoxLayout:
+        """Build the saturation-sweep controls (count + colour buttons + custom).
+
+        Returns:
+            QHBoxLayout: The assembled row.
+        """
+        row = QHBoxLayout()
+        row.addWidget(QLabel(lang.getstr("testchart.add_saturation_sweeps")))
+        self.saturation_sweeps_intctrl = self._spin(2, 255)
+        row.addWidget(self.saturation_sweeps_intctrl)
+
+        #: The primary/secondary sweep buttons, keyed by colour letter.
+        self.saturation_sweeps_btns: dict[str, QPushButton] = {}
+        for color in SATURATION_SWEEP_RGB:
+            button = QPushButton(color)
+            button.setFixedWidth(45)
+            button.clicked.connect(
+                lambda _checked=False, c=color: self.tc_add_saturation_sweeps(c)
+            )
+            self.saturation_sweeps_btns[color] = button
+            row.addWidget(button)
+
+        self.saturation_sweeps_custom_btn = QPushButton("=")
+        self.saturation_sweeps_custom_btn.setFixedWidth(45)
+        self.saturation_sweeps_custom_btn.clicked.connect(
+            lambda: self.tc_add_saturation_sweeps(None)
+        )
+        row.addWidget(self.saturation_sweeps_custom_btn)
+
+        #: The custom-RGB sweep target spinners, keyed by component letter.
+        self.saturation_sweeps_custom_ctrls: dict[str, QDoubleSpinBox] = {}
+        for component in ("R", "G", "B"):
+            row.addWidget(QLabel(component))
+            spin = QDoubleSpinBox()
+            spin.setRange(0.0, 100.0)
+            spin.setDecimals(2)
+            spin.setSingleStep(100.0 / 255)
+            spin.valueChanged.connect(self._on_saturation_custom)
+            self.saturation_sweeps_custom_ctrls[component] = spin
+            row.addWidget(spin)
+        row.addStretch(1)
+        return row
+
+    def _build_add_ti3_row(self) -> QHBoxLayout:
+        """Build the "add reference patches" button + relative-adaptation toggle.
+
+        Returns:
+            QHBoxLayout: The assembled row.
+        """
+        row = QHBoxLayout()
+        self.add_ti3_btn = QPushButton(lang.getstr("testchart.add_ti3_patches"))
+        self.add_ti3_btn.clicked.connect(self.tc_add_ti3_handler)
+        row.addWidget(self.add_ti3_btn)
+        self.add_ti3_relative_cb = QCheckBox(
+            lang.getstr("whitepoint.simulate.relative")
+        )
+        self.add_ti3_relative_cb.toggled.connect(self._on_add_ti3_relative)
+        row.addWidget(self.add_ti3_relative_cb)
+        row.addStretch(1)
+        return row
+
     # -- config sync -------------------------------------------------------
 
     def tc_update_controls(self) -> None:
@@ -658,6 +912,19 @@ class TestchartEditorWindow(BaseWindow):
             self.tc_vrml_black_offset_intctrl.setValue(getcfg("tc_vrml_black_offset"))
             self.tc_vrml_use_D50_cb.setChecked(bool(int(getcfg("tc_vrml_use_D50"))))
             self.tc_vrml_compress_cb.setChecked(bool(int(getcfg("vrml.compress"))))
+            self._select_precond_profile(getcfg("tc_precond_profile"))
+            self.tc_precond.setChecked(bool(int(getcfg("tc_precond"))))
+            self.tc_filter.setChecked(bool(int(getcfg("tc_filter"))))
+            self.tc_filter_L.setValue(getcfg("tc_filter_L"))
+            self.tc_filter_a.setValue(getcfg("tc_filter_a"))
+            self.tc_filter_b.setValue(getcfg("tc_filter_b"))
+            self.tc_filter_rad.setValue(getcfg("tc_filter_rad"))
+            self.saturation_sweeps_intctrl.setValue(getcfg("tc.saturation_sweeps"))
+            for component, spin in self.saturation_sweeps_custom_ctrls.items():
+                spin.setValue(getcfg(f"tc.saturation_sweeps.custom.{component}"))
+            self.add_ti3_relative_cb.setChecked(
+                bool(int(getcfg("tc_add_ti3_relative")))
+            )
         finally:
             self._loading = False
         self._update_multi_patches_label()
@@ -694,6 +961,9 @@ class TestchartEditorWindow(BaseWindow):
             setcfg(
                 "tc_dark_emphasis", self.tc_dark_emphasis_intctrl.value() / 100.0
             )
+        setcfg("tc.saturation_sweeps", self.saturation_sweeps_intctrl.value())
+        for component, spin in self.saturation_sweeps_custom_ctrls.items():
+            setcfg(f"tc.saturation_sweeps.custom.{component}", spin.value())
 
     def writecfg(self) -> None:
         """Write the testchart-editor configuration to disk."""
@@ -749,6 +1019,128 @@ class TestchartEditorWindow(BaseWindow):
     def _on_dark_emphasis(self) -> None:
         """React to a dark-region-emphasis change."""
         self._save_and_check()
+
+    # -- preconditioning / filter handlers ---------------------------------
+
+    def _select_precond_profile(self, path: str) -> None:
+        """Show ``path`` in the profile combo, adding it if not already listed.
+
+        Args:
+            path (str): The profile path to select (may be empty).
+        """
+        block = self.tc_precond_profile.blockSignals(True)
+        try:
+            if not path:
+                self.tc_precond_profile.setCurrentIndex(-1)
+                self.tc_precond_profile.lineEdit().clear()
+                return
+            index = self.tc_precond_profile.findData(path)
+            if index < 0:
+                self.tc_precond_profile.addItem(os.path.basename(path), path)
+                index = self.tc_precond_profile.count() - 1
+            self.tc_precond_profile.setCurrentIndex(index)
+        finally:
+            self.tc_precond_profile.blockSignals(block)
+
+    def _set_precond_profile(self, path: str) -> None:
+        """Persist ``path`` as the preconditioning profile and refresh state.
+
+        Args:
+            path (str): The chosen profile path.
+        """
+        self._select_precond_profile(path)
+        setcfg("tc_precond_profile", path)
+        if not path:
+            setcfg("tc_precond", 0)
+            self.tc_precond.setChecked(False)
+        self._update_enabled_states()
+
+    def _on_precond_profile_index(self, index: int) -> None:
+        """React to a profile chosen from the combo's history.
+
+        Args:
+            index (int): The selected combo index (``-1`` when cleared).
+        """
+        if self._loading or index < 0:
+            return
+        self._set_precond_profile(self.tc_precond_profile.itemData(index) or "")
+
+    def _on_precond_profile_browse(self) -> None:
+        """Browse for a preconditioning profile."""
+        default_dir = get_verified_path("tc_precond_profile")[0]
+        path, _selected = QFileDialog.getOpenFileName(
+            self,
+            lang.getstr("tc.precond"),
+            default_dir,
+            lang.getstr("filetype.icc_mpp") + " (*.icc *.icm *.mpp)",
+        )
+        if path:
+            self._set_precond_profile(path)
+
+    def _on_precond_profile_current(self) -> None:
+        """Use the current display profile as the preconditioning profile."""
+        profile_path = get_current_profile_path(True, True)
+        if profile_path:
+            self._set_precond_profile(profile_path)
+        else:
+            QMessageBox.critical(
+                self,
+                self.windowTitle(),
+                lang.getstr(
+                    "display_profile.not_detected",
+                    config.get_display_name(None, True),
+                ),
+            )
+
+    def precond_profile_drop_handler(self, path: str) -> None:
+        """Set a profile dropped onto the editor as the preconditioning profile.
+
+        Args:
+            path (str): The dropped ``.icc``/``.icm`` path.
+        """
+        self._set_precond_profile(path)
+
+    def _on_precond(self, checked: bool) -> None:
+        """Persist the preconditioning toggle and reset adaption accordingly.
+
+        Args:
+            checked (bool): The new checkbox state.
+        """
+        if self._loading:
+            return
+        setcfg("tc_precond", int(checked))
+        self.tc_adaption_intctrl.setValue(
+            int((1 if checked else DEFAULTS["tc_adaption"]) * 100)
+        )
+        self._save_and_check()
+
+    def _on_filter(self, *_args) -> None:
+        """Persist the Lab-sphere filter controls."""
+        if self._loading:
+            return
+        setcfg("tc_filter", int(self.tc_filter.isChecked()))
+        setcfg("tc_filter_L", self.tc_filter_L.value())
+        setcfg("tc_filter_a", self.tc_filter_a.value())
+        setcfg("tc_filter_b", self.tc_filter_b.value())
+        setcfg("tc_filter_rad", self.tc_filter_rad.value())
+
+    def _on_saturation_custom(self, *_args) -> None:
+        """Persist the custom saturation-sweep target and refresh button state."""
+        if self._loading:
+            return
+        for component, spin in self.saturation_sweeps_custom_ctrls.items():
+            setcfg(f"tc.saturation_sweeps.custom.{component}", spin.value())
+        self._update_add_precond_controls()
+
+    def _on_add_ti3_relative(self, checked: bool) -> None:
+        """Persist the "relative to display whitepoint" import toggle.
+
+        Args:
+            checked (bool): The new checkbox state.
+        """
+        if self._loading:
+            return
+        setcfg("tc_add_ti3_relative", int(checked))
 
     def tc_vrml_handler(self, *_args) -> None:
         """Persist the diagnostic-3D options and refresh the view button state."""
@@ -818,6 +1210,27 @@ class TestchartEditorWindow(BaseWindow):
             )
             self.tc_dark_emphasis_slider.setEnabled(dark_enable)
             self.tc_dark_emphasis_intctrl.setEnabled(dark_enable)
+        self.tc_precond.setEnabled(bool(getcfg("tc_precond_profile")))
+        self._update_add_precond_controls()
+
+    def _update_add_precond_controls(self) -> None:
+        """Enable the saturation-sweep / add-reference controls (matches wx).
+
+        These need both a loaded chart to append to and a preconditioning
+        profile to look reference values up through.
+        """
+        enabled = self.ti1 is not None and bool(getcfg("tc_precond_profile"))
+        self.saturation_sweeps_intctrl.setEnabled(enabled)
+        for button in self.saturation_sweeps_btns.values():
+            button.setEnabled(enabled)
+        rgb = [spin.value() for spin in self.saturation_sweeps_custom_ctrls.values()]
+        for spin in self.saturation_sweeps_custom_ctrls.values():
+            spin.setEnabled(enabled)
+        self.saturation_sweeps_custom_btn.setEnabled(
+            enabled and not (rgb[0] == rgb[1] == rgb[2])
+        )
+        self.add_ti3_btn.setEnabled(enabled)
+        self.add_ti3_relative_cb.setEnabled(enabled)
 
     # -- patch counting ----------------------------------------------------
 
@@ -942,6 +1355,7 @@ class TestchartEditorWindow(BaseWindow):
         self.export_btn.setEnabled(self.ti1 is not None)
         self.tc_save_check()
         self.tc_vrml_update_enabled()
+        self._update_add_precond_controls()
         self.tc_set_default_status()
 
     def tc_save_check(self) -> None:
@@ -1316,6 +1730,727 @@ class TestchartEditorWindow(BaseWindow):
         )
         self._populate_grid()
         self.tc_check()
+
+    # -- adding patches ----------------------------------------------------
+
+    def _selected_or_last_row(self) -> int:
+        """Return the last selected grid row, or the final row when none is.
+
+        Returns:
+            int: The row after which new patches are inserted.
+        """
+        rows = sorted(
+            index.row() for index in self.grid.selectionModel().selectedRows()
+        )
+        return rows[-1] if rows else self.grid.rowCount() - 1
+
+    def _select_row(self, row: int) -> None:
+        """Select ``row`` in the grid (clamped to the valid range).
+
+        Args:
+            row (int): The row index to select.
+        """
+        row = max(0, min(row, self.grid.rowCount() - 1))
+        if self.grid.rowCount():
+            self.grid.clearSelection()
+            self.grid.selectRow(row)
+
+    def tc_add_data(self, row: int, newdata: list[dict]) -> None:
+        """Insert ``newdata`` samples into the chart after ``row``.
+
+        Args:
+            row (int): The row after which to insert (``-1`` for the top).
+            newdata (list[dict]): The samples to add; each maps CGATS field
+                names (``RGB_R`` etc.) to values.
+        """
+        if self.ti1 is None or not newdata:
+            return
+        data = self.ti1.queryv1("DATA")
+        data_format = self.ti1.queryv1("DATA_FORMAT")
+        data.moveby1(row + 1, len(newdata))
+        for offset, sample in enumerate(newdata):
+            dataset = CGATS()
+            for label in data_format.values():
+                label = label.decode("utf-8")
+                dataset[label] = sample.get(label, 0.0)
+            dataset.key = row + 1 + offset
+            dataset.parent = data
+            dataset.root = data.root
+            dataset.type = b"SAMPLE"
+            data[dataset.key] = dataset
+        self.ti1.setmodified(True)
+        self._populate_grid()
+        self._select_row(row + len(newdata))
+        self.tc_check()
+
+    def tc_add_saturation_sweeps(self, color: str | None) -> None:
+        """Add a saturation sweep towards ``color`` (or the custom RGB target).
+
+        Args:
+            color (str | None): One of ``R``/``G``/``B``/``C``/``M``/``Y``, or
+                ``None`` for the custom RGB spinners.
+        """
+        if self.ti1 is None:
+            return
+        try:
+            profile = ICCProfile(getcfg("tc_precond_profile"))
+        except (OSError, ICCProfileInvalidError) as exception:
+            QMessageBox.critical(self, self.windowTitle(), str(exception))
+            return
+        rgb_space = profile.get_rgb_space()
+        if not rgb_space:
+            QMessageBox.critical(
+                self,
+                self.windowTitle(),
+                lang.getstr(
+                    "profile.required_tags_missing",
+                    lang.getstr("profile.type.shaper_matrix"),
+                ),
+            )
+            return
+        if color is None:
+            r, g, b = (
+                spin.value() / 100.0
+                for spin in self.saturation_sweeps_custom_ctrls.values()
+            )
+        else:
+            r, g, b = SATURATION_SWEEP_RGB[color]
+        maxv = self.saturation_sweeps_intctrl.value()
+        row = self._selected_or_last_row()
+        newdata = []
+        for i in range(maxv):
+            rgb, xyy = colormath.RGBsaturation(
+                r, g, b, 1.0 / (maxv - 1) * i, rgb_space
+            )
+            x, y, z = colormath.xyY2XYZ(*xyy)
+            newdata.append(
+                {
+                    "SAMPLE_ID": row + 2,
+                    "RGB_R": round(rgb[0] * 100, 4),
+                    "RGB_G": round(rgb[1] * 100, 4),
+                    "RGB_B": round(rgb[2] * 100, 4),
+                    "XYZ_X": x * 100,
+                    "XYZ_Y": y * 100,
+                    "XYZ_Z": z * 100,
+                }
+            )
+        self.tc_add_data(row, newdata)
+
+    def tc_drop_ti3_handler(self, path: str) -> None:
+        """Handle a reference/image file dropped onto the editor.
+
+        Args:
+            path (str): The dropped file path.
+        """
+        if self.ti1 is None:
+            Application.instance().beep()
+        elif getcfg("tc_precond_profile"):
+            self.tc_add_ti3_handler(path)
+        else:
+            QMessageBox.critical(
+                self, self.windowTitle(), lang.getstr("tc.precond.notset")
+            )
+
+    def tc_add_ti3_handler(self, chart: str | None = None) -> None:
+        """Add reference / image patches, prompting for a file when needed.
+
+        Args:
+            chart (str | None): A file path to import, or ``None`` to prompt.
+        """
+        if self._add_thread is not None and self._add_thread.isRunning():
+            return
+        try:
+            profile = ICCProfile(getcfg("tc_precond_profile"))
+        except (OSError, ICCProfileInvalidError) as exception:
+            QMessageBox.critical(self, self.windowTitle(), str(exception))
+            return
+        if not chart:
+            default_dir, default_file = get_verified_path("testchart.reference")
+            chart, _selected = QFileDialog.getOpenFileName(
+                self,
+                lang.getstr("testchart_or_reference"),
+                os.path.join(default_dir, default_file),
+                lang.getstr("filetype.ti1_ti3_txt")
+                + " (*.cgats *.cie *.gam *.icc *.icm *.jpg *.jpeg *.png *.ti1 "
+                "*.ti2 *.ti3 *.tif *.tiff *.txt)",
+            )
+            if not chart:
+                return
+            setcfg("testchart.reference", chart)
+        image = None
+        ext = os.path.splitext(chart)[1].lower()
+        if ext in IMAGE_SUFFIXES:
+            image = QImage(chart)
+            if image.isNull():
+                QMessageBox.critical(
+                    self,
+                    self.windowTitle(),
+                    lang.getstr("error.file_type_unsupported"),
+                )
+                return
+        elif ext in (".icc", ".icm"):
+            try:
+                chart = self._named_color_chart(chart)
+            except Exception as exception:  # noqa: BLE001
+                QMessageBox.critical(self, self.windowTitle(), str(exception))
+                return
+        self._progress = self._make_progress(
+            lang.getstr("testchart.add_ti3_patches")
+        )
+        self.add_ti3_btn.setEnabled(False)
+        self._add_thread = _AddPatchesThread(
+            self, chart, image, False, profile, parent=self
+        )
+        self._add_thread.done.connect(
+            lambda result: self._on_added(result, profile)
+        )
+        self._add_thread.start()
+
+    def _named_color_chart(self, path: str) -> bytes:
+        """Build GAMUT chart lines from a Named-Color ICC profile.
+
+        Args:
+            path (str): The ``.icc``/``.icm`` Named-Color profile.
+
+        Returns:
+            bytes: The CGATS text describing the profile's colours.
+
+        Raises:
+            Error: If the profile is not a usable Named-Color profile.
+        """
+        nclprof = ICCProfile(path)
+        if (
+            nclprof.profileClass != b"nmcl"
+            or "ncl2" not in nclprof.tags
+            or not isinstance(nclprof.tags.ncl2, NamedColor2Type)
+            or nclprof.connectionColorSpace not in (b"Lab", b"XYZ")
+        ):
+            raise Error(lang.getstr("profile.only_named_color"))
+        if nclprof.connectionColorSpace == b"Lab":
+            data_format = "LAB_L LAB_A LAB_B"
+        else:
+            data_format = " XYZ_X XYZ_Y XYZ_Z"
+        lines = [
+            "GAMUT  ",
+            "BEGIN_DATA_FORMAT",
+            data_format,
+            "END_DATA_FORMAT",
+            "BEGIN_DATA",
+            "END_DATA",
+        ]
+        if "wtpt" in nclprof.tags:
+            lines.insert(1, 'KEYWORD "APPROX_WHITE_POINT"')
+            lines.insert(
+                2,
+                'APPROX_WHITE_POINT "{:.4f} {:.4f} {:.4f}"'.format(
+                    *(v * 100 for v in nclprof.tags.wtpt.ir.values())
+                ),
+            )
+        for key in nclprof.tags.ncl2:
+            value = nclprof.tags.ncl2[key]
+            lines.insert(-1, "{:.4f} {:.4f} {:.4f}".format(*value.pcs.values()))
+        return "\n".join(lines).encode("utf-8")
+
+    def tc_add_ti3(
+        self,
+        chart: object,
+        image: QImage | None,
+        use_gamut: bool,
+        profile: ICCProfile,
+    ) -> CGATS | Exception:
+        """Turn a reference / image into a looked-up chart (worker thread).
+
+        Args:
+            chart (object): A file path or the CGATS lines to import.
+            image (QImage | None): The loaded image when importing pixels.
+            use_gamut (bool): Whether to run the image through ``tiffgamut``.
+            profile (ICCProfile): The preconditioning profile.
+
+        Returns:
+            CGATS | Exception: A chart carrying RGB and CIE values, or an error.
+        """
+        intent = "r" if getcfg("tc_add_ti3_relative") else "a"
+        if image is not None:
+            chart = self._image_to_chart(chart, image, use_gamut, profile, intent)
+            if isinstance(chart, Exception):
+                return chart
+        try:
+            chart = CGATS(chart)
+            if not chart.queryv1("DATA_FORMAT"):
+                raise CGATSError(
+                    lang.getstr(
+                        "error.testchart.missing_fields",
+                        (chart.filename, "DATA_FORMAT"),
+                    )
+                )
+        except (OSError, CGATSError) as exception:
+            return exception
+        finally:
+            path = chart.filename if isinstance(chart, CGATS) else None
+            if path and os.path.dirname(path) == self.worker.tempdir:
+                self.worker.wrapup(False)
+        if image is not None:
+            return self._average_image_chart(chart, use_gamut, profile, intent)
+        chart.fix_device_values_scaling()
+        return chart
+
+    def _average_image_chart(
+        self, chart: CGATS, use_gamut: bool, profile: ICCProfile, intent: str
+    ) -> CGATS | Exception:
+        """Reduce an image's pixels to a compact weighted GAMUT chart.
+
+        Ports the ``if img:`` block of ``wx_testchart_editor.tc_add_ti3``: bins
+        the (looked-up) Lab points on a coarse grid, weights each bin by its
+        lightness (biased by the dark-emphasis setting) and averages the bins
+        that clear the weight threshold into representative reference points.
+
+        Args:
+            chart (CGATS): The image chart (RGB pixels, or gamut Lab points).
+            use_gamut (bool): Whether the image came through ``tiffgamut``.
+            profile (ICCProfile): The preconditioning profile.
+            intent (str): The rendering intent (``"r"`` or ``"a"``).
+
+        Returns:
+            CGATS | Exception: The averaged GAMUT chart, or an error.
+        """
+        if use_gamut:
+            threshold = 2
+        else:
+            threshold = 4
+            try:
+                _void, ti3, _void2 = self.worker.chart_lookup(
+                    chart,
+                    profile,
+                    intent=intent,
+                    white_patches=False,
+                    raise_exceptions=True,
+                )
+            except Exception as exception:  # noqa: BLE001
+                return exception
+            if not ti3:
+                return Error(lang.getstr("error.generic", (-1, lang.getstr("unknown"))))
+            chart = ti3
+        colorsets: dict[tuple, list[tuple]] = {}
+        weights: dict[tuple, float] = {}
+        demph = getcfg("tc_dark_emphasis")
+        for sample in chart.queryv1("DATA").values():
+            rgb = (
+                None
+                if use_gamut
+                else (sample["RGB_R"], sample["RGB_G"], sample["RGB_B"])
+            )
+            lab = (sample["LAB_L"], sample["LAB_A"], sample["LAB_B"])
+            key = round(lab[0] / 10), round(lab[1] / 15), round(lab[2] / 15)
+            if key not in colorsets:
+                weights[key] = 0
+                colorsets[key] = []
+            weights[key] += lab[0] / 50 + (-demph if lab[0] >= 50 else demph)
+            colorsets[key].append(lab if rgb is None else lab + rgb)
+        data_format = "LAB_L LAB_A LAB_B"
+        if not use_gamut:
+            data_format += " RGB_R RGB_G RGB_B"
+        lines = [
+            "GAMUT  ",
+            "BEGIN_DATA_FORMAT",
+            data_format,
+            "END_DATA_FORMAT",
+            "BEGIN_DATA",
+            "END_DATA",
+        ]
+        weighted = any(weight >= threshold for weight in weights.values())
+        for key, colors in colorsets.items():
+            if weighted and weights[key] < threshold:
+                continue
+            count = len(colors)
+            averaged = [sum(values) / count for values in zip(*colors)]
+            lines.insert(-1, "{:.4f} {:.4f} {:.4f}".format(*averaged[:3]))
+            if not use_gamut:
+                lines[-2] += " {:.4f} {:.4f} {:.4f}".format(*averaged[3:6])
+        self.worker.wrapup(False)
+        return CGATS("\n".join(lines).encode("utf-8"))
+
+    def _image_to_chart(
+        self,
+        chart: str,
+        image: QImage,
+        use_gamut: bool,
+        profile: ICCProfile,
+        intent: str,
+    ) -> object:
+        """Sample an image into a GAMUT chart (worker thread).
+
+        Ports ``wx_testchart_editor.tc_add_ti3``'s image branch: the pixels are
+        converted through the embedded / preconditioning profile with ``cctiff``
+        (or ``tiffgamut``), then averaged into a compact set of Lab (and RGB)
+        reference points weighted by lightness.
+
+        Args:
+            chart (str): The source image path.
+            image (QImage): The loaded image.
+            use_gamut (bool): Whether to use ``tiffgamut`` instead of ``cctiff``.
+            profile (ICCProfile): The preconditioning profile.
+            intent (str): The rendering intent (``"r"`` or ``"a"``).
+
+        Returns:
+            object: A CGATS text/CGATS ready for lookup, or an ``Exception``.
+        """
+        cwd = self.worker.create_tempdir()
+        if isinstance(cwd, Exception):
+            return cwd
+        size = 70.0
+        scale = math.sqrt((image.width() * image.height()) / (size * size))
+        w = round(image.width() / scale)
+        h = round(image.height() / scale)
+        ext = os.path.splitext(chart)[1].lower()
+        if ext in (".tif", ".tiff") or (
+            self.worker.argyll_version >= [1, 4] and ext in (".jpeg", ".jpg")
+        ):
+            imgpath = chart
+        else:
+            imgpath = os.path.join(cwd, "image.tif")
+            if not image.save(imgpath, "TIFF"):
+                return Error(lang.getstr("error.file_type_unsupported"))
+        outpath = os.path.join(cwd, "imageout.tif")
+        gam = os.path.join(cwd, "image.gam")
+        result = self._run_image_conversion(
+            use_gamut, imgpath, imgpath == chart, outpath, gam, intent
+        )
+        if isinstance(result, Exception):
+            self.worker.wrapup(False)
+            return result
+        if use_gamut:
+            return gam
+        converted = outpath if result == "RGB" else imgpath
+        image = QImage(converted)
+        if image.isNull():
+            self.worker.wrapup(False)
+            return Error(lang.getstr("error.file_type_unsupported"))
+        if image.width() != w or image.height() != h:
+            image = image.scaled(w, h, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+        return self._image_pixels_to_ti1(image)
+
+    def _run_image_conversion(
+        self,
+        use_gamut: bool,
+        imgpath: str,
+        is_source: bool,
+        outpath: str,
+        gam: str,
+        intent: str,
+    ) -> str | Exception:
+        """Run ``cctiff``/``tiffgamut`` over ``imgpath`` (worker thread).
+
+        Tries the image's embedded profile first, then falls back to the
+        preconditioning profile (matching the wx retry).
+
+        Args:
+            use_gamut (bool): Whether to use ``tiffgamut`` instead of ``cctiff``.
+            imgpath (str): The (TIFF/JPEG) image to convert.
+            is_source (bool): Whether ``imgpath`` is the original source file.
+            outpath (str): The ``cctiff`` output TIFF path.
+            gam (str): The ``tiffgamut`` output gamut path.
+            intent (str): The rendering intent (``"r"`` or ``"a"``).
+
+        Returns:
+            str | Exception: The last reported ``cctiff`` output space (``""``
+            for ``tiffgamut``), or an ``Exception`` on failure.
+        """
+        cmdname = "tiffgamut" if use_gamut else "cctiff"
+        cmd = get_argyll_util(cmdname)
+        if not cmd:
+            return Error(lang.getstr("argyll.util.not_found", cmdname))
+        ppath = getcfg("tc_precond_profile")
+        result: object = False
+        for attempt in range(2 if ppath else 1):
+            args = self._image_conversion_args(
+                use_gamut, imgpath, is_source, outpath, gam, ppath, intent, attempt
+            )
+            result = self.worker.exec_cmd(
+                cmd, ["-v", *args], capture_output=True, skip_scripts=True
+            )
+            if not result:
+                errors = "".join(self.worker.errors)
+                if (
+                    "Error - Can't open profile in file" in errors
+                    or "Error - Can't read profile" in errors
+                ):
+                    continue
+            break
+        if isinstance(result, Exception):
+            return result
+        if not result:
+            return Error("\n".join(self.worker.errors or self.worker.output))
+        output_space = ""
+        for line in self.worker.output:
+            if line.startswith("Output space ="):
+                output_space = line.split("=")[1].strip()
+        return output_space
+
+    def _image_conversion_args(
+        self,
+        use_gamut: bool,
+        imgpath: str,
+        is_source: bool,
+        outpath: str,
+        gam: str,
+        ppath: str,
+        intent: str,
+        attempt: int,
+    ) -> list[str]:
+        """Build the ``cctiff``/``tiffgamut`` argument list for one attempt.
+
+        Args:
+            use_gamut (bool): Whether to use ``tiffgamut`` instead of ``cctiff``.
+            imgpath (str): The image to convert.
+            is_source (bool): Whether ``imgpath`` is the original source file.
+            outpath (str): The ``cctiff`` output TIFF path.
+            gam (str): The ``tiffgamut`` output gamut path.
+            ppath (str): The preconditioning profile path.
+            intent (str): The rendering intent (``"r"`` or ``"a"``).
+            attempt (int): ``0`` tries the embedded profile, ``1`` falls back.
+
+        Returns:
+            list[str]: The argument list (without the leading ``-v``).
+        """
+        if use_gamut:
+            args = [f"-d{10 if is_source else 1}", "-O", gam]
+        else:
+            args = ["-a"]
+            if self.worker.argyll_version >= [1, 4]:
+                args.append("-fT")
+            elif self.worker.argyll_version >= [1, 1]:
+                args.append("-t1")
+            else:
+                args.append("-e1")
+        args.append(f"-i{intent}")
+        if attempt == 0:
+            args.append(imgpath)
+            if not use_gamut:
+                args.append(f"-i{intent}")
+                args.append(ppath)
+        else:
+            args.append(ppath)
+        args.append(imgpath)
+        if not use_gamut:
+            args.append(outpath)
+        return args
+
+    @staticmethod
+    def _image_pixels_to_ti1(image: QImage) -> bytes:
+        """Return a device-RGB TI1 chart of every pixel in ``image``.
+
+        Args:
+            image (QImage): The (downscaled) converted image.
+
+        Returns:
+            bytes: The CGATS TI1 text with one ``RGB_R RGB_G RGB_B`` row per pixel.
+        """
+        lines = [
+            "TI1    ",
+            "BEGIN_DATA_FORMAT",
+            "RGB_R RGB_G RGB_B",
+            "END_DATA_FORMAT",
+            "BEGIN_DATA",
+            "END_DATA",
+        ]
+        for y in range(image.height()):
+            for x in range(image.width()):
+                pixel = image.pixelColor(x, y)
+                lines.insert(
+                    -1,
+                    f"{pixel.red() / 2.55:.4f} {pixel.green() / 2.55:.4f} "
+                    f"{pixel.blue() / 2.55:.4f}",
+                )
+        return "\n".join(lines).encode("utf-8")
+
+    def _on_added(self, result: object, profile: ICCProfile) -> None:
+        """Look up the imported chart and add its patches (GUI thread).
+
+        Args:
+            result (object): The chart returned by the worker, or an ``Exception``.
+            profile (ICCProfile): The preconditioning profile.
+        """
+        self._add_thread = None
+        self._close_progress()
+        self.add_ti3_btn.setEnabled(
+            self.ti1 is not None and bool(getcfg("tc_precond_profile"))
+        )
+        if isinstance(result, Exception):
+            QMessageBox.critical(self, self.windowTitle(), str(result))
+            return
+        try:
+            newdata = self._reference_to_patches(result, profile)
+        except Exception as exception:  # noqa: BLE001
+            QMessageBox.critical(self, self.windowTitle(), str(exception))
+            return
+        if not newdata:
+            return
+        row = self._selected_or_last_row()
+        for offset, entry in enumerate(newdata):
+            entry["SAMPLE_ID"] = row + 2 + offset
+        self.tc_add_data(row, newdata)
+
+    def _reference_to_patches(
+        self, chart: CGATS, profile: ICCProfile
+    ) -> list[dict]:
+        """Look reference CIE values up through the profile into patch dicts.
+
+        Ports ``wx_testchart_editor.tc_add_ti3_consumer``.
+
+        Args:
+            chart (CGATS): The reference chart returned by :meth:`tc_add_ti3`.
+            profile (ICCProfile): The preconditioning profile.
+
+        Returns:
+            list[dict]: Patches mapping ``RGB_*``/``XYZ_*`` field names to values.
+        """
+        data_format = list(chart.queryv1("DATA_FORMAT").values())
+        intent = "r" if getcfg("tc_add_ti3_relative") else "a"
+        is_rgb_gamut = (
+            chart[0].type.strip() == b"GAMUT"
+            and b"RGB_R" in data_format
+            and b"RGB_G" in data_format
+            and b"RGB_B" in data_format
+        )
+        if not is_rgb_gamut:
+            as_ti3 = all(
+                label in data_format for label in (b"LAB_L", b"LAB_A", b"LAB_B")
+            ) or all(
+                label in data_format for label in (b"XYZ_X", b"XYZ_Y", b"XYZ_Z")
+            )
+            if intent == "r":
+                chart.adapt()
+            ti1, ti3, _void = self.worker.chart_lookup(
+                chart, profile, as_ti3, intent=intent, white_patches=False
+            )
+            if not ti1 or not ti3:
+                return []
+            chart = ti1 if as_ti3 else ti3
+        dataset = chart.queryi1("DATA")
+        data_format = list(dataset.queryv1("DATA_FORMAT").values())
+        cie = (
+            "Lab"
+            if all(label in data_format for label in (b"LAB_L", b"LAB_A", b"LAB_B"))
+            else "XYZ"
+        )
+        newdata = []
+        for i in dataset.DATA:
+            sample = dataset.DATA[i]
+            if cie == "Lab":
+                sample["XYZ_X"], sample["XYZ_Y"], sample["XYZ_Z"] = colormath.Lab2XYZ(
+                    sample["LAB_L"], sample["LAB_A"], sample["LAB_B"], scale=100
+                )
+            if intent == "r":
+                sample["XYZ_X"], sample["XYZ_Y"], sample["XYZ_Z"] = colormath.adapt(
+                    sample["XYZ_X"],
+                    sample["XYZ_Y"],
+                    sample["XYZ_Z"],
+                    "D50",
+                    list(profile.tags.wtpt.values()),
+                )
+            newdata.append(
+                {
+                    label: round(sample[label], 4)
+                    for label in ("RGB_R", "RGB_G", "RGB_B", "XYZ_X", "XYZ_Y", "XYZ_Z")
+                }
+            )
+        return newdata
+
+    # -- CSV import --------------------------------------------------------
+
+    def csv_drop_handler(self, path: str) -> None:
+        """Convert and load a dropped CSV file (replacing the chart, off-thread).
+
+        Args:
+            path (str): The dropped ``.csv`` path.
+        """
+        if self._csv_thread is not None and self._csv_thread.isRunning():
+            return
+        self._progress = self._make_progress(lang.getstr("testchart.read"))
+        self._csv_thread = _CSVConvertThread(self, path, parent=self)
+        self._csv_thread.done.connect(self._on_csv_converted)
+        self._csv_thread.start()
+
+    def csv_convert(self, path: str) -> CGATS:
+        """Convert a CSV file to a temporary TI1 chart (worker thread).
+
+        Accepts rows of ``RGB`` or ``RGB + XYZ`` values (with an optional leading
+        index and header), auto-scaling device values above ``100`` down to a
+        ``0..100`` range and synthesising missing XYZ via a simple sRGB model.
+
+        Args:
+            path (str): The CSV file to convert.
+
+        Returns:
+            CGATS: The converted chart (written to a temporary ``.ti1``).
+
+        Raises:
+            ValueError: If a row does not have 3, 4, 6 or 7 columns.
+        """
+        rows = []
+        maxval = 100.0
+        with open(path, "rb") as csvfile:
+            sniffer = csv.Sniffer()
+            rawcsv = csvfile.read().decode("utf-8", "replace")
+            dialect = sniffer.sniff(rawcsv, delimiters=",;\t")
+            has_header = sniffer.has_header(rawcsv)
+        for i, row in enumerate(rawcsv.splitlines()):
+            fields = next(csv.reader([row], dialect=dialect), [])
+            if not fields:
+                continue
+            if has_header and i == 0:
+                continue
+            if len(fields) in (3, 6):
+                fields.insert(0, i)
+            if len(fields) not in (4, 7):
+                raise ValueError(lang.getstr("error.testchart.invalid", path))
+            values = [int(fields[0])] + [float(v) for v in fields[1:]]
+            maxval = max(maxval, *values[1:])
+            rows.append(values)
+        if maxval > 100:
+            for values in rows:
+                values[1:] = [v / maxval * 100 for v in values[1:]]
+        ti1 = CGATS(
+            b"""CTI1
+KEYWORD "COLOR_REP"
+COLOR_REP "RGB"
+NUMBER_OF_FIELDS 7
+BEGIN_DATA_FORMAT
+SAMPLE_ID RGB_R RGB_G RGB_B XYZ_X XYZ_Y XYZ_Z
+END_DATA_FORMAT
+NUMBER_OF_SETS 4
+BEGIN_DATA
+END_DATA"""
+        )
+        data = ti1[0].DATA
+        for values in rows:
+            if len(values) < 7:
+                values.extend(
+                    v * 100
+                    for v in argyll_rgb2xyz.rgb2xyz(*(v / 100.0 for v in values[1:]))
+                )
+            data.add_data(values)
+        tmp = self.worker.create_tempdir()
+        if isinstance(tmp, Exception):
+            raise tmp
+        ti1.filename = os.path.join(
+            tmp, os.path.splitext(os.path.basename(path))[0] + ".ti1"
+        )
+        ti1.write()
+        return ti1
+
+    def _on_csv_converted(self, result: object) -> None:
+        """Load the converted CSV chart on the GUI thread.
+
+        Args:
+            result (object): The converted ``CGATS``, or an ``Exception``.
+        """
+        self._csv_thread = None
+        self._close_progress()
+        if isinstance(result, Exception):
+            QMessageBox.critical(self, self.windowTitle(), str(result))
+            return
+        self.load_file(result.filename)
 
     # -- save / clear ------------------------------------------------------
 
