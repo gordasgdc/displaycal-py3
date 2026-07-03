@@ -220,7 +220,11 @@ def initialize_fault_handler() -> None:
 def initialize_qt_module() -> None:
     """Initialize Qt module (qtpy + PySide6)."""
     try:
-        import qtpy  # noqa: F401
+        # Import DisplayCAL.ui first: it pins QT_API=pyside6 before qtpy is
+        # imported anywhere, guaranteeing a consistent binding process-wide.
+        import DisplayCAL.ui  # noqa: F401, I001
+        import qtpy
+        import qtpy.QtCore
     except ImportError as e:
         missing = str(e)
         msg = f"Failed to import Qt bindings: {missing}\n"
@@ -235,8 +239,6 @@ def initialize_qt_module() -> None:
                 "  pip install --force-reinstall PySide6\n"
             )
         sys.exit(msg)
-
-    import qtpy
 
     print(f"Qt {qtpy.QtCore.__version__} via {qtpy.API_NAME}")
 
