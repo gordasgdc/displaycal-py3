@@ -55,8 +55,9 @@ from DisplayCAL.worker import Worker
 #: Profile file suffixes accepted for opening / drag-and-drop.
 PROFILE_SUFFIXES = (".icc", ".icm")
 
-#: White-point locus options: label -> draw_gamut code.
-WHITEPOINTS = {"Daylight (CIE 1931)": 1, "Black body (Planckian)": 2, "None": 0}
+#: Colour-temperature locus options: label -> draw_gamut code. "<None>" first
+#: and labelled like the comparison-profile combo's no-selection entry.
+WHITEPOINTS = {"<None>": 0, "Daylight (CIE 1931)": 1, "Black body (Planckian)": 2}
 
 #: Gamut lookup directions: label -> compute_profile_gamut code.
 DIRECTIONS = {
@@ -245,7 +246,7 @@ class ProfileInfoWindow(BaseWindow):
         # defaults to relative colorimetric instead; these are independent).
         self.whitepoint_combo = QComboBox()
         self.whitepoint_combo.addItems(list(WHITEPOINTS))
-        self.whitepoint_combo.setCurrentText("None")
+        self.whitepoint_combo.setCurrentText("<None>")
         self.whitepoint_combo.currentTextChanged.connect(self._redraw)
 
         self.intent_combo = QComboBox()
