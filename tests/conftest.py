@@ -12,9 +12,12 @@ import tempfile
 # sits at the very top of this file, ahead of every other import.
 _TEST_HOME = tempfile.mkdtemp(prefix="displaycal-test-home-")
 os.environ["HOME"] = _TEST_HOME
-os.environ.setdefault("XDG_CACHE_HOME", os.path.join(_TEST_HOME, ".cache"))
-os.environ.setdefault("XDG_CONFIG_HOME", os.path.join(_TEST_HOME, ".config"))
-os.environ.setdefault("XDG_DATA_HOME", os.path.join(_TEST_HOME, ".local", "share"))
+# Force (not setdefault) these: CI runners (e.g. GitHub Actions) often already
+# export XDG_CONFIG_HOME/XDG_CACHE_HOME/XDG_DATA_HOME pointing outside
+# _TEST_HOME, which would defeat the isolation above.
+os.environ["XDG_CACHE_HOME"] = os.path.join(_TEST_HOME, ".cache")
+os.environ["XDG_CONFIG_HOME"] = os.path.join(_TEST_HOME, ".config")
+os.environ["XDG_DATA_HOME"] = os.path.join(_TEST_HOME, ".local", "share")
 if sys.platform == "win32":
     # Best-effort: the pywin32 SHGetSpecialFolderPath lookup DisplayCAL uses on
     # Windows queries the OS directly and ignores these, but the ctypes
