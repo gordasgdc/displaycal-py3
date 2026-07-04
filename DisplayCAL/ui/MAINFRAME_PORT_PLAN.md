@@ -206,7 +206,7 @@ threading around the subprocess (wx `delayedresult` → Qt `QThread`) and the
 deferral → `QTimer.singleShot`) also belong to that layer, so the engine just
 holds and hands back the pending function.
 
-### Stage 3 — Qt main window shell + settings tabs — **shell landed**
+### Stage 3 — Qt main window shell + settings tabs — **DONE**
 
 Build `DisplayCAL/ui/main_window.py` (`MainWindow(BaseWindow)`): the tabbed
 layout, menubar, display/instrument selectors, and the calibration/profiling
@@ -239,10 +239,43 @@ provides:
 - Gated behind `--qt`: `DisplayCAL/main.py::_get_qt_main(None)` now returns this
   window's `main`, so `DISPLAYCAL_UI=qt` launches it instead of the wx frame.
 
-**Follow-up slices (next):** populate the Calibration, Profiling and 3D LUT tabs
-(currently scaffolded placeholder panels), embed the ported tool panels, and
-build the header / menu detail. The `get_*` settings getters deferred from
-Stage 0 land here as their Qt controls are added.
+**Landed (Calibration / Profiling / 3D LUT tabs):** the three placeholder panels
+are now real, config-backed settings tabs, covered by the expanded
+`tests/test_ui_main_window.py` (40 tests, headless offscreen):
+
+- **Calibration:** interactive-adjustment / calibration-update toggles;
+  whitepoint (native / colortemp / xy, with the active field shown per mode and
+  persisted to `whitepoint.colortemp` / `whitepoint.x` / `whitepoint.y`); white
+  and black level (as-measured / custom → `calibration.luminance` /
+  `calibration.black_luminance`); tone response curve (the 8-row selector +
+  gamma text + relative/absolute type → `trc` / `trc.type`, faithful to the wx
+  `get_trc` / reverse mapping including the BT.1886 and Gamma-2.2 presets); black
+  output offset and black point correction sliders (0-100 → 0.0-1.0); ambient
+  light level adjust; and the calibration speed slider with its inverse-quality
+  label.
+- **Profiling:** profile type (`profile.type`, modern-Argyll ordering), black
+  point compensation, profile quality slider (with the gamma+matrix
+  force-to-high coercion honoured by `config`), and the profile-name template.
+- **3D LUT:** create-after-profiling, file format, LUT size, input/output bit
+  depth, rendering intent, apply-TRC and apply-black-offset — all derived from
+  `config.VALID_VALUES` so they track Argyll's supported sets.
+
+The load-bearing marshalling (`CALIBRATION_QUALITY_LEVELS` /
+`PROFILE_QUALITY_LEVELS` sliders, `PROFILE_TYPES`, `trc_value_from_selection` /
+`trc_selection_from_config`, `lut3d_*_items`) is factored into pure module
+functions and unit-tested without a display. Checkbox and value-combo bindings go
+through generic `_add_check` / `_add_value_combo` helpers plus the `_updating`
+re-entrancy guard, so construction-time repopulation never clobbers stored
+config. The `get_*` settings getters deferred from Stage 0 are realised here as
+the control-reading logic behind these tabs.
+
+**Deferred to later slices (Pile 2 / Stage 4-5):** the measure / visual-editor /
+ambient-measure buttons, the gamap and testchart-editor / file-picker / profile
+save-path launch buttons, profile-name token expansion + the `?` preview, the
+`show_advanced_options` show/hide gating, the estimated-measurement-time
+readouts, the black-point-rate advanced control, and the 3D LUT encoding /
+HDR / content-colorspace sub-controls. These depend on tools, dialogs or the
+Stage-4 flow and are rebuilt natively as those land.
 
 ### Stage 4 — Calibrate / measure / profile actions
 

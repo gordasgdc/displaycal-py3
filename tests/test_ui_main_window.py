@@ -71,6 +71,70 @@ def test_instrument_items_falls_back_to_raw_name():
     assert items == ["Totally Unknown Meter"]
 
 
+def test_calibration_quality_slider_roundtrip():
+    for level in mw.CALIBRATION_QUALITY_LEVELS:
+        assert mw.slider_to_calibration_quality(
+            mw.calibration_quality_to_slider(level)
+        ) == level
+
+
+def test_profile_quality_slider_roundtrip():
+    for level in mw.PROFILE_QUALITY_LEVELS:
+        assert mw.slider_to_profile_quality(
+            mw.profile_quality_to_slider(level)
+        ) == level
+
+
+def test_calibration_quality_unknown_falls_back_to_default():
+    # An out-of-set value maps to the config default's slider position.
+    assert mw.calibration_quality_to_slider("zzz") == mw.calibration_quality_to_slider(
+        config.DEFAULTS["calibration.quality"]
+    )
+
+
+@pytest.mark.parametrize(
+    "index,text,expected",
+    [
+        (0, "", ""),  # as-measured
+        (1, "2.2", "2.2"),  # Gamma 2.2 (from text)
+        (2, "", "l"),  # L*
+        (3, "", "709"),  # Rec. 709
+        (4, "2.4", "2.4"),  # Rec. 1886 (from text)
+        (5, "", "240"),  # SMPTE 240M
+        (6, "", "s"),  # sRGB
+        (7, "1.8", "1.8"),  # Custom (from text)
+    ],
+)
+def test_trc_value_from_selection(index, text, expected):
+    assert mw.trc_value_from_selection(index, text) == expected
+
+
+def test_trc_selection_from_config_bt1886():
+    # 2.4 / absolute / zero black output offset == BT.1886 preset (row 4).
+    row, text, type_row = mw.trc_selection_from_config(2.4, "G", 0)
+    assert row == 4
+    assert type_row == 1
+    assert text == "2.4"
+
+
+def test_trc_selection_from_config_fixed():
+    row, text, type_row = mw.trc_selection_from_config("709", "g", 1)
+    assert row == 3
+    assert text == ""
+    assert type_row == 0
+
+
+def test_trc_selection_from_config_gamma22_preset():
+    # 2.2 / relative / 100% output offset == the "Gamma 2.2" preset (row 1).
+    row, _text, _type_row = mw.trc_selection_from_config(2.2, "g", 1)
+    assert row == 1
+
+
+def test_profile_types_cover_config_valid_values():
+    values = {value for value, _label in mw.PROFILE_TYPES}
+    assert values == set(config.VALID_VALUES["profile.type"])
+
+
 # --- window construction / wiring ------------------------------------------
 
 
@@ -141,3 +205,117 @@ def test_action_buttons_disabled_until_stage_4(window):
     assert window.calibrate_btn.isEnabled() is False
     assert window.calibrate_and_profile_btn.isEnabled() is False
     assert window.profile_btn.isEnabled() is False
+
+
+# --- Calibration tab wiring ------------------------------------------------
+
+
+def test_interactive_adjustment_persists(window):
+    window.interactive_adjustment_cb.setChecked(False)
+    assert getcfg("calibration.interactive_display_adjustment") == 0
+    window.interactive_adjustment_cb.setChecked(True)
+    assert getcfg("calibration.interactive_display_adjustment") == 1
+
+
+def test_whitepoint_colortemp_mode_persists(window):
+    window.whitepoint_ctrl.setCurrentIndex(1)  # color temperature
+    window.whitepoint_colortemp_ctrl.setValue(5800)
+    assert getcfg("whitepoint.colortemp") == 5800
+    # x/y are cleared so the stored mode round-trips back to color-temp.
+    assert getcfg("whitepoint.x", False) is None
+
+
+def test_whitepoint_native_clears_all(window):
+    window.whitepoint_ctrl.setCurrentIndex(1)
+    window.whitepoint_colortemp_ctrl.setValue(5000)
+    window.whitepoint_ctrl.setCurrentIndex(0)  # native
+    assert getcfg("whitepoint.colortemp", False) is None
+    assert getcfg("whitepoint.x", False) is None
+
+
+def test_luminance_custom_persists(window):
+    window.luminance_ctrl.setCurrentIndex(1)  # custom
+    window.luminance_textctrl.setValue(100.0)
+    assert getcfg("calibration.luminance") == 100.0
+    window.luminance_ctrl.setCurrentIndex(0)  # as-measured
+    assert getcfg("calibration.luminance", False) is None
+
+
+def test_trc_selection_persists(window):
+    window.trc_ctrl.setCurrentIndex(2)  # L*
+    assert getcfg("trc") == "l"
+
+
+def test_black_output_offset_slider_persists(window):
+    window.black_output_offset_ctrl.setValue(50)
+    assert getcfg("calibration.black_output_offset") == 0.5
+
+
+def test_calibration_quality_slider_persists(window):
+    window.calibration_quality_ctrl.setValue(4)
+    assert getcfg("calibration.quality") == "h"
+
+
+def test_calibration_controls_reflect_config(qapp, stub_worker):
+    setcfg("trc", "709")
+    setcfg("calibration.quality", "u")
+    setcfg("calibration.black_output_offset", 0.25)
+    win = mw.MainWindow()
+    try:
+        assert win.trc_ctrl.currentIndex() == 3
+        assert win.calibration_quality_ctrl.value() == 5
+        assert win.black_output_offset_ctrl.value() == 25
+    finally:
+        win.close()
+
+
+# --- Profiling tab wiring --------------------------------------------------
+
+
+def test_profile_type_persists(window):
+    window.profile_type_ctrl.setCurrentIndex(2)  # LabLUT
+    assert getcfg("profile.type") == "l"
+
+
+def test_profile_quality_persists(window):
+    # Use a cLUT type so the quality is not coerced to high (gamma+matrix rule).
+    setcfg("profile.type", "l")
+    window.profile_quality_ctrl.setValue(2)
+    assert getcfg("profile.quality") == "m"
+
+
+def test_profile_name_persists(window):
+    window.profile_name_textctrl.setText("my profile")
+    window._profile_name_changed()
+    assert getcfg("profile.name") == "my profile"
+
+
+# --- 3D LUT tab wiring -----------------------------------------------------
+
+
+def test_lut3d_create_persists(window):
+    window.lut3d_create_cb.setChecked(True)
+    assert getcfg("3dlut.create") == 1
+
+
+def test_lut3d_size_persists(window):
+    window.lut3d_size_ctrl.setCurrentIndex(0)
+    assert getcfg("3dlut.size") == config.VALID_VALUES["3dlut.size"][0]
+
+
+def test_lut3d_rendering_intent_persists(window):
+    intents = config.VALID_VALUES["3dlut.rendering_intent"]
+    window.lut3d_rendering_intent_ctrl.setCurrentIndex(2)
+    assert getcfg("3dlut.rendering_intent") == intents[2]
+
+
+def test_populating_calibration_does_not_write_config(qapp, stub_worker):
+    setcfg("calibration.quality", "u")
+    setcfg("trc", "709")
+    win = mw.MainWindow()
+    try:
+        # Repopulation on construction must not clobber the stored values.
+        assert getcfg("calibration.quality") == "u"
+        assert getcfg("trc") == "709"
+    finally:
+        win.close()
