@@ -449,12 +449,31 @@ indicator, and the `menu` / `measuring` phase transition. Tested against real
 `dispcal` interactive output (captured in the wx frame's own test fixtures)
 across every page type and both LCD / CRT measurement modes.
 
-**Sub-slice 5c-ii — Qt `DisplayAdjustmentFrame` widget.** Build the Qt window:
-the five adjustment pages (black level / white point / white level / black point
-/ check-all) with their gauges + read-out labels, the start-adjustment /
-continue-to-calibration / sound buttons, and the keyboard handling, rendering the
-5c-i `AdjustmentReadings` onto the widgets. Drop the fancy presentation
-(animated indicator, gradient `PyGauge`, sound loop) as the other tool ports did.
+**Sub-slice 5c-ii — Qt `DisplayAdjustmentFrame` widget — DONE.**
+`DisplayCAL/ui/display_adjustment_window.py` (`DisplayAdjustmentWindow(BaseWindow)`
+plus a private `_AdjustmentPage(QWidget)`), covered by
+`tests/test_ui_display_adjustment_window.py` (19 tests, headless offscreen). It
+builds the five adjustment pages (black level / white point / white level /
+black point / check-all) — each an `_AdjustmentPage` holding its own
+`AdjustmentContext`, gauges (`QProgressBar`) and read-out labels (a label + a
+checkmark icon) — behind an icon-only `QToolButton` selector column (the Qt
+stand-in for the wx `FlatImageBook` left tab strip). `parse_output(txt)` /
+`write(txt)` is the `parse_txt` port: it runs each `dispcal` chunk through the
+5c-i `parse_adjustment()` and renders the returned `AdjustmentReadings` onto the
+current page (gauge values, label text, green + checkmark when in tolerance,
+indicator dot), then applies the menu / measuring **phase** transitions to the
+start-stop / continue buttons and `is_measuring` / `is_busy` state. `setup()`
+ports `_setup`'s mode-dependent page enabling (LCD disables the black pages,
+selects white point; CRT selects black level when a black luminance is set) and
+the calibration-button label (`calibration.start` / `.skip` / `finish`), and
+swaps the CRT/LCD icons. The window is worker-agnostic: instead of calling
+`worker.safe_send` it emits the key to send (`" "` / `"1"`..`"5"` / `"7"` /
+`"8"` / raw menu key) on the `send_requested` signal, and `pulse()` /
+`UpdateProgress()` / `UpdatePulse()` implement the `progress_wnd` status contract.
+Geometry shares the `position.progress.*` keys with the progress window. **Dropped**
+(matching the other ports): the animated indicator (now a static dot), the
+gradient `PyGauge` (now a plain `QProgressBar`), and the looping sound (now a
+single best-effort beep behind an overridable `_play_sound` seam).
 
 **Sub-slice 5c-iii — wire the calibrate path.** Have the Qt worker driver run the
 interactive `dispcal` with the 5c-ii window as the `progress_wnd` (marshalling
