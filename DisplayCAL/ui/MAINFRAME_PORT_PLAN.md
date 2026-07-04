@@ -426,7 +426,41 @@ dialogs, and verifying the run end-to-end against a real colorimeter.
 `wx_display_adjustment_frame.py::DisplayAdjustmentFrame` (the interactive
 display-adjustment window shown during `worker.calibrate`), so the `CALIBRATE`
 action's interactive path runs. This is the large Pile-2 interactive window the
-calibrate flow needs; the profile path (5b) does not.
+calibrate flow needs (the profile path, 5b, does not), so like 5b it lands as
+sub-slices.
+
+**Sub-slice 5c-i — toolkit-neutral adjustment parser — DONE.**
+`DisplayCAL/ui/display_adjustment.py` `parse_adjustment()`, covered by
+`tests/test_ui_display_adjustment.py` (14 tests, no display). The interactive
+window works by parsing the text `dispcal` streams while it measures, turning
+each reading into gauge positions, target / current read-outs and an
+in-tolerance check mark. That parsing — the regex extraction plus the gauge /
+tolerance maths in `DisplayAdjustmentFrame.parse_txt` — is toolkit-neutral, but
+in wx it is interleaved with `Freeze`/`Thaw`, `SetValue` and check-mark
+show/hide on live widgets, so it cannot be reused as-is (the same reason
+`worker_runner.parse_progress` was lifted out of the progress handler for the
+non-interactive path). `parse_adjustment(txt, ctx)` is the pure port: it takes a
+`dispcal` chunk plus an `AdjustmentContext` (the per-page state wx keeps on the
+frame — `target_br` / `initial_br` / `target_bl`), updates that context in place,
+and returns an `AdjustmentReadings` describing the gauges (`L`/`R`/`G`/`B`
+needle positions), the per-metric labels (`luminance` / `black_level` / `rgb` /
+`white_point` / `black_point`, each with an `in_tolerance` flag), the measuring
+indicator, and the `menu` / `measuring` phase transition. Tested against real
+`dispcal` interactive output (captured in the wx frame's own test fixtures)
+across every page type and both LCD / CRT measurement modes.
+
+**Sub-slice 5c-ii — Qt `DisplayAdjustmentFrame` widget.** Build the Qt window:
+the five adjustment pages (black level / white point / white level / black point
+/ check-all) with their gauges + read-out labels, the start-adjustment /
+continue-to-calibration / sound buttons, and the keyboard handling, rendering the
+5c-i `AdjustmentReadings` onto the widgets. Drop the fancy presentation
+(animated indicator, gradient `PyGauge`, sound loop) as the other tool ports did.
+
+**Sub-slice 5c-iii — wire the calibrate path.** Have the Qt worker driver run the
+interactive `dispcal` with the 5c-ii window as the `progress_wnd` (marshalling
+`write` / `parse_txt` / `Pulse` from the worker thread to the GUI thread, buttons
+calling `worker.safe_send`), then connect `MainWindow`'s `CALIBRATE` /
+`CALIBRATE_AND_PROFILE` actions to it (replacing the not-yet-available notice).
 
 ### Stage 5+ — Reporting, colorimeter corrections, install/share
 
