@@ -263,3 +263,63 @@ def test_controller_pause_reflects_to_adapter(qapp):
         assert ctrl._adapter.paused is True
     finally:
         dlg.deleteLater()
+
+
+def test_adapter_confirm_same_thread_shows_directly(qapp):
+    # Called on the GUI thread (unusual), confirm() shows directly, no blocking.
+    dlg = pd.ProgressDialog()
+    adapter = wr.ProgressAdapter(dlg)
+    adapter._ask = lambda request: True
+    try:
+        assert adapter.confirm("hi", "OK", "Cancel") is True
+    finally:
+        dlg.deleteLater()
+
+
+def test_adapter_confirm_blocks_worker_until_gui_answers(qapp):
+    # A confirm requested from the worker thread is shown on the GUI thread and
+    # blocks the worker until the GUI answers; the request carries the prompt.
+    dlg = pd.ProgressDialog()
+    adapter = wr.ProgressAdapter(dlg)
+    seen = {}
+
+    def fake_ask(request):
+        seen["msg"] = request.msg
+        seen["ok"] = request.ok
+        seen["cancel"] = request.cancel
+        seen["icon"] = request.icon
+        return True
+
+    adapter._ask = fake_ask
+    results = []
+    thread = wr._ProducerThread(
+        lambda: adapter.confirm("place it", "OK", "Cancel", "dialog-warning")
+    )
+    thread.finished_with_result.connect(results.append)
+    try:
+        thread.start()
+        assert _spin_until(qapp, lambda: results)
+        assert results == [True]
+        assert seen["msg"] == "place it"
+        assert seen["ok"] == "OK"
+        assert seen["cancel"] == "Cancel"
+        assert seen["icon"] == "dialog-warning"
+    finally:
+        thread.wait()
+        dlg.deleteLater()
+
+
+def test_adapter_confirm_returns_false_on_cancel(qapp):
+    dlg = pd.ProgressDialog()
+    adapter = wr.ProgressAdapter(dlg)
+    adapter._ask = lambda request: False
+    results = []
+    thread = wr._ProducerThread(lambda: adapter.confirm("x", "OK", "No"))
+    thread.finished_with_result.connect(results.append)
+    try:
+        thread.start()
+        assert _spin_until(qapp, lambda: results)
+        assert results == [False]
+    finally:
+        thread.wait()
+        dlg.deleteLater()

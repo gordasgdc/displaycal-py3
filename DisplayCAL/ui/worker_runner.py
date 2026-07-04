@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import contextlib
 import re
+from threading import Event
 from time import time
 from typing import TYPE_CHECKING, Callable
 
@@ -98,6 +99,27 @@ def parse_progress(msg: str, lastmsg: str) -> tuple[float | None, str]:
     return percentage, lastmsg
 
 
+class _ConfirmRequest:
+    """A pending confirmation, handed from the worker thread to the GUI thread.
+
+    The worker thread fills in the prompt fields and blocks on :attr:`event`;
+    the GUI thread shows the dialog, writes :attr:`result` and sets the event,
+    releasing the worker thread. This is how the Qt adapter reproduces the
+    blocking ``ConfirmDialog.ShowModal()`` the worker previously called inline
+    (see ``DisplayCAL/ui/MAINFRAME_PORT_PLAN.md``, Stage 5, sub-slice 5b-iii).
+    """
+
+    __slots__ = ("cancel", "event", "icon", "msg", "ok", "result")
+
+    def __init__(self, msg: str, ok: str, cancel: str, icon: str) -> None:
+        self.msg = msg
+        self.ok = ok
+        self.cancel = cancel
+        self.icon = icon
+        self.result = False
+        self.event = Event()
+
+
 class _ProducerThread(QThread):
     """Run a worker producer off the GUI thread.
 
@@ -155,6 +177,7 @@ class ProgressAdapter(QObject):
     _message = Signal(str)
     _progress = Signal(float, str)
     _title = Signal(str)
+    _confirm_requested = Signal(object)
 
     def __init__(self, dialog: ProgressDialog, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -169,6 +192,9 @@ class ProgressAdapter(QObject):
         self._message.connect(self._apply_message)
         self._progress.connect(self._apply_progress)
         self._title.connect(self._apply_title)
+        # Queued so a confirm requested from the worker thread is shown on the
+        # GUI thread; the worker thread blocks until the request is answered.
+        self._confirm_requested.connect(self._on_confirm_requested)
 
     # -- wx progress_wnd interface (may run on the worker thread) -----------
 
@@ -213,6 +239,65 @@ class ProgressAdapter(QObject):
     def reset(self) -> None:
         """Reset progress (no-op flag reset; the controller resets the dialog)."""
         self.keepGoing = True
+
+    def confirm(  # noqa: PLR0913
+        self,
+        msg: str,
+        ok: str,
+        cancel: str,
+        icon: str = "dialog-information",
+    ) -> bool:
+        """Show a modal confirmation and block the worker thread for the answer.
+
+        Called from the worker thread in place of the wx
+        ``ConfirmDialog.ShowModal()`` the worker used to run inline. The request
+        is marshalled to the GUI thread (which owns the dialog) and this call
+        blocks until the user answers, mirroring the modal wx behaviour.
+
+        Args:
+            msg (str): The message to show.
+            ok (str): The confirm (accept) button label.
+            cancel (str): The cancel (reject) button label.
+            icon (str): The icon name, ``"dialog-warning"`` for a warning else
+                an information icon.
+
+        Returns:
+            bool: True if the user confirmed, False if they cancelled.
+        """
+        request = _ConfirmRequest(msg, ok, cancel, icon)
+        if QThread.currentThread() is self.thread():
+            # Already on the GUI thread (unusual): show directly, no blocking.
+            return self._ask(request)
+        self._confirm_requested.emit(request)
+        request.event.wait()
+        return request.result
+
+    def _on_confirm_requested(self, request: _ConfirmRequest) -> None:
+        """Show the confirm dialog on the GUI thread and release the worker."""
+        try:
+            request.result = self._ask(request)
+        finally:
+            request.event.set()
+
+    def _ask(self, request: _ConfirmRequest) -> bool:
+        """Show the actual Qt confirm dialog (GUI thread).
+
+        Split out as the single toolkit touch-point so tests can drive the
+        blocking round-trip without a real modal event loop.
+        """
+        from qtpy.QtWidgets import QMessageBox
+
+        box = QMessageBox(self._dialog)
+        box.setIcon(
+            QMessageBox.Icon.Warning
+            if request.icon == "dialog-warning"
+            else QMessageBox.Icon.Information
+        )
+        box.setText(request.msg)
+        ok_button = box.addButton(request.ok, QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(request.cancel, QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        return box.clickedButton() is ok_button
 
     # The worker probes these for visibility / layout; they are not meaningful
     # for the adapter, so they are safe no-ops / simple answers.

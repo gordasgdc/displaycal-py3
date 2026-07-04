@@ -3579,6 +3579,45 @@ class Worker(WorkerBase):
             self.do_single_measurement()
             self.is_ambient_measurement = False
 
+    def _prompt_confirm(self, msg, ok=None, cancel=None, icon="dialog-information"):
+        """Show a modal confirmation and return whether the user confirmed.
+
+        Toolkit-neutral seam for the mid-measurement instrument prompts. A Qt
+        progress adapter (``DisplayCAL.ui.worker_runner.ProgressAdapter``)
+        services this through its ``confirm()`` method; the wx progress windows
+        have no such method, so the fallback builds the same wx ``ConfirmDialog``
+        the prompts used inline, preserving the existing behaviour exactly.
+
+        Args:
+            msg (str): The message to show.
+            ok (str): The confirm button label. Defaults to the localized "ok".
+            cancel (str): The cancel button label. Defaults to localized
+                "cancel".
+            icon (str): The icon name passed to ``get_icon`` for the wx dialog
+                and mapped by the Qt adapter.
+
+        Returns:
+            bool: True if the user confirmed, False otherwise.
+        """
+        if ok is None:
+            ok = lang.getstr("ok")
+        if cancel is None:
+            cancel = lang.getstr("cancel")
+        confirm = getattr(self.progress_wnd, "confirm", None)
+        if callable(confirm):
+            return confirm(msg, ok, cancel, icon)
+        dlg = ConfirmDialog(
+            self.progress_wnd,
+            msg=msg,
+            ok=ok,
+            cancel=cancel,
+            bitmap=get_icon(32, icon),
+        )
+        self.progress_wnd.dlg = dlg
+        dlg_result = dlg.ShowModal()
+        dlg.Destroy()
+        return dlg_result == wx.ID_OK
+
     def do_single_measurement(self):
         """Perform a single measurement, e.g. ambient light measurement."""
         if getattr(self, "subprocess_abort", False) or getattr(
@@ -3589,19 +3628,12 @@ class Worker(WorkerBase):
         self.progress_wnd.Pulse(" " * 4)
         if self.is_ambient_measurement:
             self.is_ambient_measurement = False
-            dlg = ConfirmDialog(
-                self.progress_wnd,
-                msg=lang.getstr("instrument.measure_ambient"),
-                ok=lang.getstr("ok"),
-                cancel=lang.getstr("cancel"),
-                bitmap=get_icon(32, "dialog-information"),
+            confirmed = self._prompt_confirm(
+                lang.getstr("instrument.measure_ambient")
             )
-            self.progress_wnd.dlg = dlg
-            dlg_result = dlg.ShowModal()
-            dlg.Destroy()
             if self.finished:
                 return None
-            if dlg_result != wx.ID_OK:
+            if not confirmed:
                 self.abort_subprocess()
                 return False
         if self.safe_send(" "):
@@ -4139,9 +4171,8 @@ END_DATA
             self.madtpg_show_osd(
                 msg, sys.platform == "win32" and self.single_real_display()
             )
-        dlg = ConfirmDialog(
-            self.progress_wnd,
-            msg="{}\n\n{}".format(
+        confirmed = self._prompt_confirm(
+            "{}\n\n{}".format(
                 msg,
                 (
                     (
@@ -4161,20 +4192,15 @@ END_DATA
                     or self.get_instrument_name()
                 ),
             ),
-            ok=lang.getstr("ok"),
-            cancel=lang.getstr("cancel"),
-            bitmap=get_icon(32, "dialog-information"),
+            icon="dialog-information",
         )
-        self.progress_wnd.dlg = dlg
-        dlg_result = dlg.ShowModal()
-        dlg.Destroy()
         if self.finished:
             self.log(
                 f"{APPNAME}: Ignoring instrument calibration prompt (worker "
                 "thread finished)"
             )
             return None
-        if dlg_result != wx.ID_OK:
+        if not confirmed:
             self.log(f"{APPNAME}: Canceled instrument calibration prompt")
             self._last_calibration_msg = None
             self.abort_subprocess()
@@ -4305,9 +4331,8 @@ END_DATA
                 lang.getstr("instrument.place_on_screen"),
                 sys.platform == "win32" and self.single_real_display(),
             )
-        dlg = ConfirmDialog(
-            self.progress_wnd,
-            msg="{}\n\n{}".format(
+        confirmed = self._prompt_confirm(
+            "{}\n\n{}".format(
                 lang.getstr("instrument.place_on_screen"),
                 (
                     (
@@ -4327,20 +4352,15 @@ END_DATA
                     or self.get_instrument_name()
                 ),
             ),
-            ok=lang.getstr("ok"),
-            cancel=lang.getstr("cancel"),
-            bitmap=get_icon(32, "dialog-information"),
+            icon="dialog-information",
         )
-        self.progress_wnd.dlg = dlg
-        dlg_result = dlg.ShowModal()
-        dlg.Destroy()
         if self.finished:
             self.log(
                 f"{APPNAME}: Ignoring instrument placement prompt (worker thread "
                 "finished)"
             )
             return None
-        if dlg_result != wx.ID_OK:
+        if not confirmed:
             self.log(f"{APPNAME}: Canceled instrument placement prompt")
             self.abort_subprocess()
             return False
@@ -4376,23 +4396,17 @@ END_DATA
                 lang.getstr("instrument.reposition_sensor"),
                 sys.platform == "win32" and self.single_real_display(),
             )
-        dlg = ConfirmDialog(
-            self.progress_wnd,
-            msg=lang.getstr("instrument.reposition_sensor"),
-            ok=lang.getstr("ok"),
-            cancel=lang.getstr("cancel"),
-            bitmap=get_icon(32, "dialog-warning"),
+        confirmed = self._prompt_confirm(
+            lang.getstr("instrument.reposition_sensor"),
+            icon="dialog-warning",
         )
-        self.progress_wnd.dlg = dlg
-        dlg_result = dlg.ShowModal()
-        dlg.Destroy()
         if self.finished:
             self.log(
                 f"{APPNAME}: Ignoring instrument sensor repositioning prompt (worker "
                 "thread finished)"
             )
             return None
-        if dlg_result != wx.ID_OK:
+        if not confirmed:
             self.log(f"{APPNAME}: Canceled instrument sensor repositioning prompt")
             self.abort_subprocess()
             return False

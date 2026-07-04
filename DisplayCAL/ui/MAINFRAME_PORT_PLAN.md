@@ -379,15 +379,32 @@ shows the 5a `ProgressDialog`, polls the worker output buffers on a GUI-thread
 completion; the dialog's `cancelled` / `pause_toggled` signals drive
 `abort_subprocess()` / the adapter pause flag.
 
-Not yet wired to `MainWindow.measurement_requested`: that waits on 5b-iii (the
-worker pops wx instrument dialogs mid-run, which would still crash a real run),
-so the controller is landed and unit-tested but not connected to a live button.
+Not yet wired to `MainWindow.measurement_requested`: that waited on 5b-iii (the
+worker popped wx instrument dialogs mid-run, which would crash a real run under
+the pure-Qt app), now resolved. Wiring the live button is the next step.
 
-**Sub-slice 5b-iii — Qt instrument-prompt dialogs.** Port the mid-measurement
+**Sub-slice 5b-iii — Qt instrument-prompt dialogs — DONE.** The mid-measurement
 prompts the worker pops on the measurement thread (place instrument on
-screen/spot, sensor position, instrument self-calibration, retry measurement),
-replacing the `self.progress_wnd.dlg = <wx dialog>` constructions with Qt
-equivalents surfaced through the adapter. Required for any real colorimeter run.
+screen/spot, sensor self-calibration, reposition sensor, ambient single
+measurement) previously built a wx `ConfirmDialog` inline and blocked the
+worker thread on `ShowModal()`. Those four sites (`instrument_place_on_screen`,
+`do_instrument_calibration`, `instrument_reposition_sensor`,
+`do_single_measurement`) now route through a new toolkit-neutral
+`Worker._prompt_confirm(msg, ok, cancel, icon)` seam: if `progress_wnd` exposes
+a callable `confirm` (the Qt adapter) it is used, otherwise the exact wx
+`ConfirmDialog` fallback runs, so the shipping wx path is byte-for-byte
+unchanged. On the Qt side, `ProgressAdapter.confirm()` is called from the worker
+thread, marshals a `_ConfirmRequest` to the GUI thread via a queued signal,
+shows a `QMessageBox`, and blocks the worker thread on a `threading.Event` until
+the user answers, reproducing the modal `ShowModal()` contract. The
+`QMessageBox` construction is isolated in `ProgressAdapter._ask()` so the
+blocking round-trip is unit-testable headless without a real modal loop.
+`abort_subprocess`'s confirm-cancel dialog is left on the wx path (the Qt
+controller only ever calls `abort_subprocess(confirm=False)`).
+
+Next: wire `MainWindow.measurement_requested` to
+`WorkerRunController.run(worker.measure, ...)` for the profile/measure path,
+then verify against a real colorimeter.
 
 **Sub-slice 5c — interactive `DisplayAdjustmentFrame`.** Port
 `wx_display_adjustment_frame.py::DisplayAdjustmentFrame` (the interactive
