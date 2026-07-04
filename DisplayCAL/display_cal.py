@@ -3234,14 +3234,11 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self.menuitem_use_simple_splash = options.FindItemById(
             options.FindItem("splash.simple")
         )
-        if sys.platform == "darwin":
-            self.Bind(
-                wx.EVT_MENU,
-                self.use_simple_splash_handler,
-                self.menuitem_use_simple_splash,
-            )
-        else:
-            options.RemoveItem(self.menuitem_use_simple_splash)
+        self.Bind(
+            wx.EVT_MENU,
+            self.use_simple_splash_handler,
+            self.menuitem_use_simple_splash,
+        )
         self.menuitem_use_fancy_progress = options.FindItemById(
             options.FindItem("use_fancy_progress")
         )
@@ -21888,9 +21885,7 @@ class StartupFrame(start_cls):
                 self.SetWindowShape()
 
         # Setup splash screen
-        self.use_simple_splash = sys.platform == "darwin" and bool(
-            getcfg("splash.simple")
-        )
+        self.use_simple_splash = bool(getcfg("splash.simple"))
         self.splash_bmp = get_bitmap(
             "theme/splash-simple" if self.use_simple_splash else "theme/splash"
         )
