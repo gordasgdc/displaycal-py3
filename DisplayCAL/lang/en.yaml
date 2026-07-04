@@ -2250,6 +2250,8 @@
   Starting up...
 "startup_sound.enable": |-
   Enable startup sound
+"splash.simple": |-
+  Use simple splash screen
 "success": |-
   ...ok.
 "surround_xyz": |-

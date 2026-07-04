@@ -1904,6 +1904,7 @@ DEFAULTS = {
     "skip_legacy_serial_ports": 1,
     "skip_scripts": 1,
     "splash.zoom": 0,
+    "splash.simple": 0,
     "startup_sound.enable": 1,
     "sudo.preserve_environment": 1,
     "synthprofile.black_luminance": 0.0,
