@@ -1,3 +1,5 @@
+import io
+import json
 import os
 import platform
 import sys
@@ -11,6 +13,7 @@ import wx
 from wx import AppConsole, Button
 
 from DisplayCAL import display_cal, config
+from DisplayCAL import localization as lang
 from DisplayCAL.cgats import CGATS
 from DisplayCAL.config import get_ccxx_testchart, get_icon, getcfg, setcfg
 from DisplayCAL.dev.mocks import check_call, check_call_str
@@ -19,6 +22,7 @@ from DisplayCAL.display_cal import (
     app_up_to_date,
     check_donation,
     colorimeter_correction_check_overwrite,
+    colorimeter_correction_web_check_choose,
     donation_message,
     ExtraArgsFrame,
     GamapFrame,
@@ -155,6 +159,59 @@ def test_colorimeter_correction_check_overwrite(
     finally:
         if os.path.exists(target_path):
             os.remove(target_path)
+
+
+def test_colorimeter_correction_web_check_choose_observer_column(
+    mainframe: MainFrame,
+) -> None:
+    """Regression test: REFERENCE_OBSERVER bytes vs str mismatch.
+
+    ``CGATS.queryv1()`` returns bytes for "REFERENCE_OBSERVER", but
+    ``MainFrame.observers_ab`` (built from ``config.VALID_VALUES["observer"]``)
+    is keyed by str. Looking the bytes value up directly always missed, so the
+    web-check dialog's "observer" column silently fell back to "unknown" for
+    every CCMX correction instead of resolving the real label.
+    """
+    cgats_text = (
+        'CCMX\n\n'
+        'DESCRIPTOR "test"\n'
+        'DISPLAY "LCD Monitor"\n'
+        'REFERENCE_OBSERVER "1931_2"\n'
+        'FIT_METHOD "xy"\n'
+    )
+    entry = {
+        "cgats": cgats_text,
+        "type": "ccmx",
+        "display": "Dell U2413",
+        "manufacturer": "Dell",
+        "reference": "i1 Pro",
+        "description": "i1 DisplayPro, ColorMunki Display",
+    }
+    resp = io.BytesIO(json.dumps([entry]).encode("utf-8"))
+    expected_label = mainframe.observers_ab["1931_2"]
+    with check_call(BaseInteractiveDialog, "ShowWindowModalBlocking", wx.ID_CANCEL):
+        with check_call(wx.ListCtrl, "SetStringItem", call_count=-1) as calls:
+            colorimeter_correction_web_check_choose(resp, mainframe)
+    # SetStringItem(index, col, label) is called on the ListCtrl instance, so
+    # the recorded args are (self, index, col, label).
+    observer_values = [args[3] for args, _kwargs in calls if args[2] == 5]
+    assert observer_values
+    assert expected_label in observer_values
+    assert lang.getstr("unknown") not in observer_values
+
+
+def test_upload_colorimeter_correction_accepts_str_cgats(mainframe: MainFrame) -> None:
+    """Regression test: a str ``cgats`` argument must not raise ``TypeError``.
+
+    ``upload_colorimeter_correction_handler`` reads the file as str
+    (``.decode()``) before calling ``MainFrame.upload_colorimeter_correction``,
+    but that method ran a bytes-pattern regex directly against it, raising
+    ``TypeError`` for every manually-chosen upload file.
+    """
+    cgats_text = 'CCMX\n\nORIGINATOR "Argyll dispcal"\nDISPLAY "LCD Monitor"\n'
+    with check_call(BaseInteractiveDialog, "ShowWindowModalBlocking", wx.ID_OK):
+        with check_call(Worker, "start", call_count=1):
+            mainframe.upload_colorimeter_correction(cgats_text)
 
 
 @pytest.mark.parametrize("file", ("0_16.ti3", "0_16_with_refresh.ti3", "default.ti3"))
