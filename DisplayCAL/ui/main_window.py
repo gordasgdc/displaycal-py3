@@ -14,19 +14,25 @@ module is the **shell** those slices grow into plus the four settings tabs:
 * the **Calibration**, **Profiling** and **3D LUT** tabs, whose config-backed
   settings controls are wired to ``config`` through an ``_updating`` re-entrancy
   guard (so repopulation never clobbers the stored selection),
-* the calibrate / profile action-button bar (present but disabled; the actions
-  are wired in Stage 4 against the Stage-2 :mod:`DisplayCAL.ui.measurement_flow`
-  engine).
+* the calibrate / calibrate&profile / profile action-button bar, wired against
+  the Stage-2 :mod:`DisplayCAL.ui.measurement_flow` engine: each button stages a
+  :class:`MeasurementAction` and presents the measurement area (call-pending /
+  in-process measure frame / measure-frame subprocess on a :class:`QThread`),
+  emitting :attr:`MainWindow.measurement_requested` once the user commits.
 
 The ``get_*`` settings getters deferred from Stage 0 land here as the Qt controls
 that back them (whitepoint / TRC / luminance / quality) are built: they read
 control state, mirroring the wx ``MainFrame`` getters, and are exercised through
 the pure marshalling helpers at module scope.
 
-Deferred to later slices (Pile 2 / Stage 4-5): the measure / visual-editor /
-ambient-measure buttons, the gamap and testchart-editor / file-picker launch
-buttons, profile-name token expansion, the advanced-option show/hide gating, the
-estimated-measurement-time readouts and the black-point-rate advanced control.
+Deferred to later slices (Pile 2 / Stage 5): the worker-driven Argyll execution
+behind :attr:`MainWindow.measurement_requested` (the progress dialog and
+interactive display-adjustment window), the pattern-generator setup dialogs
+(Prisma / madTPG / Resolve), the pre-flight confirmation / overwrite dialogs, the
+visual-editor / ambient-measure buttons, the gamap and testchart-editor /
+file-picker launch buttons, profile-name token expansion, the advanced-option
+show/hide gating, the estimated-measurement-time readouts and the
+black-point-rate advanced control.
 
 The window is opt-in behind ``DISPLAYCAL_UI=qt`` / ``--qt`` (wired in
 :mod:`DisplayCAL.main`), so it never displaces the still-shipping wx main window.
@@ -35,10 +41,12 @@ The window is opt-in behind ``DISPLAYCAL_UI=qt`` / ``--qt`` (wired in
 from __future__ import annotations
 
 import contextlib
+import enum
+import os
 import sys
 from typing import TYPE_CHECKING
 
-from qtpy.QtCore import Qt
+from qtpy.QtCore import Qt, QThread, QTimer, Signal
 from qtpy.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -49,6 +57,7 @@ from qtpy.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QSizePolicy,
     QSlider,
@@ -61,12 +70,20 @@ from qtpy.QtWidgets import (
 
 from DisplayCAL import config
 from DisplayCAL import localization as lang
-from DisplayCAL.config import DEFAULTS, getcfg, setcfg
+from DisplayCAL.config import DEFAULTS, getcfg, setcfg, writecfg
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import get_theme_pixmap
 from DisplayCAL.ui.base_window import BaseWindow
-from DisplayCAL.ui.measurement_flow import MeasurementFlow, observer_items
+from DisplayCAL.ui.measure_frame import MeasureFrame
+from DisplayCAL.ui.measurement_flow import (
+    MeasurementFlow,
+    PresentationMode,
+    build_measureframe_command,
+    interpret_measureframe_result,
+    observer_items,
+    run_measureframe_subprocess,
+)
 from DisplayCAL.util_decimal import stripzeros
 from DisplayCAL.worker import Worker
 
@@ -129,6 +146,54 @@ _TRC_ITEMS = (
 _TRC_TEXT_ROWS = (1, 4, 7)
 #: TRC rows that map straight to a fixed config value.
 _TRC_FIXED = {2: "l", 3: "709", 5: "240", 6: "s"}
+
+
+class MeasurementAction(enum.Enum):
+    """Which measurement workflow an action button triggers.
+
+    Mirrors the wx button handlers (``calibrate_btn_handler`` etc.). The engine
+    stages one of these as the pending measurement; the worker-driven Argyll run
+    behind it lands in a later slice (see :meth:`MainWindow._drive_measurement`).
+    """
+
+    #: Calibrate only (``MainFrame.just_calibrate``).
+    CALIBRATE = "calibrate"
+    #: Calibrate then characterize (``MainFrame.calibrate_and_profile``).
+    CALIBRATE_AND_PROFILE = "calibrate_and_profile"
+    #: Characterize only (``MainFrame.just_measure`` / ``just_profile``).
+    PROFILE = "profile"
+
+
+class _MeasureframeSubprocessThread(QThread):
+    """Run the measure-frame subprocess off the UI thread.
+
+    The Qt equivalent of the wx ``delayedresult`` producer around
+    ``MainFrame.measureframe_subprocess``: it blocks in
+    :func:`~DisplayCAL.ui.measurement_flow.run_measureframe_subprocess` on a
+    worker thread and reports the ``(returncode, stderr)`` back to the window via
+    :attr:`finished_with_result`.
+    """
+
+    #: Emitted with the subprocess ``(returncode, stderr)`` when it exits.
+    finished_with_result = Signal(int, str)
+
+    def __init__(
+        self, args: list[str], env: dict[str, str], parent: QWidget | None = None
+    ) -> None:
+        super().__init__(parent)
+        self._args = args
+        self._env = env
+        #: The live subprocess, kept so the caller can terminate it.
+        self.process = None
+
+    def run(self) -> None:  # noqa: D102 (QThread override)
+        returncode, stderr = run_measureframe_subprocess(
+            self._args, self._env, on_start=self._store_process
+        )
+        self.finished_with_result.emit(returncode, stderr)
+
+    def _store_process(self, process: object) -> None:
+        self.process = process
 
 
 def _as_float(value: object) -> float | None:
@@ -292,6 +357,16 @@ def lut3d_bitdepth_items() -> list[tuple[int, str]]:
 class MainWindow(BaseWindow):
     """DisplayCAL's Qt main window (shell + all four settings tabs)."""
 
+    #: Emitted (with a :class:`MeasurementAction`) once the user has committed to
+    #: a run and the measurement area has been presented. The worker-driven
+    #: Argyll execution layer connects this in a later slice; see
+    #: :meth:`_drive_measurement`.
+    measurement_requested = Signal(object)
+
+    #: Delay before a staged measurement driver runs, letting the display settle
+    #: (the wx ``call_pending_function`` 100 ms ``CallLater``).
+    _pending_delay_ms = 100
+
     def __init__(self) -> None:
         super().__init__(
             name="mainframe",
@@ -309,6 +384,10 @@ class MainWindow(BaseWindow):
         self._value_combos: dict[str, tuple[QComboBox, list]] = {}
         #: config key -> checkbox for the generic checkbox binder.
         self._value_checks: dict[str, QCheckBox] = {}
+        #: The child measure frame, created lazily on first SHOW_FRAME run.
+        self.measureframe: MeasureFrame | None = None
+        #: The live measure-frame subprocess thread, if any.
+        self._measureframe_thread: _MeasureframeSubprocessThread | None = None
 
         self._build_ui()
         self.init_menubar()
@@ -689,8 +768,8 @@ class MainWindow(BaseWindow):
     def _build_button_bar(self) -> QWidget:
         """Build the calibrate / profile action-button row.
 
-        The buttons are present but disabled in this slice; Stage 4 wires them
-        to the pending measurement functions via :attr:`flow`.
+        The buttons stage a :class:`MeasurementAction` through :attr:`flow` and
+        present the measurement area (see :meth:`begin_measurement`).
         """
         bar = QWidget()
         bar.setObjectName("buttonpanel")
@@ -700,17 +779,20 @@ class MainWindow(BaseWindow):
         row.addStretch(1)
 
         self.calibrate_btn = QPushButton(lang.getstr("button.calibrate"))
+        self.calibrate_btn.clicked.connect(self.calibrate_btn_handler)
         self.calibrate_and_profile_btn = QPushButton(
             lang.getstr("button.calibrate_and_profile")
         )
+        self.calibrate_and_profile_btn.clicked.connect(
+            self.calibrate_and_profile_btn_handler
+        )
         self.profile_btn = QPushButton(lang.getstr("button.profile"))
+        self.profile_btn.clicked.connect(self.profile_btn_handler)
         for button in (
             self.calibrate_btn,
             self.calibrate_and_profile_btn,
             self.profile_btn,
         ):
-            # Actions land in Stage 4; keep them visible but inert for now.
-            button.setEnabled(False)
             button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
             row.addWidget(button)
         return bar
@@ -1082,6 +1164,143 @@ class MainWindow(BaseWindow):
         button = self._tab_buttons[key]
         if not button.isChecked():
             button.setChecked(True)
+
+    # -- measurement actions (Stage 4) ------------------------------------
+
+    def calibrate_btn_handler(self) -> None:
+        """Stage a calibration run and present the measurement area."""
+        self.begin_measurement(MeasurementAction.CALIBRATE)
+
+    def calibrate_and_profile_btn_handler(self) -> None:
+        """Stage a combined calibrate + characterize run."""
+        self.begin_measurement(MeasurementAction.CALIBRATE_AND_PROFILE)
+
+    def profile_btn_handler(self) -> None:
+        """Stage a characterization (profiling) run."""
+        self.begin_measurement(MeasurementAction.PROFILE)
+
+    def begin_measurement(
+        self, action: MeasurementAction, *, wrapup: bool = True
+    ) -> None:
+        """Qt port of ``MainFrame.setup_measurement``.
+
+        Persists config, stages the driver for ``action`` through :attr:`flow`
+        and dispatches on the toolkit-neutral presentation decision:
+
+        * :attr:`~PresentationMode.CALL_PENDING` — run the driver directly
+          (virtual display / dry run),
+        * :attr:`~PresentationMode.SHOW_FRAME` — show the in-process measure
+          frame and route its Measure button to the driver,
+        * :attr:`~PresentationMode.SUBPROCESS` — run the measure frame as a
+          separate process and act on its exit code.
+
+        The pattern-generator setup dialogs the wx path runs first (Prisma /
+        madTPG / Resolve) are Pile-2 glue rebuilt in a later slice.
+
+        Args:
+            action (MeasurementAction): Which workflow to run.
+            wrapup (bool): Whether the caller should wrap up the worker before
+                presenting (passed through on the plan).
+        """
+        writecfg()
+        plan = self.flow.plan_measurement(
+            self._drive_measurement,
+            action,
+            use_patternwindow=getattr(self.worker, "_use_patternwindow", False),
+            wrapup=wrapup,
+        )
+        if plan.mode is PresentationMode.CALL_PENDING:
+            self.call_pending_function()
+        elif plan.mode is PresentationMode.SHOW_FRAME:
+            self._present_measureframe()
+        else:
+            self._start_measureframe_subprocess()
+
+    def call_pending_function(self) -> None:
+        """Qt port of ``MainFrame.call_pending_function``.
+
+        Hides the measure frame (or blanks it under the pattern window), then
+        runs the staged driver after a short delay so the display can settle.
+        """
+        writecfg()
+        if self.measureframe is not None and self.measureframe.isVisible():
+            if getattr(self.worker, "_use_patternwindow", False):
+                self.measureframe.show_controls(False)
+            else:
+                self.measureframe.hide()
+        self._defer(self._run_pending_function)
+
+    def _defer(self, callback: object) -> None:
+        """Run ``callback`` after :attr:`_pending_delay_ms` (overridable in tests)."""
+        QTimer.singleShot(self._pending_delay_ms, callback)
+
+    def _run_pending_function(self) -> None:
+        """Pop and invoke the staged measurement driver."""
+        func, args, kwargs = self.flow.take_pending_function()
+        if func is not None:
+            func(*args, **kwargs)
+
+    def _present_measureframe(self) -> None:
+        """Show the measure frame and route its Measure button to the flow."""
+        self._ensure_measureframe()
+        self.measureframe.show_controls(True)
+        self.measureframe.show()
+        self.measureframe.raise_()
+
+    def _ensure_measureframe(self) -> None:
+        """Create the child measure frame once, wiring its Measure signal."""
+        if self.measureframe is None:
+            self.measureframe = MeasureFrame(self)
+            self.measureframe.measure_requested.connect(self.call_pending_function)
+
+    def _start_measureframe_subprocess(self) -> None:
+        """Run the measure frame as a subprocess on a worker thread."""
+        args = build_measureframe_command()
+        env = os.environ.copy()
+        self._measureframe_thread = _MeasureframeSubprocessThread(args, env, self)
+        self._measureframe_thread.finished_with_result.connect(
+            self._on_measureframe_finished
+        )
+        self._measureframe_thread.start()
+
+    def _on_measureframe_finished(self, returncode: int, stderr: str) -> None:
+        """Qt port of ``MainFrame.measureframe_consumer``.
+
+        Args:
+            returncode (int): The measure-frame subprocess exit code.
+            stderr (str): The subprocess stderr (only used on failure).
+        """
+        result = interpret_measureframe_result(returncode, stderr)
+        if result.config_changed:
+            # The subprocess may have rewritten geometry / display config.
+            config.initcfg()
+            self.update_controls()
+        if result.should_call_pending:
+            self.call_pending_function()
+            return
+        self._restore_after_measurement()
+        if result.error_message:
+            QMessageBox.critical(self, APPNAME, result.error_message)
+
+    def _drive_measurement(self, action: MeasurementAction) -> None:
+        """Run the staged Argyll measurement for ``action``.
+
+        Emits :attr:`measurement_requested` and restores the main window. The
+        worker-driven Argyll execution (the progress dialog and interactive
+        display-adjustment window that ``worker.Worker.start`` drives in wx) is a
+        wx-heavy path rebuilt in a later slice; exposing the committed run as a
+        signal lets that layer connect without this window depending on it.
+
+        Args:
+            action (MeasurementAction): The workflow the user committed to.
+        """
+        self._restore_after_measurement()
+        self.measurement_requested.emit(action)
+
+    def _restore_after_measurement(self) -> None:
+        """Re-show the main window after the measurement area closes."""
+        self.show()
+        self.raise_()
 
     # -- misc --------------------------------------------------------------
 

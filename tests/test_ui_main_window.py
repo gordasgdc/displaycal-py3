@@ -22,6 +22,7 @@ os.environ.setdefault("QT_API", "pyside6")
 pytest.importorskip("qtpy")
 
 from DisplayCAL.ui import main_window as mw  # noqa: E402
+from DisplayCAL.ui import measurement_flow as mf  # noqa: E402
 
 
 @pytest.fixture(scope="session")
@@ -201,10 +202,10 @@ def test_select_tab_switches_stack(window):
     assert window._tab_buttons["profiling"].isChecked() is True
 
 
-def test_action_buttons_disabled_until_stage_4(window):
-    assert window.calibrate_btn.isEnabled() is False
-    assert window.calibrate_and_profile_btn.isEnabled() is False
-    assert window.profile_btn.isEnabled() is False
+def test_action_buttons_enabled(window):
+    assert window.calibrate_btn.isEnabled() is True
+    assert window.calibrate_and_profile_btn.isEnabled() is True
+    assert window.profile_btn.isEnabled() is True
 
 
 # --- Calibration tab wiring ------------------------------------------------
@@ -319,3 +320,122 @@ def test_populating_calibration_does_not_write_config(qapp, stub_worker):
         assert getcfg("trc") == "709"
     finally:
         win.close()
+
+
+# --- measurement actions (Stage 4) -----------------------------------------
+
+
+@pytest.fixture
+def _no_writecfg(monkeypatch):
+    """Keep begin_measurement / call_pending_function off the real config file."""
+    monkeypatch.setattr(mw, "writecfg", lambda *a, **k: None)
+
+
+def _run_pending_synchronously(window):
+    """Fire the window's deferred pending-run immediately (no event loop)."""
+    window._defer = lambda callback: callback()
+
+
+def _force_mode(window, monkeypatch, mode):
+    """Pin the flow's presentation decision so dispatch is platform-independent."""
+
+    def fake_plan(pending_function, *args, **kwargs):
+        window.flow.set_pending_function(pending_function, *args)
+        return mf.MeasurementPlan(mode=mode, display_name="DELL U2413")
+
+    monkeypatch.setattr(window.flow, "plan_measurement", fake_plan)
+
+
+@pytest.mark.parametrize(
+    "button_attr,action",
+    [
+        ("calibrate_btn", mw.MeasurementAction.CALIBRATE),
+        ("calibrate_and_profile_btn", mw.MeasurementAction.CALIBRATE_AND_PROFILE),
+        ("profile_btn", mw.MeasurementAction.PROFILE),
+    ],
+)
+def test_action_button_dry_run_emits_request(
+    window, _no_writecfg, monkeypatch, button_attr, action
+):
+    # Dry run -> the flow calls the pending driver straight away.
+    monkeypatch.setattr(config, "get_display_name", lambda *a, **k: "DELL U2413")
+    monkeypatch.setattr(config, "is_virtual_display", lambda *a, **k: False)
+    setcfg("dry_run", 1)
+    _run_pending_synchronously(window)
+    seen = []
+    window.measurement_requested.connect(seen.append)
+
+    getattr(window, button_attr).click()
+
+    assert seen == [action]
+
+
+def test_show_frame_mode_presents_measureframe(window, _no_writecfg, monkeypatch):
+    _force_mode(window, monkeypatch, mf.PresentationMode.SHOW_FRAME)
+    _run_pending_synchronously(window)
+    seen = []
+    window.measurement_requested.connect(seen.append)
+
+    window.begin_measurement(mw.MeasurementAction.CALIBRATE)
+
+    assert window.measureframe is not None
+    assert window.measureframe.isVisible() is True
+    # No driver runs until the user actually presses Measure.
+    assert seen == []
+
+    window.measureframe.measure_requested.emit()
+
+    assert seen == [mw.MeasurementAction.CALIBRATE]
+    # Committing hides the frame again.
+    assert window.measureframe.isVisible() is False
+
+
+def test_subprocess_mode_starts_subprocess(window, _no_writecfg, monkeypatch):
+    called = []
+    monkeypatch.setattr(
+        window, "_start_measureframe_subprocess", lambda: called.append(True)
+    )
+    _force_mode(window, monkeypatch, mf.PresentationMode.SUBPROCESS)
+
+    window.begin_measurement(mw.MeasurementAction.CALIBRATE)
+
+    assert called == [True]
+
+
+def test_measureframe_result_measure_runs_pending(window, _no_writecfg, monkeypatch):
+    monkeypatch.setattr(window, "_start_measureframe_subprocess", lambda: None)
+    _force_mode(window, monkeypatch, mf.PresentationMode.SUBPROCESS)
+    _run_pending_synchronously(window)
+    seen = []
+    window.measurement_requested.connect(seen.append)
+    window.begin_measurement(mw.MeasurementAction.PROFILE)  # stages the pending driver
+
+    window._on_measureframe_finished(255, "")
+
+    assert seen == [mw.MeasurementAction.PROFILE]
+
+
+def test_measureframe_result_clean_close_restores(window, _no_writecfg, monkeypatch):
+    _run_pending_synchronously(window)
+    seen = []
+    window.measurement_requested.connect(seen.append)
+    restored = []
+    monkeypatch.setattr(
+        window, "_restore_after_measurement", lambda: restored.append(True)
+    )
+
+    window._on_measureframe_finished(0, "")
+
+    assert restored == [True]
+    assert seen == []
+
+
+def test_measureframe_result_failure_shows_error(window, _no_writecfg, monkeypatch):
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    monkeypatch.setattr(window, "_restore_after_measurement", lambda: None)
+
+    window._on_measureframe_finished(-1, "boom")
+
+    assert errors
+    assert "boom" in errors[0][2]

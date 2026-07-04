@@ -277,11 +277,43 @@ readouts, the black-point-rate advanced control, and the 3D LUT encoding /
 HDR / content-colorspace sub-controls. These depend on tools, dialogs or the
 Stage-4 flow and are rebuilt natively as those land.
 
-### Stage 4 — Calibrate / measure / profile actions
+### Stage 4 — Calibrate / measure / profile actions — **DONE (orchestration)**
 
-Wire the action buttons to the Stage-2 flow: `just_calibrate`, `just_measure`,
-`just_profile`, `calibrate_and_profile`, `profile_finish`, running Argyll via
-`worker.Worker` on a `QThread` (per README pattern #3).
+Wire the action buttons to the Stage-2 flow, running the measure-frame
+subprocess on a `QThread` (per README pattern #3).
+
+**Landed:** the calibrate / calibrate&profile / profile buttons in
+`DisplayCAL/ui/main_window.py` now drive the Stage-2 `MeasurementFlow`, covered
+by the expanded `tests/test_ui_main_window.py` (48 tests, headless offscreen):
+
+- A `MeasurementAction` enum names the three workflows the buttons stage.
+- `begin_measurement()` — the Qt port of `MainFrame.setup_measurement`: it
+  `writecfg()`s, stages the driver through `flow.plan_measurement()`, and
+  dispatches on the returned `PresentationMode`:
+  - `CALL_PENDING` (virtual display / dry run) -> `call_pending_function()`;
+  - `SHOW_FRAME` (macOS / Windows / frozen / Wayland-patch) -> shows the
+    in-process Qt `MeasureFrame` as a child and routes its `measure_requested`
+    signal to `call_pending_function()`;
+  - `SUBPROCESS` -> runs the measure frame as a separate process on
+    `_MeasureframeSubprocessThread(QThread)` and acts on the exit code via
+    `interpret_measureframe_result()` (`config.initcfg()` + repopulate on
+    change, run the pending driver on `255`, restore + surface stderr otherwise).
+- `call_pending_function()` — the window-layer side of the Stage-2 pending-
+  function machine: hides / blanks the measure frame, then runs the staged
+  driver after the 100 ms `QTimer.singleShot` deferral (the wx `CallLater`), via
+  an overridable `_defer` seam.
+- The committed run is exposed as the `MainWindow.measurement_requested`
+  `Signal(MeasurementAction)`, and the main window is restored around it.
+
+**Deferred to Stage 5 (the wx-heavy worker layer):** the actual Argyll execution
+behind `measurement_requested` — `just_calibrate` / `just_measure` /
+`just_profile` / `calibrate_and_profile` / `profile_finish` driving
+`worker.Worker.start`, which in wx owns the `ProgressDialog`, the interactive
+`DisplayAdjustmentFrame` / `SimpleTerminal`, and the `BetterWindowDisabler`.
+Those windows are Pile-2 glue rebuilt natively before the signal is connected.
+Also deferred: the pattern-generator setup dialogs (`patterngenerator_kind()`
+already names the branch) and the pre-flight confirmation / overwrite dialogs
+(`check_show_macos_bugs_warning`, the fast-matrix-shaper choice, `check_overwrite`).
 
 ### Stage 5 — Reporting, colorimeter corrections, install/share
 
