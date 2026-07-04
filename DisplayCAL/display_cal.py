@@ -3231,6 +3231,14 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self.Bind(
             wx.EVT_MENU, self.startup_sound_enable_handler, self.menuitem_startup_sound
         )
+        self.menuitem_use_simple_splash = options.FindItemById(
+            options.FindItem("splash.simple")
+        )
+        self.Bind(
+            wx.EVT_MENU,
+            self.use_simple_splash_handler,
+            self.menuitem_use_simple_splash,
+        )
         self.menuitem_use_fancy_progress = options.FindItemById(
             options.FindItem("use_fancy_progress")
         )
@@ -3608,6 +3616,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self.menuitem_enable_argyll_debug.Check(bool(getcfg("argyll.debug")))
         self.menuitem_enable_dry_run.Check(bool(getcfg("dry_run")))
         self.menuitem_startup_sound.Check(bool(getcfg("startup_sound.enable")))
+        self.menuitem_use_simple_splash.Check(bool(getcfg("splash.simple")))
         self.menuitem_use_fancy_progress.Check(bool(getcfg("use_fancy_progress")))
         self.menuitem_advanced_options.Enable(bool(getcfg("show_advanced_options")))
         spyd2en = get_argyll_util("spyd2en")
@@ -6489,6 +6498,14 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             event (wx.Event): The event triggered by the menu item.
         """
         setcfg("startup_sound.enable", int(self.menuitem_startup_sound.IsChecked()))
+
+    def use_simple_splash_handler(self, event: wx.Event) -> None:
+        """Handle the simple splash screen menu item.
+
+        Args:
+            event (wx.Event): The event triggered by the menu item.
+        """
+        setcfg("splash.simple", int(self.menuitem_use_simple_splash.IsChecked()))
 
     def use_fancy_progress_handler(self, event: wx.Event) -> None:
         """Handle the use fancy progress menu item.
@@ -21868,7 +21885,10 @@ class StartupFrame(start_cls):
                 self.SetWindowShape()
 
         # Setup splash screen
-        self.splash_bmp = get_bitmap("theme/splash")
+        self.use_simple_splash = bool(getcfg("splash.simple"))
+        self.splash_bmp = get_bitmap(
+            "theme/splash-simple" if self.use_simple_splash else "theme/splash"
+        )
         self.splash_anim = []
         for pth in get_data_path("theme/splash_anim", r"\.png$") or []:
             self.splash_anim.append(get_bitmap(os.path.splitext(pth)[0]))
@@ -22014,6 +22034,8 @@ class StartupFrame(start_cls):
 
     def grab_image(self) -> None:
         """Grab screen shot."""
+        if self.use_simple_splash:
+            return
         is_wayland = os.getenv("XDG_SESSION_TYPE") == "wayland"
         # Grab a bitmap of the screen area we're going to draw on
         if sys.platform != "darwin" and not is_wayland:
