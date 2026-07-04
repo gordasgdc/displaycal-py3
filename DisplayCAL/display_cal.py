@@ -66,6 +66,7 @@ from DisplayCAL import (
     main_settings,
     madvr,
     measurement_report as measurement_report_utils,
+    profile_install,
     report,
     util_x,
     xh_bitmapctrls,
@@ -1374,13 +1375,7 @@ def get_profile_load_on_login_label(os_cal: bool) -> str:
     Returns:
         str: The label for the profile load on login checkbox.
     """
-    label = lang.getstr("profile.load_on_login")
-    if sys.platform == "win32" and not os_cal:
-        lstr = lang.getstr("calibration.preserve")
-        if lang.getcode() != "de":
-            lstr = lstr[0].lower() + lstr[1:]
-        label += " && " + lstr
-    return label
+    return profile_install.get_profile_load_on_login_label(os_cal)
 
 
 def upload_colorimeter_correction(
@@ -9105,7 +9100,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         if isinstance(result, Exception) or not result:
             return
         try:
-            profile = ICCProfile(profile_path)
+            profile_install.load_installable_profile(profile_path)
         except (OSError, ICCProfileInvalidError):
             InfoDialog(
                 self,
@@ -9114,19 +9109,10 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 bitmap=get_icon(32, "dialog-error"),
             )
             return
-
-        if profile.profileClass != b"mntr" or profile.colorSpace != b"RGB":
+        except profile_install.ProfileUnsupportedError as exception:
             InfoDialog(
                 self,
-                msg=lang.getstr(
-                    "profile.unsupported",
-                    (
-                        profile.profileClass.decode("utf-8"),
-                        profile.colorSpace.decode("utf-8"),
-                    ),
-                )
-                + "\n"
-                + profile_path,
+                msg=str(exception) + "\n" + profile_path,
                 ok=lang.getstr("ok"),
                 bitmap=get_icon(32, "dialog-error"),
             )
@@ -12787,31 +12773,28 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     )
                     dlg.sizer3.Add((1, 4))
                     self.profile_load_on_login_handler()
-            if (
-                (
-                    (
-                        sys.platform == "darwin"
-                        or (
-                            sys.platform != "win32"
-                            and self.worker.argyll_version >= [1, 1, 0]
-                        )
-                    )
-                    and (os.geteuid() == 0 or which("sudo"))
-                )
-                or (
-                    sys.platform == "win32"
-                    and sys.getwindowsversion() >= (6,)
-                    and self.worker.argyll_version > [1, 1, 1]
-                )
-                or TEST
-            ):
+            if sys.platform == "win32":
+                windows_version = sys.getwindowsversion()
+                is_superuser_or_sudo = False
+            else:
+                windows_version = None
+                is_superuser_or_sudo = os.geteuid() == 0 or bool(which("sudo"))
+            # NOTE: System install scope is currently not implemented
+            # correctly in dispwin 1.1.0, but a patch is trivial and
+            # should be in the next version
+            # 2010-06-18: Do not offer system install in DisplayCAL when
+            # installing via GCM or oyranos FIXME: oyranos-monitor can't
+            # be run via sudo
+            scope_options = profile_install.resolve_install_scope_options(
+                argyll_version=self.worker.argyll_version,
+                is_superuser_or_sudo=is_superuser_or_sudo,
+                windows_version=windows_version,
+                network_profiles_dir_exists=sys.platform == "darwin"
+                and os.path.isdir("/Network/Library/ColorSync/Profiles"),
+                test_mode=TEST,
+            )
+            if scope_options:
                 # Linux, OSX or Vista and later
-                # NOTE: System install scope is currently not implemented
-                # correctly in dispwin 1.1.0, but a patch is trivial and
-                # should be in the next version
-                # 2010-06-18: Do not offer system install in DisplayCAL when
-                # installing via GCM or oyranos FIXME: oyranos-monitor can't
-                # be run via sudo
                 self.install_profile_user = wx.RadioButton(
                     dlg, -1, lang.getstr("profile.install_user"), style=wx.RB_GROUP
                 )
@@ -12844,9 +12827,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     flag=wx.TOP | wx.ALIGN_LEFT,
                     border=4,
                 )
-                if sys.platform == "darwin" and os.path.isdir(
-                    "/Network/Library/ColorSync/Profiles"
-                ):
+                if "n" in scope_options:
                     self.install_profile_network = wx.RadioButton(
                         dlg, -1, lang.getstr("profile.install_network")
                     )
@@ -13010,28 +12991,15 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         elif result:
             # Check all profile install methods
             argyll_install, colord_install, oy_install, loader_install = result
-            all_good = (
-                argyll_install in (None, True)
-                and colord_install in (None, True)
-                and oy_install in (None, True)
-                and loader_install in (None, True)
+            summary = profile_install.summarize_install_result(
+                argyll_install, colord_install, oy_install, loader_install
             )
-            some_good = (
-                argyll_install is True
-                or colord_install is True
-                or oy_install is True
-                or loader_install is True
-            )
-            linux = sys.platform not in ("darwin", "win32")
-            if all_good:
-                msg = lang.getstr("profile.install.success")
-                icon = "dialog-information"
-            elif some_good and linux:
-                msg = lang.getstr("profile.install.warning")
-                icon = "dialog-warning"
-            else:
-                msg = lang.getstr("profile.install.error")
-                icon = "dialog-error"
+            icon = {
+                "success": "dialog-information",
+                "warning": "dialog-warning",
+                "error": "dialog-error",
+            }[summary.message_key]
+            msg = lang.getstr(f"profile.install.{summary.message_key}")
             dlg = InfoDialog(
                 self,
                 msg=msg,
@@ -13039,32 +13007,22 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 bitmap=get_icon(32, icon),
                 show=False,
             )
-            if not all_good and linux:
+            if summary.details:
                 sizer = wx.FlexGridSizer(0, 2, 8, 8)
                 dlg.sizer3.Add(sizer, 1, flag=wx.TOP, border=12)
-                for name, result_ in (
-                    ("ArgyllCMS", argyll_install),
-                    ("colord", colord_install),
-                    ("Oyranos", oy_install),
-                    (lang.getstr("profile_loader"), loader_install),
-                ):
-                    if result_ is not None:
-                        if result_ is True:
-                            icon = "checkmark"
-                            result_ = lang.getstr("ok")
-                        elif isinstance(result_, Warning):
-                            icon = "dialog-warning"
-                        else:
-                            icon = "x"
-                            if not result_:
-                                result_ = lang.getstr("failure")
-                        result_ = wrap(str(result_))
-                        sizer.Add(
-                            wx.StaticBitmap(dlg, -1, get_icon(16, icon)),
-                            flag=wx.TOP,
-                            border=2,
-                        )
-                        sizer.Add(wx.StaticText(dlg, -1, f"{name}: {result_}"))
+                for name, ok, text in summary.details:
+                    if ok:
+                        icon = "checkmark"
+                    elif ok is None:
+                        icon = "dialog-warning"
+                    else:
+                        icon = "x"
+                    sizer.Add(
+                        wx.StaticBitmap(dlg, -1, get_icon(16, icon)),
+                        flag=wx.TOP,
+                        border=2,
+                    )
+                    sizer.Add(wx.StaticText(dlg, -1, f"{name}: {wrap(text)}"))
                 dlg.sizer0.SetSizeHints(dlg)
                 dlg.sizer0.Layout()
             dlg.ok.SetDefault()

@@ -623,6 +623,21 @@ with a "icc.opensuse.org is not working anymore / temporarily disabled" notice
 (#194); everything after is dead code. The Qt port is just that notice, so there
 is no extraction to do here until/unless the upload endpoint is revived.
 
+**Profile install / load-on-login sub-slice i — toolkit-neutral helpers — DONE.**
+`DisplayCAL/profile_install.py` (another plain, Qt-free `DisplayCAL` module),
+covered by `tests/test_profile_install.py` (20 tests, no display). It holds
+the pure pieces lifted out of `install_profile_handler`, `profile_finish` and
+`profile_finish_consumer`: `load_installable_profile()` (the `mntr`/`RGB`
+validation, raising a new `ProfileUnsupportedError` instead of building the wx
+error dialog inline), `get_profile_load_on_login_label()` (moved here
+verbatim; `display_cal.py`'s function of the same name now delegates),
+`resolve_install_scope_options()` (the platform/Argyll-version/privilege
+boolean guarding the user/local-system/network radio buttons, returning which
+of `"u"`/`"l"`/`"n"` to offer), and `summarize_install_result()` (the
+all-good/some-good/per-method-breakdown derivation from `Worker
+.install_profile()`'s 4-tuple result, replacing the wx consumer's inline
+icon/message logic). The wx `MainFrame` now delegates to all four.
+
 ### Stage 6 — StartupFrame + retire wx paths
 
 Port `StartupFrame`, flip the default toolkit, and begin deleting wx modules
