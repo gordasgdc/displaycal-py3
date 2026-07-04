@@ -3305,6 +3305,9 @@
 "spectral_resolution": |-
   Spectral resolution
 
+"splash.simple": |-
+  간단한 스플래시 화면 사용
+
 "ssl.certificate_verify_failed": |-
   원격 인증서를 검증할 수 없습니다.
 

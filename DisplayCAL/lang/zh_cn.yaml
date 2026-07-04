@@ -3323,6 +3323,9 @@
 "spectral_resolution": |-
   光谱分辨率
 
+"splash.simple": |-
+  使用简单启动画面
+
 "ssl.certificate_verify_failed": |-
   远程证书不能被验证。
 

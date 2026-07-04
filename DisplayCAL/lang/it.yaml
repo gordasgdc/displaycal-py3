@@ -245,7 +245,7 @@
   Installa i driver degli strumenti ArgyllCMS...
 "argyll.instrument.drivers.install.confirm": |-
   È necessario installare i driver specifici di ArgyllCMS solo se il tuo strumento di misura non è un ColorMunki Display, i1 Display Pro, Huey, ColorHug, specbos, spectraval o K-10.
-  
+
   Vuoi procedere?
 "argyll.instrument.drivers.install.failure": |-
   Installazione dei driver degli strumenti ArgyllCMS non riuscita.
@@ -255,7 +255,7 @@
   Disinstalla i driver degli strumenti ArgyllCMS...
 "argyll.instrument.drivers.uninstall.confirm": |-
   Nota: la disinstallazione non influisce sui driver dello strumento attualmente in uso, ma rimuove solo il driver dal Driver Store di Windows. Se vuoi tornare a usare un driver del produttore già installato per il tuo strumento, dovrai usare Gestione dispositivi di Windows per passare manualmente al driver del produttore. Per farlo, fai clic destro sullo strumento e seleziona “Aggiorna software driver...”, quindi scegli “Cerca il software del driver nel computer”, “Scegli manualmente da un elenco di driver di dispositivo nel computer” e infine seleziona dall'elenco il driver del produttore per il tuo strumento.
-  
+
   Vuoi procedere?
 "argyll.instrument.drivers.uninstall.failure": |-
   Disinstallazione dei driver degli strumenti ArgyllCMS non riuscita.
@@ -667,7 +667,7 @@
   Non tutte le correzioni colorimetro da %s sono state importate. %i voci su %i sono state saltate.
 "colorimeter_correction.import.success": |-
   Le correzioni colorimetro sono state importate con successo dai seguenti programmi:
-  
+
   %s
 "colorimeter_correction.info": |-
   Informazioni correzione colorimetro
@@ -1022,7 +1022,7 @@
 "donation_message": |-
   Se desideri supportare lo sviluppo, l'assistenza tecnica e la continua disponibilità di DisplayCAL e ArgyllCMS, considera un contributo economico. Poiché DisplayCAL non sarebbe utile senza ArgyllCMS, tutti i contributi ricevuti per DisplayCAL saranno suddivisi tra entrambi i progetti.
   Per un uso personale leggero e non commerciale può essere appropriato un contributo una tantum. Se usi DisplayCAL professionalmente, un contributo annuale o mensile farebbe una grande differenza per garantire che entrambi i progetti continuino a essere disponibili.
-  
+
   Grazie a tutti i contributori!
 "download": |-
   Scarica
@@ -1122,7 +1122,7 @@
   Tipo di file non gestito.
 "error.generic": |-
   Errore di sistema.
-  
+
   Codice d'errore: %s
   Messaggio d'errore: %s
 "error.luminance.invalid": |-
@@ -1193,7 +1193,7 @@
   L'integrità di %s non può essere verificata perché non ha una voce nel file checksum.
 "file.hash.verification.fail": |-
   Verifica checksum fallita per %s:
-  
+
   Atteso %s
   Reale %s
 "file.invalid": |-
@@ -1423,49 +1423,49 @@
   Ingresso
 "info.3dlut_settings": |-
   Una <font weight='bold'>LUT 3D</font> (LUT = Look Up Table) o un profilo ICC device link può essere usato da applicazioni compatibili con LUT 3D o ICC device link per una <font weight='bold'>correzione colore completa del display</font>.
-  
+
   <font weight='bold'>Creare più LUT 3D (aggiuntive) da un profilo esistente</font>
   Con il profilo desiderato selezionato in “Impostazioni”, deseleziona la casella “Crea LUT 3D dopo la profilazione”.
-  
+
   <font weight='bold'>Scegliere il corretto spazio colore sorgente e la curva di risposta tonale</font>
   Per LUT 3D e profili ICC device link, spazio colore sorgente e curva di risposta tonale devono essere impostati in anticipo e diventano parte fissa della trasformazione colore complessiva (a differenza dei profili ICC dispositivo, collegati dinamicamente al volo). Ad esempio, il materiale video HD è solitamente masterizzato secondo Rec. 709 con gamma power pura intorno a 2.2-2.4 (relativa con offset nero output 100%) o curva di risposta tonale Rec. 1886 (assoluta con offset nero output 0%). È possibile anche una via intermedia tra Rec. 1886-like e power pura impostando l'offset nero output tra 0% e 100%.
-  
+
   <font weight='bold'>Gamma “assoluta” vs “relativa”</font>
   Per adattarsi a un livello nero non nullo di un display reale, la curva di risposta tonale deve essere opportunamente traslata e scalata.
   La gamma “assoluta” produce un output reale al 50% input che non corrisponde a quello di una curva power idealizzata (a meno che il livello nero sia zero).
   La gamma “relativa” produce un output reale al 50% input che corrisponde a quello di una curva power idealizzata.
-  
+
   <font weight='bold'>Intento di rendering</font>
   Se hai calibrato su un punto di bianco diverso da quello richiesto dallo spazio colore sorgente e vuoi usare quello per la LUT 3D, seleziona “Colorimetrico relativo”. Altrimenti seleziona “Colorimetrico assoluto con scalatura punto di bianco” (la scalatura punto di bianco eviterà clipping in modalità colorimetrica assoluta che potrebbe verificarsi se il punto di bianco sorgente è fuori gamut display). Puoi anche usare un intento di rendering non colorimetrico che comprima o espanda lo spazio colore sorgente per adattarlo al gamut display (non consigliato quando è richiesta accuratezza colorimetrica).
 "info.calibration_settings": |-
   La <font weight='bold'>calibrazione</font> viene eseguita <font weight='bold'>regolando interattivamente il display</font> per soddisfare punto di bianco e/o luminanza scelti, nonché opzionalmente creando <font weight='bold'>curve di calibrazione LUT 1D</font> (LUT = Look Up Table) per rispettare la curva di risposta tonale scelta e garantire il bilanciamento dei grigi. Nota che se durante la calibrazione vuoi solo regolare il display e saltare la generazione di curve LUT 1D, devi impostare la curva di risposta tonale su “Come misurato”. La calibrazione LUT 1D <font weight='bold'>non</font> può essere usata per la correzione colore completa del display: devi creare un <font weight='bold'>profilo dispositivo ICC</font> o una <font weight='bold'>LUT 3D</font> e usarli con applicazioni che li supportano. La calibrazione LUT 1D è comunque complementare a profilazione e calibrazione LUT 3D.
 "info.display_instrument": |-
   <font weight='bold'>Disabilita tutte le impostazioni immagine dinamiche del display</font> se applicabile. Questo può includere contrasto dinamico, dimming, luminosità automatica e funzioni simili.
-  
+
   Assicurati che la luce non colpisca direttamente lo schermo.
-  
+
   Se il tuo display è una TV <font weight='bold'>OLED</font> o <font weight='bold'>Plasma</font>, o altro tipo con emissione luminosa variabile in base al contenuto immagine, abilita la <font weight='bold'>compensazione deriva livello bianco</font>.
-  
+
   Se il tuo strumento è uno <font weight='bold'>spettrometro</font> e lo usi in modalità contatto su un display con livello nero stabile, potresti voler abilitare la <font weight='bold'>compensazione deriva livello nero dello strumento</font>.
-  
+
   Se il tuo strumento è un <font weight='bold'>colorimetro</font>, dovresti usare una <font weight='bold'>modalità di misura</font> o <font weight='bold'>correzione</font> adatta al tuo display o alla sua tecnologia. Nota che alcuni strumenti (es. K-10, Spyder4/5/X) possono offrire modalità di misura già ottimizzate per specifici tipi di display.
 "info.display_instrument.warmup": |-
   Lascia riscaldare il display per almeno <font weight='bold'>30 minuti</font> prima di iniziare le misure. Se usi lo strumento in modalità contatto, è una buona idea lasciarlo sul display durante questo tempo.
 "info.display_tech": |-
   <font weight='bold'>LCD White LED</font> (WLED con gamut normale e copertura sRGB fino al 100%) è la tecnologia retroilluminazione LCD più comune.
-  
+
   <font weight='bold'>LCD PFS Phosphor WLED</font> ha gamut ampio in due varianti comuni con copertura P3 o Adobe RGB intorno al 90-99%.
-  
+
   <font weight='bold'>LCD Quantum Dot LED</font> ha gamut ampio con copertura P3 quasi completa, comunemente usata nelle TV Samsung QLED.
-  
+
   <font weight='bold'>WOLED</font> ha gamut ampio con alta copertura P3, comunemente usato nelle TV LG OLED.
-  
+
   <font weight='bold'>RGB OLED/AMOLED</font> ha gamut ampio con copertura quasi completa Adobe RGB e/o P3.
-  
+
   <font weight='bold'>LCD GB-r-LED</font> (nota anche come GB-LED) ha gamut ampio con copertura Adobe RGB intorno al 99%.
-  
+
   <font weight='bold'>LCD RGB LED</font> ha gamut ampio con copertura Adobe RGB quasi completa.
-  
+
   <font weight='bold'>LCD CCFL</font> e <font weight='bold'>LCD CCFL Wide Gamut</font> sono tecnologie più vecchie comunemente usate nei display del 2009 e precedenti.
 "info.display_tech.linklabel.displayspecifications.com": |-
   Trova monitor/TV e tecnologia corrispondente su displayspecifications.com
@@ -1475,16 +1475,16 @@
   Mostra informazioni sulle tecnologie display comuni
 "info.mr_settings": |-
   Puoi <font weight='bold'>verificare l'accuratezza</font> di un profilo ICC o LUT 3D tramite un report di misura che contiene statistiche dettagliate sugli errori colore delle patch misurate.
-  
+
   Quando verifichi una LUT 3D, assicurati di usare le stesse impostazioni con cui è stata creata.
-  
+
   <font weight='bold'>Suggerimento:</font> per creare un report di autocontrollo invece di un report di misura, tieni premuto ALT sulla tastiera.
 "info.profile_settings": |-
   La <font weight='bold'>profilazione</font> è il processo di <font weight='bold'>caratterizzazione</font> del display e registrazione della sua risposta in un <font weight='bold'>profilo dispositivo ICC</font>. Il profilo ICC può essere usato da applicazioni con gestione colore ICC per una <font weight='bold'>correzione colore completa del display</font> e/o per creare una <font weight='bold'>LUT 3D</font>.
-  
+
   La quantità di patch misurate influisce sull'accuratezza ottenibile del profilo risultante. Per una qualità ragionevole in un profilo basato su matrice 3x3 e curve, possono bastare poche decine di patch se il display ha buona linearità e buona miscelazione additiva. Se è richiesta la massima accuratezza possibile, è consigliato un profilo basato su LUT da alcune centinaia a diverse migliaia di patch. L'impostazione carta di test <font weight='bold'>“Auto-optimized”</font> tiene conto automaticamente delle non linearità e della risposta reale del display e dovrebbe essere usata per i migliori risultati.
 "infoframe.default_text": |-
-  
+
 "infoframe.title": |-
   Informazioni
 "infoframe.toggle": |-
@@ -1572,12 +1572,12 @@
 "macos.bugs.cal.warning": |-
   Le applicazioni che usano Apple CMM (modulo gestione colore), come Anteprima macOS e QuickLook, non supportano la correzione tonalità del punto nero di calibrazione.
   Le applicazioni che usano la propria gestione colore non sono interessate (come Adobe Creative Suite con Adobe ACE, o applicazioni grafiche open source che usano littleCMS come GIMP o Krita, o applicazioni che impiegano LUT 3D per gestione colore).
-  
+
   Vuoi disabilitare la correzione tonalità del punto nero di calibrazione?
 "macos.bugs.profile.warning": |-
   Le applicazioni che usano Apple CMM (modulo gestione colore), come Anteprima macOS e QuickLook, non supportano tipi di profilo display diversi da curva singola + matrice con compensazione punto nero.
   Le applicazioni che usano la propria gestione colore non sono interessate (come Adobe Creative Suite con Adobe ACE, o applicazioni grafiche open source che usano littleCMS come GIMP o Krita, o applicazioni che impiegano LUT 3D per gestione colore).
-  
+
   Vuoi impostare il tipo profilo su curva singola + matrice e abilitare la compensazione punto nero?
 "madhcnet.outdated": |-
   La versione installata di %s trovata in %s è obsoleta. Aggiorna all'ultima versione di madVR (almeno %i.%i.%i.%i).
@@ -1944,7 +1944,7 @@
   Nome del profile
 "profile.name.placeholders": |-
   Puoi usare i seguenti segnaposto nel nome profilo:
-  
+
   %a	Nome giorno della settimana abbreviato
   %A	Nome giorno della settimana completo
   %b	Nome mese abbreviato
@@ -2000,7 +2000,7 @@
   La risoluzione delle tabelle PCS-a-dispositivo del profilo è troppo bassa.
 "profile.share.enter_info": |-
   Puoi condividere il tuo profilo con altri utenti tramite il servizio OpenSUSE “ICC Profile Taxi”.
-  
+
   Fornisci una descrizione significativa e inserisci sotto le proprietà del display. Leggi le impostazioni display dal menu OSD e applica solo le impostazioni pertinenti che hai modificato rispetto ai valori predefiniti.
   Esempio: per la maggior parte dei display, nomi preset selezionati, luminosità, contrasto, temperatura colore e/o guadagni punto bianco RGB, nonché gamma. Nei laptop spesso solo luminosità. Se hai modificato impostazioni aggiuntive durante la calibrazione, inseriscile se possibile.
 "profile.share.meta_missing": |-
@@ -2077,9 +2077,9 @@
   Correggi automaticamente associazioni profilo
 "profile_loader.fix_profile_associations_warning": |-
   Finché il caricatore profilo è in esecuzione, può occuparsi delle associazioni profilo quando cambi la configurazione display.
-  
+
   Prima di procedere, assicurati che le associazioni profilo mostrate sopra siano corrette. Se non lo sono, segui questi passaggi:
-  
+
   1. Apri impostazioni display Windows.
   2. Attiva tutti i display collegati (desktop esteso).
   3. Apri associazioni profilo.
@@ -2233,6 +2233,8 @@
   Spettrale
 "spectral_resolution": |-
   Risoluzione spettrale
+"splash.simple": |-
+  Usa schermata di avvio semplice
 "ssl.certificate_verify_failed": |-
   Impossibile verificare il certificato remoto.
 "ssl.certificate_verify_failed.root_ca_missing": |-
@@ -2591,22 +2593,22 @@
   Avviso: i valori sotto il punto nero del profilo display verranno clippati!
 "warning.suspicious_delta_e": |-
   Avviso: sono state trovate misure sospette. Nota che questo controllo assume un display simile a sRGB. Se il tuo display differisce da questa ipotesi (ad es. gamut molto ampio o risposta tonale molto diversa da sRGB), gli errori trovati potrebbero non essere significativi.
-  
+
   È stato soddisfatto uno o più dei seguenti criteri:
-  
+
   • Patch consecutive con numeri RGB diversi ma ΔE*00 sospettosamente basso tra le rispettive misure.
   • Grigio RGB con numeri RGB crescenti rispetto alla patch precedente ma luminosità (L*) decrescente.
   • Grigio RGB con numeri RGB decrescenti rispetto alla patch precedente ma luminosità (L*) crescente.
   • ΔE*00 e ΔL*00 o ΔH*00 o ΔC*00 insolitamente alti delle misure rispetto all'equivalente sRGB dei numeri RGB.
-  
+
   Questo potrebbe indicare errori di misura. I valori considerati problematici (il che non deve necessariamente essere vero) sono evidenziati in rosso. Controlla attentamente le misure e marca quelle che vuoi accettare. Puoi anche modificare i valori RGB e XYZ.
 "warning.suspicious_delta_e.info": |-
   Spiegazione delle colonne Δ:
-  
+
   ΔE*00 XYZ A/B: ΔE*00 dei valori misurati rispetto ai valori misurati della patch precedente. Se questo valore manca, non era un fattore durante il controllo. Se è presente, si assume che sia troppo basso.
-  
+
   0.5 ΔE*00 RGB A/B: ΔE*00 dell'equivalente sRGB dei numeri RGB rispetto all'equivalente sRGB dei numeri RGB della patch precedente (con fattore 0.5). Se presente, rappresenta il valore di confronto (minimo) durante il controllo di un ΔE*00 XYZ A/B presumibilmente troppo basso. Serve come orientamento molto approssimativo.
-  
+
   ΔE*00 RGB-XYZ: ΔE*00 dei valori misurati rispetto all'equivalente sRGB dei numeri RGB.
   ΔL*00 RGB-XYZ: ΔL*00 dei valori misurati rispetto all'equivalente sRGB dei numeri RGB.
   ΔC*00 RGB-XYZ: ΔC*00 dei valori misurati rispetto all'equivalente sRGB dei numeri RGB.
