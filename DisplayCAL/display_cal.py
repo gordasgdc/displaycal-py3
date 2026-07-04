@@ -42,7 +42,7 @@ import zipfile
 from decimal import Decimal
 from hashlib import md5
 from io import BytesIO, StringIO
-from time import localtime, sleep, strftime, strptime, struct_time
+from time import localtime, sleep, strftime
 from typing import TYPE_CHECKING, Callable
 from zlib import crc32
 
@@ -57,7 +57,6 @@ from wx.lib.scrolledpanel import ScrolledPanel
 # Local Imports
 from DisplayCAL import (
     audio,
-    ccmx,
     colord,
     colorimeter_correction,
     colormath,
@@ -993,129 +992,27 @@ def colorimeter_correction_web_check_choose(
     dlg_list_ctrl.SetColumnWidth(int(col), int(135 * scale))  # CCMX self check avg
     dlg_list_ctrl.SetColumnWidth(int(col), int(135 * scale))  # CCMX self check max
     dlg_list_ctrl.SetColumnWidth(int(col), int(150 * scale))  # Date
-    types = {
-        "CCSS": lang.getstr("spectral").replace(":", ""),
-        "CCMX": lang.getstr("matrix").replace(":", ""),
-    }
     cgats = {}
-    rows_data = []
-    for item in json:
-        # CGATS is byte string based, make sure to encode Unicode back to UTF-8
-        # for parsing
-        # CGATS accepts ``bytes`` data only
-        cgats_bytes = item.get("cgats", "").encode("utf-8")
-        try:
-            ccxx = CGATS(cgats_bytes)
-        except CGATSError as exception:
-            print(exception)
-            cgats_bytes = b""
-            ccxx = CGATS()
-        ccxx = ccxx.get(0, ccxx)
-        ccxx_type = item.get("type", "").upper()
-        manufacturer = colord.quirk_manufacturer(
-            item.get("manufacturer") or lang.getstr("unknown")
-        )
-        display = item.get("display") or lang.getstr("unknown")
-        if config.is_virtual_display(display):
-            display = manufacturer
-        if not display.lower().startswith(manufacturer.lower()):
-            display = f"{manufacturer} {display}"
-        spectral = {}
-        for key in ("bands", "start_nm", "end_nm"):
-            try:
-                v = float(item.get(f"spectral_{key}", 0))
-            except (TypeError, ValueError):
-                pass
-            else:
-                if v:
-                    spectral[key] = v
-        if spectral:
-            spectral_res = "{:.1f}nm, {:.0f}-{:.0f}nm".format(
-                (spectral["end_nm"] - spectral["start_nm"]) / (spectral["bands"] - 1),
-                spectral["start_nm"],
-                spectral["end_nm"],
-            )
-        else:
-            spectral_res = lang.getstr("unknown")
-        created = item.get("created")
-        if created:
-            try:
-                created = strptime(created)
-            except ValueError:
-                datetmp = re.search(
-                    r"\w+ (\w{3}) (\d{2}) (\d{2}(?::[0-5][0-9]){2}) (\d{4})", created
-                )
-                if datetmp:
-                    datetmp = "{}-{}-{} {}".format(
-                        datetmp.groups()[3],
-                        {
-                            "Jan": "01",
-                            "Feb": "02",
-                            "Mar": "03",
-                            "Apr": "04",
-                            "May": "05",
-                            "Jun": "06",
-                            "Jul": "07",
-                            "Aug": "08",
-                            "Sep": "09",
-                            "Oct": "10",
-                            "Nov": "11",
-                            "Dec": "12",
-                        }.get(datetmp.groups()[0]),
-                        datetmp.groups()[1],
-                        datetmp.groups()[2],
-                    )
-                    with contextlib.suppress(ValueError):
-                        created = strptime(datetmp, "%Y-%m-%d %H:%M:%S")
-            if isinstance(created, struct_time):
-                created = strftime("%Y-%m-%d %H:%M:%S", created)
-        fit_method = ccxx.queryv1("FIT_METHOD")
-        if fit_method and fit_method != b"xy":
-            fit_method = lang.getstr("perceptual")
-        elif isinstance(fit_method, bytes):
-            # queryv1() returns bytes; decode so it's consistent with the
-            # localized str the "perceptual" branch above produces.
-            fit_method = fit_method.decode("utf-8")
-        reference_observer = ccxx.queryv1("REFERENCE_OBSERVER")
-        if isinstance(reference_observer, bytes):
-            # queryv1() returns bytes, but observers_ab is keyed by str, so
-            # without decoding this lookup never matches and the "observer"
-            # column always fell back to "unknown"/"not_applicable".
-            reference_observer = reference_observer.decode("utf-8")
-        rows_data.append({
-            "cgats": cgats_bytes,
+    rows_data = [
+        {
+            "cgats": row["cgats"],
             "columns": [
-                types.get(ccxx_type, ccxx_type),
-                get_canonical_instrument_name(
-                    item.get("description") or lang.getstr("unknown")
-                ),
-                display,
-                get_canonical_instrument_name(
-                    item.get("reference") or lang.getstr("unknown")
-                ),
-                spectral_res,
-                parent.observers_ab.get(
-                    reference_observer,
-                    lang.getstr("unknown" if ccxx_type == "CCMX" else "not_applicable"),
-                ),
-                (
-                    fit_method or lang.getstr("unknown")
-                    if ccxx_type == "CCMX"
-                    else lang.getstr("not_applicable")
-                ),
-                (
-                    str(ccxx.queryv1("FIT_AVG_DE00") or lang.getstr("unknown"))
-                    if ccxx_type == "CCMX"
-                    else lang.getstr("not_applicable")
-                ),
-                (
-                    str(ccxx.queryv1("FIT_MAX_DE00") or lang.getstr("unknown"))
-                    if ccxx_type == "CCMX"
-                    else lang.getstr("not_applicable")
-                ),
-                created or lang.getstr("unknown"),
+                row["type"],
+                row["description"],
+                row["display"],
+                row["reference"],
+                row["spectral_resolution"],
+                row["observer"],
+                row["fit_method"],
+                row["fit_avg_de00"],
+                row["fit_max_de00"],
+                row["created"],
             ],
-        })
+        }
+        for row in colorimeter_correction.parse_web_check_entries(
+            json, parent.observers_ab
+        )
+    ]
 
     sort_state = [None, True]  # [column_index, ascending]
 
@@ -1395,14 +1292,11 @@ def upload_colorimeter_correction(
         f"colorimetercorrections.{DOMAIN}",
         "GET",
         path,
-        # Remove CREATED date for calculating hash
         {
             "get": True,
-            "hash": md5(  # noqa: S324
-                re.sub(
-                    rb'\nCREATED\s+".+?"\n', rb"\n\n", bytes(params["cgats"])
-                ).strip()
-            ).hexdigest(),
+            "hash": colorimeter_correction.compute_upload_dedup_hash(
+                bytes(params["cgats"])
+            ),
         },
         silent=True,
     )
@@ -13905,17 +13799,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         Args:
             event (wx.Event): The event that triggered this handler.
         """
-        filetype = "ccss,ccmx" if self.worker.instrument_supports_ccss() else "ccmx"
-        params = {
-            "get": True,
-            "type": filetype,
-            "manufacturer_id": self.worker.get_display_edid().get(
-                "manufacturer_id", ""
-            ),
-            "display": self.worker.get_display_name(False, True) or "Unknown",
-            "instrument": self.worker.get_instrument_name() or "Unknown",
-            "json": 1,
-        }
+        params = colorimeter_correction.build_web_check_params(self.worker)
         self.worker.interactive = False
         self.worker.start(
             colorimeter_correction_web_check_choose,
@@ -15671,26 +15555,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         dlg.Destroy()
         if result != wx.ID_OK:
             return
-        if isinstance(cgats, str):
-            # upload_colorimeter_correction_handler() passes a str (decoded
-            # from the file), but the regex below requires bytes; normalize
-            # so it doesn't raise TypeError.
-            cgats = cgats.encode("utf-8")
-        ccxx = CGATS(cgats)
-        # Remove platform-specific/potentially sensitive information
-        cgats = re.sub(rb'\n(?:REFERENCE|TARGET)_FILENAME\s+"[^"]+"\n', b"\n", cgats)
-        params = {"cgats": cgats}
-        # Also upload reference and target CGATS (if available)
-        for label in ("REFERENCE", "TARGET"):
-            filename = (ccxx.queryv1(f"{label}_FILENAME") or b"").decode("utf-8")
-            algo_hash = ((ccxx.queryv1(f"{label}_HASH") or b"").decode("utf-8")).split(
-                ":", 1
-            )
-            if filename and os.path.isfile(filename) and algo_hash[0] in globals():
-                meas = bytes(CGATS(filename)).strip()
-                # Check hash
-                if globals()[algo_hash[0]](meas).hexdigest() == algo_hash[-1]:
-                    params[label.lower() + "_cgats"] = meas
+        params = colorimeter_correction.build_upload_params(cgats)
         if DEBUG or TEST:
             print(list(params.keys()))
         # Upload correction
@@ -15733,10 +15598,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         # different than raw data so MD5 will be different
         with open(path, "rb") as cgatsfile:
             cgats = cgatsfile.read().decode()
-        originator = re.search(r'\nORIGINATOR\s+"Argyll', cgats)
-        if not originator:
-            originator = re.search(r'\nORIGINATOR\s+"' + APPNAME, cgats)
-        if not originator:
+        if not colorimeter_correction.validate_upload_originator(cgats, APPNAME):
             InfoDialog(
                 self,
                 msg=lang.getstr("colorimeter_correction.upload.deny"),
@@ -16003,160 +15865,9 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         debug_print("   oeminst:", oeminst)
         debug_print("   path(s):", path)
         debug_print("   asroot:", asroot)
-        kind = None
-        if isinstance(path, list):
-            kind = "xrite"
-        elif path and os.path.exists(path):
-            filename, ext = os.path.splitext(path)
-            kind = "unknown"
-            if ext.lower() == ".txt":
-                kind = "icd"
-                result = True
-            else:
-                icolordisplay = "icolordisplay" in os.path.basename(path).lower()
-                if ext.lower() == ".dmg":
-                    if icolordisplay:
-                        kind = "icd"
-                        result = self.worker.exec_cmd(
-                            which("hdiutil"),
-                            ["attach", path],
-                            capture_output=True,
-                            skip_scripts=True,
-                        )
-                        if result and not isinstance(result, Exception):
-                            for _path in safe_glob(
-                                os.path.join(
-                                    os.path.sep,
-                                    "Volumes",
-                                    "iColorDisplay*",
-                                    "iColorDisplay*.app",
-                                    "Contents",
-                                    "Resources",
-                                    "DeviceCorrections.txt",
-                                )
-                            ):
-                                break
-                            else:
-                                result = Error(
-                                    lang.getstr("file.missing", "DeviceCorrections.txt")
-                                )
-                elif i1d3ccss and ext.lower() == ".edr":
-                    kind = "xrite"
-                elif ext.lower() in (".cab", ".exe"):
-                    if icolordisplay:
-                        kind = "icd"
-                        sevenzip = get_program_file("7z", "7-zip")
-                        if sevenzip:
-                            if not getcfg("dry_run"):
-                                # Extract from NSIS installer
-                                temp = self.worker.create_tempdir()
-                                if isinstance(temp, Exception):
-                                    result = temp
-                                else:
-                                    result = self.worker.exec_cmd(
-                                        sevenzip,
-                                        ["e", "-y", path, "DeviceCorrections.txt"],
-                                        capture_output=True,
-                                        skip_scripts=True,
-                                        working_dir=temp,
-                                    )
-                                    if result and not isinstance(result, Exception):
-                                        path = os.path.join(
-                                            temp, "DeviceCorrections.txt"
-                                        )
-                                    else:
-                                        self.worker.wrapup(False)
-                        else:
-                            result = Error(lang.getstr("file.missing", "7z" + EXE_EXT))
-                    elif i1d3ccss and (
-                        "colormunki" in os.path.basename(path).lower()
-                        or "i1profiler" in os.path.basename(path).lower()
-                        or os.path.basename(path).lower() == "i1d3"
-                    ):
-                        # Assume X-Rite installer
-                        kind = "xrite"
-                    elif spyd4en and (
-                        "spyder4" in os.path.basename(path).lower()
-                        or os.path.basename(path).lower() == "spyd4"
-                    ):
-                        # Assume Spyder4/5
-                        kind = "spyder4"
-        if kind:
-            if kind == "icd":
-                if (
-                    not getcfg("dry_run")
-                    and result
-                    and not isinstance(result, Exception)
-                ):
-                    # Assume iColorDisplay DeviceCorrections.txt
-                    ccmx_dir = config.get_argyll_data_dir()
-                    if not os.path.exists(ccmx_dir):
-                        result = check_create_dir(ccmx_dir)
-                        if isinstance(result, Exception):
-                            return result, i1d3, spyd4, icd
-                    print(lang.getstr("colorimeter_correction.import"))
-                    print(path)
-                    try:
-                        imported, skipped = ccmx.convert_devicecorrections_to_ccmx(
-                            path, ccmx_dir
-                        )
-                        if imported == 0:
-                            raise Info
-                    except ValueError as exception:
-                        result = Error(
-                            lang.getstr("file.invalid") + "\n" + str(exception)
-                        )
-                    except Info:
-                        result = False
-                    except Exception as exception:
-                        result = exception
-                    else:
-                        result = icd = True
-                        if skipped > 0:
-                            result = Warn(
-                                lang.getstr(
-                                    "colorimeter_correction.import.partial_warning",
-                                    ("iColor Display", skipped, imported + skipped),
-                                )
-                            )
-                    self.worker.wrapup(False)
-            elif kind == "xrite":
-                # Import .edr
-                if asroot and sys.platform == "win32":
-                    ccss = self.get_argyll_data_files("l", "*.ccss", True)
-                args = path if isinstance(path, list) else [path]
-                result = i1d3 = self.worker.import_edr(args, asroot=asroot)
-                if asroot and sys.platform == "win32":
-                    # Hacky but the only way to know if we were successful
-                    result = i1d3 = (
-                        self.get_argyll_data_files("l", "*.ccss", True) != ccss
-                    )
-            elif kind == "spyder4":
-                # Import spyd4cal.bin
-                result = spyd4 = self.worker.import_spyd4cal([path], asroot=asroot)
-                if asroot and sys.platform == "win32":
-                    result = spyd4 = self.get_argyll_data_files("l", "spyd4cal.bin")
-            elif oeminst and not icolordisplay:
-                if asroot and sys.platform == "win32":
-                    ccss = self.get_argyll_data_files("l", "*.ccss", True)
-                result = self.worker.import_colorimeter_corrections(
-                    oeminst, [path], asroot
-                )
-                if ".ccss" in "".join(self.worker.output) or (
-                    asroot
-                    and sys.platform == "win32"
-                    and self.get_argyll_data_files("l", "*.ccss", True) != ccss
-                ):
-                    i1d3 = result
-                if "spyd4cal.bin" in "".join(self.worker.output) or (
-                    asroot
-                    and sys.platform == "win32"
-                    and self.get_argyll_data_files("l", "spyd4cal.bin")
-                ):
-                    spyd4 = result
-            else:
-                result = Error(lang.getstr("error.file_type_unsupported") + "\n" + path)
-
+        result, i1d3, spyd4, icd = colorimeter_correction.detect_import_kind(
+            self.worker, result, i1d3, i1d3ccss, spyd4, spyd4en, icd, oeminst, path, asroot
+        )
         debug_print("import_colorimeter_correction ->")
         debug_print("   result:", result)
         debug_print("   i1d3:", i1d3)
@@ -16206,131 +15917,19 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         """
         if auto and not paths:
             paths = []
-            if importers.get("icd"):
-                # Look for iColorDisplay
-                if sys.platform == "win32":
-                    icdfn = safe_glob(
-                        os.path.join(
-                            getenvu("PROGRAMFILES", ""),
-                            "Quato",
-                            "iColorDisplay",
-                            "DeviceCorrections.txt",
-                        )
-                    )
-                elif sys.platform == "darwin":
-                    icdfn = safe_glob(
-                        os.path.join(
-                            os.path.sep,
-                            "Applications",
-                            "iColorDisplay*.app",
-                            "DeviceCorrections.txt",
-                        )
-                    )
-                    if not icdfn:
-                        icdfn = safe_glob(
-                            os.path.join(
-                                os.path.sep,
-                                "Volumes",
-                                "iColorDisplay*",
-                                "iColorDisplay*.app",
-                                "DeviceCorrections.txt",
-                            )
-                        )
-                else:
-                    icdfn = None
-                if icdfn:
-                    paths.extend(icdfn)
-            if importers.get("i1d3") and (oeminst or i1d3ccss) and not i1d3:
-                # Look for *.edr files
-                if sys.platform == "win32":
-                    i1d3fn = safe_glob(
-                        os.path.join(
-                            getenvu("PROGRAMFILES", ""),
-                            "X-Rite",
-                            "Devices",
-                            "i1d3",
-                            "Calibrations",
-                            "*.edr",
-                        )
-                    )
-                elif sys.platform == "darwin":
-                    i1d3fn = safe_glob(
-                        os.path.join(
-                            os.path.sep,
-                            "Library",
-                            "Application Support",
-                            "X-Rite",
-                            "Devices",
-                            "i1d3xrdevice",
-                            "Contents",
-                            "Resources",
-                            "Calibrations",
-                            "*.edr",
-                        )
-                    )
-                    if not i1d3fn:
-                        i1d3fn = safe_glob(
-                            os.path.join(
-                                os.path.sep, "Volumes", "i1Profiler", "*Setup.exe"
-                            )
-                        )
-                    if not i1d3fn:
-                        i1d3fn = safe_glob(
-                            os.path.join(
-                                os.path.sep,
-                                "Volumes",
-                                "ColorMunki Display",
-                                "*Setup.exe",
-                            )
-                        )
-                else:
-                    i1d3fn = []
-                if len(i1d3fn) > 1:
-                    # Multiple EDR files
-                    paths.append(i1d3fn)
-                else:
-                    paths.extend(i1d3fn)
-            if importers.get("spyd4") and (oeminst or spyd4en) and not spyd4:
-                # Look for dccmtr.dll
-                if sys.platform == "win32":
-                    spydfn = safe_glob(
-                        os.path.join(
-                            getenvu("PROGRAMFILES", ""),
-                            "Datacolor",
-                            "Spyder5*",
-                            "dccmtr.dll",
-                        )
-                    )
-                    if not spydfn:
-                        spydfn = safe_glob(
-                            os.path.join(
-                                getenvu("PROGRAMFILES", ""),
-                                "Datacolor",
-                                "Spyder4*",
-                                "dccmtr.dll",
-                            )
-                        )
-                elif sys.platform == "darwin":
-                    # Look for setup.exe on CD-ROM
-                    spydfn = safe_glob(
-                        os.path.join(
-                            os.path.sep, "Volumes", "Datacolor", "Data", "Setup.exe"
-                        )
-                    )
-                    if not spydfn:
-                        spydfn = safe_glob(
-                            os.path.join(
-                                os.path.sep,
-                                "Volumes",
-                                "Datacolor_ISO",
-                                "Data",
-                                "Setup.exe",
-                            )
-                        )
-                else:
-                    spydfn = None
-                if spydfn:
-                    paths.extend(spydfn)
+            found = colorimeter_correction.discover_auto_import_paths(
+                importers, i1d3, i1d3ccss, spyd4, spyd4en, oeminst
+            )
+            if found.get("icd"):
+                paths.extend(found["icd"])
+            i1d3fn = found.get("i1d3", [])
+            if len(i1d3fn) > 1:
+                # Multiple EDR files
+                paths.append(i1d3fn)
+            else:
+                paths.extend(i1d3fn)
+            if found.get("spyd4"):
+                paths.extend(found["spyd4"])
         for path in paths:
             (result, i1d3, spyd4, icd) = self.import_colorimeter_correction(
                 result, i1d3, i1d3ccss, spyd4, spyd4en, icd, oeminst, path, asroot
@@ -18566,67 +18165,9 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             list[str | tuple[str, float]]: A list of file paths or tuples of
                 (file path, last modification time).
         """
-        data_files = []
-        if sys.platform != "darwin":
-            if "l" in scope:
-                for commonappdata in config.COMMONAPPDATA:
-                    data_files += safe_glob(
-                        os.path.join(commonappdata, "color", wildcard)
-                    )
-                    data_files += safe_glob(
-                        os.path.join(commonappdata, "ArgyllCMS", wildcard)
-                    )
-            if "u" in scope:
-                data_files += safe_glob(os.path.join(config.APPDATA, "color", wildcard))
-        else:
-            if "l" in scope:
-                data_files += safe_glob(os.path.join(config.LIBRARY, "color", wildcard))
-                data_files += safe_glob(
-                    os.path.join(config.LIBRARY, "ArgyllCMS", wildcard)
-                )
-                if [1, 9] <= self.worker.argyll_version <= [1, 9, 1]:
-                    # Argyll CMS 1.9 and 1.9.1 use *nix locations due to a
-                    # configuration problem
-                    data_files += safe_glob(
-                        os.path.join("/usr/local/share", "ArgyllCMS", wildcard)
-                    )
-            if "u" in scope:
-                data_files += safe_glob(
-                    os.path.join(config.LIBRARY_HOME, "color", wildcard)
-                )
-                if [1, 9] <= self.worker.argyll_version <= [1, 9, 1]:
-                    # Argyll CMS 1.9 and 1.9.1 use *nix locations due to a
-                    # configuration problem
-                    data_files += safe_glob(
-                        os.path.join(
-                            config.HOME, ".local", "share", "ArgyllCMS", wildcard
-                        )
-                    )
-        if "u" in scope:
-            data_files += safe_glob(os.path.join(config.APPDATA, "ArgyllCMS", wildcard))
-        filenames = list(data_files)
-        data_files = []
-        mapping = {}
-        for filename in filenames:
-            basename = os.path.basename(filename)
-            if (
-                basename not in mapping
-                or os.path.basename(os.path.dirname(filename)) == "ArgyllCMS"
-            ):
-                # Prefer files with same basename in 'ArgyllCMS' folder over
-                # 'color' folder
-                mapping[basename] = filename
-
-        for filename in mapping.values():
-            if include_lastmod:
-                try:
-                    lastmod = os.stat(filename).st_mtime
-                except OSError:
-                    lastmod = -1
-                data_files.append((filename, lastmod))
-            else:
-                data_files.append(filename)
-        return data_files
+        return colorimeter_correction.get_argyll_data_files(
+            self.worker, scope, wildcard, include_lastmod
+        )
 
     def get_instrument_type(self) -> str:
         """Return the instrument type as a string.
