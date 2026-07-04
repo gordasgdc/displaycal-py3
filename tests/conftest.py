@@ -1,12 +1,34 @@
-import glob
 import os
+import sys
+import tempfile
+
+# Isolate every DisplayCAL user path (preferences/config file, logs, storage,
+# cache, ...) under a throwaway per-session directory, so running the test
+# suite never reads from or writes to the developer's real config (e.g.
+# ~/Library/Preferences/DisplayCAL/DisplayCAL.ini on macOS, ~/.config/DisplayCAL
+# on Linux). DisplayCAL computes these paths from $HOME (and the XDG_* /
+# Windows equivalents) at *import time* (see DisplayCAL/defaultpaths.py), so
+# this must run before the first import of any DisplayCAL module — hence it
+# sits at the very top of this file, ahead of every other import.
+_TEST_HOME = tempfile.mkdtemp(prefix="displaycal-test-home-")
+os.environ["HOME"] = _TEST_HOME
+os.environ.setdefault("XDG_CACHE_HOME", os.path.join(_TEST_HOME, ".cache"))
+os.environ.setdefault("XDG_CONFIG_HOME", os.path.join(_TEST_HOME, ".config"))
+os.environ.setdefault("XDG_DATA_HOME", os.path.join(_TEST_HOME, ".local", "share"))
+if sys.platform == "win32":
+    # Best-effort: the pywin32 SHGetSpecialFolderPath lookup DisplayCAL uses on
+    # Windows queries the OS directly and ignores these, but the ctypes
+    # fallback and any other HOME-based logic still benefit.
+    os.environ["USERPROFILE"] = _TEST_HOME
+    os.environ.setdefault("APPDATA", os.path.join(_TEST_HOME, "AppData", "Roaming"))
+    os.environ.setdefault("LOCALAPPDATA", os.path.join(_TEST_HOME, "AppData", "Local"))
+
+import glob
 import platform
 import pathlib
 import shutil
 import subprocess
-import sys
 import tarfile
-import tempfile
 import time
 import zipfile
 
