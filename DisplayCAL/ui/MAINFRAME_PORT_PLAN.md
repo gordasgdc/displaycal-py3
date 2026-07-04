@@ -615,8 +615,66 @@ come from the generic `Worker.get_instrument_measurement_modes()` rather than
 the wx handler's hard-coded per-instrument label overrides. The `spec2cie`
 reference-observer override and the provenance-only `REFERENCE_FILENAME`/
 `*_HASH` metadata are not reproduced. The web-check, import and upload entry
-points and the wx-only `CCXXPlot` spectral/matrix visualization remain future
-slices (as the plan already tracked import/upload as separate items).
+points (sub-slice iii, below) and the wx-only `CCXXPlot` spectral/matrix
+visualization (still future work) were tracked as separate items.
+
+**Colorimeter-correction sub-slice iii — import/upload/web-check — DONE.**
+`DisplayCAL/colorimeter_correction.py` gains the remaining toolkit-neutral
+pieces, covered by the expanded `tests/test_colorimeter_correction.py` (35
+tests, no display): `parse_web_check_entries()` (the JSON-entry-to-row loop
+from `colorimeter_correction_web_check_choose`, minus the wx `ListCtrl`
+dialog), `build_web_check_params()` (from `colorimeter_correction_web_
+handler`), `build_upload_params()` / `compute_upload_dedup_hash()` /
+`validate_upload_originator()` (from `MainFrame.upload_colorimeter_
+correction` / `upload_colorimeter_correction_handler` / the module-level
+`upload_colorimeter_correction`), and `get_argyll_data_files()` /
+`discover_auto_import_paths()` / `detect_import_kind()` (from `MainFrame.
+get_argyll_data_files` / `import_colorimeter_corrections_producer` /
+`import_colorimeter_correction`, `self` → `worker`). The wx `MainFrame` now
+delegates to all of these (byte-for-byte identical CGATS output), thinning
+~350 lines out of the three handlers. Two latent wx bugs, both fixed at the
+source (so the still-shipping wx path gets the fix too): `REFERENCE_OBSERVER`
+(and `FIT_METHOD`'s "xy" case) came back from `queryv1()` as `bytes` but were
+looked up/compared against `str` data, so the web-check dialog's "observer"
+column always showed "unknown"; and `upload_colorimeter_correction_handler`
+passed a `str` (from `.decode()`) into a helper that later ran a `bytes`-
+pattern regex against it, raising `TypeError` for every manually-chosen
+upload file (the create-correction call site, which already held `bytes`,
+never hit it). `build_upload_params()` now normalizes `str` input to `bytes`
+upfront.
+
+`DisplayCAL/ui/colorimeter_correction_io.py` provides the Qt side, covered by
+`tests/test_ui_colorimeter_correction_io.py` (15 tests, headless offscreen):
+three `QObject` controllers (`WebCheckController`, `ImportController`,
+`UploadController`), each owning a background `QThread` plus an indeterminate
+progress dialog (the `_CreateThread` pattern from
+`ui/colorimeter_correction_window.py`), plus a small standalone launcher
+window (`ColorimeterCorrectionIOWindow`, `python -m DisplayCAL.ui
+.colorimeter_correction_io`) with one button per flow for manual testing.
+`WebCheckController` runs the `http_request` GET on the thread, parses the
+response with `parse_web_check_entries()`, and shows a `_WebCheckChooserDialog`
+(a `QTableWidget` chooser, auto-selecting when there's only one match) before
+saving via the new `save_correction()` (write + overwrite-check + `colorimeter
+_correction_matrix_file` config update). `ImportController` shows an
+`_ImportOptionsDialog` (auto-detect checkboxes per importer + a file picker
+alternative + install-scope radios), then runs the same auto-discovery /
+per-path dispatch / OEM-package auto-download loop the wx producer did
+(toolkit-neutral, so it runs unchanged on the `QThread`) and reports success/
+failure like `import_colorimeter_corrections_consumer`. `UploadController`
+validates the ORIGINATOR, confirms, then runs the duplicate-check GET +
+upload POST on the thread.
+
+**Dropped / deferred versus the wx handlers:** the "info" button
+(`CCXXPlot` spectral/matrix preview) is not reproduced, matching the drop
+already made in `colorimeter_correction_window.py`. Choosing an elevated
+import scope (local system/network) shows a not-yet-available notice instead
+of attempting an unauthenticated install, matching `profile_install_window
+.py`'s deferral (needs `Worker.authenticate()`'s wx password prompt). These
+flows are standalone (own `Worker`, own dialogs) and not yet wired to a live
+main window, so the wx consumer's `update_measurement_modes()` /
+`update_colorimeter_correction_matrix_ctrl_items()` refresh is not
+reproduced; the future Qt main window will need to refresh its own state
+after a successful import/web choice.
 
 **Profile share — effectively retired.** `profile_share_handler()` returns early
 with a "icc.opensuse.org is not working anymore / temporarily disabled" notice
