@@ -638,6 +638,38 @@ all-good/some-good/per-method-breakdown derivation from `Worker
 .install_profile()`'s 4-tuple result, replacing the wx consumer's inline
 icon/message logic). The wx `MainFrame` now delegates to all four.
 
+**Profile install / load-on-login sub-slice ii — the Qt window — DONE.**
+`DisplayCAL/ui/profile_install_window.py` (`InstallProfileWindow(BaseWindow)`)
+is the Qt port of the install-profile portion of `profile_finish` (not its 3D
+LUT install branch, already covered by the ported `ui/tools/lut3d`), covered
+by `tests/test_ui_profile_install_window.py` (12 tests, headless offscreen).
+Standalone-runnable (`python -m DisplayCAL.ui.profile_install_window`), it
+covers `select_install_profile_handler` + `install_profile_handler` (browse or
+drop an `.icc`/`.icm`, validated via the sub-slice-i helper), a "show profile
+info" button that opens the already-ported `ui.tools.profile_info
+.ProfileInfoWindow`, the load-on-login checkbox (+ the Windows-only "handled
+by OS" sub-checkbox, backed by `util_win.calibration_management_isenabled`/
+`enable_calibration_management`), the install-scope radio buttons built from
+`resolve_install_scope_options()`, and the actual install via
+`Worker.install_profile()` on a `QThread` behind an indeterminate
+`QProgressDialog` (the `lut3d.py` `_CreateThread` pattern), with the result
+reported through `summarize_install_result()`.
+
+**Dropped / deferred versus the wx dialog:** the calibration-preview and "show
+LUT" checkboxes need a live calibration session on the running main window
+(the wx dialog reads `self.cal` / `self.preview`); they return with the Qt
+main window. Installing with an elevated scope (local system / network) needs
+the wx password-prompt + `sudo` credential caching in `Worker.authenticate()`,
+which pops a wx `ConfirmDialog` internally; the scope choice is still offered
+and persisted to `profile.install_scope`, but choosing one and clicking
+Install surfaces a not-yet-available notice instead of attempting (and
+silently failing) an unauthenticated elevated install. The Windows
+profile-loader IPC resync (the `send_command("apply-profiles", ...)`
+round-trip to a separately running tray process, in both
+`profile_load_on_login_handler` and `profile_finish`) is not reproduced;
+`profile.load_on_login` is still written directly, which is what
+`Worker.install_profile()` itself reads.
+
 ### Stage 6 — StartupFrame + retire wx paths
 
 Port `StartupFrame`, flip the default toolkit, and begin deleting wx modules
