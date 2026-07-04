@@ -545,6 +545,27 @@ file-save + overwrite dialogs; the `worker.Worker` measure run
 strings from widgets) plus `report.create` + launch. Those land as the Qt report
 window is built, reusing this module.
 
+**Colorimeter-correction sub-slice i — CCXX metadata injection — DONE.**
+`DisplayCAL/colorimeter_correction.py` (another plain, Qt-free `DisplayCAL`
+module), covered by `tests/test_colorimeter_correction.py` (9 tests, no display).
+`inject_ccxx_metadata()` is the pure port of the raw-bytes rewriting near the
+end of the 1736-line `create_colorimeter_correction_handler()` that adds the
+`REFERENCE` / `TECHNOLOGY` / `MANUFACTURER_ID` / `MANUFACTURER` / `OBSERVER` /
+`REFERENCE_OBSERVER` fields Argyll omits from CCMX/CCSS by default (inserted
+above the `DISPLAY` line, in a fixed order so the output MD5 is stable, skipping
+any field already present). It normalizes `str`/`bytes` values (the wx path had
+a latent `b"%s" % str` crash if the technology string arrived as `str`), which
+is byte-identical for real inputs (no backslashes). The wx handler now delegates
+(same ruff profile). This is the first bite of the plan's "extract the 1736-line
+handler first"; the dialogs, the `spec2cie` / `ccxxmake` / `create_ccxx` worker
+run, the four-color-matrix path, the reference-vs-corrected preview grid, and
+`import_colorimeter_correction` / `upload_colorimeter_correction` remain.
+
+**Profile share — effectively retired.** `profile_share_handler()` returns early
+with a "icc.opensuse.org is not working anymore / temporarily disabled" notice
+(#194); everything after is dead code. The Qt port is just that notice, so there
+is no extraction to do here until/unless the upload endpoint is revived.
+
 ### Stage 6 — StartupFrame + retire wx paths
 
 Port `StartupFrame`, flip the default toolkit, and begin deleting wx modules

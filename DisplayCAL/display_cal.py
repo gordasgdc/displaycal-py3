@@ -59,6 +59,7 @@ from DisplayCAL import (
     audio,
     ccmx,
     colord,
+    colorimeter_correction,
     colormath,
     config,
     floatspin,
@@ -15356,23 +15357,6 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 show_result_dialog(exception, self)
                 self.worker.wrapup(False)
                 return None
-            if reference_ti3[0].get("TARGET_INSTRUMENT") and not re.search(
-                rb'\nREFERENCE\s+".+?"\n', cgats
-            ):
-                # By default, CCSS files don't contain reference instrument
-                cgats = re.sub(
-                    rb'(\nDISPLAY\s+"[^"]*"\n)',
-                    b'\nREFERENCE "%s"\\1'
-                    % reference_ti3[0].get("TARGET_INSTRUMENT").replace(b"\\", b"\\\\"),
-                    cgats,
-                )
-            if not re.search(rb'\nTECHNOLOGY\s+".+?"\n', cgats) and tech:
-                # By default, CCMX files don't contain technology string
-                cgats = re.sub(
-                    rb'(\nDISPLAY\s+"[^"]*"\n)',
-                    b'\nTECHNOLOGY "%s"\\1' % tech,
-                    cgats,
-                )
             manufacturer_id = None
             if manufacturer:
                 if not PNP_ID_CACHE:
@@ -15382,41 +15366,17 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 manufacturer_id = manufacturers.get(manufacturer)
             debug_print(f"manufacturer_id: {manufacturer_id}")
             debug_print(f"manufacturer   : {manufacturer}")
-            if manufacturer_id and not re.search(
-                rb'\nMANUFACTURER_ID\s+".+?"\n', cgats
-            ):
-                # By default, CCMX/CCSS files don't contain manufacturer ID
-                cgats = re.sub(
-                    rb'(\nDISPLAY\s+"[^"]*"\n)',
-                    b'\nMANUFACTURER_ID "%s"\\1'
-                    % manufacturer_id.replace("\\", "\\\\").encode("utf-8"),
-                    cgats,
-                )
-            if manufacturer and not re.search(rb'\nMANUFACTURER\s+".+?"\n', cgats):
-                # By default, CCMX/CCSS files don't contain manufacturer
-                cgats = re.sub(
-                    rb'(\nDISPLAY\s+"[^"]*"\n)',
-                    b'\nMANUFACTURER "%s"\\1'
-                    % manufacturer.replace("\\", "\\\\").encode("utf-8"),
-                    cgats,
-                )
-            if observer and not re.search(rb'\nOBSERVER\s+".+?"\n', cgats):
-                # By default, CCMX/CCSS files don't contain observer
-                cgats = re.sub(
-                    rb'(\nDISPLAY\s+"[^"]*"\n)',
-                    b'\nOBSERVER "%s"\\1' % observer.replace(b"\\", b"\\\\"),
-                    cgats,
-                )
-            if reference_observer and not re.search(
-                rb'\nREFERENCE_OBSERVER\s+".+?"\n', cgats
-            ):
-                # By default, CCMX/CCSS files don't contain observer
-                cgats = re.sub(
-                    rb'(\nDISPLAY\s+"[^"]*"\n)',
-                    b'\nREFERENCE_OBSERVER "%s"\\1'
-                    % reference_observer.encode("UTF-8").replace(b"\\", b"\\\\"),
-                    cgats,
-                )
+            # By default Argyll omits these fields from CCMX/CCSS files; inject
+            # them (order matters for byte-identical output / MD5).
+            cgats = colorimeter_correction.inject_ccxx_metadata(
+                cgats,
+                reference=reference_ti3[0].get("TARGET_INSTRUMENT"),
+                technology=tech,
+                manufacturer_id=manufacturer_id,
+                manufacturer=manufacturer,
+                observer=observer,
+                reference_observer=reference_observer,
+            )
             result = check_create_dir(config.get_argyll_data_dir())
             if isinstance(result, Exception):
                 show_result_dialog(result, self)
