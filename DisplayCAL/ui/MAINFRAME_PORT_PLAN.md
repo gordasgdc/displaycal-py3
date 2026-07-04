@@ -315,7 +315,49 @@ Also deferred: the pattern-generator setup dialogs (`patterngenerator_kind()`
 already names the branch) and the pre-flight confirmation / overwrite dialogs
 (`check_show_macos_bugs_warning`, the fast-matrix-shaper choice, `check_overwrite`).
 
-### Stage 5 — Reporting, colorimeter corrections, install/share
+### Stage 5 — Worker execution layer (make the Stage-4 buttons run)
+
+Connect the Stage-4 `measurement_requested` signal to the actual Argyll
+execution so the calibrate / calibrate&profile / profile buttons *run* something.
+In wx this is `worker.Worker.start()` (worker.py:15705), which is the most
+wx-entangled method in the codebase: it owns the `delayedresult` producer/consumer
+threading, `wx.CallAfter`, `BetterWindowDisabler`, and constructs the wx
+`ProgressDialog` (and, for interactive calibration, the `DisplayAdjustmentFrame`)
+inside `progress_dlg_start()`. None of that can flip to Qt in one increment
+without touching the still-shipping wx path, so this lands as sub-slices. The Qt
+path drives the worker itself rather than routing through `worker.start()`.
+
+**Sub-slice 5a — native Qt `ProgressDialog` — DONE.** `DisplayCAL/ui/progress_dialog.py`
+(`ProgressDialog(QDialog)`), covered by `tests/test_ui_progress_dialog.py`
+(17 tests, headless offscreen). It preserves the contract the flow depends on:
+an indeterminate (`pulse`) and determinate (`set_progress`) mode over a
+`QProgressBar`, elapsed / estimated-remaining read-outs (the maths factored into
+the pure, unit-tested `format_elapsed` / `estimate_remaining`), optional cancel
+and pause controls surfaced as the `cancelled` / `pause_toggled` signals, a
+`keep_going` flag the driver polls (mirroring wx `Pulse` returning
+`(keepGoing, skip)`), and position persistence to the shared `position.progress.*`
+config keys. **Dropped** (matching the other tools' simplifications): the fancy
+animated throbber (`AnimatedBitmap` / `get_bitmaps`), the looping sound effects
+(`audio.Sound`), the gradient `BetterPyGauge`, and Windows taskbar-progress
+integration.
+
+**Sub-slice 5b — the QThread worker driver (non-interactive measure/profile).**
+A `WorkerRunner(QThread)` that runs a worker producer (`worker.measure` via
+`start_measurement`'s contract) off the GUI thread, shows the 5a `ProgressDialog`,
+and calls the consumer on the main thread when done. Requires a small
+`progress_wnd` adapter forwarding the worker's wx-named progress calls
+(`Pulse` / `UpdateProgress` / `reset` / `SetTitle` / …) to the Qt dialog, then
+wires `measurement_requested` -> run for the `PROFILE` / `CALIBRATE_AND_PROFILE`
+(profile phase) actions. Verify against real hardware before connecting the
+signal, since the worker's exec loop is not exercisable headless.
+
+**Sub-slice 5c — interactive `DisplayAdjustmentFrame`.** Port
+`wx_display_adjustment_frame.py::DisplayAdjustmentFrame` (the interactive
+display-adjustment window shown during `worker.calibrate`), so the `CALIBRATE`
+action's interactive path runs. This is the large Pile-2 interactive window the
+calibrate flow needs; the profile path (5b) does not.
+
+### Stage 5+ — Reporting, colorimeter corrections, install/share
 
 The remaining large features, each its own slice: measurement report
 (`measurement_report*`), colorimeter-correction create/import/upload (extract
