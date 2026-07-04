@@ -537,13 +537,32 @@ wx `MainFrame` now delegates to all four (byte-for-byte identical output, same
 ruff profile), so the extraction thins the wx consumer today and hands the Qt
 report layer a ready seam.
 
-**Deferred to later report sub-slices:** the window-shaped remainder, chart /
-profile / sim / devlink resolution and the BT.1886 lookup in the handler; the
-file-save + overwrite dialogs; the `worker.Worker` measure run
-(`measurement_report`); and the big `placeholders2data` assembly in the consumer
-(it reads live CGATS / ICCProfile objects and pulls display / instrument / ccmx
-strings from widgets) plus `report.create` + launch. Those land as the Qt report
-window is built, reusing this module.
+**Measurement report sub-slice ii — the Qt settings window — DONE.**
+`DisplayCAL/ui/measurement_report.py` ports `wx_report_frame.ReportFrame` to a
+`ReportWindow(BaseWindow)`, covered by `tests/test_ui_measurement_report.py` (13
+headless tests under the offscreen `QApplication`). The wx `xrc/report.xrc`
+widget set and top-to-bottom order are hand-built with native Qt widgets (the
+custom wx `FileBrowseButtonWithHistory` becomes the same editable-combo +
+browse-button `_FileBrowse` stand-in the Qt 3D LUT window uses). All the
+config-driven behaviour is ported: the chart/reference loader + fields chooser,
+the simulation / device-link / output profile controls with their `xicclu`
+blackpoint lookups and profile-class validation (`set_profile`), the
+unmodified / black-offset / BT.1886-style TRC block with gamma + gamma-type +
+black-output-offset slider/spin (guarded against Qt's programmatic-`setValue`
+re-entrancy via `_GuardContext`, as in `lut3d.py`), the whitepoint-simulation
+options, the estimated-measurement-time readout, and the big
+`mr_update_main_controls` show/hide/enable orchestration. It reuses the sub-slice
+i helpers. Runnable standalone via `python -m DisplayCAL.ui.measurement_report`.
+
+**Deferred (surfaced as Qt signals, matching `MeasureFrame`):** the actual
+measurement run and the test-chart editor are `measure_requested` /
+`edit_chart_requested` signals for the not-yet-ported Qt main window to wire up.
+Still in the wx path for now: the chart / profile / sim / devlink resolution and
+BT.1886 lookup in `measurement_report_handler`, the file-save + overwrite
+dialogs, the `worker.Worker` measure run (`measurement_report`), and the big
+`placeholders2data` assembly in the consumer (it reads live CGATS / ICCProfile
+objects and pulls display / instrument / ccmx strings from widgets) plus
+`report.create` + launch. Those land when the Qt main window drives this window.
 
 **Colorimeter-correction sub-slice i — CCXX metadata injection — DONE.**
 `DisplayCAL/colorimeter_correction.py` (another plain, Qt-free `DisplayCAL`

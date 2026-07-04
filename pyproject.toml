@@ -243,6 +243,10 @@ extend-ignore = [
 # ``*_xy_dE`` names mirror the wx ``parse_txt`` locals this ports verbatim; the
 # single dispatch function is branch-heavy for the same reason ``parse_txt`` is.
 "DisplayCAL/ui/display_adjustment.py" = ["N806", "C901"]
+# Measurement-report window: ``XYZbp*`` uses CIE XYZ notation and the branch-heavy
+# ``set_profile`` / ``chart_ctrl_handler`` / ``update_estimated_measurement_time``
+# mirror the wx ``ReportFrame`` handlers they port verbatim.
+"DisplayCAL/ui/measurement_report.py" = ["N803", "N806", "C901"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 12
