@@ -189,8 +189,16 @@ def test_colorimeter_correction_web_check_choose_observer_column(
     }
     resp = io.BytesIO(json.dumps([entry]).encode("utf-8"))
     expected_label = mainframe.observers_ab["1931_2"]
+    # On GTK3, wx.ListCtrl is DisplayCAL.wx_fixes.ListCtrl, a DataViewListCtrl
+    # shim whose SetStringItem() only creates the real row once every column
+    # has been set. Spy on it (call through to the original) rather than
+    # replacing it outright, otherwise the shim never gets a real row and the
+    # dialog's later GetItem(0) call crashes with a wx assertion error.
+    original_set_string_item = wx.ListCtrl.SetStringItem
     with check_call(BaseInteractiveDialog, "ShowWindowModalBlocking", wx.ID_CANCEL):
-        with check_call(wx.ListCtrl, "SetStringItem", call_count=-1) as calls:
+        with check_call(
+            wx.ListCtrl, "SetStringItem", original_set_string_item, call_count=-1
+        ) as calls:
             colorimeter_correction_web_check_choose(resp, mainframe)
     # SetStringItem(index, col, label) is called on the ListCtrl instance, so
     # the recorded args are (self, index, col, label).
