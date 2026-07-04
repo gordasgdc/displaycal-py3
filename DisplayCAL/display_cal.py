@@ -1068,6 +1068,16 @@ def colorimeter_correction_web_check_choose(
         fit_method = ccxx.queryv1("FIT_METHOD")
         if fit_method and fit_method != b"xy":
             fit_method = lang.getstr("perceptual")
+        elif isinstance(fit_method, bytes):
+            # queryv1() returns bytes; decode so it's consistent with the
+            # localized str the "perceptual" branch above produces.
+            fit_method = fit_method.decode("utf-8")
+        reference_observer = ccxx.queryv1("REFERENCE_OBSERVER")
+        if isinstance(reference_observer, bytes):
+            # queryv1() returns bytes, but observers_ab is keyed by str, so
+            # without decoding this lookup never matches and the "observer"
+            # column always fell back to "unknown"/"not_applicable".
+            reference_observer = reference_observer.decode("utf-8")
         rows_data.append({
             "cgats": cgats_bytes,
             "columns": [
@@ -1081,7 +1091,7 @@ def colorimeter_correction_web_check_choose(
                 ),
                 spectral_res,
                 parent.observers_ab.get(
-                    ccxx.queryv1("REFERENCE_OBSERVER"),
+                    reference_observer,
                     lang.getstr("unknown" if ccxx_type == "CCMX" else "not_applicable"),
                 ),
                 (
@@ -15744,6 +15754,11 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         dlg.Destroy()
         if result != wx.ID_OK:
             return
+        if isinstance(cgats, str):
+            # upload_colorimeter_correction_handler() passes a str (decoded
+            # from the file), but the regex below requires bytes; normalize
+            # so it doesn't raise TypeError.
+            cgats = cgats.encode("utf-8")
         ccxx = CGATS(cgats)
         # Remove platform-specific/potentially sensitive information
         cgats = re.sub(rb'\n(?:REFERENCE|TARGET)_FILENAME\s+"[^"]+"\n', b"\n", cgats)
