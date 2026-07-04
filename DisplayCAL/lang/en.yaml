@@ -2240,6 +2240,8 @@
   Spectral
 "spectral_resolution": |-
   Spectral resolution
+"splash.simple": |-
+  Use simple splash screen
 "ssl.certificate_verify_failed": |-
   The remote certificate could not be verified.
 "ssl.certificate_verify_failed.root_ca_missing": |-
@@ -2250,8 +2252,6 @@
   Starting up...
 "startup_sound.enable": |-
   Enable startup sound
-"splash.simple": |-
-  Use simple splash screen
 "success": |-
   ...ok.
 "surround_xyz": |-

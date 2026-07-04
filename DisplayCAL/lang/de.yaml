@@ -3307,6 +3307,9 @@
 "spectral_resolution": |-
   Spektrale Auflösung
 
+"splash.simple": |-
+  Einfachen Startbildschirm verwenden
+
 "ssl.certificate_verify_failed": |-
   Das Server-Zertifikat konnte nicht verifiziert werden.
 

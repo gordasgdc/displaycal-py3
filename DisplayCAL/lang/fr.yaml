@@ -3302,6 +3302,9 @@
 "spectral_resolution": |-
   Résolution spectrale
 
+"splash.simple": |-
+  Utiliser un écran de démarrage simple
+
 "ssl.certificate_verify_failed": |-
   Le certificat distant n’a pas pu être vérifié.
 

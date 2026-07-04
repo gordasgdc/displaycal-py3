@@ -3334,6 +3334,9 @@
 "spectral_resolution": |-
   光譜解像度
 
+"splash.simple": |-
+  使用簡單啟動畫面
+
 "ssl.certificate_verify_failed": |-
   無法驗證遠端的證書。
 
