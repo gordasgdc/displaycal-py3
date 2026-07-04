@@ -13,7 +13,12 @@ grid), the ``worker.Worker`` execution (``spec2cie`` / ``ccxxmake`` /
 
 from __future__ import annotations
 
+import os
 import re
+
+from DisplayCAL import config
+from DisplayCAL import localization as lang
+from DisplayCAL.argyll import make_argyll_compatible_path
 
 # The keyword injection order, top-to-bottom, must match the wx handler so the
 # emitted CCXX bytes are identical (each field is inserted immediately above the
@@ -108,3 +113,26 @@ def inject_ccxx_metadata(
         if value:
             cgats = _insert_ccxx_field(cgats, _CCXX_KEYWORDS[field], _to_bytes(value))
     return cgats
+
+
+def get_cgats_path(cgats: bytes) -> str:
+    """Return the default save path for a CCMX/CCSS file's raw bytes.
+
+    Ports ``display_cal.get_cgats_path``: the file is named after the
+    ``DESCRIPTOR`` field (falling back to "unnamed"), sanitised for the
+    filesystem and Argyll, with the extension taken from the CGATS type
+    keyword on the first line (``CCMX`` / ``CCSS``), saved under the Argyll
+    data dir.
+
+    Args:
+        cgats: The raw CCXX file bytes.
+
+    Returns:
+        The full path to save the file to.
+    """
+    descriptor = re.search(rb'\nDESCRIPTOR\s+"(.+?)"\n', cgats)
+    descriptor = descriptor.groups()[0] if descriptor else b""
+    description = descriptor.decode("utf-8") or lang.getstr("unnamed")
+    name = make_argyll_compatible_path(description, is_name=True)[:255]
+    extension = cgats.split()[0].lower().decode("utf-8")
+    return os.path.join(config.get_argyll_data_dir(), f"{name}.{extension}")

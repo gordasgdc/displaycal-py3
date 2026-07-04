@@ -580,6 +580,44 @@ handler first"; the dialogs, the `spec2cie` / `ccxxmake` / `create_ccxx` worker
 run, the four-color-matrix path, the reference-vs-corrected preview grid, and
 `import_colorimeter_correction` / `upload_colorimeter_correction` remain.
 
+**Colorimeter-correction sub-slice ii — the Qt create window — DONE.**
+`DisplayCAL/ui/colorimeter_correction_window.py` (`CreateCorrectionWindow
+(BaseWindow)`), covered by `tests/test_ui_colorimeter_correction_window.py` (15
+tests, headless offscreen; 2 run the real `ccxxmake` pipeline end to end and are
+skipped when no Argyll install is present). Unlike the other ported settings
+windows, this one runs the actual Argyll pipeline itself rather than deferring
+it: correction-type (matrix/spectral + four-color-matrix) and reference/
+colorimeter instrument + measurement-mode + observer + TI3 selection, TI3
+loading/validation (spectral/EDID detection dropped in favour of dedicated
+reference/colorimeter controls, the CCXX-testchart patch trimming kept,
+`check_add_display_type_base_id` + `DISPLAY_TYPE_REFRESH` backfill kept since
+`ccxxmake` hard-requires them), the auto-derived description/display/
+manufacturer/technology fields, the `spec2cie`/`ccxxmake`/`create_ccxx` run on a
+`QThread` (the `lut3d.py` `_CreateThread` pattern) behind an indeterminate
+`QProgressDialog`, the four-color-matrix recomputation
+(`colormath.four_color_matrix`), metadata injection (reusing sub-slice i's
+`inject_ccxx_metadata` plus a newly-extracted `get_cgats_path`, both now shared
+with the wx path), the `FIT_METHOD`/`FIT_*_DE94`/`FIT_*_DE00` metadata, and a
+`_PreviewDialog` (`QTableWidget` with sRGB swatches, the Qt stand-in for the wx
+reference-vs-corrected confirmation grid) before the overwrite-check + save.
+Verified against a real Argyll install: constructs a valid CCMX from synthetic
+TI3 fixtures with correct correction-matrix values, fit-error metadata and
+technology defaulting (LCD, fixing a latent bytes/str comparison bug in the wx
+handler that silently defaulted the technology chooser to CRT).
+
+**Dropped / simplified versus the wx handler:** the "Measure reference" /
+"Measure colorimeter" buttons need the live measurement flow (main-window
+territory), so they only emit `measure_reference_requested` /
+`measure_colorimeter_requested` signals, matching the `ReportWindow` /
+`MeasureFrame` deferral. TI3 controls accept only `.ti3` (the wx `.icc`/`.icm`-
+as-reference path via `ti1_lookup_to_ti3` is dropped). Measurement-mode choices
+come from the generic `Worker.get_instrument_measurement_modes()` rather than
+the wx handler's hard-coded per-instrument label overrides. The `spec2cie`
+reference-observer override and the provenance-only `REFERENCE_FILENAME`/
+`*_HASH` metadata are not reproduced. The web-check, import and upload entry
+points and the wx-only `CCXXPlot` spectral/matrix visualization remain future
+slices (as the plan already tracked import/upload as separate items).
+
 **Profile share — effectively retired.** `profile_share_handler()` returns early
 with a "icc.opensuse.org is not working anymore / temporarily disabled" notice
 (#194); everything after is dead code. The Qt port is just that notice, so there

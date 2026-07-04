@@ -1763,6 +1763,8 @@ DEFAULTS = {
     "patterngenerator.use_video_levels": 0,
     "position.x": 50,
     "position.y": 50,
+    "position.colorimetercorrectioncreate.x": 50,
+    "position.colorimetercorrectioncreate.y": 50,
     "position.info.x": 50,
     "position.info.y": 50,
     "position.lut_viewer.x": 50,

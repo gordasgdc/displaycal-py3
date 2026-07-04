@@ -1311,14 +1311,7 @@ def get_cgats_path(cgats: bytes) -> str:
     Returns:
         str: The path to save the CGATS file.
     """
-    descriptor = re.search(rb'\nDESCRIPTOR\s+"(.+?)"\n', cgats)
-    if descriptor:
-        descriptor = descriptor.groups()[0]
-    descriptor = descriptor.decode("utf-8")
-    description = descriptor or lang.getstr("unnamed")
-    name = make_argyll_compatible_path(description, is_name=True)[:255]
-    extension = cgats.split()[0].lower().decode("utf-8")
-    return os.path.join(config.get_argyll_data_dir(), f"{name}.{extension}")
+    return colorimeter_correction.get_cgats_path(cgats)
 
 
 def get_header(
