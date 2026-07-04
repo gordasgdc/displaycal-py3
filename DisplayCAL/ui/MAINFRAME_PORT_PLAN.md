@@ -523,6 +523,28 @@ The remaining large features, each its own slice: measurement report
 (`measurement_report*`), colorimeter-correction create/import/upload (extract
 the 1736-line handler first), profile install/load-on-login, profile share.
 
+**Measurement report sub-slice i — toolkit-neutral report helpers — DONE.**
+`DisplayCAL/measurement_report.py` (a plain, Qt-free `DisplayCAL` module like
+`main_settings.py`, so the still-shipping wx path can import it without pulling
+in Qt), covered by `tests/test_measurement_report.py` (19 tests, no display).
+It holds the pure string / number marshalling lifted out of
+`MainFrame.measurement_report_handler` / `measurement_report_consumer`:
+`default_report_filename` (the save-dialog default `.html` name + unsafe-char
+sanitisation), `resolve_quantization_bits` (the `-Z <bits>` / `-Zbits` / `-E`->8
+dispread-arg derivation), `quantize_gray` (the grayscale reference rescale to a
+bit grid), and `report_trc_label` (the default-target -> `"BT.1886"` label). The
+wx `MainFrame` now delegates to all four (byte-for-byte identical output, same
+ruff profile), so the extraction thins the wx consumer today and hands the Qt
+report layer a ready seam.
+
+**Deferred to later report sub-slices:** the window-shaped remainder, chart /
+profile / sim / devlink resolution and the BT.1886 lookup in the handler; the
+file-save + overwrite dialogs; the `worker.Worker` measure run
+(`measurement_report`); and the big `placeholders2data` assembly in the consumer
+(it reads live CGATS / ICCProfile objects and pulls display / instrument / ccmx
+strings from widgets) plus `report.create` + launch. Those land as the Qt report
+window is built, reusing this module.
+
 ### Stage 6 — StartupFrame + retire wx paths
 
 Port `StartupFrame`, flip the default toolkit, and begin deleting wx modules

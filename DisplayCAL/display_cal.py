@@ -64,6 +64,7 @@ from DisplayCAL import (
     floatspin,
     main_settings,
     madvr,
+    measurement_report as measurement_report_utils,
     report,
     util_x,
     xh_bitmapctrls,
@@ -9912,17 +9913,12 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
 
         # let the user choose a location for the result
         report_type = "Self Check" if self_check_report else "Measurement"
-        default_file = "{} Report {} - {} - {}".format(
+        default_file = measurement_report_utils.default_report_filename(
             report_type,
             VERSION_STRING,
-            re.sub(
-                r"[\\/:;*?\"<>|]+",
-                "_",
-                self.display_ctrl.GetStringSelection().replace(
-                    f" {lang.getstr('display.primary')}", ""
-                ),
+            self.display_ctrl.GetStringSelection().replace(
+                f" {lang.getstr('display.primary')}", ""
             ),
-            strftime("%Y-%m-%d %H-%M.html"),
         )
         if not path:
             default_dir = get_verified_path(
@@ -10316,28 +10312,12 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             self.worker.add_measurement_features(
                 args, True, allow_video_levels=True, quantize=True
             )
-            quantize_arg = get_arg("-Z", args)
-            if quantize_arg:
-                try:
-                    if quantize_arg[1] == "-Z":
-                        # Next arg is quantization bit depth
-                        qbits = int(args[quantize_arg[0] + 1])
-                    else:
-                        # Quantization bit depth is part of arg string
-                        qbits = int(quantize_arg[1][2:])
-                except (IndexError, TypeError, ValueError):
-                    pass
-            elif "-E" in args:
-                qbits = 8  # ArgyllCMS default for video encoding (see dispread doc)
+            qbits = measurement_report_utils.resolve_quantization_bits(args)
         if qbits:
             print(f"Quantizing reference device values to {qbits:.0f} bits")
             ti3_ref.quantize_device_values(qbits)
             if gray:
-                qmax = 2**qbits - 1.0
-                gray = [
-                    [round(round(v / 100.0 * qmax) / qmax * 100.0, 4) for v in RGB]
-                    for RGB in gray
-                ]
+                gray = measurement_report_utils.quantize_gray(gray, qbits)
 
         # Keep around ref TI3 for diagnostic purposes
         ti3_ref.write(f"{os.path.splitext(ti3_path)[0]}_ref.ti3")
@@ -10630,14 +10610,11 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         if not sim_profile and use_sim and use_sim_as_output:
             sim_profile = profile
 
-        if (
-            getcfg("measurement_report.trc_gamma") != 2.4
-            or getcfg("measurement_report.trc_gamma_type") != "B"
-            or getcfg("measurement_report.trc_output_offset")
-        ):
-            trc = ""
-        else:
-            trc = "BT.1886"
+        trc = measurement_report_utils.report_trc_label(
+            getcfg("measurement_report.trc_gamma"),
+            getcfg("measurement_report.trc_gamma_type"),
+            getcfg("measurement_report.trc_output_offset"),
+        )
 
         if self_check_report:
             display = oprof.getDeviceModelDescription() or "N/A"
