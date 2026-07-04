@@ -341,15 +341,42 @@ animated throbber (`AnimatedBitmap` / `get_bitmaps`), the looping sound effects
 (`audio.Sound`), the gradient `BetterPyGauge`, and Windows taskbar-progress
 integration.
 
-**Sub-slice 5b — the QThread worker driver (non-interactive measure/profile).**
-A `WorkerRunner(QThread)` that runs a worker producer (`worker.measure` via
-`start_measurement`'s contract) off the GUI thread, shows the 5a `ProgressDialog`,
-and calls the consumer on the main thread when done. Requires a small
-`progress_wnd` adapter forwarding the worker's wx-named progress calls
-(`Pulse` / `UpdateProgress` / `reset` / `SetTitle` / …) to the Qt dialog, then
-wires `measurement_requested` -> run for the `PROFILE` / `CALIBRATE_AND_PROFILE`
-(profile phase) actions. Verify against real hardware before connecting the
-signal, since the worker's exec loop is not exercisable headless.
+**Key finding (drives the sub-slicing below):** the worker measurement engine is
+*fully wx-event-loop-bound*, not just at the progress dialog. `Worker.start()`
+uses `delayedresult` + `wx.CallAfter` for threading / consumer delivery;
+`progress_handler` is ticked by the wx `ProgressDialog`'s `wx.Timer` and is
+interleaved with `wx.GetApp()` / `wx.CallAfter` / `DisplayAdjustmentFrame`
+calls; and mid-measurement, on the worker thread, the instrument handlers
+(`check_instrument_place_on_screen`, `do_instrument_calibration`,
+`instrument_place_on_screen`, `instrument_reposition_sensor`) construct wx
+dialogs (`self.progress_wnd.dlg = <wx dialog>`) and call `wx.CallLater` /
+`wx.GetApp()` even on the colorimeter path. The `--qt` process is a pure
+`QApplication` with no wx.App / `wx.MainLoop`, so none of that ticks. Making the
+Qt buttons run therefore means porting the *driving* and the *instrument
+prompts* to Qt (the maintainer chose this "full Qt port" over a wx/Qt
+event-loop bridge).
+
+**Sub-slice 5b-i — pure progress parser — DONE.** `DisplayCAL/ui/worker_runner.py`
+`parse_progress()`, covered by `tests/test_ui_worker_runner.py` (10 tests, no
+display). The toolkit-neutral percentage extraction lifted out of
+`Worker.progress_handler` (the `NN%` / `Patch N of M` / `Added N/M` / `It N:`
+shapes), which the wx handler cannot share as-is because the rest of it needs a
+running wx app. This is what the Qt progress poll will call.
+
+**Sub-slice 5b-ii — QThread worker driver + thread-safe progress adapter.** A
+`WorkerRunner(QThread)` running a worker producer (`worker.measure`) off the GUI
+thread; a thread-safe `progress_wnd` adapter that returns `(keepGoing, skip)`
+synchronously from plain flags and marshals GUI updates to the 5a
+`ProgressDialog` via queued signals (the worker thread must never touch the
+`QProgressBar` directly); and a GUI-thread `QTimer` that polls the worker
+buffers, runs `parse_progress()`, and updates the dialog. The consumer runs on
+the GUI thread on completion.
+
+**Sub-slice 5b-iii — Qt instrument-prompt dialogs.** Port the mid-measurement
+prompts the worker pops on the measurement thread (place instrument on
+screen/spot, sensor position, instrument self-calibration, retry measurement),
+replacing the `self.progress_wnd.dlg = <wx dialog>` constructions with Qt
+equivalents surfaced through the adapter. Required for any real colorimeter run.
 
 **Sub-slice 5c — interactive `DisplayAdjustmentFrame`.** Port
 `wx_display_adjustment_frame.py::DisplayAdjustmentFrame` (the interactive
