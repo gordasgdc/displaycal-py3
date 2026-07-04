@@ -1,13 +1,22 @@
 """Tests for the Qt worker execution layer ``DisplayCAL.ui.worker_runner``.
 
-These cover the toolkit-neutral ``parse_progress`` extracted from
-``Worker.progress_handler`` (worker.py:15022). Pure function, no display or
-``QApplication`` needed. See ``DisplayCAL/ui/MAINFRAME_PORT_PLAN.md`` (Stage 5).
+``parse_progress`` (extracted from ``Worker.progress_handler``) is a pure
+function tested without a display. The ``_ProducerThread`` / ``ProgressAdapter``
+/ ``WorkerRunController`` driver is exercised headless via the shared offscreen
+``QApplication``, with a fake worker so no Argyll / hardware is needed. See
+``DisplayCAL/ui/MAINFRAME_PORT_PLAN.md`` (Stage 5, sub-slices 5b-i / 5b-ii).
 """
+
+import os
+import time
 
 import pytest
 
-from DisplayCAL.ui.worker_runner import parse_progress
+# Run headless: pick the offscreen platform before any Qt import.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ.setdefault("QT_API", "pyside6")
+
+from DisplayCAL.ui.worker_runner import parse_progress  # noqa: E402
 
 
 def test_percent_download_progress():
@@ -69,3 +78,188 @@ def test_no_match_returns_none():
 def test_percentage_is_clamped():
     pct, _ = parse_progress("", "150%")
     assert pct == 100
+
+
+# --- driver / adapter / controller (headless Qt) ---------------------------
+
+pytest.importorskip("qtpy")
+
+from DisplayCAL.ui import progress_dialog as pd  # noqa: E402
+from DisplayCAL.ui import worker_runner as wr  # noqa: E402
+
+
+@pytest.fixture(scope="session")
+def qapp():
+    """Provide a singleton offscreen QApplication for the test session."""
+    from qtpy.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication([])
+    yield app
+
+
+class _FakeBuffer:
+    """Stand-in for a worker ``FilteredStream`` output buffer."""
+
+    def __init__(self):
+        self._text = ""
+
+    def set(self, text):
+        self._text = text
+
+    def read(self, triggers=None):
+        return self._text
+
+
+class FakeWorker:
+    """Minimal worker exposing what ``WorkerRunController`` touches."""
+
+    def __init__(self):
+        self.recent = _FakeBuffer()
+        self.lastmsg = _FakeBuffer()
+        self.progress_wnd = None
+        self.abort_calls = []
+
+    def abort_subprocess(self, confirm=False):
+        self.abort_calls.append(confirm)
+
+
+def _spin_until(qapp, predicate, timeout_s=3.0):
+    """Pump the event loop until ``predicate`` is true or the timeout elapses."""
+    deadline = time.time() + timeout_s
+    while not predicate() and time.time() < deadline:
+        qapp.processEvents()
+        time.sleep(0.005)
+    return predicate()
+
+
+def test_producer_thread_emits_result(qapp):
+    thread = wr._ProducerThread(lambda: 42)
+    results = []
+    thread.finished_with_result.connect(results.append)
+    thread.start()
+    assert _spin_until(qapp, lambda: results)
+    assert results == [42]
+    thread.wait()
+
+
+def test_producer_thread_emits_exception_as_result(qapp):
+    boom = ValueError("boom")
+
+    def producer():
+        raise boom
+
+    thread = wr._ProducerThread(producer)
+    results = []
+    thread.finished_with_result.connect(results.append)
+    thread.start()
+    assert _spin_until(qapp, lambda: results)
+    assert results == [boom]
+    thread.wait()
+
+
+def test_adapter_pulse_returns_flags_and_updates_dialog(qapp):
+    dlg = pd.ProgressDialog()
+    adapter = wr.ProgressAdapter(dlg)
+    try:
+        # Same-thread emit delivers directly, so the dialog updates in place.
+        keep_going, skip = adapter.Pulse("measuring")
+        assert (keep_going, skip) == (True, False)
+        assert dlg._message.text() == "measuring"
+        # Cancelling flips the flag the worker thread reads.
+        adapter.keepGoing = False
+        assert adapter.Pulse()[0] is False
+    finally:
+        dlg.deleteLater()
+
+
+def test_adapter_update_progress_sets_determinate_value(qapp):
+    dlg = pd.ProgressDialog(maximum=100)
+    adapter = wr.ProgressAdapter(dlg)
+    try:
+        adapter.UpdateProgress(60, "almost")
+        assert dlg._gauge.value() == 60
+        assert dlg._gauge.maximum() == 100
+    finally:
+        dlg.deleteLater()
+
+
+def test_controller_poll_advances_dialog(qapp):
+    dlg = pd.ProgressDialog(maximum=100)
+    worker = FakeWorker()
+    ctrl = wr.WorkerRunController(worker, dlg)
+    try:
+        worker.recent.set("")
+        worker.lastmsg.set("Patch 26 of 100")
+        ctrl._on_poll()
+        assert dlg._gauge.value() == 25
+    finally:
+        dlg.deleteLater()
+
+
+def test_controller_run_calls_consumer_and_cleans_up(qapp):
+    dlg = pd.ProgressDialog()
+    worker = FakeWorker()
+    ctrl = wr.WorkerRunController(worker, dlg)
+    got = []
+    try:
+        ctrl.run(lambda: True, got.append, progress_msg="Measuring")
+        # The adapter is installed while running.
+        assert worker.progress_wnd is not None
+        assert _spin_until(qapp, lambda: got)
+        assert got == [True]
+        assert worker.progress_wnd is None
+        assert dlg.isVisible() is False
+        assert ctrl.is_running is False
+    finally:
+        dlg.deleteLater()
+
+
+def test_controller_run_ignores_second_start_while_running(qapp):
+    dlg = pd.ProgressDialog()
+    worker = FakeWorker()
+    ctrl = wr.WorkerRunController(worker, dlg)
+    release = []
+    calls = []
+
+    def slow():
+        calls.append(1)
+        while not release:
+            time.sleep(0.005)
+        return True
+
+    try:
+        ctrl.run(slow)
+        # Second call while running is a no-op.
+        ctrl.run(lambda: calls.append(2))
+        release.append(True)
+        assert _spin_until(qapp, lambda: ctrl.is_running is False)
+        assert calls == [1]
+    finally:
+        release.append(True)
+        dlg.deleteLater()
+
+
+def test_controller_cancel_aborts_worker(qapp):
+    dlg = pd.ProgressDialog(cancelable=True)
+    worker = FakeWorker()
+    ctrl = wr.WorkerRunController(worker, dlg)
+    try:
+        # Simulate an in-flight run so the adapter is present.
+        ctrl._adapter = wr.ProgressAdapter(dlg)
+        dlg.cancel_button.click()
+        assert ctrl._adapter.keepGoing is False
+        assert worker.abort_calls == [False]
+    finally:
+        dlg.deleteLater()
+
+
+def test_controller_pause_reflects_to_adapter(qapp):
+    dlg = pd.ProgressDialog(pauseable=True)
+    worker = FakeWorker()
+    ctrl = wr.WorkerRunController(worker, dlg)
+    try:
+        ctrl._adapter = wr.ProgressAdapter(dlg)
+        dlg.pause_button.click()
+        assert ctrl._adapter.paused is True
+    finally:
+        dlg.deleteLater()

@@ -363,14 +363,25 @@ display). The toolkit-neutral percentage extraction lifted out of
 shapes), which the wx handler cannot share as-is because the rest of it needs a
 running wx app. This is what the Qt progress poll will call.
 
-**Sub-slice 5b-ii — QThread worker driver + thread-safe progress adapter.** A
-`WorkerRunner(QThread)` running a worker producer (`worker.measure`) off the GUI
-thread; a thread-safe `progress_wnd` adapter that returns `(keepGoing, skip)`
-synchronously from plain flags and marshals GUI updates to the 5a
-`ProgressDialog` via queued signals (the worker thread must never touch the
-`QProgressBar` directly); and a GUI-thread `QTimer` that polls the worker
-buffers, runs `parse_progress()`, and updates the dialog. The consumer runs on
-the GUI thread on completion.
+**Sub-slice 5b-ii — QThread worker driver + thread-safe progress adapter — DONE.**
+`DisplayCAL/ui/worker_runner.py` gains `_ProducerThread(QThread)`,
+`ProgressAdapter(QObject)` and `WorkerRunController(QObject)`, covered by
+`tests/test_ui_worker_runner.py` (now 19 tests, headless offscreen with a fake
+worker). `_ProducerThread` runs a worker producer (`worker.measure`) off the GUI
+thread and delivers its result (bool or Exception) via a signal. `ProgressAdapter`
+is the thread-safe stand-in for the wx `progress_wnd`: it returns
+`(keepGoing, skip)` synchronously from plain flags (safe to read from the worker
+thread) and marshals every GUI update onto the GUI thread through queued signals,
+so the worker thread never touches the `QProgressBar`. `WorkerRunController`
+installs the adapter, sets the non-interactive `Worker.start()` state subset,
+shows the 5a `ProgressDialog`, polls the worker output buffers on a GUI-thread
+`QTimer` through `parse_progress()`, and calls the consumer on the GUI thread on
+completion; the dialog's `cancelled` / `pause_toggled` signals drive
+`abort_subprocess()` / the adapter pause flag.
+
+Not yet wired to `MainWindow.measurement_requested`: that waits on 5b-iii (the
+worker pops wx instrument dialogs mid-run, which would still crash a real run),
+so the controller is landed and unit-tested but not connected to a live button.
 
 **Sub-slice 5b-iii — Qt instrument-prompt dialogs.** Port the mid-measurement
 prompts the worker pops on the measurement thread (place instrument on
