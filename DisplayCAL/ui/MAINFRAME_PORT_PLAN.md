@@ -379,9 +379,7 @@ shows the 5a `ProgressDialog`, polls the worker output buffers on a GUI-thread
 completion; the dialog's `cancelled` / `pause_toggled` signals drive
 `abort_subprocess()` / the adapter pause flag.
 
-Not yet wired to `MainWindow.measurement_requested`: that waited on 5b-iii (the
-worker popped wx instrument dialogs mid-run, which would crash a real run under
-the pure-Qt app), now resolved. Wiring the live button is the next step.
+Now wired to `MainWindow.measurement_requested` (see sub-slice 5b-iv below).
 
 **Sub-slice 5b-iii — Qt instrument-prompt dialogs — DONE.** The mid-measurement
 prompts the worker pops on the measurement thread (place instrument on
@@ -402,9 +400,27 @@ blocking round-trip is unit-testable headless without a real modal loop.
 `abort_subprocess`'s confirm-cancel dialog is left on the wx path (the Qt
 controller only ever calls `abort_subprocess(confirm=False)`).
 
-Next: wire `MainWindow.measurement_requested` to
-`WorkerRunController.run(worker.measure, ...)` for the profile/measure path,
-then verify against a real colorimeter.
+**Sub-slice 5b-iv — wire `measurement_requested` to the worker — DONE.**
+`MainWindow.__init__` connects `measurement_requested` to
+`_on_measurement_requested`, which drives the Argyll worker through a lazily
+created `WorkerRunController` (over a Qt `ProgressDialog`). The `PROFILE` action
+runs the characterization path (`_run_profile_measurement`), a Qt port of the
+non-interactive setup `MainFrame.just_profile` does before
+`worker.start_measurement`: it sets `dispread_after_dispcal = False`, marks the
+worker `interactive` only for an `Untethered` display, clears
+`calibration.file.previous`, and calls `controller.run(worker.measure,
+_on_measurement_finished, wkwargs={"apply_calibration": True}, ...)`.
+`_on_measurement_finished` ports the error / incomplete branches of
+`just_profile_finish` (a `QMessageBox` on an `Exception`, the
+`profiling.incomplete` notice on a non-dry-run failure, a log line on success).
+The signal stays public so other layers / tests still observe committed runs.
+The `CALIBRATE` / `CALIBRATE_AND_PROFILE` actions need the interactive
+`DisplayAdjustmentFrame` (5c) and surface a not-yet-available notice until then.
+
+**Deferred from 5b-iv:** building the profile from the measurements (the
+`colprof` stage `just_profile_finish` chains into via `start_profile_worker`),
+the pre-flight `check_overwrite` / `current_cal_choice` / macOS-bugs preflight
+dialogs, and verifying the run end-to-end against a real colorimeter.
 
 **Sub-slice 5c — interactive `DisplayAdjustmentFrame`.** Port
 `wx_display_adjustment_frame.py::DisplayAdjustmentFrame` (the interactive

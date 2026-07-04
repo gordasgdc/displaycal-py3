@@ -84,6 +84,8 @@ from DisplayCAL.ui.measurement_flow import (
     observer_items,
     run_measureframe_subprocess,
 )
+from DisplayCAL.ui.progress_dialog import ProgressDialog
+from DisplayCAL.ui.worker_runner import WorkerRunController
 from DisplayCAL.util_decimal import stripzeros
 from DisplayCAL.worker import Worker
 
@@ -358,9 +360,10 @@ class MainWindow(BaseWindow):
     """DisplayCAL's Qt main window (shell + all four settings tabs)."""
 
     #: Emitted (with a :class:`MeasurementAction`) once the user has committed to
-    #: a run and the measurement area has been presented. The worker-driven
-    #: Argyll execution layer connects this in a later slice; see
-    #: :meth:`_drive_measurement`.
+    #: a run and the measurement area has been presented. Connected internally to
+    #: :meth:`_on_measurement_requested`, which drives the Argyll worker through a
+    #: :class:`~DisplayCAL.ui.worker_runner.WorkerRunController`; the signal stays
+    #: public so other layers (and tests) can observe committed runs.
     measurement_requested = Signal(object)
 
     #: Delay before a staged measurement driver runs, letting the display settle
@@ -388,10 +391,15 @@ class MainWindow(BaseWindow):
         self.measureframe: MeasureFrame | None = None
         #: The live measure-frame subprocess thread, if any.
         self._measureframe_thread: _MeasureframeSubprocessThread | None = None
+        #: The Qt progress dialog / worker driver, created lazily on first run.
+        self._progress_dialog: ProgressDialog | None = None
+        self._run_controller: WorkerRunController | None = None
 
         self._build_ui()
         self.init_menubar()
         self.setup_language()
+        # Run the committed Argyll measurement when a run is requested.
+        self.measurement_requested.connect(self._on_measurement_requested)
 
         self.worker.enumerate_displays_and_ports(silent=True)
         self.update_controls()
@@ -1285,11 +1293,10 @@ class MainWindow(BaseWindow):
     def _drive_measurement(self, action: MeasurementAction) -> None:
         """Run the staged Argyll measurement for ``action``.
 
-        Emits :attr:`measurement_requested` and restores the main window. The
-        worker-driven Argyll execution (the progress dialog and interactive
-        display-adjustment window that ``worker.Worker.start`` drives in wx) is a
-        wx-heavy path rebuilt in a later slice; exposing the committed run as a
-        signal lets that layer connect without this window depending on it.
+        Restores the main window and emits :attr:`measurement_requested`, which
+        is connected to :meth:`_on_measurement_requested` to actually run the
+        worker. Emitting through the signal (rather than calling the runner
+        directly) keeps the committed run observable by other layers and tests.
 
         Args:
             action (MeasurementAction): The workflow the user committed to.
@@ -1301,6 +1308,82 @@ class MainWindow(BaseWindow):
         """Re-show the main window after the measurement area closes."""
         self.show()
         self.raise_()
+
+    # -- worker execution (Stage 5) ---------------------------------------
+
+    def _on_measurement_requested(self, action: MeasurementAction) -> None:
+        """Drive the Argyll worker for a committed measurement ``action``.
+
+        The characterization (profile) path runs non-interactively through the
+        Qt :class:`~DisplayCAL.ui.worker_runner.WorkerRunController`. The
+        calibration paths need the interactive ``DisplayAdjustmentFrame`` (Qt
+        sub-slice 5c) and are surfaced as a not-yet-available notice until then.
+
+        Args:
+            action (MeasurementAction): The workflow the user committed to.
+        """
+        if action is MeasurementAction.PROFILE:
+            self._run_profile_measurement()
+            return
+        self._notify_calibration_unavailable()
+
+    def _ensure_run_controller(self) -> WorkerRunController:
+        """Create the progress dialog / worker driver once, on first run."""
+        if self._run_controller is None:
+            self._progress_dialog = ProgressDialog(self, pauseable=True)
+            self._run_controller = WorkerRunController(
+                self.worker, self._progress_dialog, self
+            )
+        return self._run_controller
+
+    def _run_profile_measurement(self) -> None:
+        """Run the characterization measurement (Qt port of ``just_profile``).
+
+        Mirrors the non-interactive setup ``MainFrame.just_profile`` does before
+        ``worker.start_measurement`` and runs ``worker.measure`` through the Qt
+        controller. Building the profile from the measurements (the ``colprof``
+        stage ``just_profile_finish`` chains into) is a follow-on slice.
+        """
+        self.worker.dispread_after_dispcal = False
+        self.worker.interactive = config.get_display_name() == "Untethered"
+        setcfg("calibration.file.previous", None)
+        controller = self._ensure_run_controller()
+        controller.run(
+            self.worker.measure,
+            self._on_measurement_finished,
+            wkwargs={"apply_calibration": True},
+            progress_msg=lang.getstr("measuring.characterization"),
+            pauseable=True,
+        )
+
+    def _on_measurement_finished(self, result: object) -> None:
+        """Report the outcome of a characterization run on the GUI thread.
+
+        Ports the error / incomplete branches of ``just_profile_finish``; the
+        success branch (profile creation) lands with the ``colprof`` slice.
+
+        Args:
+            result (object): ``True`` on success, ``False`` / ``None`` when the
+                run did not complete, or an ``Exception`` on failure.
+        """
+        if isinstance(result, Exception):
+            QMessageBox.critical(self, APPNAME, str(result))
+            return
+        if not result:
+            if not getcfg("dry_run"):
+                QMessageBox.information(
+                    self, APPNAME, lang.getstr("profiling.incomplete")
+                )
+            return
+        self.worker.log(f"{APPNAME}: Characterization measurements complete")
+
+    def _notify_calibration_unavailable(self) -> None:
+        """Tell the user the interactive calibration path is not yet in Qt."""
+        QMessageBox.information(
+            self,
+            APPNAME,
+            "Interactive calibration is not available in the Qt interface yet.",
+        )
 
     # -- misc --------------------------------------------------------------
 

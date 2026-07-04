@@ -331,6 +331,18 @@ def _no_writecfg(monkeypatch):
     monkeypatch.setattr(mw, "writecfg", lambda *a, **k: None)
 
 
+@pytest.fixture
+def _stub_measurement_run(window, monkeypatch):
+    """Neutralise the worker run so signal-dispatch tests touch no hardware.
+
+    ``measurement_requested`` is connected to the real runner in ``__init__``;
+    tests that only assert the signal fires stub the leaf run methods (looked up
+    on the instance at emit time) so no ``QThread`` / progress dialog starts.
+    """
+    monkeypatch.setattr(window, "_run_profile_measurement", lambda: None)
+    monkeypatch.setattr(window, "_notify_calibration_unavailable", lambda: None)
+
+
 def _run_pending_synchronously(window):
     """Fire the window's deferred pending-run immediately (no event loop)."""
     window._defer = lambda callback: callback()
@@ -355,7 +367,7 @@ def _force_mode(window, monkeypatch, mode):
     ],
 )
 def test_action_button_dry_run_emits_request(
-    window, _no_writecfg, monkeypatch, button_attr, action
+    window, _no_writecfg, _stub_measurement_run, monkeypatch, button_attr, action
 ):
     # Dry run -> the flow calls the pending driver straight away.
     monkeypatch.setattr(config, "get_display_name", lambda *a, **k: "DELL U2413")
@@ -370,7 +382,9 @@ def test_action_button_dry_run_emits_request(
     assert seen == [action]
 
 
-def test_show_frame_mode_presents_measureframe(window, _no_writecfg, monkeypatch):
+def test_show_frame_mode_presents_measureframe(
+    window, _no_writecfg, _stub_measurement_run, monkeypatch
+):
     _force_mode(window, monkeypatch, mf.PresentationMode.SHOW_FRAME)
     _run_pending_synchronously(window)
     seen = []
@@ -402,7 +416,9 @@ def test_subprocess_mode_starts_subprocess(window, _no_writecfg, monkeypatch):
     assert called == [True]
 
 
-def test_measureframe_result_measure_runs_pending(window, _no_writecfg, monkeypatch):
+def test_measureframe_result_measure_runs_pending(
+    window, _no_writecfg, _stub_measurement_run, monkeypatch
+):
     monkeypatch.setattr(window, "_start_measureframe_subprocess", lambda: None)
     _force_mode(window, monkeypatch, mf.PresentationMode.SUBPROCESS)
     _run_pending_synchronously(window)
@@ -439,3 +455,92 @@ def test_measureframe_result_failure_shows_error(window, _no_writecfg, monkeypat
 
     assert errors
     assert "boom" in errors[0][2]
+
+
+# --- worker execution wiring (Stage 5) -------------------------------------
+
+
+def test_profile_request_runs_measure_through_controller(window, monkeypatch):
+    # A committed PROFILE run drives worker.measure through the controller with
+    # the non-interactive apply_calibration=True setup just_profile does.
+    calls = {}
+
+    def fake_run(_ctrl, producer, consumer=None, **kwargs):
+        calls["producer"] = producer
+        calls["consumer"] = consumer
+        calls["wkwargs"] = kwargs.get("wkwargs")
+
+    monkeypatch.setattr(config, "get_display_name", lambda *a, **k: "DELL U2413")
+    monkeypatch.setattr(mw.WorkerRunController, "run", fake_run)
+
+    window.measurement_requested.emit(mw.MeasurementAction.PROFILE)
+
+    assert calls["producer"] == window.worker.measure
+    assert calls["consumer"] == window._on_measurement_finished
+    assert calls["wkwargs"] == {"apply_calibration": True}
+    assert window.worker.dispread_after_dispcal is False
+    assert window.worker.interactive is False
+
+
+def test_profile_request_marks_untethered_interactive(window, monkeypatch):
+    monkeypatch.setattr(config, "get_display_name", lambda *a, **k: "Untethered")
+    monkeypatch.setattr(mw.WorkerRunController, "run", lambda *a, **k: None)
+
+    window.measurement_requested.emit(mw.MeasurementAction.PROFILE)
+
+    assert window.worker.interactive is True
+
+
+@pytest.mark.parametrize(
+    "action",
+    [mw.MeasurementAction.CALIBRATE, mw.MeasurementAction.CALIBRATE_AND_PROFILE],
+)
+def test_calibration_request_reports_unavailable(window, monkeypatch, action):
+    infos = []
+    monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: infos.append(a))
+    ran = []
+    monkeypatch.setattr(window, "_run_profile_measurement", lambda: ran.append(True))
+
+    window.measurement_requested.emit(action)
+
+    assert infos  # the not-yet-available notice was shown
+    assert ran == []  # no worker run for the calibration paths
+
+
+def test_measurement_finished_exception_shows_error(window, monkeypatch):
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+
+    window._on_measurement_finished(ValueError("boom"))
+
+    assert errors
+    assert "boom" in errors[0][2]
+
+
+def test_measurement_finished_incomplete_shows_info(window, monkeypatch):
+    infos = []
+    monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: infos.append(a))
+    setcfg("dry_run", 0)
+
+    window._on_measurement_finished(False)
+
+    assert infos
+
+
+def test_measurement_finished_incomplete_silent_on_dry_run(window, monkeypatch):
+    infos = []
+    monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: infos.append(a))
+    setcfg("dry_run", 1)
+
+    window._on_measurement_finished(False)
+
+    assert infos == []
+
+
+def test_measurement_finished_success_logs(window, monkeypatch):
+    logged = []
+    monkeypatch.setattr(window.worker, "log", lambda *a, **k: logged.append(a))
+
+    window._on_measurement_finished(True)
+
+    assert logged
