@@ -475,11 +475,47 @@ Geometry shares the `position.progress.*` keys with the progress window. **Dropp
 gradient `PyGauge` (now a plain `QProgressBar`), and the looping sound (now a
 single best-effort beep behind an overridable `_play_sound` seam).
 
-**Sub-slice 5c-iii — wire the calibrate path.** Have the Qt worker driver run the
-interactive `dispcal` with the 5c-ii window as the `progress_wnd` (marshalling
-`write` / `parse_txt` / `Pulse` from the worker thread to the GUI thread, buttons
-calling `worker.safe_send`), then connect `MainWindow`'s `CALIBRATE` /
-`CALIBRATE_AND_PROFILE` actions to it (replacing the not-yet-available notice).
+**Sub-slice 5c-iii — wire the calibrate path — DONE.** `DisplayCAL/ui/worker_runner.py`
+gains `_AdjustmentTerminal(QObject)` and `AdjustmentController(QObject)`, covered
+by the expanded `tests/test_ui_worker_runner.py` (30 tests, headless offscreen
+with a fake worker + fake window), and `MainWindow` now drives them. The
+interactive calibration path is the Qt replacement for the
+`interactive_frame="adjust"` branch of `Worker.start()`, which is not reachable
+from the pure-Qt app (no wx event loop):
+
+- `AdjustmentController` runs `Worker.calibrate` on the 5b `_ProducerThread` with
+  the 5c-ii `DisplayAdjustmentWindow` installed as both `worker.terminal` and
+  `worker.progress_wnd` (through `_AdjustmentTerminal`), and connects the window's
+  `send_requested` keys to `worker.safe_send`. It sets the interactive worker
+  state `Worker.start` would (`interactive` / `interactive_frame="adjust"` /
+  pauseable / abort flags) and installs the producer thread as `worker.thread`
+  (given an `is_alive()` alias) so `exec_cmd` attaches the interactive terminal
+  to the output stream.
+- `_AdjustmentTerminal` is the thread-safe stand-in for the one wx frame that is
+  both the `terminal` (its `write` marshals each `dispcal` chunk to
+  `window.parse_output` on the GUI thread) and the `progress_wnd` (`Pulse` /
+  `UpdateProgress` / `SetTitle` / `reset` / `Show` marshalled likewise, the
+  `keepGoing` / `skip` flags read synchronously from any thread, and `confirm`
+  reproducing the blocking `ConfirmDialog.ShowModal` for the mid-measurement
+  instrument prompts, reusing the 5b-iii `_ConfirmRequest` round-trip).
+- `MainWindow._run_calibration_measurement` ports the setup `just_calibrate` /
+  `calibrate_and_profile` do: it sets `calibration.continue_next` (and, for
+  calibrate&profile, `dispcal_create_fast_matrix_shaper=False` /
+  `dispread_after_dispcal=True`), and dispatches on whether interactive display
+  adjustment is on (and this is not a calibration update) — interactive runs go
+  through the `AdjustmentController`, non-interactive ones through the 5a
+  `ProgressDialog` / `WorkerRunController`. `_on_calibration_finished` ports the
+  error / incomplete branches of `just_calibrate_finish` and, on a successful
+  calibrate&profile, chains the characterization measurement
+  (`_run_profile_measurement`). This replaces the 5b-iv not-yet-available notice.
+
+**Deferred from 5c-iii:** building the profile from a calibrate&profile run (the
+`colprof` stage, shared with the 5b-iv profile deferral), the calibration success
+side effects (`load_cal` + the `calibration.complete` dialog + fast-matrix-shaper
+profile), the wx swap-to-progress-dialog once adjustment ends (the adjustment
+window stays up showing status pulses through the curve measurement), the
+`abort_subprocess` confirm-cancel path (still on the wx `delayedresult` seam, as
+in 5b-iii), and verifying end-to-end against a real colorimeter.
 
 ### Stage 5+ — Reporting, colorimeter corrections, install/share
 

@@ -11,6 +11,7 @@ import os
 import pytest
 
 from DisplayCAL import config
+from DisplayCAL import localization as lang
 from DisplayCAL.config import getcfg, setcfg
 from DisplayCAL.worker import Worker
 
@@ -340,7 +341,7 @@ def _stub_measurement_run(window, monkeypatch):
     on the instance at emit time) so no ``QThread`` / progress dialog starts.
     """
     monkeypatch.setattr(window, "_run_profile_measurement", lambda: None)
-    monkeypatch.setattr(window, "_notify_calibration_unavailable", lambda: None)
+    monkeypatch.setattr(window, "_run_calibration_measurement", lambda action: None)
 
 
 def _run_pending_synchronously(window):
@@ -495,16 +496,78 @@ def test_profile_request_marks_untethered_interactive(window, monkeypatch):
     "action",
     [mw.MeasurementAction.CALIBRATE, mw.MeasurementAction.CALIBRATE_AND_PROFILE],
 )
-def test_calibration_request_reports_unavailable(window, monkeypatch, action):
-    infos = []
-    monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: infos.append(a))
-    ran = []
-    monkeypatch.setattr(window, "_run_profile_measurement", lambda: ran.append(True))
+def test_calibration_request_runs_calibration(window, monkeypatch, action):
+    seen = []
+    monkeypatch.setattr(
+        window, "_run_calibration_measurement", lambda a: seen.append(a)
+    )
 
     window.measurement_requested.emit(action)
 
-    assert infos  # the not-yet-available notice was shown
-    assert ran == []  # no worker run for the calibration paths
+    assert seen == [action]
+
+
+def test_interactive_calibration_runs_through_adjustment_controller(
+    window, monkeypatch
+):
+    # Interactive display adjustment on (and not a calibration update) drives the
+    # AdjustmentController rather than the progress-dialog runner.
+    setcfg("calibration.interactive_display_adjustment", 1)
+    setcfg("calibration.update", 0)
+    calls = {}
+    monkeypatch.setattr(
+        mw.AdjustmentController,
+        "run",
+        lambda _ctrl, consumer=None, **kw: calls.update(consumer=consumer, kw=kw),
+    )
+
+    window._run_calibration_measurement(mw.MeasurementAction.CALIBRATE)
+
+    assert getcfg("calibration.continue_next") == 0
+    assert calls["kw"] == {"remove": True}
+    assert callable(calls["consumer"])
+
+
+def test_noninteractive_calibration_runs_through_progress_controller(
+    window, monkeypatch
+):
+    # Interactive adjustment off -> non-interactive calibration over the dialog.
+    setcfg("calibration.interactive_display_adjustment", 0)
+    calls = {}
+    monkeypatch.setattr(
+        mw.WorkerRunController,
+        "run",
+        lambda _ctrl, producer, consumer=None, **kw: calls.update(
+            producer=producer, wkwargs=kw.get("wkwargs")
+        ),
+    )
+
+    window._run_calibration_measurement(mw.MeasurementAction.CALIBRATE)
+
+    assert calls["producer"] == window.worker.calibrate
+    assert calls["wkwargs"] == {"remove": True}
+    assert window.worker.interactive is False
+
+
+def test_calibrate_and_profile_chains_characterization_on_success(window, monkeypatch):
+    setcfg("calibration.interactive_display_adjustment", 0)
+    ran = []
+    monkeypatch.setattr(window, "_run_profile_measurement", lambda: ran.append(True))
+
+    window._on_calibration_finished(mw.MeasurementAction.CALIBRATE_AND_PROFILE, True)
+
+    assert ran == [True]
+
+
+def test_calibration_finished_incomplete_shows_notice(window, monkeypatch):
+    setcfg("dry_run", 0)
+    infos = []
+    monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: infos.append(a))
+
+    window._on_calibration_finished(mw.MeasurementAction.CALIBRATE, False)
+
+    assert infos
+    assert lang.getstr("calibration.incomplete") in infos[0][2]
 
 
 def test_measurement_finished_exception_shows_error(window, monkeypatch):

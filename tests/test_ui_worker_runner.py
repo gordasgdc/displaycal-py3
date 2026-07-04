@@ -323,3 +323,181 @@ def test_adapter_confirm_returns_false_on_cancel(qapp):
     finally:
         thread.wait()
         dlg.deleteLater()
+
+
+# --- interactive calibration driver (5c-iii) -------------------------------
+
+from threading import Event  # noqa: E402
+
+from qtpy.QtCore import QObject, Signal  # noqa: E402
+
+
+class _FakeAdjustmentWindow(QObject):
+    """Stand-in for the Qt ``DisplayAdjustmentWindow`` the driver marshals to."""
+
+    send_requested = Signal(str)
+
+    def __init__(self):
+        super().__init__()
+        self.parsed = []
+        self.pulses = []
+        self.title = ""
+        self.reset_calls = 0
+        self.shown = False
+        self.is_measuring = False
+
+    def parse_output(self, txt):
+        self.parsed.append(txt)
+
+    def pulse(self, msg=""):
+        self.pulses.append(msg)
+
+    def setWindowTitle(self, title):  # noqa: N802 - Qt name the terminal calls
+        self.title = title
+
+    def reset(self):
+        self.reset_calls += 1
+
+    def place(self):
+        pass
+
+    def show(self):
+        self.shown = True
+
+    def raise_(self):
+        pass
+
+    def hide(self):
+        self.shown = False
+
+    def isVisible(self):  # noqa: N802 - Qt name the terminal probes
+        return self.shown
+
+    def isActiveWindow(self):  # noqa: N802 - Qt name the terminal probes
+        return False
+
+
+class FakeCalibrateWorker:
+    """Minimal worker exposing what ``AdjustmentController`` touches."""
+
+    def __init__(self, result=True, block=None):
+        self.sent = []
+        self.terminal = None
+        self.progress_wnd = None
+        self.thread = None
+        self._result = result
+        self._block = block
+
+    def calibrate(self, remove=True):
+        # Emit a chunk so the terminal marshalling is exercised end to end.
+        self.terminal.write("Patch 1 of 10")
+        if self._block is not None:
+            self._block.wait()
+        return self._result
+
+    def safe_send(self, data):
+        self.sent.append(data)
+        return True
+
+    def log(self, *args, **kwargs):
+        pass
+
+
+def test_producer_thread_is_alive_reflects_running(qapp):
+    block = Event()
+    thread = wr._ProducerThread(block.wait)
+    assert thread.is_alive() is False
+    try:
+        thread.start()
+        assert _spin_until(qapp, thread.is_alive)
+    finally:
+        block.set()
+        thread.wait()
+    assert thread.is_alive() is False
+
+
+def test_adjustment_terminal_write_marshals_to_window(qapp):
+    window = _FakeAdjustmentWindow()
+    terminal = wr._AdjustmentTerminal(window)
+    # Same-thread emit delivers directly.
+    terminal.write("hello")
+    assert window.parsed == ["hello"]
+    # Empty writes are dropped.
+    terminal.write("")
+    assert window.parsed == ["hello"]
+
+
+def test_adjustment_terminal_pulse_returns_flags(qapp):
+    window = _FakeAdjustmentWindow()
+    terminal = wr._AdjustmentTerminal(window)
+    keep_going, skip = terminal.Pulse("please wait")
+    assert (keep_going, skip) == (True, False)
+    assert window.pulses == ["please wait"]
+    terminal.keepGoing = False
+    assert terminal.Pulse()[0] is False
+
+
+def test_adjustment_terminal_confirm_same_thread_shows_directly(qapp):
+    window = _FakeAdjustmentWindow()
+    terminal = wr._AdjustmentTerminal(window)
+    terminal._ask = lambda request: True
+    assert terminal.confirm("place instrument", "OK", "Cancel") is True
+
+
+def test_adjustment_controller_forwards_send_to_worker(qapp):
+    window = _FakeAdjustmentWindow()
+    worker = FakeCalibrateWorker()
+    ctrl = wr.AdjustmentController(worker, window)
+    assert ctrl is not None
+    window.send_requested.emit("2")
+    assert worker.sent == ["2"]
+
+
+def test_adjustment_controller_sets_interactive_state(qapp):
+    window = _FakeAdjustmentWindow()
+    block = Event()
+    worker = FakeCalibrateWorker(block=block)
+    ctrl = wr.AdjustmentController(worker, window)
+    try:
+        ctrl.run(remove=True)
+        assert worker.interactive is True
+        assert worker.interactive_frame == "adjust"
+        assert worker.progress_wnd is not None
+        assert worker.thread is ctrl._thread
+        assert window.reset_calls == 1
+        assert window.shown is True
+    finally:
+        block.set()
+        assert _spin_until(qapp, lambda: ctrl.is_running is False)
+
+
+def test_adjustment_controller_run_calls_consumer_and_cleans_up(qapp):
+    window = _FakeAdjustmentWindow()
+    worker = FakeCalibrateWorker(result=True)
+    ctrl = wr.AdjustmentController(worker, window)
+    got = []
+    ctrl.run(got.append, remove=True)
+    assert _spin_until(qapp, lambda: got)
+    assert got == [True]
+    # The streamed chunk reached the window on the GUI thread.
+    assert window.parsed == ["Patch 1 of 10"]
+    assert worker.progress_wnd is None
+    assert worker.terminal is None
+    assert worker.thread is None
+    assert window.shown is False
+    assert ctrl.is_running is False
+
+
+def test_adjustment_controller_ignores_second_run_while_running(qapp):
+    window = _FakeAdjustmentWindow()
+    block = Event()
+    worker = FakeCalibrateWorker(block=block)
+    ctrl = wr.AdjustmentController(worker, window)
+    try:
+        ctrl.run(remove=True)
+        first_thread = ctrl._thread
+        ctrl.run(remove=True)  # ignored while running
+        assert ctrl._thread is first_thread
+    finally:
+        block.set()
+        assert _spin_until(qapp, lambda: ctrl.is_running is False)

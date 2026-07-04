@@ -75,6 +75,7 @@ from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import get_theme_pixmap
 from DisplayCAL.ui.base_window import BaseWindow
+from DisplayCAL.ui.display_adjustment_window import DisplayAdjustmentWindow
 from DisplayCAL.ui.measure_frame import MeasureFrame
 from DisplayCAL.ui.measurement_flow import (
     MeasurementFlow,
@@ -85,7 +86,7 @@ from DisplayCAL.ui.measurement_flow import (
     run_measureframe_subprocess,
 )
 from DisplayCAL.ui.progress_dialog import ProgressDialog
-from DisplayCAL.ui.worker_runner import WorkerRunController
+from DisplayCAL.ui.worker_runner import AdjustmentController, WorkerRunController
 from DisplayCAL.util_decimal import stripzeros
 from DisplayCAL.worker import Worker
 
@@ -394,6 +395,10 @@ class MainWindow(BaseWindow):
         #: The Qt progress dialog / worker driver, created lazily on first run.
         self._progress_dialog: ProgressDialog | None = None
         self._run_controller: WorkerRunController | None = None
+        #: The interactive-adjustment window / driver, created lazily on first
+        #: interactive calibration run.
+        self._adjustment_window: DisplayAdjustmentWindow | None = None
+        self._adjustment_controller: AdjustmentController | None = None
 
         self._build_ui()
         self.init_menubar()
@@ -1316,8 +1321,9 @@ class MainWindow(BaseWindow):
 
         The characterization (profile) path runs non-interactively through the
         Qt :class:`~DisplayCAL.ui.worker_runner.WorkerRunController`. The
-        calibration paths need the interactive ``DisplayAdjustmentFrame`` (Qt
-        sub-slice 5c) and are surfaced as a not-yet-available notice until then.
+        calibration paths run ``dispcal`` through the interactive
+        :class:`~DisplayCAL.ui.worker_runner.AdjustmentController` (or the
+        non-interactive progress dialog when interactive adjustment is off).
 
         Args:
             action (MeasurementAction): The workflow the user committed to.
@@ -1325,7 +1331,7 @@ class MainWindow(BaseWindow):
         if action is MeasurementAction.PROFILE:
             self._run_profile_measurement()
             return
-        self._notify_calibration_unavailable()
+        self._run_calibration_measurement(action)
 
     def _ensure_run_controller(self) -> WorkerRunController:
         """Create the progress dialog / worker driver once, on first run."""
@@ -1377,13 +1383,90 @@ class MainWindow(BaseWindow):
             return
         self.worker.log(f"{APPNAME}: Characterization measurements complete")
 
-    def _notify_calibration_unavailable(self) -> None:
-        """Tell the user the interactive calibration path is not yet in Qt."""
-        QMessageBox.information(
-            self,
-            APPNAME,
-            "Interactive calibration is not available in the Qt interface yet.",
+    def _ensure_adjustment_controller(self) -> AdjustmentController:
+        """Create the interactive-adjustment window / driver once, on first run."""
+        if self._adjustment_controller is None:
+            self._adjustment_window = DisplayAdjustmentWindow(self)
+            self._adjustment_controller = AdjustmentController(
+                self.worker, self._adjustment_window, self
+            )
+        else:
+            # Re-apply mode-dependent setup for the committed config.
+            self._adjustment_window.setup()
+        return self._adjustment_controller
+
+    def _run_calibration_measurement(self, action: MeasurementAction) -> None:
+        """Run ``dispcal`` for a calibration ``action`` (Qt port of ``just_calibrate``).
+
+        Ports the non-interactive setup ``MainFrame.just_calibrate`` /
+        ``calibrate_and_profile`` do before ``worker.start_calibration``: when
+        interactive display adjustment is enabled (and this is not a calibration
+        update) the run drives the interactive
+        :class:`~DisplayCAL.ui.display_adjustment_window.DisplayAdjustmentWindow`;
+        otherwise it runs non-interactively over the progress dialog. Building
+        the profile from a ``calibrate & profile`` run (the ``colprof`` stage) is
+        a follow-on slice; on a successful calibration the characterization
+        measurement is chained.
+
+        Args:
+            action (MeasurementAction): ``CALIBRATE`` or ``CALIBRATE_AND_PROFILE``.
+        """
+        both = action is MeasurementAction.CALIBRATE_AND_PROFILE
+        setcfg("calibration.continue_next", 1 if both else 0)
+        if both:
+            self.worker.dispcal_create_fast_matrix_shaper = False
+            self.worker.dispread_after_dispcal = True
+        interactive = bool(
+            getcfg("calibration.interactive_display_adjustment")
+        ) and not getcfg("calibration.update")
+        remove = not both
+
+        def consumer(result: object) -> None:
+            self._on_calibration_finished(action, result)
+
+        if interactive:
+            controller = self._ensure_adjustment_controller()
+            controller.run(consumer, remove=remove)
+            return
+        self.worker.interactive = False
+        controller = self._ensure_run_controller()
+        controller.run(
+            self.worker.calibrate,
+            consumer,
+            wkwargs={"remove": remove},
+            progress_msg=lang.getstr("calibration"),
+            pauseable=True,
         )
+
+    def _on_calibration_finished(
+        self, action: MeasurementAction, result: object
+    ) -> None:
+        """Report a calibration outcome, chaining the profile run if requested.
+
+        Ports the error / incomplete branches of ``just_calibrate_finish``; the
+        success side effects (loading the calibration, the ``calibration.complete``
+        dialog, building the profile) land with the ``colprof`` slice. For a
+        ``calibrate & profile`` run the characterization measurement is started
+        on success.
+
+        Args:
+            action (MeasurementAction): The calibration workflow that finished.
+            result (object): ``True`` on success, ``False`` / ``None`` when the
+                run did not complete, or an ``Exception`` on failure.
+        """
+        self.worker.interactive = False
+        if isinstance(result, Exception):
+            QMessageBox.critical(self, APPNAME, str(result))
+            return
+        if not result:
+            if not getcfg("dry_run"):
+                QMessageBox.information(
+                    self, APPNAME, lang.getstr("calibration.incomplete")
+                )
+            return
+        self.worker.log(f"{APPNAME}: Calibration complete")
+        if action is MeasurementAction.CALIBRATE_AND_PROFILE:
+            self._run_profile_measurement()
 
     # -- misc --------------------------------------------------------------
 
