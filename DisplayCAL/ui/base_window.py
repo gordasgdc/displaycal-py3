@@ -50,6 +50,12 @@ class BaseWindow(ScriptingHostMixin, QMainWindow):
         icon_name: str = "",
     ) -> None:
         super().__init__(parent)
+        # Force explicit painting of the palette ``Window`` colour. On macOS,
+        # the native style otherwise fills top-level windows with the OS's own
+        # (light) window background material instead of our themed palette,
+        # which is how the dark scheme ends up visibly lighter than wx's
+        # hard-coded ``#333333`` (see ``DisplayCAL.ui.theme``).
+        self.setAutoFillBackground(True)
         if name:
             self.setObjectName(name)
         if title:

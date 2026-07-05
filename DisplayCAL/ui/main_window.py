@@ -46,7 +46,7 @@ import os
 import sys
 from typing import TYPE_CHECKING, Callable
 
-from qtpy.QtCore import Qt, QThread, QTimer, Signal
+from qtpy.QtCore import QSize, Qt, QThread, QTimer, Signal
 from qtpy.QtGui import QColor, QPainter, QPixmap
 from qtpy.QtWidgets import (
     QButtonGroup,
@@ -65,6 +65,7 @@ from qtpy.QtWidgets import (
     QProgressDialog,
     QPushButton,
     QRadioButton,
+    QApplication,
     QScrollArea,
     QSizePolicy,
     QSlider,
@@ -83,7 +84,8 @@ from DisplayCAL.config import DEFAULTS, get_verified_path, getcfg, setcfg, write
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.options import TEST
 from DisplayCAL.ui.application import Application
-from DisplayCAL.ui.assets import get_theme_pixmap
+from DisplayCAL.ui.assets import get_theme_pixmap, get_themed_pixmap
+from DisplayCAL.ui.theme import is_dark
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.colorimeter_correction_io import WebCheckController
 from DisplayCAL.ui.colorimeter_correction_window import CreateCorrectionWindow
@@ -106,7 +108,7 @@ from DisplayCAL.util_os import get_program_file
 from DisplayCAL.worker import Worker, get_options_from_cal, get_options_from_profile
 
 if TYPE_CHECKING:
-    from qtpy.QtGui import QShowEvent
+    from qtpy.QtGui import QPaintEvent, QShowEvent
 
 
 #: The settings tabs, in order: ``(config-ish key, icon name, label key)``.
@@ -399,6 +401,43 @@ def lut3d_bitdepth_items() -> list[tuple[int, str]]:
     return [(bit, str(bit)) for bit in config.VALID_VALUES["3dlut.bitdepth.input"]]
 
 
+class _HeaderBanner(QWidget):
+    """The header banner: gradient background, wordmark bitmap and tagline.
+
+    wx's ``BitmapBackgroundPanelText`` draws its bitmap and label directly in
+    one ``paintEvent``. A Qt equivalent built from overlapping sibling widgets
+    (an image ``QLabel`` plus a text ``QLabel`` stacked via ``QStackedLayout``)
+    turned out to be unreliable -- sibling stacking order in Qt is not simply
+    "first added wins" across widget kinds, so painting both explicitly here
+    is the direct, dependable option.
+    """
+
+    def __init__(
+        self, pixmap: QPixmap, tagline: str, inset: int, parent: QWidget | None = None
+    ) -> None:
+        super().__init__(parent)
+        self._pixmap = pixmap
+        self._tagline = tagline
+        self._inset = inset
+        # Qt only auto-enables style-sheet backgrounds for the literal
+        # QWidget class; a subclass with its own paintEvent needs this set
+        # explicitly or its "background: qlineargradient(...)" stylesheet
+        # never paints.
+        self.setAttribute(Qt.WA_StyledBackground, True)
+
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: D102 (Qt override)
+        super().paintEvent(event)
+        painter = QPainter(self)
+        if not self._pixmap.isNull():
+            painter.drawPixmap(0, 0, self._pixmap)
+        painter.setPen(QColor("white"))
+        rect = self.rect().adjusted(self._inset, 0, -12, -10)
+        painter.drawText(
+            rect, int(Qt.AlignLeft | Qt.AlignBottom | Qt.TextWordWrap), self._tagline
+        )
+        painter.end()
+
+
 class MainWindow(BaseWindow):
     """DisplayCAL's Qt main window (shell + all four settings tabs)."""
 
@@ -479,18 +518,22 @@ class MainWindow(BaseWindow):
         if not adopted_worker:
             self.worker.enumerate_displays_and_ports(silent=True)
         self.update_controls()
+        self._apply_initial_geometry()
 
     # -- UI construction ---------------------------------------------------
 
     def _build_ui(self) -> None:
         """Assemble the tab bar, stacked settings panels and action buttons."""
         central = QWidget()
+        central.setAutoFillBackground(True)
         layout = QVBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        layout.addWidget(self._build_header())
-        layout.addWidget(self._build_tabbar())
+        self._header_widget = self._build_header()
+        self._tabbar_widget = self._build_tabbar()
+        layout.addWidget(self._header_widget)
+        layout.addWidget(self._tabbar_widget)
 
         self.stack = QStackedWidget()
         self._panels["display_instrument"] = self._build_display_instrument_tab()
@@ -503,19 +546,64 @@ class MainWindow(BaseWindow):
         # wx wraps the equivalent tab content in a scrolled window
         # (``calpanel``, ``wxHSCROLL|wxVSCROLL``) since the per-tab info
         # panels below can make a tab taller than the window.
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setFrameShape(QFrame.NoFrame)
-        scroll_area.setWidget(self.stack)
-        layout.addWidget(scroll_area, 1)
+        self._scroll_area = QScrollArea()
+        self._scroll_area.setWidgetResizable(True)
+        self._scroll_area.setFrameShape(QFrame.NoFrame)
+        self._scroll_area.setWidget(self.stack)
+        layout.addWidget(self._scroll_area, 1)
 
-        layout.addWidget(self._build_button_bar())
+        self._button_bar_widget = self._build_button_bar()
+        layout.addWidget(self._button_bar_widget)
 
         self.setCentralWidget(central)
         self._select_tab("display_instrument")
 
+    def _apply_initial_geometry(self) -> None:
+        """Size the window to fit the active tab without scrolling.
+
+        Mirrors wx's ``MainFrame.set_size(True, True)`` startup call: rather
+        than a fixed default size, wx sums the chrome (header/tab bar/button
+        bar) and the currently selected panel's natural size, then clamps to
+        the screen. The window is centered afterwards (see :meth:`showEvent`)
+        when no saved position exists, matching wx's ``self.Center()``.
+        """
+        chrome_height = (
+            self._header_widget.sizeHint().height()
+            + self._tabbar_widget.sizeHint().height()
+            + self._button_bar_widget.sizeHint().height()
+        )
+        content = self.stack.currentWidget().sizeHint()
+        width = max(
+            self._header_widget.sizeHint().width(),
+            self._tabbar_widget.sizeHint().width(),
+            self._button_bar_widget.sizeHint().width(),
+            max(panel.sizeHint().width() for panel in self._panels.values()),
+        )
+        height = chrome_height + content.height()
+        screen = self.screen() if self.windowHandle() else QApplication.primaryScreen()
+        if screen is not None:
+            available = screen.availableGeometry()
+            width = min(width, available.width())
+            height = min(height, available.height())
+        self.resize(width, height)
+
+    def _center_on_screen(self) -> None:
+        """Center the window on its screen (wx's ``self.Center()`` fallback)."""
+        screen = self.screen() if self.windowHandle() else QApplication.primaryScreen()
+        if screen is None:
+            return
+        frame = self.frameGeometry()
+        frame.moveCenter(screen.availableGeometry().center())
+        self.move(frame.topLeft())
+
     #: Logical size (pt) of the wx ``get_header()`` wordmark bitmap.
     _HEADER_BANNER_SIZE = (222, 64)
+
+    #: wx's ``get_header(x=80)`` tagline inset, which is also where the "D" of
+    #: the "DisplayCAL" wordmark starts in ``theme/header.png``; the
+    #: "Settings" bar below lines its label up with the same x so the two
+    #: rows read as one column, matching wx.
+    _HEADER_LOGO_INSET = 80
 
     def _build_header(self) -> QWidget:
         """Build the calibration/profile-file banner atop the tab bar.
@@ -541,29 +629,35 @@ class MainWindow(BaseWindow):
         strip.setStyleSheet("background-color: #66CC00;")
         outer.addWidget(strip)
 
-        banner = QWidget()
+        # wx overlays the tagline directly on the banner bitmap (``get_header``,
+        # white text near the bottom, starting at the same x as the "D" in the
+        # wordmark); ``_HeaderBanner`` paints both explicitly for the same
+        # effect instead of layering two widgets.
+        banner = _HeaderBanner(
+            self._header_banner_pixmap(),
+            lang.getstr("header"),
+            self._HEADER_LOGO_INSET,
+        )
         banner.setFixedHeight(self._HEADER_BANNER_SIZE[1])
+        # Matches the actual gradient sampled from ``theme/header@2x.png``: it
+        # reaches its final blue by the vertical midpoint and stays flat below
+        # that (a plain 2-stop linear gradient over-darkens the top half).
         banner.setStyleSheet(
             "background: qlineargradient(x1:0, y1:0, x2:0, y2:1,"
-            " stop:0 #093d75, stop:1 #0e59a9);"
+            " stop:0 #093d75, stop:0.5 #0e59a9, stop:1 #0e59a9);"
         )
-        banner_row = QHBoxLayout(banner)
-        banner_row.setContentsMargins(0, 0, 0, 0)
-        banner_row.setSpacing(0)
-        banner_pixmap = self._header_banner_pixmap()
-        if not banner_pixmap.isNull():
-            image_label = QLabel()
-            image_label.setPixmap(banner_pixmap)
-            image_label.setFixedSize(*self._HEADER_BANNER_SIZE)
-            banner_row.addWidget(image_label)
-        banner_row.addStretch(1)
         outer.addWidget(banner)
 
         bar = QWidget()
         bar.setObjectName("headerpanel")
-        bar.setStyleSheet("background-color: #0e59a9;")
+        # Scoped to the object name (not a bare "QWidget { ... }" rule) so the
+        # background doesn't cascade into descendants: any style sheet on a
+        # widget forces Qt to draw its children (like the combo box below) via
+        # the CSS style engine instead of the native one, losing the native
+        # chevron / popup chrome the rest of the app's combo boxes keep.
+        bar.setStyleSheet("QWidget#headerpanel { background-color: #0e59a9; }")
         bar_row = QHBoxLayout(bar)
-        bar_row.setContentsMargins(16, 8, 16, 8)
+        bar_row.setContentsMargins(self._HEADER_LOGO_INSET, 8, 16, 8)
         bar_row.setSpacing(8)
 
         file_label = QLabel(lang.getstr("calibration.file"))
@@ -652,6 +746,15 @@ class MainWindow(BaseWindow):
         painter.end()
         return white
 
+    def _pixmap(self, size: int, name: str) -> QPixmap:
+        """Return a themed icon pixmap for the app's current light/dark scheme.
+
+        Unlike :meth:`_header_icon_pixmap` (always white, for the permanently
+        dark blue header banner), this recolors monochrome glyphs only when
+        the app is in its dark scheme, matching wx's on-the-fly inversion.
+        """
+        return get_themed_pixmap(size, name, is_dark(self))
+
     @classmethod
     def _header_tool_button(
         cls, icon_name: str, tooltip_key: str, slot: Callable[[], None]
@@ -666,6 +769,42 @@ class MainWindow(BaseWindow):
         button.clicked.connect(lambda _checked=False: slot())
         return button
 
+    #: wx has no boxed frame around the Display tab's "Display"/"Instrument"
+    #: sections, just a bold section-title label (see ``display_box_label`` /
+    #: ``instrument_box_label`` in ``main.xrc``); drop the native QGroupBox
+    #: border/frame but keep its bold title, to match.
+    _FLAT_GROUPBOX_STYLE = (
+        "QGroupBox {"
+        " border: none;"
+        " margin-top: 1.5ex;"
+        " font-weight: bold;"
+        "}"
+        "QGroupBox::title {"
+        " subcontrol-origin: margin;"
+        " left: 0px;"
+        " padding: 0 0 4px 0;"
+        "}"
+    )
+
+    #: Flat look for the tab bar's toggle buttons (wx's ``platebtn.PlateButton``
+    #: idle state has no visible background; only a soft highlight distinguishes
+    #: the checked/hovered button, instead of Qt's native checked-button chrome).
+    _TAB_BUTTON_STYLE = (
+        "QToolButton {"
+        " border: none;"
+        " background: transparent;"
+        " padding: 4px 10px;"
+        "}"
+        "QToolButton:checked {"
+        " background: rgba(128, 128, 128, 60);"
+        " border-radius: 4px;"
+        "}"
+        "QToolButton:hover:!checked {"
+        " background: rgba(128, 128, 128, 30);"
+        " border-radius: 4px;"
+        "}"
+    )
+
     def _build_tabbar(self) -> QWidget:
         """Build the exclusive toggle-button tab bar."""
         bar = QWidget()
@@ -674,14 +813,19 @@ class MainWindow(BaseWindow):
         row.setContentsMargins(16, 8, 16, 8)
         row.setSpacing(24)
 
+        # wx centers the tab buttons (equal stretch spacers on both sides of
+        # the button row); match that instead of left-aligning them.
+        row.addStretch(1)
         self._tab_group = QButtonGroup(self)
         self._tab_group.setExclusive(True)
         for key, icon_name, label_key in _TABS:
             button = QToolButton()
             button.setCheckable(True)
             button.setAutoRaise(True)
-            button.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
-            pixmap = get_theme_pixmap(32, icon_name)
+            button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+            button.setIconSize(QSize(32, 32))
+            button.setStyleSheet(self._TAB_BUTTON_STYLE)
+            pixmap = self._pixmap(32, icon_name)
             if not pixmap.isNull():
                 button.setIcon(pixmap)
             button.setText(lang.getstr(label_key))
@@ -719,10 +863,10 @@ class MainWindow(BaseWindow):
         a ``StaticFancyText``) shown at the bottom of each settings tab.
         """
         panel = QWidget()
-        panel.setStyleSheet(
-            "background-color: #ffffff;"
-            " border-top: 1px solid palette(mid);"
-        )
+        # wx's info panels don't set an explicit background either (they
+        # inherit the app's BGCOLOUR/FGCOLOUR like everything else); only the
+        # separator above them (wx's ``shadow-bordertop.png``) is distinct.
+        panel.setStyleSheet("border-top: 1px solid palette(mid);")
         outer = QVBoxLayout(panel)
         outer.setContentsMargins(16, 16, 16, 16)
         outer.setSpacing(12)
@@ -732,7 +876,7 @@ class MainWindow(BaseWindow):
         grid.setColumnStretch(1, 1)
         for row_index, (icon_name, label_key) in enumerate(rows):
             icon_label = QLabel()
-            pixmap = get_theme_pixmap(32, icon_name)
+            pixmap = self._pixmap(32, icon_name)
             if not pixmap.isNull():
                 icon_label.setPixmap(pixmap)
             icon_label.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
@@ -741,7 +885,6 @@ class MainWindow(BaseWindow):
             text_label.setTextFormat(Qt.RichText)
             text_label.setWordWrap(True)
             text_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-            text_label.setStyleSheet("color: #000000;")
             grid.addWidget(text_label, row_index, 1)
         # Keep icon/text rows packed at the top; push leftover vertical
         # space (from the ``outer.addWidget(panel, 1)`` stretch factor at
@@ -760,6 +903,7 @@ class MainWindow(BaseWindow):
         columns = QHBoxLayout()
 
         display_box = QGroupBox(lang.getstr("display"))
+        display_box.setStyleSheet(self._FLAT_GROUPBOX_STYLE)
         display_outer = QVBoxLayout(display_box)
         display_row = QHBoxLayout()
         display_form = QFormLayout()
@@ -788,7 +932,7 @@ class MainWindow(BaseWindow):
         self.detect_displays_and_ports_btn.setToolTip(
             lang.getstr("detect_displays_and_ports")
         )
-        refresh_pixmap = get_theme_pixmap(16, "stock_refresh")
+        refresh_pixmap = self._pixmap(16, "stock_refresh")
         if not refresh_pixmap.isNull():
             self.detect_displays_and_ports_btn.setIcon(refresh_pixmap)
         self.detect_displays_and_ports_btn.clicked.connect(
@@ -810,6 +954,7 @@ class MainWindow(BaseWindow):
         columns.addWidget(display_box, 1)
 
         instrument_box = QGroupBox(lang.getstr("instrument"))
+        instrument_box.setStyleSheet(self._FLAT_GROUPBOX_STYLE)
         instrument_outer = QVBoxLayout(instrument_box)
         instrument_form = QFormLayout()
         self.comport_ctrl = QComboBox()
@@ -963,7 +1108,7 @@ class MainWindow(BaseWindow):
         self.colorimeter_correction_info_btn.setToolTip(
             lang.getstr("colorimeter_correction.info")
         )
-        info_pixmap = get_theme_pixmap(16, "info")
+        info_pixmap = self._pixmap(16, "info")
         if not info_pixmap.isNull():
             self.colorimeter_correction_info_btn.setIcon(info_pixmap)
         self.colorimeter_correction_info_btn.clicked.connect(
@@ -975,7 +1120,7 @@ class MainWindow(BaseWindow):
         self.colorimeter_correction_matrix_btn.setToolTip(
             lang.getstr("colorimeter_correction_matrix_file.choose")
         )
-        open_pixmap = get_theme_pixmap(16, "document-open")
+        open_pixmap = self._pixmap(16, "document-open")
         if not open_pixmap.isNull():
             self.colorimeter_correction_matrix_btn.setIcon(open_pixmap)
         self.colorimeter_correction_matrix_btn.clicked.connect(
@@ -987,7 +1132,7 @@ class MainWindow(BaseWindow):
         self.colorimeter_correction_web_btn.setToolTip(
             lang.getstr("colorimeter_correction.web_check")
         )
-        web_pixmap = get_theme_pixmap(16, "web")
+        web_pixmap = self._pixmap(16, "web")
         if not web_pixmap.isNull():
             self.colorimeter_correction_web_btn.setIcon(web_pixmap)
         self.colorimeter_correction_web_btn.clicked.connect(
@@ -999,7 +1144,7 @@ class MainWindow(BaseWindow):
         self.colorimeter_correction_create_btn.setToolTip(
             lang.getstr("colorimeter_correction.create")
         )
-        create_pixmap = get_theme_pixmap(16, "list-add")
+        create_pixmap = self._pixmap(16, "list-add")
         if not create_pixmap.isNull():
             self.colorimeter_correction_create_btn.setIcon(create_pixmap)
         self.colorimeter_correction_create_btn.clicked.connect(
@@ -1344,8 +1489,12 @@ class MainWindow(BaseWindow):
 
         self.calibrate_btn = QPushButton(lang.getstr("button.calibrate"))
         self.calibrate_btn.clicked.connect(self.calibrate_btn_handler)
+        # QPushButton (unlike QLabel) treats "&" as a mnemonic marker and
+        # swallows it; the label is "Calibrate & profile" (a literal "and"),
+        # so escape it to "&&" to render the ampersand, mirroring wx's own
+        # ``label.replace("&", "&&")`` for its button labels.
         self.calibrate_and_profile_btn = QPushButton(
-            lang.getstr("button.calibrate_and_profile")
+            lang.getstr("button.calibrate_and_profile").replace("&", "&&")
         )
         self.calibrate_and_profile_btn.clicked.connect(
             self.calibrate_and_profile_btn_handler
@@ -1411,6 +1560,40 @@ class MainWindow(BaseWindow):
             self.update_lut3d_controls()
         finally:
             self._updating = False
+        self._update_action_buttons()
+
+    def _update_action_buttons(self) -> None:
+        """Show exactly one calibrate/profile action button, per wx.
+
+        Mirrors the relevant part of ``MainFrame.update_main_controls``: wx
+        shows "Calibrate & Profile" by default, falling back to "Calibrate
+        only" or "Profile only" depending on the interactive-adjustment /
+        TRC / "update existing calibration" state, never more than one at
+        once. (The Qt port doesn't have the 3D LUT "Create" button or the
+        Measurement Report tab yet, so those parts of wx's condition are
+        omitted here.)
+        """
+        update_cal = self.calibration_update_cb.isChecked()
+        update_profile = update_cal and config.is_profile()
+        enable_cal = not config.is_uncalibratable_display() and (
+            self.interactive_adjustment_cb.isChecked()
+            or self.trc_ctrl.currentIndex() > 0
+        )
+        calibrate_and_profile_show = enable_cal and not update_profile
+        calibrate_show = enable_cal and not calibrate_and_profile_show
+        profile_show = not calibrate_and_profile_show and not update_cal
+
+        has_devices = bool(self.worker.displays) and bool(self.worker.instruments)
+        not_ccxx = not config.is_ccxx_testchart()
+
+        self.calibrate_btn.setVisible(calibrate_show)
+        self.calibrate_btn.setEnabled(calibrate_show and not_ccxx and has_devices)
+        self.calibrate_and_profile_btn.setVisible(calibrate_and_profile_show)
+        self.calibrate_and_profile_btn.setEnabled(
+            calibrate_and_profile_show and not_ccxx and has_devices
+        )
+        self.profile_btn.setVisible(profile_show)
+        self.profile_btn.setEnabled(profile_show and has_devices)
 
     def update_displays(self) -> None:
         """Populate the display selector from ``worker.displays``."""
@@ -1716,7 +1899,7 @@ class MainWindow(BaseWindow):
 
     def _apply_display_lut_link_icon(self, linked: bool) -> None:
         """Swap the link-toggle icon to reflect the current link state."""
-        pixmap = get_theme_pixmap(16, "stock_lock" if linked else "stock_lock-open")
+        pixmap = self._pixmap(16, "stock_lock" if linked else "stock_lock-open")
         if not pixmap.isNull():
             self.display_lut_link_ctrl.setIcon(pixmap)
 
@@ -2030,6 +2213,7 @@ class MainWindow(BaseWindow):
         if self._updating:
             return
         setcfg(config_key, 1 if checked else 0)
+        self._update_action_buttons()
 
     def _value_combo_handler(self, config_key: str, index: int, cast: type) -> None:
         """Persist a bound value-combo selection."""
@@ -2111,6 +2295,7 @@ class MainWindow(BaseWindow):
     def _trc_changed(self, *_args: object) -> None:
         """Persist the tone-response-curve selection to ``trc`` / ``trc.type``."""
         self._apply_trc_mode()
+        self._update_action_buttons()
         if self._updating:
             return
         index = self.trc_ctrl.currentIndex()
@@ -2830,7 +3015,8 @@ class MainWindow(BaseWindow):
         super().showEvent(event)
         if not self._position_restored:
             self._position_restored = True
-            self.restore_position()
+            if not self.restore_position():
+                self._center_on_screen()
 
 
 def main() -> int:

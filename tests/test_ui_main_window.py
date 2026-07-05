@@ -438,9 +438,48 @@ def test_select_tab_switches_stack(window):
 
 
 def test_action_buttons_enabled(window):
-    assert window.calibrate_btn.isEnabled() is True
+    # Only one of the three is ever shown at once (mirrors wx's
+    # ``update_main_controls``); with interactive adjustment on and no
+    # "update existing calibration", that's "Calibrate & Profile". Config is
+    # process-global and other tests may have left it in a different state,
+    # so drive the widgets (and force a recompute) rather than assume
+    # defaults - matching the pattern used by the other calibration tests.
+    window.calibration_update_cb.setChecked(False)
+    window.interactive_adjustment_cb.setChecked(True)
+    window.trc_ctrl.setCurrentIndex(6)
+    window._update_action_buttons()
+    assert window.calibrate_btn.isHidden() is True
+    assert window.calibrate_and_profile_btn.isHidden() is False
     assert window.calibrate_and_profile_btn.isEnabled() is True
+    assert window.profile_btn.isHidden() is True
+
+
+def test_action_buttons_mutually_exclusive_calibrate_only(window):
+    # Disabling interactive adjustment and picking the "as measured" TRC
+    # disables ``enable_cal``, so only "Profile only" remains.
+    window.calibration_update_cb.setChecked(False)
+    window.interactive_adjustment_cb.setChecked(False)
+    window.trc_ctrl.setCurrentIndex(0)
+    window._update_action_buttons()
+    assert window.calibrate_btn.isHidden() is True
+    assert window.calibrate_and_profile_btn.isHidden() is True
+    assert window.profile_btn.isHidden() is False
     assert window.profile_btn.isEnabled() is True
+
+
+def test_action_buttons_mutually_exclusive_update_existing_profile(
+    window, monkeypatch
+):
+    # "Update existing calibration" against a file that resolves to an ICC
+    # profile shows "Calibrate only" instead of "Calibrate & Profile".
+    monkeypatch.setattr(config, "is_profile", lambda *a, **k: True)
+    window.interactive_adjustment_cb.setChecked(True)
+    window.calibration_update_cb.setChecked(True)
+    window._update_action_buttons()
+    assert window.calibrate_btn.isHidden() is False
+    assert window.calibrate_btn.isEnabled() is True
+    assert window.calibrate_and_profile_btn.isHidden() is True
+    assert window.profile_btn.isHidden() is True
 
 
 # --- Calibration tab wiring ------------------------------------------------
@@ -593,6 +632,31 @@ def _force_mode(window, monkeypatch, mode):
     monkeypatch.setattr(window.flow, "plan_measurement", fake_plan)
 
 
+def _show_action_button(window, monkeypatch, button_attr):
+    """Put ``window`` into the (mutually exclusive) state that shows ``button_attr``.
+
+    Only one of calibrate/calibrate-and-profile/profile is ever visible+enabled
+    at once (see :meth:`MainWindow._update_action_buttons`), so exercising a
+    button first requires driving the window into the state that surfaces it.
+    """
+    window.calibration_update_cb.setChecked(False)
+    window.interactive_adjustment_cb.setChecked(True)
+    window.trc_ctrl.setCurrentIndex(6)
+    if button_attr == "calibrate_btn":
+        # "Update existing calibration" against a file that resolves to an
+        # ICC profile shows "Calibrate only" instead of "Calibrate & Profile".
+        monkeypatch.setattr(config, "is_profile", lambda *a, **k: True)
+        window.calibration_update_cb.setChecked(True)
+    elif button_attr == "profile_btn":
+        window.interactive_adjustment_cb.setChecked(False)
+        window.trc_ctrl.setCurrentIndex(0)
+    # Config is process-global and the checkbox no-ops above (setChecked to an
+    # already-current value) don't emit ``toggled``, so force a recompute
+    # rather than rely on signal-driven updates picking up every case.
+    window._update_action_buttons()
+    assert getattr(window, button_attr).isEnabled() is True
+
+
 @pytest.mark.parametrize(
     "button_attr,action",
     [
@@ -609,6 +673,7 @@ def test_action_button_dry_run_emits_request(
     monkeypatch.setattr(config, "is_virtual_display", lambda *a, **k: False)
     setcfg("dry_run", 1)
     _run_pending_synchronously(window)
+    _show_action_button(window, monkeypatch, button_attr)
     seen = []
     window.measurement_requested.connect(seen.append)
 
