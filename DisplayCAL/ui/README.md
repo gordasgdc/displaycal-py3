@@ -197,7 +197,12 @@ and are added per window as those windows are ported.
 
 ## Not yet ported / deliberately deferred
 
-- **The main application window** (`display_cal.MainFrame`, ~22k lines) and its
-  custom widgets (grids, gauges, gradient buttons, LUT/plot views). This is the
-  bulk of the work and will be tackled in dedicated, refactored pieces — large
-  methods broken into smaller ones as they move.
+- **The main application window** (`display_cal.MainFrame`, ~22k lines) is
+  being ported in vertical, independently shippable slices tracked in
+  [MAINFRAME_PORT_PLAN.md](MAINFRAME_PORT_PLAN.md). The Qt shell
+  (`main_window.py`), all four settings tabs, the calibrate/measure/profile
+  worker execution layer, the interactive display-adjustment window and the
+  splash screen (`startup.py`) are done; still deferred: some custom widgets
+  (grids, gradient buttons), several reporting/install/colorimeter-correction
+  dialogs' parent-window wiring, and — until the wx and Qt paths are confirmed
+  behaviourally identical — retiring the wx code paths themselves.

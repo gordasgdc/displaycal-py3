@@ -371,13 +371,23 @@ class MainWindow(BaseWindow):
     #: (the wx ``call_pending_function`` 100 ms ``CallLater``).
     _pending_delay_ms = 100
 
-    def __init__(self) -> None:
+    def __init__(self, worker: Worker | None = None) -> None:
+        """Construct the main window.
+
+        Args:
+            worker (Worker | None): A pre-enumerated worker to adopt (e.g. from
+                :class:`~DisplayCAL.ui.startup.StartupController`), skipping the
+                synchronous ``enumerate_displays_and_ports`` call below. When
+                omitted, a fresh ``Worker`` is created and enumerated in place
+                (used by tests and standalone ``main()``).
+        """
         super().__init__(
             name="mainframe",
             title=APPNAME,
             icon_name=APPNAME.lower(),
         )
-        self.worker = Worker()
+        adopted_worker = worker is not None
+        self.worker = worker if worker is not None else Worker()
         self.flow = MeasurementFlow()
         #: Guards config-writing handlers while controls are repopulated.
         self._updating = False
@@ -406,7 +416,8 @@ class MainWindow(BaseWindow):
         # Run the committed Argyll measurement when a run is requested.
         self.measurement_requested.connect(self._on_measurement_requested)
 
-        self.worker.enumerate_displays_and_ports(silent=True)
+        if not adopted_worker:
+            self.worker.enumerate_displays_and_ports(silent=True)
         self.update_controls()
 
     # -- UI construction ---------------------------------------------------
