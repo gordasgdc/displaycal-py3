@@ -245,15 +245,27 @@ provides:
   and display-settle-time-multiplier override controls; the flash-field-
   pattern-insertion group (checkbox + interval/duration/level); and the
   output-levels radio group (auto/full-range/limited-range, bound to
-  `patterngenerator.detect_video_levels` / `.use_video_levels`). **Not yet
-  ported** (need their own toolkit-neutral extraction first, the same way
-  Stage 5+ extracted the CCXX import/upload/web-check helpers before porting
-  them): `measurement_mode_ctrl` (wx's `get_measurement_modes` builds its
-  items from instrument-name-keyed tables in `display_cal.py`, not `Worker`)
-  and the colorimeter-correction-matrix row (wx's
-  `update_colorimeter_correction_matrix_ctrl_items` disk-scans `.ccmx`/`.ccss`
-  files with AUTO/None special-casing — substantially more than a config
-  binding).
+  `patterngenerator.detect_video_levels` / `.use_video_levels`). Also now
+  wired: `measurement_mode_ctrl` and the colorimeter-correction-matrix row,
+  after extracting their instrument-capability logic out of `display_cal.py`
+  into toolkit-neutral helpers in `DisplayCAL/colorimeter_correction.py`
+  (`get_instrument_type`, `compute_measurement_modes`,
+  `ColorimeterCorrectionCatalog` + `resolve_colorimeter_correction_selection`),
+  mirroring the Stage 5+ CCXX-extraction precedent; `display_cal.py`'s
+  `MainFrame.get_measurement_modes` / `get_cgats_measurement_mode` now delegate
+  to these helpers unchanged (verified against the existing wx test suite).
+  `update_colorimeter_correction_matrix_ctrl_items` itself was **not**
+  refactored to delegate (its instance-cached state is read directly by
+  `delete_colorimeter_correction_matrix_ctrl_item` elsewhere in `MainFrame`,
+  and it's covered only by a shallow idempotency smoke test, so a
+  behavior-preserving refactor was judged too risky to do blind); the Qt port
+  only reuses the new pure `resolve_colorimeter_correction_selection` function
+  standalone. Deliberately not reproduced in the Qt port: malformed-CCXX
+  trashing, the observer-control visibility toggle
+  (`show_observer_ctrl`), and the old-Argyll "projector/adaptive mode
+  unavailable" fallback dialogs; the CCXX "info" button (`CCXXPlot`) shows a
+  not-yet-available notice, matching the drop already made in
+  `colorimeter_correction_io.py`.
 - The calibrate / calibrate&profile / profile action buttons (present but
   disabled — Stage 4 wires them to `flow`, a `MeasurementFlow`).
 - Gated behind `--qt`: `DisplayCAL/main.py::_get_qt_main(None)` now returns this

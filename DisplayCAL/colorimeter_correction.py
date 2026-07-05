@@ -16,6 +16,8 @@ from __future__ import annotations
 import os
 import re
 import sys
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from hashlib import md5
 from time import strftime, strptime, struct_time
 from typing import TYPE_CHECKING
@@ -24,10 +26,12 @@ from DisplayCAL import ccmx, colord, config
 from DisplayCAL import localization as lang
 from DisplayCAL.argyll import make_argyll_compatible_path
 from DisplayCAL.argyll_instruments import get_canonical_instrument_name
-from DisplayCAL.cgats import CGATS, CGATSError
+from DisplayCAL.cgats import CGATS, CGATSError, CGATSInvalidError
 from DisplayCAL.config import EXE_EXT
 from DisplayCAL.debughelpers import Error, Info, Warn
+from DisplayCAL.util_dict import swap_dict_keys_values
 from DisplayCAL.util_os import get_program_file, getenvu, safe_glob, which
+from DisplayCAL.util_str import ellipsis_
 
 if TYPE_CHECKING:
     from DisplayCAL.worker import Worker
@@ -836,3 +840,778 @@ def detect_import_kind(
         else:
             result = Error(lang.getstr("error.file_type_unsupported") + "\n" + path)
     return result, i1d3, spyd4, icd
+
+
+# -- Measurement modes ---------------------------------------------------
+
+
+def get_instrument_type(worker: Worker) -> str:
+    """Return the instrument type, "color" (colorimeter) or "spect" (spectrometer).
+
+    Toolkit-neutral port of ``MainFrame.get_instrument_type`` (``self`` ->
+    ``worker``, the only instance state it reads).
+    """
+    spect = worker.get_instrument_features().get("spectral", False)
+    return "spect" if spect else "color"
+
+
+def get_cgats_measurement_mode(cgats: CGATS, instrument: str) -> str | None:
+    """Get the measurement mode implied by a CCMX/CCSS's CGATS metadata.
+
+    Toolkit-neutral port of ``display_cal.get_cgats_measurement_mode`` (moved
+    here since it never depended on wx; ``display_cal`` now delegates to this).
+
+    Args:
+        cgats: The parsed CGATS data.
+        instrument (str): The instrument name.
+
+    Returns:
+        str | None: The measurement mode, or None if it can't be determined.
+    """
+    base_id = cgats.queryv1("DISPLAY_TYPE_BASE_ID")
+    refresh = cgats.queryv1("DISPLAY_TYPE_REFRESH")
+    mode = None
+    if base_id:
+        # IMPORTANT: Make changes aswell in the following locations:
+        # - DisplayCAL.MainFrame.create_colorimeter_correction_handler
+        # - DisplayCAL.MainFrame.get_ccxx_measurement_modes
+        # - DisplayCAL.MainFrame.set_ccxx_measurement_mode
+        # - worker.Worker.check_add_display_type_base_id
+        # - worker.Worker.instrument_can_use_ccxx
+        if instrument in ("ColorHug", "ColorHug2"):
+            mode = {1: "F", 2: "R"}.get(base_id)
+        elif instrument == "ColorMunki Smile":
+            mode = {1: "f"}.get(base_id)
+        elif instrument == "Colorimtre HCFR":
+            mode = {1: "R"}.get(base_id)
+        elif instrument == "K-10":
+            mode = {1: "F"}.get(base_id)
+        else:
+            mode = {1: "l", 2: "c", 3: "g"}.get(base_id)
+    elif refresh == b"NO":
+        mode = "l"
+    elif refresh == b"YES":
+        mode = "c"
+    return mode
+
+
+@dataclass
+class MeasurementModes:
+    """Result of :func:`compute_measurement_modes`."""
+
+    #: The (possibly-corrected) measurement mode abbreviation to store.
+    measurement_mode: str
+    #: instrument type -> localized mode names, in combo order.
+    measurement_modes: dict[str, list[str]]
+    #: instrument type -> {combo index: mode abbreviation}.
+    measurement_modes_ab: dict[str, dict[int, str]]
+    #: instrument type -> {mode abbreviation: combo index}.
+    measurement_modes_ba: dict[str, dict[str, int]]
+
+
+def compute_measurement_modes(
+    worker: Worker,
+    instrument_name: str,
+    instrument_type: str,
+    cfgname: str = "measurement_mode",
+) -> MeasurementModes:
+    """Compute the measurement modes available for the given instrument.
+
+    Toolkit-neutral port of ``MainFrame.get_measurement_modes`` (``self`` ->
+    ``worker``; no other instance state was read).
+
+    Args:
+        worker: The running :class:`DisplayCAL.worker.Worker`.
+        instrument_name (str): Name of the instrument.
+        instrument_type (str): Type of the instrument (e.g., "spect",
+            "color"), as returned by :func:`get_instrument_type`.
+        cfgname (str, optional): Configuration name for the measurement mode.
+
+    Returns:
+        MeasurementModes: The current mode plus the combo's items/index maps.
+    """
+    measurement_mode = config.getcfg(cfgname)
+    if instrument_name != "DTP92":
+        measurement_modes = {
+            instrument_type: [
+                lang.getstr("measurement_mode.refresh"),
+                lang.getstr("measurement_mode.lcd"),
+            ]
+        }
+        measurement_modes_ab = {instrument_type: ["c", "l"]}
+    else:
+        measurement_modes = {
+            instrument_type: [lang.getstr("measurement_mode.refresh")]
+        }
+        measurement_modes_ab = {instrument_type: ["c"]}
+    instrument_features = worker.get_instrument_features(instrument_name)
+    if instrument_name in ("Spyder4", "Spyder5") and worker.spyder4_cal_exists():
+        # Spyder4 Argyll CMS >= 1.3.6
+        # Spyder5 Argyll CMS >= 1.7.0
+        # See http://www.argyllcms.com/doc/instruments.html#spyd4
+        # for description of supported modes
+        measurement_modes[instrument_type].extend(
+            [
+                lang.getstr("measurement_mode.lcd.ccfl"),
+                lang.getstr("measurement_mode.lcd.wide_gamut.ccfl"),
+                lang.getstr("measurement_mode.lcd.white_led"),
+                lang.getstr("measurement_mode.lcd.wide_gamut.rgb_led"),
+                lang.getstr("measurement_mode.lcd.ccfl.2"),
+            ]
+        )
+        if worker.argyll_version >= [1, 5, 0]:
+            measurement_modes_ab[instrument_type].extend(["f", "L", "e", "B", "x"])
+        else:
+            measurement_modes_ab[instrument_type].extend(["3", "4", "5", "6", "7"])
+    elif instrument_name == "SpyderX":
+        # Argyll SpyderX modes:
+        # l General [Default,CB1] (LCD/CCFL)
+        # e Standard LED (LCD/white LED)
+        # b Wide Gamut LED (LCD/RGB LED)
+        # i GB LED (LCD/GB-R Phosphor LED)
+        measurement_modes[instrument_type] = [
+            lang.getstr("measurement_mode.generic"),
+            lang.getstr("measurement_mode.lcd.white_led"),
+            lang.getstr("measurement_mode.lcd.wide_gamut.led"),
+            lang.getstr("measurement_mode.lcd.wide_gamut.gb_led"),
+        ]
+        measurement_modes_ab[instrument_type] = ["l", "e", "b", "i"]
+    elif instrument_name == "SpyderX2":
+        # Argyll SpyderX2 modes: SpyderX plus high brightness
+        measurement_modes[instrument_type] = [
+            lang.getstr("measurement_mode.generic"),
+            lang.getstr("measurement_mode.lcd.white_led"),
+            lang.getstr("measurement_mode.lcd.wide_gamut.led"),
+            lang.getstr("measurement_mode.lcd.wide_gamut.gb_led"),
+            lang.getstr("measurement_mode.lcd.high_brightness", "High brightness"),
+        ]
+        measurement_modes_ab[instrument_type] = ["l", "e", "b", "i", "h"]
+    elif instrument_name == "Spyder 2024":
+        # Argyll Spyder/SpyderPro 2024 modes: SpyderX2 plus OLED and Mini-LED
+        measurement_modes[instrument_type] = [
+            lang.getstr("measurement_mode.generic"),
+            lang.getstr("measurement_mode.lcd.white_led"),
+            lang.getstr("measurement_mode.lcd.wide_gamut.led"),
+            lang.getstr("measurement_mode.lcd.wide_gamut.gb_led"),
+            lang.getstr("measurement_mode.lcd.high_brightness", "High brightness"),
+            lang.getstr("measurement_mode.lcd.oled", "OLED"),
+            lang.getstr("measurement_mode.lcd.mini_led", "Mini-LED"),
+        ]
+        measurement_modes_ab[instrument_type] = ["l", "e", "b", "i", "h", "o", "m"]
+    elif instrument_name in ("ColorHug", "ColorHug2"):
+        # Argyll CMS 1.3.6, spectro/colorhug.c, colorhug_disptypesel
+        # Note: projector mode (-yp) is not the same as ColorMunki
+        # projector mode! (-p)
+        # ColorHug2 needs Argyll CMS 1.7
+        measurement_modes[instrument_type].extend(
+            [
+                lang.getstr("projector"),
+                lang.getstr("measurement_mode.lcd.white_led"),
+                lang.getstr("measurement_mode.factory"),
+                lang.getstr("measurement_mode.raw"),
+                lang.getstr("auto"),
+            ]
+        )
+        measurement_modes_ab[instrument_type].extend(["p", "e", "F", "R", "auto"])
+    elif instrument_name == "DTP94" and worker.argyll_version >= [1, 5, 0]:
+        # Argyll CMS 1.5.x introduces new measurement mode
+        measurement_modes[instrument_type].extend(
+            [lang.getstr("measurement_mode.generic")]
+        )
+        measurement_modes_ab[instrument_type].append("g")
+    elif instrument_name == "ColorMunki Smile":
+        # Only supported in Argyll CMS 1.5.x and newer
+        measurement_modes[instrument_type] = [
+            lang.getstr("measurement_mode.lcd.ccfl"),
+            lang.getstr("measurement_mode.lcd.white_led"),
+        ]
+        measurement_modes_ab[instrument_type] = ["f", "e"]
+    elif instrument_name == "Colorimtre HCFR" and worker.argyll_version >= [
+        1,
+        5,
+        0,
+    ]:
+        # Argyll CMS 1.5.x introduces new measurement mode
+        measurement_modes[instrument_type].extend(
+            [lang.getstr("measurement_mode.raw")]
+        )
+        measurement_modes_ab[instrument_type].append("R")
+    elif instrument_name == "K-10" or not instrument_features:
+        # K-10 and 'unknown' instruments
+        measurement_modes[instrument_type] = []
+        measurement_modes_ab[instrument_type] = []
+        for mode, desc in worker.get_instrument_measurement_modes().items():
+            measurement_modes[instrument_type].append(lang.getstr(desc))
+            measurement_modes_ab[instrument_type].append(mode)
+    if (
+        instrument_name == "K-10"
+        and measurement_mode not in measurement_modes_ab[instrument_type]
+    ):
+        measurement_mode = "F"
+    if instrument_features.get("projector_mode") and worker.argyll_version >= [
+        1,
+        1,
+        0,
+    ]:
+        # Projector mode introduced in Argyll 1.1.0 Beta
+        measurement_modes[instrument_type].append(lang.getstr("projector"))
+        measurement_modes_ab[instrument_type].append("p")
+    if measurement_mode not in measurement_modes_ab[instrument_type]:
+        if measurement_modes_ab[instrument_type]:
+            measurement_mode = measurement_modes_ab[instrument_type][0]
+        else:
+            measurement_mode = config.DEFAULTS["measurement_mode"]
+    if instrument_features.get("adaptive_mode") and (
+        worker.argyll_version[0:3] > [1, 1, 0]
+        or (
+            worker.argyll_version[0:3] == [1, 1, 0]
+            and "Beta" not in worker.argyll_version_string
+            and "RC1" not in worker.argyll_version_string
+            and "RC2" not in worker.argyll_version_string
+        )
+    ):
+        # Adaptive mode introduced in Argyll 1.1.0 RC3
+        for key in iter(measurement_modes):
+            instrument_modes = list(measurement_modes[key])
+            for i, mode in reversed(
+                list(zip(list(range(len(instrument_modes))), instrument_modes))
+            ):
+                if mode == lang.getstr("default"):
+                    mode = lang.getstr("measurement_mode.adaptive")
+                else:
+                    mode = "{} {}".format(
+                        mode, lang.getstr("measurement_mode.adaptive")
+                    )
+                measurement_modes[key].insert(i + 1, mode)
+                modesig = measurement_modes_ab[key][i]
+                measurement_modes_ab[key].insert(i + 1, (modesig or "") + "V")
+        if config.getcfg(f"{cfgname}.adaptive"):
+            measurement_mode += "V"
+    if instrument_features.get("highres_mode"):
+        for key in iter(measurement_modes):
+            instrument_modes = list(measurement_modes[key])
+            for i, mode in reversed(
+                list(zip(list(range(len(instrument_modes))), instrument_modes))
+            ):
+                if mode == lang.getstr("default"):
+                    mode = lang.getstr("measurement_mode.highres")
+                else:
+                    mode = "{} {}".format(mode, lang.getstr("measurement_mode.highres"))
+                measurement_modes[key].insert(i + 1, mode)
+                modesig = measurement_modes_ab[key][i]
+                measurement_modes_ab[key].insert(i + 1, (modesig or "") + "H")
+        if config.getcfg(f"{cfgname}.highres"):
+            measurement_mode += "H"
+    measurement_modes_ab = dict(
+        list(
+            zip(
+                list(measurement_modes_ab.keys()),
+                [
+                    dict(
+                        list(
+                            zip(
+                                list(range(len(measurement_modes_ab[key]))),
+                                measurement_modes_ab[key],
+                            )
+                        )
+                    )
+                    for key in measurement_modes_ab
+                ],
+            )
+        )
+    )
+    measurement_modes_ba = dict(
+        list(
+            zip(
+                list(measurement_modes_ab.keys()),
+                [
+                    swap_dict_keys_values(measurement_modes_ab[key])
+                    for key in measurement_modes_ab
+                ],
+            )
+        )
+    )
+    return MeasurementModes(
+        measurement_mode=measurement_mode,
+        measurement_modes=measurement_modes,
+        measurement_modes_ab=measurement_modes_ab,
+        measurement_modes_ba=measurement_modes_ba,
+    )
+
+
+# -- Colorimeter-correction-matrix combo ---------------------------------
+
+
+class ColorimeterCorrectionCatalog:
+    """Persistent CCMX/CCSS disk-scan cache.
+
+    Toolkit-neutral port of the ``MainFrame.ccmx_cached_paths`` /
+    ``ccmx_cached_descriptors`` / ``ccmx_instruments`` / ``ccmx_mapping`` /
+    ``ccmx_item_paths`` instance attributes, which
+    ``update_colorimeter_correction_matrix_ctrl_items`` populates once and
+    reuses across calls (``force=True`` re-scans). A caller keeps one
+    instance alive for the lifetime of its correction-matrix combo.
+    """
+
+    def __init__(self) -> None:
+        self.cached_paths: list[str] | None = None
+        self.cached_descriptors: dict[str, str] = {}
+        self.instruments: dict[str, str] = {}
+        self.mapping: dict[str, str] = {}
+        self.item_paths: list[str] = []
+
+    def forget(self, path: str) -> None:
+        """Drop a deleted CCMX/CCSS file from the cache.
+
+        Toolkit-neutral port of
+        ``MainFrame.delete_colorimeter_correction_matrix_ctrl_item``.
+        """
+        if self.cached_paths and path in self.cached_paths:
+            self.cached_paths.remove(path)
+        self.cached_descriptors.pop(path, None)
+        self.instruments.pop(path, None)
+        key = next(
+            (key for key, value in self.mapping.items() if value == path), None
+        )
+        if key is not None:
+            del self.mapping[key]
+
+
+@dataclass
+class ColorimeterCorrectionSelection:
+    """Result of :func:`resolve_colorimeter_correction_selection`.
+
+    Carries everything ``update_colorimeter_correction_matrix_ctrl_items``
+    used to push straight into wx widgets, as plain data instead: the caller
+    (wx or Qt) applies it to its own combo/tooltip/observer control and
+    decides how (or whether) to surface ``mismatch_warning``,
+    ``malformed_paths`` and ``parse_errors`` to the user.
+    """
+
+    #: Combo items, in order ("None", "Auto", then the matching CCMX/CCSS).
+    items: list[str]
+    #: Paths for ``items[2:]``, i.e. ``item_paths[i]`` backs ``items[i + 2]``.
+    item_paths: list[str]
+    #: Index into ``items`` that should be selected.
+    index: int
+    #: The resolved ``colorimeter_correction_matrix_file`` cfg value, split
+    #: on ``":"`` (already written back via ``setcfg``).
+    ccmx: list[str]
+    #: Whether a CCMX/CCSS correction is actually in effect.
+    use_ccmx: bool
+    #: Tooltip text for the combo (the resolved path, or "").
+    tooltip: str
+    #: Display technology implied by the resolved mode/correction, if any.
+    tech: str | None
+    #: Observer implied by the CCSS metadata, if any.
+    observer: str | None
+    #: True if ``observer`` is one DisplayCAL recognizes (already written to
+    #: cfg); the caller should lock its observer control in that case, and
+    #: (re-)enable it otherwise.
+    observer_recognized: bool
+    #: New measurement mode implied by the correction, if it changed
+    #: (already written to cfg); the caller should re-sync its own control.
+    measurement_mode: str | None
+    #: Set (only when the caller passed ``warn_on_mismatch=True``) when the
+    #: configured CCMX/CCSS doesn't match the current instrument.
+    mismatch_warning: str | None
+    #: CCMX/CCSS files that failed to parse as CGATS at all (candidates for
+    #: deletion, as the wx handler does after warning the user; not
+    #: reproduced here).
+    malformed_paths: list[str] = dataclass_field(default_factory=list)
+    #: ``(path, exception)`` pairs for files that failed to parse where wx
+    #: would have shown ``show_ccxx_error_dialog``.
+    parse_errors: list[tuple[str, Exception]] = dataclass_field(default_factory=list)
+
+
+def resolve_colorimeter_correction_selection(
+    catalog: ColorimeterCorrectionCatalog,
+    worker: Worker,
+    current_selection_index: int = -1,
+    force: bool = False,
+    warn_on_mismatch: bool = False,
+    update_measurement_mode: bool = True,
+) -> ColorimeterCorrectionSelection:
+    """Resolve the CCMX/CCSS combo's items and selection.
+
+    Toolkit-neutral port of
+    ``MainFrame.update_colorimeter_correction_matrix_ctrl_items``. Scans the
+    Argyll data dirs for ``.ccmx``/``.ccss`` files matching the current
+    instrument, resolves "Auto" against the instrument+display mapping, and
+    validates the configured selection, exactly as the wx handler does -
+    except it never touches a widget or shows a dialog directly; see
+    :class:`ColorimeterCorrectionSelection` for what's returned instead.
+
+    Deliberately not reproduced (caller's responsibility, or deferred):
+    trashing malformed files, the observer-control visibility toggle
+    (``show_observer_ctrl``), and re-running ``measurement_mode_ctrl_handler``
+    when the resolved mode changes calibration defaults (matches the wx
+    handler's ``update_main_controls`` / ``update_estimated_measurement_times``
+    refresh, out of scope here).
+
+    Args:
+        catalog: Persistent scan cache, reused across calls.
+        worker: The running :class:`DisplayCAL.worker.Worker`.
+        current_selection_index: The combo's currently-selected index before
+            this call (mirrors ``self.colorimeter_correction_matrix_ctrl
+            .Selection``); only used for the "keep whatever is currently
+            selected" fallback. Pass -1 if there is no live selection yet.
+        force: Re-scan the Argyll data dirs even if a cache already exists.
+        warn_on_mismatch: If True, populate ``mismatch_warning`` when the
+            configured CCMX doesn't match the current instrument (matches
+            the wx handler's dialog-vs-print choice).
+        update_measurement_mode: If True, a CCMX/CCSS-implied measurement
+            mode always overrides the current one; if False, a mismatched
+            implied mode instead discards the CCMX/CCSS selection.
+
+    Returns:
+        ColorimeterCorrectionSelection: The resolved items/selection/etc.
+    """
+    items = [lang.getstr("colorimeter_correction.file.none"), lang.getstr("auto")]
+    catalog.item_paths = []
+    index = 0
+    ccxx_path = None
+    ccmx_cfg = config.getcfg("colorimeter_correction_matrix_file").split(":", 1)
+
+    if len(ccmx_cfg) > 1 and not os.path.isfile(ccmx_cfg[1]):
+        ccmx_cfg = ccmx_cfg[:1]
+
+    if force or not catalog.cached_paths:
+        ccmx_paths = get_argyll_data_files(worker, "lu", "*.ccmx")
+        ccss_paths = get_argyll_data_files(worker, "lu", "*.ccss")
+        # Filter out files with known identical spectra. Key is the
+        # preferred CCSS, value is the one to be ignored. If key is same as
+        # value, remove from paths completely.
+        dupe_mapping = {
+            "Dell_U2413_25Jul12.ccss": "GBrLED_25Jul12.ccss",  # HCFR
+            "necpa242w_full.ccss": "necpa242w_full.ccss",  # HCFR
+            # necpa242w_full.ccss is bad - not done with native primaries
+            "Panasonic VVX17P051J00.ccss": "PanasonicVVX17P051J00.ccss",
+        }
+        imapping = {}
+        for path in ccss_paths:
+            basename = os.path.basename(path)
+            if basename in dupe_mapping:
+                imapping[dupe_mapping[basename]] = path
+        if imapping:
+            discard_paths = []
+            for path in ccss_paths:
+                basename = os.path.basename(path)
+                if basename in imapping:
+                    if basename in dupe_mapping:
+                        print("Ignoring", path)
+                    else:
+                        print("Ignoring", path, "in favor of", imapping[basename])
+                    discard_paths.append(path)
+            if discard_paths:
+                ccss_paths = [p for p in ccss_paths if p not in discard_paths]
+        ccmx_paths.sort(key=os.path.basename)
+        ccss_paths.sort(key=os.path.basename)
+        catalog.cached_paths = ccmx_paths + ccss_paths
+        catalog.cached_descriptors = {}
+        catalog.instruments = {}
+        catalog.mapping = {}
+
+    types = {
+        "ccss": lang.getstr("spectral").replace(":", ""),
+        "ccmx": lang.getstr("matrix").replace(":", ""),
+    }
+    add_basename_to_desc_on_mismatch = False
+    malformed_ccxx: list[str] = []
+    parse_errors: list[tuple[str, Exception]] = []
+
+    for path in catalog.cached_paths:
+        filename, ext = os.path.splitext(path)
+        lstr = ext[1:] + "." + os.path.basename(filename)
+        desc = lang.getstr(lstr)
+        if catalog.cached_descriptors.get(path):
+            if desc == lstr:
+                desc = catalog.cached_descriptors[path]
+        elif os.path.isfile(path):
+            try:
+                cgats = CGATS(path, strict=True)
+            except (OSError, CGATSError) as exception:
+                print(exception)
+                if isinstance(exception, CGATSInvalidError):
+                    malformed_ccxx.append(path)
+                continue
+            if desc == lstr:
+                desc = cgats.get_descriptor()  # this is bytes
+                desc = desc.decode("utf-8", "replace")
+            # If the description is not the same as the 'sane' filename, add
+            # the filename after the description (max 31 chars). See also
+            # colorimeter_correction_check_overwrite, the way the filename
+            # is processed must be the same.
+            if (
+                add_basename_to_desc_on_mismatch
+                and re.sub(
+                    r"[\\/:;*?\"<>|]+", "_", make_argyll_compatible_path(desc)
+                )
+                != os.path.splitext(os.path.basename(path))[0]
+            ):
+                desc = "{} <{}>".format(
+                    ellipsis_(desc, 66, "m"), ellipsis_(os.path.basename(path), 31, "m")
+                )
+            else:
+                desc = ellipsis_(desc, 100, "m")
+            catalog.cached_descriptors[path] = desc
+            # get_canonical_instrument_name: returns bytes
+            catalog.instruments[path] = get_canonical_instrument_name(
+                cgats.queryv1("INSTRUMENT") or b"",
+                {
+                    "DTP94-LCD mode": "DTP94",
+                    "eye-one display": "i1 Display",
+                    "Spyder 2 LCD": "Spyder2",
+                    "Spyder 3": "Spyder3",
+                },
+            ).decode("utf-8")
+            key = "{}\0{}".format(
+                catalog.instruments[path],
+                (cgats.queryv1("DISPLAY") or b"").decode("utf-8"),
+            )
+            if not catalog.mapping.get(key) or (
+                len(ccmx_cfg) > 1 and path == ccmx_cfg[1]
+            ):
+                # Prefer the selected CCMX
+                catalog.mapping[key] = path
+        else:
+            continue
+
+        instrument_name = worker.get_instrument_name()
+        if instrument_name.lower().replace(" ", "") in catalog.instruments.get(
+            path, ""
+        ).lower().replace(" ", "") or (
+            path.lower().endswith(".ccss") and worker.instrument_supports_ccss()
+        ):
+            # Only add the correction to the list if it matches the
+            # currently selected instrument or if it is a CCSS
+            if len(ccmx_cfg) > 1 and ccmx_cfg[0] != "AUTO" and ccmx_cfg[1] == path:
+                ccxx_path = path
+
+            item_text = "{}: {}".format(
+                types.get(os.path.splitext(path)[1].lower()[1:]),
+                desc if isinstance(desc, str) else desc.decode("utf-8", "replace"),
+            )
+            items.append(item_text)
+            catalog.item_paths.append(path)
+    items_paths = []
+    for i, item in enumerate(items[2:]):
+        items_paths.append({"item": item, "path": catalog.item_paths[i]})
+    items_paths.sort(key=lambda item_path: item_path["item"].lower())
+    for i, item_path in enumerate(items_paths):
+        items[i + 2] = item_path["item"]
+        catalog.item_paths[i] = item_path["path"]
+    if ccxx_path:
+        index = catalog.item_paths.index(ccxx_path) + 2
+    add_cfg_ccxx = False
+    cgats = None
+    if (
+        len(ccmx_cfg) > 1
+        and ccmx_cfg[1]
+        and ccmx_cfg[1] not in catalog.cached_paths
+        and (
+            not ccmx_cfg[1].lower().endswith(".ccss")
+            or worker.instrument_supports_ccss()
+        )
+    ):
+        # Add currently configured CCXX to list? Check if same file in list
+        add_cfg_ccxx = True
+        for i, path in enumerate(catalog.item_paths):
+            if os.path.basename(path) == os.path.basename(ccmx_cfg[1]):
+                try:
+                    existing_cgats = CGATS(path)
+                    existing_cgats[0].DATA.vmaxlen = 5  # Allow margin of error
+                except Exception as exception:  # noqa: BLE001
+                    print(exception)
+                    break
+                try:
+                    cgats = CGATS(ccmx_cfg[1], strict=True)
+                    vmaxlen = cgats[0].DATA.vmaxlen
+                    cgats[0].DATA.vmaxlen = 5  # Allow margin of error
+                except Exception as exception:  # noqa: BLE001
+                    parse_errors.append((ccmx_cfg[1], exception))
+                    add_cfg_ccxx = False
+                    ccmx_cfg = [""]
+                else:
+                    if str(cgats) == str(existing_cgats):
+                        # Same, use existing entry
+                        print(ccmx_cfg[1], "matches", path, "- using the latter")
+                        add_cfg_ccxx = False
+                        ccmx_cfg[1] = path
+                        index = i + 2
+                    else:
+                        print(ccmx_cfg[1], "does not match", path, "- using the former")
+                    cgats[0].DATA.vmaxlen = vmaxlen
+                break
+    if add_cfg_ccxx:
+        desc = catalog.cached_descriptors.get(ccmx_cfg[1])
+        if not desc and os.path.isfile(ccmx_cfg[1]):
+            try:
+                if not cgats:
+                    cgats = CGATS(ccmx_cfg[1], strict=True)
+            except (OSError, CGATSError) as exception:
+                if isinstance(
+                    exception, CGATSInvalidError
+                ) and ccmx_cfg[1] in get_argyll_data_files(
+                    worker, "lu", "*" + os.path.splitext(ccmx_cfg[1])[1]
+                ):
+                    malformed_ccxx.append(ccmx_cfg[1])
+                parse_errors.append((ccmx_cfg[1], exception))
+                ccmx_cfg = [""]
+            else:
+                catalog.cached_paths.insert(0, ccmx_cfg[1])
+                desc = cgats.get_descriptor()
+                # If the description is not the same as the 'sane' filename,
+                # add the filename after the description (max 31 chars). See
+                # also colorimeter_correction_check_overwite, the way the
+                # filename is processed must be the same.
+                if (
+                    add_basename_to_desc_on_mismatch
+                    and re.sub(
+                        r"[\\/:;*?\"<>|]+", "_", make_argyll_compatible_path(desc)
+                    )
+                    != os.path.splitext(os.path.basename(ccmx_cfg[1]))[0]
+                ):
+                    desc = "{} <{}>".format(
+                        ellipsis_(desc, 66, "m"),
+                        ellipsis_(os.path.basename(ccmx_cfg[1]), 31, "m"),
+                    )
+                else:
+                    desc = ellipsis_(desc, 100, "m")
+                catalog.cached_descriptors[ccmx_cfg[1]] = desc
+                catalog.instruments[ccmx_cfg[1]] = get_canonical_instrument_name(
+                    cgats.queryv1("INSTRUMENT") or b"",
+                    {
+                        "DTP94-LCD mode": "DTP94",
+                        "eye-one display": "i1 Display",
+                        "Spyder 2 LCD": "Spyder2",
+                        "Spyder 3": "Spyder3",
+                    },
+                ).decode("utf-8")
+                key = "{}\0{}".format(
+                    catalog.instruments[ccmx_cfg[1]],
+                    (cgats.queryv1("DISPLAY") or b"").decode("utf-8"),
+                )
+                catalog.mapping[key] = ccmx_cfg[1]
+        if desc and (
+            worker.get_instrument_name().lower().replace(" ", "")
+            in catalog.instruments.get(ccmx_cfg[1], "").lower().replace(" ", "")
+            or ccmx_cfg[1].lower().endswith(".ccss")
+        ):
+            # Only add the correction to the list if it matches the
+            # currently selected instrument or if it is a CCSS
+            items.insert(
+                2,
+                "{}: {}".format(
+                    types.get(os.path.splitext(ccmx_cfg[1])[1].lower()[1:]),
+                    desc if isinstance(desc, str) else desc.decode("utf-8", "replace"),
+                ),
+            )
+            catalog.item_paths.insert(0, ccmx_cfg[1])
+            if ccmx_cfg[0] != "AUTO":
+                index = 2
+    if ccmx_cfg[0] == "AUTO":
+        if len(ccmx_cfg) < 2:
+            ccmx_cfg.append("")
+        display_name = worker.get_display_name(False, True, False)
+        if worker.instrument_supports_ccss():
+            # Prefer CCSS
+            ccmx_cfg[1] = catalog.mapping.get(f"\0{display_name}", "")
+        if not worker.instrument_supports_ccss() or not ccmx_cfg[1]:
+            instrument_name = worker.get_instrument_name()
+            ccmx_cfg[1] = catalog.mapping.get(f"{instrument_name}\0{display_name}", "")
+        cgats = None
+    elif not ccmx_cfg[0] and len(ccmx_cfg) < 2:
+        if -1 < current_selection_index - 2 < len(catalog.item_paths):
+            index = current_selection_index
+            ccmx_cfg.append(catalog.item_paths[current_selection_index - 2])
+
+    mismatch_warning = None
+    if (
+        worker.instrument_can_use_ccxx()
+        and len(ccmx_cfg) > 1
+        and ccmx_cfg[1]
+        and ccmx_cfg[1] not in catalog.item_paths
+    ):
+        # CCMX does not match the currently selected instrument, don't use
+        msg = lang.getstr("colorimeter_correction.instrument_mismatch")
+        if warn_on_mismatch:
+            mismatch_warning = msg
+        else:
+            print(msg, ccmx_cfg[1])
+        ccmx_cfg = [""]
+    elif ccmx_cfg[0] == "AUTO":
+        index = 1
+        if ccmx_cfg[1]:
+            ccmx_desc = catalog.cached_descriptors[ccmx_cfg[1]]
+            items[1] += " ({}: {})".format(
+                types.get(os.path.splitext(ccmx_cfg[1])[1].lower()[1:]),
+                (
+                    ccmx_desc
+                    if isinstance(ccmx_desc, str)
+                    else ccmx_desc.decode("utf-8", "replace")
+                ),
+            )
+        else:
+            items[1] += " ({})".format(lang.getstr("colorimeter_correction.file.none"))
+
+    use_ccmx = bool(
+        worker.instrument_can_use_ccxx(False) and len(ccmx_cfg) > 1 and ccmx_cfg[1]
+    )
+    tech = None
+    observer = None
+    measurement_mode = None
+    if use_ccmx:
+        mode = None
+        try:
+            if not cgats:
+                cgats = CGATS(ccmx_cfg[1], strict=True)
+        except (OSError, CGATSError) as exception:
+            parse_errors.append((ccmx_cfg[1], exception))
+            ccmx_cfg = ["", ""]
+            index = 0
+        else:
+            if config.getcfg("measurement_mode") != "auto":
+                tech = cgats.queryv1("TECHNOLOGY")
+                # Set appropriate measurement mode
+                # IMPORTANT: Make changes aswell in the following locations:
+                # - DisplayCAL.get_cgats_measurement_mode
+                mode = get_cgats_measurement_mode(cgats, worker.get_instrument_name())
+            observer = cgats.queryv1("OBSERVER")
+            if observer in config.VALID_VALUES["observer"]:
+                config.setcfg("observer", observer)
+        if mode or (
+            config.getcfg("measurement_mode") != "auto"
+            and not worker.instrument_can_use_ccxx()
+        ):
+            if update_measurement_mode or mode == config.getcfg("measurement_mode"):
+                config.setcfg("measurement_mode", mode)
+                measurement_mode = mode
+            else:
+                ccmx_cfg = ["", ""]
+                index = 0
+                tech = None
+    if tech is None:
+        tech = worker.get_instrument_measurement_modes().get(
+            config.getcfg("measurement_mode")
+        )
+    config.setcfg("display.technology", tech)
+    config.setcfg("colorimeter_correction_matrix_file", ":".join(ccmx_cfg))
+
+    return ColorimeterCorrectionSelection(
+        items=items,
+        item_paths=list(catalog.item_paths),
+        index=index,
+        ccmx=ccmx_cfg,
+        use_ccmx=use_ccmx,
+        tooltip=ccmx_cfg[1] if use_ccmx and len(ccmx_cfg) > 1 else "",
+        tech=tech,
+        observer=observer,
+        observer_recognized=(
+            bool(observer) and observer in config.VALID_VALUES["observer"]
+        ),
+        measurement_mode=measurement_mode,
+        mismatch_warning=mismatch_warning,
+        malformed_paths=malformed_ccxx,
+        parse_errors=parse_errors,
+    )

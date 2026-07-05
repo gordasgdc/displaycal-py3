@@ -52,6 +52,7 @@ from qtpy.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
+    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -69,13 +70,16 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from DisplayCAL import config
+from DisplayCAL import colorimeter_correction, config
 from DisplayCAL import localization as lang
+from DisplayCAL.colorimeter_correction import ColorimeterCorrectionCatalog
 from DisplayCAL.config import DEFAULTS, getcfg, setcfg, writecfg
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import get_theme_pixmap
 from DisplayCAL.ui.base_window import BaseWindow
+from DisplayCAL.ui.colorimeter_correction_io import WebCheckController
+from DisplayCAL.ui.colorimeter_correction_window import CreateCorrectionWindow
 from DisplayCAL.ui.display_adjustment_window import DisplayAdjustmentWindow
 from DisplayCAL.ui.measure_frame import MeasureFrame
 from DisplayCAL.ui.measurement_flow import (
@@ -410,6 +414,16 @@ class MainWindow(BaseWindow):
         #: interactive calibration run.
         self._adjustment_window: DisplayAdjustmentWindow | None = None
         self._adjustment_controller: AdjustmentController | None = None
+        #: instrument type -> {combo index: mode code} / {mode code: index},
+        #: refreshed each time :meth:`update_measurement_mode_ctrl` repopulates
+        #: the measurement-mode combo (mirrors wx's ``measurement_modes_ab``
+        #: / ``measurement_modes_ba``).
+        self._measurement_modes_ab: dict[str, dict[int, str]] = {}
+        self._measurement_modes_ba: dict[str, dict[str, int]] = {}
+        #: Persistent CCMX/CCSS disk-scan cache for the correction-matrix combo.
+        self._ccmx_catalog = ColorimeterCorrectionCatalog()
+        self._ccxx_web_controller: WebCheckController | None = None
+        self._ccxx_create_window: CreateCorrectionWindow | None = None
 
         self._build_ui()
         self.init_menubar()
@@ -536,6 +550,13 @@ class MainWindow(BaseWindow):
         self.comport_ctrl = QComboBox()
         self.comport_ctrl.currentIndexChanged.connect(self.comport_ctrl_handler)
         instrument_form.addRow(lang.getstr("instrument"), self.comport_ctrl)
+        self.measurement_mode_ctrl = QComboBox()
+        self.measurement_mode_ctrl.currentIndexChanged.connect(
+            self.measurement_mode_ctrl_handler
+        )
+        instrument_form.addRow(
+            lang.getstr("measurement_mode"), self.measurement_mode_ctrl
+        )
         instrument_outer.addLayout(instrument_form)
 
         self.blacklevel_drift_compensation_cb = QCheckBox(
@@ -660,6 +681,67 @@ class MainWindow(BaseWindow):
         )
         output_levels_row.addStretch(1)
         outer.addLayout(output_levels_row)
+
+        # Colorimeter-correction-matrix (CCMX/CCSS) row.
+        ccmx_row = QHBoxLayout()
+        self.colorimeter_correction_matrix_label = QLabel(
+            lang.getstr("colorimeter_correction_matrix_file")
+        )
+        ccmx_row.addWidget(self.colorimeter_correction_matrix_label)
+        self.colorimeter_correction_matrix_ctrl = QComboBox()
+        self.colorimeter_correction_matrix_ctrl.currentIndexChanged.connect(
+            self.colorimeter_correction_matrix_ctrl_handler
+        )
+        ccmx_row.addWidget(self.colorimeter_correction_matrix_ctrl, 1)
+        self.colorimeter_correction_info_btn = QToolButton()
+        self.colorimeter_correction_info_btn.setAutoRaise(True)
+        self.colorimeter_correction_info_btn.setToolTip(
+            lang.getstr("colorimeter_correction.info")
+        )
+        info_pixmap = get_theme_pixmap(16, "info")
+        if not info_pixmap.isNull():
+            self.colorimeter_correction_info_btn.setIcon(info_pixmap)
+        self.colorimeter_correction_info_btn.clicked.connect(
+            self.colorimeter_correction_info_btn_handler
+        )
+        ccmx_row.addWidget(self.colorimeter_correction_info_btn)
+        self.colorimeter_correction_matrix_btn = QToolButton()
+        self.colorimeter_correction_matrix_btn.setAutoRaise(True)
+        self.colorimeter_correction_matrix_btn.setToolTip(
+            lang.getstr("colorimeter_correction_matrix_file.choose")
+        )
+        open_pixmap = get_theme_pixmap(16, "document-open")
+        if not open_pixmap.isNull():
+            self.colorimeter_correction_matrix_btn.setIcon(open_pixmap)
+        self.colorimeter_correction_matrix_btn.clicked.connect(
+            self.colorimeter_correction_matrix_btn_handler
+        )
+        ccmx_row.addWidget(self.colorimeter_correction_matrix_btn)
+        self.colorimeter_correction_web_btn = QToolButton()
+        self.colorimeter_correction_web_btn.setAutoRaise(True)
+        self.colorimeter_correction_web_btn.setToolTip(
+            lang.getstr("colorimeter_correction.web_check")
+        )
+        web_pixmap = get_theme_pixmap(16, "web")
+        if not web_pixmap.isNull():
+            self.colorimeter_correction_web_btn.setIcon(web_pixmap)
+        self.colorimeter_correction_web_btn.clicked.connect(
+            self.colorimeter_correction_web_btn_handler
+        )
+        ccmx_row.addWidget(self.colorimeter_correction_web_btn)
+        self.colorimeter_correction_create_btn = QToolButton()
+        self.colorimeter_correction_create_btn.setAutoRaise(True)
+        self.colorimeter_correction_create_btn.setToolTip(
+            lang.getstr("colorimeter_correction.create")
+        )
+        create_pixmap = get_theme_pixmap(16, "list-add")
+        if not create_pixmap.isNull():
+            self.colorimeter_correction_create_btn.setIcon(create_pixmap)
+        self.colorimeter_correction_create_btn.clicked.connect(
+            self.colorimeter_correction_create_btn_handler
+        )
+        ccmx_row.addWidget(self.colorimeter_correction_create_btn)
+        outer.addLayout(ccmx_row)
 
         outer.addStretch(1)
         return panel
@@ -1083,6 +1165,8 @@ class MainWindow(BaseWindow):
         self._sync_check("drift_compensation.blacklevel")
 
         self.update_display_lut_ctrl()
+        self.update_measurement_mode_ctrl()
+        self.update_colorimeter_correction_matrix_ctrl()
 
         override_delay = bool(
             int(getcfg("measure.override_min_display_update_delay_ms"))
@@ -1265,12 +1349,18 @@ class MainWindow(BaseWindow):
     def comport_ctrl_handler(self, index: int) -> None:
         """Persist the selected instrument (comport) number.
 
+        Mirrors wx's ``comport_ctrl_handler``: a new instrument changes which
+        measurement modes and CCMX/CCSS corrections are available, so both
+        get rebuilt for it.
+
         Args:
             index (int): The newly selected combo index.
         """
         if self._updating or index < 0:
             return
         setcfg("comport.number", index + 1)
+        self.update_measurement_mode_ctrl()
+        self.update_colorimeter_correction_matrix_ctrl()
 
     def observer_ctrl_handler(self, index: int) -> None:
         """Persist the selected standard observer.
@@ -1335,6 +1425,234 @@ class MainWindow(BaseWindow):
         """
         self.worker.enumerate_displays_and_ports(silent=True)
         self.update_controls()
+
+    def get_measurement_mode(self) -> str | None:
+        """Return the mode code for the currently selected combo entry.
+
+        Toolkit-neutral equivalent of wx's ``MainFrame.get_measurement_mode``.
+        """
+        instrument_type = colorimeter_correction.get_instrument_type(self.worker)
+        return self._measurement_modes_ab.get(instrument_type, {}).get(
+            self.measurement_mode_ctrl.currentIndex()
+        )
+
+    def measurement_mode_ctrl_handler(self, index: int) -> None:
+        """Persist the selected measurement mode.
+
+        Mirrors wx's ``measurement_mode_ctrl_handler``, minus the old-Argyll
+        "projector/adaptive mode unavailable" fallback dialogs (those only
+        applied to Argyll versions far older than anything this Qt port
+        targets).
+
+        Args:
+            index (int): The newly selected combo index.
+        """
+        if self._updating or index < 0:
+            return
+        code = self.get_measurement_mode()
+        instrument_features = self.worker.get_instrument_features()
+        if (
+            code
+            and self.worker.get_instrument_name() in ("ColorHug", "ColorHug2")
+            and "p" in code
+        ):
+            # ColorHug projector mode is just a correction matrix; avoid
+            # setting ColorMunki projector mode.
+            code = code.replace("p", "")
+        setcfg(
+            "measurement_mode",
+            (code.replace("V", "").replace("H", "") if code else None) or None,
+        )
+        if instrument_features.get("adaptive_mode"):
+            setcfg("measurement_mode.adaptive", 1 if code and "V" in code else 0)
+        if instrument_features.get("highres_mode"):
+            setcfg("measurement_mode.highres", 1 if code and "H" in code else 0)
+        setcfg("measurement_mode.projector", 1 if code and "p" in code else None)
+        self.update_colorimeter_correction_matrix_ctrl()
+
+    def update_measurement_mode_ctrl(self) -> None:
+        """Populate the measurement-mode combo for the current instrument.
+
+        Toolkit-neutral port of wx's ``update_measurement_modes`` via
+        :func:`colorimeter_correction.compute_measurement_modes`.
+        """
+        instrument_name = self.worker.get_instrument_name()
+        instrument_type = colorimeter_correction.get_instrument_type(self.worker)
+        result = colorimeter_correction.compute_measurement_modes(
+            self.worker, instrument_name, instrument_type
+        )
+        self._measurement_modes_ab = result.measurement_modes_ab
+        self._measurement_modes_ba = result.measurement_modes_ba
+        modes = result.measurement_modes[instrument_type]
+        was_updating = self._updating
+        self._updating = True
+        try:
+            self.measurement_mode_ctrl.clear()
+            self.measurement_mode_ctrl.addItems(modes)
+            if modes:
+                index = min(
+                    self._measurement_modes_ba[instrument_type].get(
+                        result.measurement_mode, 1
+                    ),
+                    len(modes) - 1,
+                )
+                self.measurement_mode_ctrl.setCurrentIndex(index)
+        finally:
+            self._updating = was_updating
+        mode = self.get_measurement_mode() or "l"
+        setcfg("measurement_mode", mode if mode == "auto" else mode[0])
+        self.measurement_mode_ctrl.setEnabled(
+            bool(self.worker.instruments) and bool(modes)
+        )
+
+    def update_colorimeter_correction_matrix_ctrl(self) -> None:
+        """Show or hide the CCMX/CCSS row, then refresh its items.
+
+        Toolkit-neutral port of wx's
+        ``update_colorimeter_correction_matrix_ctrl``.
+        """
+        show_control = (
+            self.worker.instrument_can_use_ccxx(False)
+            and not config.is_ccxx_testchart()
+            and getcfg("measurement_mode") != "auto"
+        )
+        for widget in (
+            self.colorimeter_correction_matrix_label,
+            self.colorimeter_correction_matrix_ctrl,
+            self.colorimeter_correction_info_btn,
+            self.colorimeter_correction_matrix_btn,
+            self.colorimeter_correction_web_btn,
+            self.colorimeter_correction_create_btn,
+        ):
+            widget.setVisible(show_control)
+        self.update_colorimeter_correction_matrix_ctrl_items()
+
+    def update_colorimeter_correction_matrix_ctrl_items(
+        self,
+        force: bool = False,
+        warn_on_mismatch: bool = False,
+        update_measurement_mode: bool = True,
+    ) -> colorimeter_correction.ColorimeterCorrectionSelection:
+        """Refresh the CCMX/CCSS combo's items and selection.
+
+        Toolkit-neutral port of wx's
+        ``update_colorimeter_correction_matrix_ctrl_items`` via
+        :func:`colorimeter_correction.resolve_colorimeter_correction_selection`.
+        Malformed-file trashing and the observer-control visibility toggle
+        (``show_observer_ctrl``) are not reproduced; see that function's
+        docstring for the full list of deliberate simplifications.
+
+        Args:
+            force: Re-scan the Argyll data dirs even if already cached.
+            warn_on_mismatch: Show a dialog (instead of only printing) when
+                the configured CCMX doesn't match the current instrument.
+            update_measurement_mode: If True, a CCMX/CCSS-implied
+                measurement mode always overrides the current one.
+        """
+        result = colorimeter_correction.resolve_colorimeter_correction_selection(
+            self._ccmx_catalog,
+            self.worker,
+            current_selection_index=self.colorimeter_correction_matrix_ctrl.currentIndex(),
+            force=force,
+            warn_on_mismatch=warn_on_mismatch,
+            update_measurement_mode=update_measurement_mode,
+        )
+        was_updating = self._updating
+        self._updating = True
+        try:
+            self.colorimeter_correction_matrix_ctrl.clear()
+            self.colorimeter_correction_matrix_ctrl.addItems(result.items)
+            self.colorimeter_correction_matrix_ctrl.setCurrentIndex(result.index)
+        finally:
+            self._updating = was_updating
+        self.colorimeter_correction_matrix_ctrl.setToolTip(result.tooltip)
+        self.colorimeter_correction_info_btn.setEnabled(result.use_ccmx)
+        if result.observer_recognized:
+            self.update_observers()
+            self.observer_ctrl.setEnabled(False)
+        else:
+            self.observer_ctrl.setEnabled(True)
+        if result.measurement_mode is not None:
+            self.update_measurement_mode_ctrl()
+        if result.mismatch_warning:
+            QMessageBox.warning(
+                self,
+                lang.getstr("colorimeter_correction_matrix_file"),
+                result.mismatch_warning,
+            )
+        return result
+
+    def colorimeter_correction_matrix_ctrl_handler(self, index: int) -> None:
+        """Persist the selected CCMX/CCSS correction (or None/Auto).
+
+        Args:
+            index (int): The newly selected combo index.
+        """
+        if self._updating or index < 0:
+            return
+        if index == 0:
+            ccmx = ["", ""]
+        elif index == 1:
+            ccmx = ["AUTO", ""]
+        else:
+            path_index = index - 2
+            if path_index >= len(self._ccmx_catalog.item_paths):
+                return
+            ccmx = ["", self._ccmx_catalog.item_paths[path_index]]
+        setcfg("colorimeter_correction_matrix_file", ":".join(ccmx))
+        self.update_colorimeter_correction_matrix_ctrl_items()
+
+    def colorimeter_correction_matrix_btn_handler(self) -> None:
+        """Browse for a CCMX/CCSS file and select it."""
+        ccmx = getcfg("colorimeter_correction_matrix_file").split(":", 1)
+        default_dir, default_file = config.get_verified_path(
+            None, ccmx[-1] if ccmx else ""
+        )
+        path, _filter = QFileDialog.getOpenFileName(
+            self,
+            lang.getstr("colorimeter_correction_matrix_file.choose"),
+            default_dir if default_file else config.get_argyll_data_dir(),
+            f"{lang.getstr('filetype.ccmx')} (*.ccmx *.ccss)",
+        )
+        if not path:
+            return
+        if (
+            getcfg("colorimeter_correction_matrix_file").split(":")[0] != "AUTO"
+            or path not in (self._ccmx_catalog.cached_paths or [])
+        ):
+            setcfg("colorimeter_correction_matrix_file", ":" + path)
+        self.update_colorimeter_correction_matrix_ctrl_items(warn_on_mismatch=True)
+
+    def colorimeter_correction_web_btn_handler(self) -> None:
+        """Check the online colorimeter-correction database."""
+        controller = WebCheckController(self.worker, self)
+        controller.finished.connect(self._on_ccxx_web_check_finished)
+        self._ccxx_web_controller = controller
+        controller.run()
+
+    def _on_ccxx_web_check_finished(self) -> None:
+        self._ccxx_web_controller = None
+        self.update_colorimeter_correction_matrix_ctrl_items(force=True)
+
+    def colorimeter_correction_create_btn_handler(self) -> None:
+        """Launch the standalone CCMX/CCSS creation window."""
+        window = CreateCorrectionWindow()
+        window.show()
+        self._ccxx_create_window = window
+
+    def colorimeter_correction_info_btn_handler(self) -> None:
+        """Plot the selected CCMX/CCSS's spectra or matrix.
+
+        Not yet ported (the wx ``CCXXPlot`` visualization is out of scope
+        for this Qt port slice, matching the deferral already made in
+        ``colorimeter_correction_io.py``).
+        """
+        QMessageBox.information(
+            self,
+            lang.getstr("colorimeter_correction.info"),
+            "Plotting colorimeter-correction spectra/matrices isn't "
+            "available in this Qt build yet.",
+        )
 
     def _display_delay_override_toggled(self, checked: bool) -> None:
         """Enable the delay spinbox and persist the override flag."""

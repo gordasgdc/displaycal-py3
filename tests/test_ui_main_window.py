@@ -274,6 +274,98 @@ def test_detect_displays_and_ports_btn_refreshes_controls(window, monkeypatch):
     assert calls == [True]
 
 
+def test_measurement_mode_ctrl_populates_and_persists(window):
+    assert window.measurement_mode_ctrl.count() >= 1
+    assert window.measurement_mode_ctrl.isEnabled() is True
+
+    window.measurement_mode_ctrl.setCurrentIndex(1)
+    code = window.get_measurement_mode()
+    assert getcfg("measurement_mode") == (code[0] if code != "auto" else code)
+
+
+def test_measurement_mode_ctrl_rebuilds_on_instrument_change(window):
+    before = [
+        window.measurement_mode_ctrl.itemText(i)
+        for i in range(window.measurement_mode_ctrl.count())
+    ]
+    window.comport_ctrl.setCurrentIndex(1)
+    # Rebuilding must not leave the combo empty/disabled for the new
+    # instrument (a regression guard for the comport -> measurement-mode
+    # refresh wiring, not a claim about the exact item set).
+    assert window.measurement_mode_ctrl.count() >= 1
+    assert window.measurement_mode_ctrl.isEnabled() is True
+    assert before  # sanity: there was something to compare against
+
+
+def test_colorimeter_correction_matrix_ctrl_hidden_when_ccxx_unsupported(window):
+    # The stub worker's default argyll_version ([0, 0, 0]) can't use CCXX.
+    assert window.colorimeter_correction_matrix_ctrl.isVisibleTo(window) is False
+
+
+def test_colorimeter_correction_matrix_ctrl_shown_when_ccxx_supported(window):
+    window.worker.argyll_version = [1, 5, 0]
+    window.update_colorimeter_correction_matrix_ctrl()
+    assert window.colorimeter_correction_matrix_ctrl.isVisibleTo(window) is True
+
+
+def test_colorimeter_correction_matrix_ctrl_handler_none_and_auto(window):
+    window.colorimeter_correction_matrix_ctrl_handler(0)
+    assert getcfg("colorimeter_correction_matrix_file") == ""
+
+    window.colorimeter_correction_matrix_ctrl_handler(1)
+    assert getcfg("colorimeter_correction_matrix_file").startswith("AUTO")
+
+
+def test_colorimeter_correction_matrix_btn_handler_cancelled_is_noop(
+    window, monkeypatch
+):
+    monkeypatch.setattr(
+        mw.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: ("", ""))
+    )
+    before = getcfg("colorimeter_correction_matrix_file")
+    window.colorimeter_correction_matrix_btn_handler()
+    assert getcfg("colorimeter_correction_matrix_file") == before
+
+
+def test_colorimeter_correction_web_btn_handler_refreshes_after_finish(
+    window, monkeypatch
+):
+    from DisplayCAL.ui import colorimeter_correction_io as ccio
+
+    def fake_run(self):
+        self.finished.emit()
+
+    monkeypatch.setattr(ccio.WebCheckController, "run", fake_run)
+    calls = []
+    monkeypatch.setattr(
+        window,
+        "update_colorimeter_correction_matrix_ctrl_items",
+        lambda *a, **k: calls.append((a, k)),
+    )
+    window.colorimeter_correction_web_btn_handler()
+    assert calls
+    assert window._ccxx_web_controller is None
+
+
+def test_colorimeter_correction_create_btn_handler_opens_window(window):
+    window.colorimeter_correction_create_btn_handler()
+    try:
+        assert window._ccxx_create_window is not None
+    finally:
+        window._ccxx_create_window.close()
+
+
+def test_colorimeter_correction_info_btn_handler_shows_notice(window, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        mw.QMessageBox,
+        "information",
+        staticmethod(lambda *a, **k: calls.append(True)),
+    )
+    window.colorimeter_correction_info_btn_handler()
+    assert calls == [True]
+
+
 def test_observer_ctrl_lives_on_calibration_tab(window):
     """wx puts ``observer_ctrl`` on the Calibration tab (``main.xrc``
     ``calibration_settings_panel``), not Display & Instrument; a regression
