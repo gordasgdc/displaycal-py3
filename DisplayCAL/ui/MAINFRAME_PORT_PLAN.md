@@ -328,11 +328,11 @@ Everything else the comparison surfaced was already-documented deferred scope,
 now visually confirmed rather than newly discovered: the colorful wx header
 banner (logo + tagline + `<Current>` settings-file selector with info/open/
 save/delete/download icons) had no Qt equivalent at the time (later built in
-Session 5, below); every tab's italic explanatory tip text (wx's
+Session 5, below); every tab's explanatory tip text (wx's
 `*_settings_info_panel`,
-e.g. "Profiling is the process of characterizing...") has no Qt equivalent
-either, a gap not previously called out explicitly but low-priority
-(informational text, not a bound control) and left as future scope; and the
+e.g. "Profiling is the process of characterizing..."; not italic despite the
+name — see Session 6) had no Qt equivalent at the time either (later built in
+Session 6, below); and the
 `show_advanced_options` menu toggle (Qt has no menu items beyond File yet)
 that in wx hides/shows a large fraction of controls across all four tabs by
 default (black level, colortemp locus, display-delay overrides, ffp insertion,
@@ -411,6 +411,51 @@ in `tests/test_ui_main_window.py` (100 total, up from 82), covering combo
 population/selection, preset loading (real bundled `.icc` presets, not
 fakes), and each button's handler including the background-thread archive
 path (mirroring `InstallProfileWindow`'s progress-dialog pattern).
+
+**Session 5 follow-up — header visual fixes.** Maintainer screenshot-compared
+the new banner against wx and flagged 3 issues, all fixed in `main_window.py`:
+the wordmark now uses `_header_banner_pixmap()` (crops wx's own
+`theme/header.png`/`header@2x.png` to its native `222x64` region instead of a
+bare, undersized `headericon.png`); the banner `QWidget` carries the artwork's
+baked-in top-to-bottom blue gradient (`#093d75`→`#0e59a9`) as a Qt stylesheet
+`qlineargradient` so it's consistent past the artwork's fixed width; and the 5
+header icon buttons are recolored white via `_header_icon_pixmap()` (unconditional,
+since the bar is always dark blue regardless of the app's own theme).
+
+**Session 6 — per-tab info panels (Session 4's "low-priority" gap).** Ported
+wx's `*_settings_info_panel` (`calibration_settings_info_panel`,
+`profile_settings_info_panel`, `lut3d_settings_info_panel`, and
+`display_instrument_info_panel`, which uniquely holds two stacked texts —
+a clock-icon "warm up" tip plus the usual dialog-information tip) to the
+bottom of each of the four Qt settings tabs. New `MainWindow._build_info_panel()`
+renders each `(icon_name, label_key)` row as a themed 32x32 icon beside a
+word-wrapped `QLabel`; `_info_text_html()` translates wx's
+`StaticFancyText` markup (`<font weight='bold'>` spans, blank-line paragraph
+breaks) into Qt rich text (`<b>`, `<p>`) rather than re-authoring the long,
+already-translated `info.*` strings from `lang/en.yaml`. Confirmed via
+`xh_fancytext.py`/`main.xrc`/`display_cal.py` that wx's info text is plain
+weight (not italic) apart from the bold spans — italic had been assumed in
+the Session 4 note but isn't actually wx's style.
+
+Each tab's builder now does `outer.addWidget(self._build_info_panel(...), 1)`
+in place of the old bare `outer.addStretch(1)`, so the panel itself — not an
+empty spacer — expands to fill the tab's remaining vertical space, matching
+wx's `option=1, wxEXPAND` sizer flag on the same panel; inside
+`_build_info_panel`, a trailing `grid.setRowStretch(len(rows), 1)` keeps the
+icon/text rows packed at the top of that expanding area instead of being
+vertically centered. Since these multi-paragraph texts can make a tab taller
+than the window (most visibly the 3D LUT tab's 5-subsection text), the
+settings `QStackedWidget` is now wrapped in a `QScrollArea`
+(`setWidgetResizable(True)`), mirroring wx's own `calpanel`
+(`wxScrolledWindow`, `wxHSCROLL|wxVSCROLL`) — previously the stack had no
+scroll wrapper since no prior tab content was tall enough to need one.
+Deliberately not reproduced: the wx `display_tech_info_show_btn` /
+`TooltipWindow` sub-feature (a separate button + hyperlinked popup describing
+LCD/OLED backlight technologies, `info.display_tech*` keys) — a distinct,
+larger mini-dialog feature rather than a tip-text gap, left as its own future
+slice. 6 new regression tests in `tests/test_ui_main_window.py` (106 total, up
+from 100): markup-to-HTML conversion, the scroll-area wrapping, and each
+tab's info text being present and translated.
 
 ### Stage 4 — Calibrate / measure / profile actions — **DONE (orchestration)**
 

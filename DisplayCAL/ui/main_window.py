@@ -55,6 +55,8 @@ from qtpy.QtWidgets import (
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -63,6 +65,7 @@ from qtpy.QtWidgets import (
     QProgressDialog,
     QPushButton,
     QRadioButton,
+    QScrollArea,
     QSizePolicy,
     QSlider,
     QSpinBox,
@@ -496,7 +499,15 @@ class MainWindow(BaseWindow):
         self._panels["lut3d"] = self._build_lut3d_tab()
         for key, _icon, _label in _TABS:
             self.stack.addWidget(self._panels[key])
-        layout.addWidget(self.stack, 1)
+
+        # wx wraps the equivalent tab content in a scrolled window
+        # (``calpanel``, ``wxHSCROLL|wxVSCROLL``) since the per-tab info
+        # panels below can make a tab taller than the window.
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        scroll_area.setWidget(self.stack)
+        layout.addWidget(scroll_area, 1)
 
         layout.addWidget(self._build_button_bar())
 
@@ -680,6 +691,64 @@ class MainWindow(BaseWindow):
             row.addWidget(button)
         row.addStretch(1)
         return bar
+
+    @staticmethod
+    def _info_text_html(label_key: str) -> str:
+        """Convert a wx ``StaticFancyText`` markup string to Qt rich text.
+
+        wx's markup (``<font weight='bold'>...</font>``, blank-line
+        paragraph breaks) isn't valid Qt rich text; translate it rather
+        than re-authoring the (long, translated) ``info.*`` strings.
+        """
+        text = lang.getstr(label_key)
+        text = text.replace("<font weight='bold'>", "<b>").replace(
+            "</font>", "</b>"
+        )
+        paragraphs = text.split("\n\n")
+        return "".join(
+            f"<p style='margin:0 0 8px 0'>{paragraph.replace(chr(10), '<br>')}</p>"
+            for paragraph in paragraphs
+        )
+
+    def _build_info_panel(self, *rows: tuple[str, str]) -> QWidget:
+        """Build a wx ``*_settings_info_panel`` equivalent.
+
+        Each row is an ``(icon_name, label_key)`` pair, rendered as a
+        32x32 themed icon beside word-wrapped rich text, matching wx's
+        white-background info panels (dialog-information/clock icon plus
+        a ``StaticFancyText``) shown at the bottom of each settings tab.
+        """
+        panel = QWidget()
+        panel.setStyleSheet(
+            "background-color: #ffffff;"
+            " border-top: 1px solid palette(mid);"
+        )
+        outer = QVBoxLayout(panel)
+        outer.setContentsMargins(16, 16, 16, 16)
+        outer.setSpacing(12)
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(12)
+        grid.setColumnStretch(1, 1)
+        for row_index, (icon_name, label_key) in enumerate(rows):
+            icon_label = QLabel()
+            pixmap = get_theme_pixmap(32, icon_name)
+            if not pixmap.isNull():
+                icon_label.setPixmap(pixmap)
+            icon_label.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+            grid.addWidget(icon_label, row_index, 0)
+            text_label = QLabel(self._info_text_html(label_key))
+            text_label.setTextFormat(Qt.RichText)
+            text_label.setWordWrap(True)
+            text_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+            text_label.setStyleSheet("color: #000000;")
+            grid.addWidget(text_label, row_index, 1)
+        # Keep icon/text rows packed at the top; push leftover vertical
+        # space (from the ``outer.addWidget(panel, 1)`` stretch factor at
+        # each tab's call site) into a trailing spacer row instead.
+        grid.setRowStretch(len(rows), 1)
+        outer.addLayout(grid)
+        return panel
 
     def _build_display_instrument_tab(self) -> QWidget:
         """Build the Display & Instrument settings panel."""
@@ -939,7 +1008,13 @@ class MainWindow(BaseWindow):
         ccmx_row.addWidget(self.colorimeter_correction_create_btn)
         outer.addLayout(ccmx_row)
 
-        outer.addStretch(1)
+        outer.addWidget(
+            self._build_info_panel(
+                ("clock", "info.display_instrument.warmup"),
+                ("dialog-information", "info.display_instrument"),
+            ),
+            1,
+        )
         return panel
 
     def _build_calibration_tab(self) -> QWidget:
@@ -1122,7 +1197,12 @@ class MainWindow(BaseWindow):
         form.addRow(lang.getstr("calibration.speed"), self._wrap(quality_row))
 
         outer.addLayout(form)
-        outer.addStretch(1)
+        outer.addWidget(
+            self._build_info_panel(
+                ("dialog-information", "info.calibration_settings")
+            ),
+            1,
+        )
         return panel
 
     def _build_profiling_tab(self) -> QWidget:
@@ -1164,7 +1244,12 @@ class MainWindow(BaseWindow):
         form.addRow(lang.getstr("profile.name"), self.profile_name_textctrl)
 
         outer.addLayout(form)
-        outer.addStretch(1)
+        outer.addWidget(
+            self._build_info_panel(
+                ("dialog-information", "info.profile_settings")
+            ),
+            1,
+        )
         return panel
 
     def _build_lut3d_tab(self) -> QWidget:
@@ -1236,7 +1321,12 @@ class MainWindow(BaseWindow):
         form.addRow("", self.lut3d_apply_black_offset_cb)
 
         outer.addLayout(form)
-        outer.addStretch(1)
+        outer.addWidget(
+            self._build_info_panel(
+                ("dialog-information", "info.3dlut_settings")
+            ),
+            1,
+        )
         return panel
 
     def _build_button_bar(self) -> QWidget:

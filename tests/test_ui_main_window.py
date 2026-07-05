@@ -1114,3 +1114,53 @@ def test_delete_calibration_handler_no_file_is_noop(window):
     setcfg("calibration.file", False)
 
     window.delete_calibration_handler()  # Should not raise.
+
+
+# --- per-tab info panels (wx's ``*_settings_info_panel`` / StaticFancyText) -
+
+
+def test_info_text_html_converts_bold_markup_and_paragraphs():
+    lang.init()
+    html = mw.MainWindow._info_text_html("info.calibration_settings")
+    assert "<b>Calibration</b>" in html
+    assert "<font" not in html
+    assert "<p" in html
+
+
+def test_settings_stack_is_wrapped_in_scroll_area(window):
+    # wx wraps the equivalent tab content in a scrolled window (``calpanel``)
+    # since the info panels below can make a tab taller than the window.
+    scroll_areas = window.findChildren(mw.QScrollArea)
+    assert any(area.widget() is window.stack for area in scroll_areas)
+
+
+def test_calibration_tab_has_info_panel_text(window):
+    lang.init()
+    labels = [lbl.text() for lbl in window._panels["calibration"].findChildren(mw.QLabel)]
+    assert any(
+        "<b>Calibration</b> is done by" in text for text in labels
+    )
+
+
+def test_profiling_tab_has_info_panel_text(window):
+    lang.init()
+    labels = [lbl.text() for lbl in window._panels["profiling"].findChildren(mw.QLabel)]
+    assert any("<b>Profiling</b> is the process" in text for text in labels)
+
+
+def test_lut3d_tab_has_info_panel_text(window):
+    lang.init()
+    labels = [lbl.text() for lbl in window._panels["lut3d"].findChildren(mw.QLabel)]
+    assert any("<b>3D LUT</b>" in text for text in labels)
+
+
+def test_display_instrument_tab_has_both_info_panel_texts(window):
+    lang.init()
+    labels = [
+        lbl.text()
+        for lbl in window._panels["display_instrument"].findChildren(mw.QLabel)
+    ]
+    assert any("<b>warm up</b>" in text for text in labels)
+    assert any(
+        "Disable any and all dynamic picture settings" in text for text in labels
+    )
