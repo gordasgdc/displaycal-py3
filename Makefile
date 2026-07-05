@@ -77,10 +77,14 @@ py2app:
 		codesign --force --deep --options runtime --entitlements misc/entitlements.plist --sign - "$$APP_PATH"; \
 	done; \
 	build_folder=$(ls dist | grep -i py2app.macosx); \
-	xattr -cr "dist/${build_folder}/DisplayCAL-${version}/DisplayCAL.app";
+	xattr -cr "dist/${build_folder}/DisplayCAL-${VERSION}/DisplayCAL.app";
 
 new-release:
 	@printf "\n\033[36m--- $@: Generating New Release ---\033[0m\n"
+	@if [ ! -d "$(VIRTUALENV_DIR)" ]; then \
+		printf "\n\033[31m--- $@: Virtualenv '$(VIRTUALENV_DIR)' not found, run 'make venv' first ---\033[0m\n"; \
+		exit 1; \
+	fi
 	git add $(VERSION_FILE)
 	git commit -m "Version $(VERSION)"
 	git push
@@ -91,11 +95,10 @@ new-release:
 	git push origin main --tags
 	@source ./$(VIRTUALENV_DIR)/bin/activate; \
 	printf "\n\033[36m--- $@: Using python interpreter '`which python`' ---\033[0m\n"; \
-	uv pip install -r requirements.txt; \
-	uv pip install -r requirements-dev.txt; \
+	uv pip install -r requirements.txt -r requirements-dev.txt; \
 	uv build; \
-	twine check dist/DisplayCAL-$(VERSION).tar.gz; \
-	twine upload dist/DisplayCAL-$(VERSION).tar.gz;
+	twine check dist/displaycal-$(VERSION).tar.gz; \
+	twine upload dist/displaycal-$(VERSION).tar.gz;
 
 .PHONY: tests
 tests:
