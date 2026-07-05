@@ -44,9 +44,10 @@ import contextlib
 import enum
 import os
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from qtpy.QtCore import Qt, QThread, QTimer, Signal
+from qtpy.QtGui import QPixmap
 from qtpy.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -59,6 +60,7 @@ from qtpy.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QProgressDialog,
     QPushButton,
     QRadioButton,
     QSizePolicy,
@@ -70,10 +72,11 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from DisplayCAL import colorimeter_correction, config
+from DisplayCAL import calibration_file, colorimeter_correction, config
 from DisplayCAL import localization as lang
+from DisplayCAL.cgats import CGATSError
 from DisplayCAL.colorimeter_correction import ColorimeterCorrectionCatalog
-from DisplayCAL.config import DEFAULTS, getcfg, setcfg, writecfg
+from DisplayCAL.config import DEFAULTS, get_verified_path, getcfg, setcfg, writecfg
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.options import TEST
 from DisplayCAL.ui.application import Application
@@ -91,10 +94,13 @@ from DisplayCAL.ui.measurement_flow import (
     observer_items,
     run_measureframe_subprocess,
 )
+from DisplayCAL.ui.profile_install_window import InstallProfileWindow
 from DisplayCAL.ui.progress_dialog import ProgressDialog
+from DisplayCAL.ui.tools.profile_info import ProfileInfoWindow
 from DisplayCAL.ui.worker_runner import AdjustmentController, WorkerRunController
 from DisplayCAL.util_decimal import stripzeros
-from DisplayCAL.worker import Worker
+from DisplayCAL.util_os import get_program_file
+from DisplayCAL.worker import Worker, get_options_from_cal, get_options_from_profile
 
 if TYPE_CHECKING:
     from qtpy.QtGui import QShowEvent
@@ -203,6 +209,33 @@ class _MeasureframeSubprocessThread(QThread):
 
     def _store_process(self, process: object) -> None:
         self.process = process
+
+
+class _SessionArchiveThread(QThread):
+    """Run :func:`~DisplayCAL.calibration_file.create_session_archive` off-thread.
+
+    The Qt equivalent of wx's ``worker.start(create_session_archive_consumer,
+    create_session_archive_producer, ...)`` pair (same one-shot-behind-a-
+    progress-dialog pattern as :class:`~DisplayCAL.ui.profile_install_window
+    ._InstallThread`).
+    """
+
+    #: Emitted with the archive result (``True``, or an ``Exception``).
+    done = Signal(object)
+
+    def __init__(
+        self,
+        request: calibration_file.SessionArchiveRequest,
+        exec_cmd: object,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._request = request
+        self._exec_cmd = exec_cmd
+
+    def run(self) -> None:  # noqa: D102 (QThread override)
+        result = calibration_file.create_session_archive(self._request, self._exec_cmd)
+        self.done.emit(result)
 
 
 def _as_float(value: object) -> float | None:
@@ -425,6 +458,14 @@ class MainWindow(BaseWindow):
         self._ccmx_catalog = ColorimeterCorrectionCatalog()
         self._ccxx_web_controller: WebCheckController | None = None
         self._ccxx_create_window: CreateCorrectionWindow | None = None
+        #: Recent calibrations/profiles (index 0 is always "", the "new
+        #: settings" choice) and bundled presets, mirroring wx's
+        #: ``MainFrame.recent_cals`` / ``.presets``.
+        self.recent_cals, self.presets = calibration_file.build_recent_calibrations()
+        self._install_profile_window: InstallProfileWindow | None = None
+        self._profile_info_window: ProfileInfoWindow | None = None
+        self._archive_thread: _SessionArchiveThread | None = None
+        self._archive_progress: QProgressDialog | None = None
 
         self._build_ui()
         self.init_menubar()
@@ -445,6 +486,7 @@ class MainWindow(BaseWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
+        layout.addWidget(self._build_header())
         layout.addWidget(self._build_tabbar())
 
         self.stack = QStackedWidget()
@@ -460,6 +502,107 @@ class MainWindow(BaseWindow):
 
         self.setCentralWidget(central)
         self._select_tab("display_instrument")
+
+    def _build_header(self) -> QWidget:
+        """Build the calibration/profile-file banner atop the tab bar.
+
+        Mirrors ``main.xrc``'s ``headerbordertop`` (green strip) + ``header``
+        (logo/tagline banner) + ``headerpanel`` (the functional current-file
+        bar: label, ``calibration_file_ctrl`` selector, and the info / load /
+        archive / delete / install-profile buttons) stack. Simplified versus
+        wx: the wordmark is the plain themed app icon plus ``APPNAME`` text
+        rather than wx's per-DPI cropped bitmap, and the bar's icon buttons
+        use their normal themed variants rather than wx's on-the-fly white
+        "-inverted" recolor.
+        """
+        container = QWidget()
+        outer = QVBoxLayout(container)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        strip = QWidget()
+        strip.setFixedHeight(6)
+        strip.setStyleSheet("background-color: #66CC00;")
+        outer.addWidget(strip)
+
+        banner = QWidget()
+        banner.setStyleSheet("background-color: #0e59a9;")
+        banner_row = QHBoxLayout(banner)
+        banner_row.setContentsMargins(16, 8, 16, 8)
+        icon_path = config.get_data_path("theme/headericon.png")
+        if icon_path:
+            icon_label = QLabel()
+            icon_label.setPixmap(
+                QPixmap(icon_path).scaledToHeight(32, Qt.SmoothTransformation)
+            )
+            banner_row.addWidget(icon_label)
+        tagline = QLabel(APPNAME)
+        tagline.setStyleSheet("color: white; font-weight: bold; font-size: 14pt;")
+        banner_row.addWidget(tagline)
+        banner_row.addStretch(1)
+        outer.addWidget(banner)
+
+        bar = QWidget()
+        bar.setObjectName("headerpanel")
+        bar.setStyleSheet("background-color: #0e59a9;")
+        bar_row = QHBoxLayout(bar)
+        bar_row.setContentsMargins(16, 8, 16, 8)
+        bar_row.setSpacing(8)
+
+        file_label = QLabel(lang.getstr("calibration.file"))
+        file_label.setStyleSheet("color: white;")
+        bar_row.addWidget(file_label)
+
+        self.calibration_file_ctrl = QComboBox()
+        self.calibration_file_ctrl.setMinimumWidth(220)
+        self.calibration_file_ctrl.currentIndexChanged.connect(
+            self.calibration_file_ctrl_handler
+        )
+        bar_row.addWidget(self.calibration_file_ctrl, 1)
+
+        self.profile_info_btn = self._header_tool_button(
+            "info", "profile.info", self.profile_info_btn_handler
+        )
+        bar_row.addWidget(self.profile_info_btn)
+
+        self.calibration_file_btn = self._header_tool_button(
+            "document-open", "calibration.load", self.load_cal_btn_handler
+        )
+        bar_row.addWidget(self.calibration_file_btn)
+
+        self.create_session_archive_btn = self._header_tool_button(
+            "package-x-generic",
+            "archive.create",
+            self.create_session_archive_handler,
+        )
+        bar_row.addWidget(self.create_session_archive_btn)
+
+        self.delete_calibration_btn = self._header_tool_button(
+            "edit-delete", "delete", self.delete_calibration_handler
+        )
+        bar_row.addWidget(self.delete_calibration_btn)
+
+        self.install_profile_btn = self._header_tool_button(
+            "install", "profile.install", self.install_profile_btn_handler
+        )
+        bar_row.addWidget(self.install_profile_btn)
+
+        outer.addWidget(bar)
+        return container
+
+    @staticmethod
+    def _header_tool_button(
+        icon_name: str, tooltip_key: str, slot: Callable[[], None]
+    ) -> QToolButton:
+        """Build one of the header bar's plain icon buttons."""
+        button = QToolButton()
+        pixmap = get_theme_pixmap(16, icon_name)
+        if not pixmap.isNull():
+            button.setIcon(pixmap)
+        button.setToolTip(lang.getstr(tooltip_key))
+        button.setAutoRaise(True)
+        button.clicked.connect(lambda _checked=False: slot())
+        return button
 
     def _build_tabbar(self) -> QWidget:
         """Build the exclusive toggle-button tab bar."""
@@ -1117,6 +1260,7 @@ class MainWindow(BaseWindow):
         """Repopulate every control from the current worker/config state."""
         self._updating = True
         try:
+            self.update_calibration_file_ctrl()
             self.update_displays()
             self.update_comports()
             self.update_observers()
@@ -2191,6 +2335,337 @@ class MainWindow(BaseWindow):
         self.worker.log(f"{APPNAME}: Calibration complete")
         if action is MeasurementAction.CALIBRATE_AND_PROFILE:
             self._run_profile_measurement()
+
+    # -- calibration/profile-file header bar --------------------------------
+
+    def update_calibration_file_ctrl(self) -> None:
+        """Repopulate ``calibration_file_ctrl`` from ``calibration.file``.
+
+        Mirrors wx's ``update_calibration_file_ctrl``: adds a newly-loaded
+        file to the recent list (persisting it to the ``recent_cals`` config
+        option), or drops it and falls back to "new settings" if it has gone
+        missing from disk. Simplified versus wx's incremental ``Freeze`` +
+        item patching: rebuilds the whole combo from ``self.recent_cals``
+        each time, which is cheap at this list's size.
+        """
+        cal = getcfg("calibration.file", False)
+        selection = calibration_file.resolve_calibration_selection(
+            cal, self.recent_cals
+        )
+        if selection.cal and selection.is_new_recent:
+            self.recent_cals.append(selection.cal)
+            unpreseted = calibration_file.get_unpreseted_recent_calibrations(
+                self.recent_cals, self.presets
+            )
+            setcfg("recent_cals", os.pathsep.join(unpreseted))
+        elif selection.missing:
+            self.recent_cals.remove(cal)
+        if not selection.cal:
+            setcfg("calibration.file", None)
+            setcfg("calibration.update", 0)
+
+        self.calibration_file_ctrl.blockSignals(True)
+        self.calibration_file_ctrl.clear()
+        self.calibration_file_ctrl.addItem(lang.getstr("settings.new"))
+        for recent_cal in self.recent_cals[1:]:
+            self.calibration_file_ctrl.addItem(
+                lang.getstr(os.path.basename(recent_cal))
+            )
+        if selection.cal:
+            idx = calibration_file.index_fallback_ignorecase(
+                self.recent_cals, selection.cal
+            )
+            self.calibration_file_ctrl.setCurrentIndex(max(idx, 0))
+            self.calibration_file_ctrl.setToolTip(selection.cal)
+        else:
+            self.calibration_file_ctrl.setCurrentIndex(0)
+            self.calibration_file_ctrl.setToolTip("")
+        self.calibration_file_ctrl.blockSignals(False)
+
+        has_cal = bool(selection.cal) and selection.cal not in self.presets
+        self.create_session_archive_btn.setEnabled(has_cal)
+        self.delete_calibration_btn.setEnabled(has_cal)
+        has_profile = bool(selection.profile_path) and selection.profile_exists
+        self.profile_info_btn.setEnabled(has_profile)
+        self.install_profile_btn.setEnabled(has_profile)
+
+    def calibration_file_ctrl_handler(self, index: int) -> None:
+        """Load the recent calibration/profile picked in the header combo.
+
+        Mirrors wx's handler for ``sel > 0``; selecting index 0 ("new
+        settings") just clears the stored file (wx's cross-frame
+        ``lut3dframe``/``reportframe`` resync on that path is a no-op here,
+        those tool windows aren't ported).
+        """
+        if self._updating or index <= 0 or index >= len(self.recent_cals):
+            return
+        self._load_calibration_file(self.recent_cals[index])
+
+    def load_cal_btn_handler(self) -> None:
+        """Prompt for a calibration/profile file and load it."""
+        default_dir, default_file = get_verified_path("last_cal_or_icc_path")
+        path, _selected_filter = QFileDialog.getOpenFileName(
+            self,
+            lang.getstr("calibration.load_from_cal_or_profile"),
+            f"{default_dir}/{default_file}" if default_file else default_dir,
+            f"{lang.getstr('filetype.cal_icc')} (*.cal *.icc *.icm)",
+        )
+        if not path:
+            return
+        setcfg("last_cal_or_icc_path", path)
+        self._load_calibration_file(path)
+
+    def _load_calibration_file(self, path: str, silent: bool = False) -> None:
+        """Load calibration/profile settings from ``path``.
+
+        Faithful port of the "modern" branch of wx's ``load_cal_handler``
+        (files with ``ARGYLL_DISPCAL_ARGS`` / ``ARGYLL_COLPROF_ARGS``
+        sections, i.e. anything DisplayCAL itself wrote) via
+        :mod:`DisplayCAL.calibration_file`. See that module's docstring for
+        what's deliberately not reproduced (legacy pre-args ``.cal`` files,
+        EDID-based display/instrument auto-matching, the 3D LUT HDR
+        config-mapper block).
+        """
+        if not path or not os.path.exists(path):
+            return
+        ext = os.path.splitext(path)[-1]
+        if ext.lower() in calibration_file.COMPRESSED_FILE_EXTENSIONS:
+            QMessageBox.information(
+                self,
+                self.windowTitle(),
+                "Importing session archives isn't available in this Qt "
+                "build yet.",
+            )
+            return
+
+        try:
+            profile, ti3_lines = calibration_file.parse_calibration_file(path)
+        except calibration_file.CalibrationFileError as exception:
+            QMessageBox.critical(self, self.windowTitle(), str(exception))
+            return
+
+        if ext.lower() in calibration_file.ICCPROFILE_FILE_EXTENSIONS:
+            options_dispcal, options_colprof = get_options_from_profile(profile)
+        else:
+            try:
+                options_dispcal, options_colprof = get_options_from_cal(path)
+            except (OSError, CGATSError):
+                QMessageBox.critical(
+                    self,
+                    self.windowTitle(),
+                    f"{lang.getstr('calibration.file.invalid')}\n{path}",
+                )
+                return
+
+        if not options_dispcal and not options_colprof:
+            if not silent:
+                QMessageBox.information(
+                    self,
+                    self.windowTitle(),
+                    f"{lang.getstr('no_settings')}\n{path}",
+                )
+            return
+
+        calibration_file.apply_calibration_options(options_dispcal, options_colprof)
+        setcfg("calibration.file", path)
+        if b"CTI3" in ti3_lines:
+            setcfg("testchart.file", path)
+        writecfg()
+        self.update_controls()
+        is_profile = ext.lower() in calibration_file.ICCPROFILE_FILE_EXTENSIONS
+        if is_profile or options_dispcal:
+            self._apply_vcgt(path, silent=True)
+
+    def _apply_vcgt(self, path: str, silent: bool = True) -> None:
+        """Load ``path``'s calibration curve onto the display's video LUT.
+
+        Synchronous simplification of wx's ``load_cal``/``install_cal``
+        (which only shows a progress dialog when not silent; the header
+        combo/button paths always call this silently, like wx's own
+        ``load_cal_handler`` does).
+        """
+        if config.is_virtual_display():
+            return
+        cmd, args = self.worker.prepare_dispwin(path, None, False)
+        if isinstance(cmd, Exception):
+            return
+        self.worker.exec_cmd(
+            cmd,
+            args,
+            capture_output=True,
+            low_contrast=False,
+            skip_scripts=True,
+            silent=silent,
+            title=lang.getstr("calibration.load_from_cal_or_profile"),
+        )
+
+    def profile_info_btn_handler(self) -> None:
+        """Show profile info for the currently selected calibration/profile."""
+        cal = getcfg("calibration.file", False)
+        selection = calibration_file.resolve_calibration_selection(
+            cal, self.recent_cals
+        )
+        if not (selection.profile_path and selection.profile_exists):
+            return
+        if self._profile_info_window is None:
+            self._profile_info_window = ProfileInfoWindow()
+        self._profile_info_window.load_profile(selection.profile_path)
+        self._profile_info_window.show()
+        self._profile_info_window.raise_()
+        self._profile_info_window.activateWindow()
+
+    def install_profile_btn_handler(self) -> None:
+        """Open the profile-install window, pre-loaded with the current profile."""
+        cal = getcfg("calibration.file", False)
+        selection = calibration_file.resolve_calibration_selection(
+            cal, self.recent_cals
+        )
+        if self._install_profile_window is None:
+            self._install_profile_window = InstallProfileWindow()
+        if selection.profile_path and selection.profile_exists:
+            self._install_profile_window.load_profile(selection.profile_path)
+        self._install_profile_window.show()
+        self._install_profile_window.raise_()
+        self._install_profile_window.activateWindow()
+
+    def create_session_archive_handler(self) -> None:
+        """Archive the current calibration/profile session to a 7z/zip/tgz file.
+
+        Faithful port of ``create_session_archive_handler`` via
+        :mod:`DisplayCAL.calibration_file`, running the archive creation on a
+        background thread behind an indeterminate progress dialog (the same
+        pattern as :class:`~DisplayCAL.ui.profile_install_window.InstallProfileWindow`).
+        """
+        cal = getcfg("calibration.file", False)
+        if not cal:
+            return
+        path_name = os.path.splitext(cal)[0]
+        sevenzip = get_program_file("7z", "7-zip")
+        file_format = "7z" if sevenzip else "zip"
+        default_dir, _default_file = get_verified_path("last_archive_save_path")
+        archive_path, selected_filter = QFileDialog.getSaveFileName(
+            self,
+            lang.getstr("archive.create"),
+            os.path.join(default_dir, f"{os.path.basename(path_name)}.{file_format}"),
+            self._archive_filter(sevenzip),
+        )
+        if not archive_path:
+            return
+        if sevenzip and "*.7z" not in selected_filter:
+            sevenzip = None
+        setcfg("last_archive_save_path", archive_path)
+
+        filenames, dirfilenames, dirname = calibration_file.session_archive_filenames(
+            cal
+        )
+        has_3dlut, lut3d_ext = calibration_file.session_archive_has_3dlut_files(
+            filenames, config.VALID_VALUES["3dlut.format"]
+        )
+        exclude_ext = None
+        if has_3dlut:
+            result = QMessageBox.question(
+                self,
+                self.windowTitle(),
+                lang.getstr("archive.include_3dluts"),
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+                QMessageBox.No,
+            )
+            if result == QMessageBox.Cancel:
+                return
+            if result == QMessageBox.No:
+                exclude_ext = lut3d_ext
+
+        request = calibration_file.SessionArchiveRequest(
+            dirname=dirname,
+            dirfilenames=dirfilenames,
+            filenames=filenames,
+            archive_path=archive_path,
+            exclude_ext=exclude_ext,
+            sevenzip=sevenzip,
+        )
+        self._run_session_archive(request)
+
+    @staticmethod
+    def _archive_filter(sevenzip: str | None) -> str:
+        """Build the ``QFileDialog`` save-filter string for the archive format."""
+        parts = []
+        if sevenzip:
+            parts.append(f"{lang.getstr('filetype.7z')} (*.7z)")
+        parts.append(f"{lang.getstr('filetype.zip')} (*.zip)")
+        parts.append(f"{lang.getstr('filetype.tgz')} (*.tgz)")
+        return ";;".join(parts)
+
+    def _run_session_archive(
+        self, request: calibration_file.SessionArchiveRequest
+    ) -> None:
+        self._archive_progress = QProgressDialog(
+            lang.getstr("archive.create"), "", 0, 0, self
+        )
+        self._archive_progress.setWindowTitle(self.windowTitle())
+        self._archive_progress.setCancelButton(None)
+        self._archive_progress.show()
+        self._archive_thread = _SessionArchiveThread(
+            request, self.worker.exec_cmd, parent=self
+        )
+        self._archive_thread.done.connect(self._on_session_archive_done)
+        self._archive_thread.start()
+
+    def _on_session_archive_done(self, result: object) -> None:
+        self._archive_thread = None
+        if self._archive_progress is not None:
+            self._archive_progress.close()
+            self._archive_progress = None
+        if not result or isinstance(result, Exception):
+            message = str(result) if isinstance(result, Exception) else lang.getstr(
+                "error"
+            )
+            QMessageBox.critical(self, self.windowTitle(), message)
+
+    def delete_calibration_handler(self) -> None:
+        """Delete the current calibration/profile and its related files.
+
+        Faithful port of ``delete_calibration_handler`` via
+        :mod:`DisplayCAL.calibration_file`; the confirmation dialog lists
+        related files as plain text rather than wx's individually-toggleable
+        checkbox list (all related files are always included), a UI
+        simplification.
+        """
+        cal = getcfg("calibration.file", False)
+        if not cal or not os.path.exists(cal):
+            return
+        try:
+            dircontents = os.listdir(os.path.dirname(cal))
+        except OSError as exception:
+            QMessageBox.critical(self, self.windowTitle(), str(exception))
+            return
+        related_files = calibration_file.related_files_for(cal, dircontents)
+        message = lang.getstr("dialog.confirm_delete")
+        if related_files:
+            message += "\n\n" + "\n".join(sorted(related_files))
+        result = QMessageBox.question(
+            self,
+            self.windowTitle(),
+            message,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if result != QMessageBox.Yes:
+            return
+        _deleted, orphaned = calibration_file.delete_related_files(cal, related_files)
+        if orphaned:
+            trashcan_key = {
+                "darwin": "trashcan.mac",
+                "win32": "trashcan.windows",
+            }.get(sys.platform, "trashcan.linux")
+            QMessageBox.critical(
+                self,
+                self.windowTitle(),
+                lang.getstr("error.deletion", lang.getstr(trashcan_key))
+                + "\n\n"
+                + "\n".join(os.path.basename(path) for path in orphaned),
+            )
+        setcfg("settings.changed", 1)
+        self.update_controls()
 
     # -- misc --------------------------------------------------------------
 

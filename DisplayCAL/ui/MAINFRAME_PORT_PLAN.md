@@ -222,8 +222,8 @@ covered by `tests/test_ui_main_window.py` (10 tests, headless offscreen). It
 provides:
 
 - `MainWindow(BaseWindow)` with menubar and geometry persistence (from
-  `BaseWindow`), a header-less vertical layout of tab bar + stacked panels +
-  action-button bar.
+  `BaseWindow`), a vertical layout of header bar + tab bar + stacked panels +
+  action-button bar (the header landed later, in Session 5 below).
 - A tab bar of exclusive `QToolButton` toggles (Display, Calibration, Profiling,
   3D LUT) switching a `QStackedWidget` — the Qt equivalent of the wx custom
   `TabButton` / show-hide-settings-panel mechanism.
@@ -327,9 +327,9 @@ algorithm (82 total in `tests/test_ui_main_window.py`, up from 80).
 Everything else the comparison surfaced was already-documented deferred scope,
 now visually confirmed rather than newly discovered: the colorful wx header
 banner (logo + tagline + `<Current>` settings-file selector with info/open/
-save/delete/download icons) has no Qt equivalent — this is intentional, not a
-gap, per this file's own "header-less vertical layout" description of the Qt
-shell; every tab's italic explanatory tip text (wx's `*_settings_info_panel`,
+save/delete/download icons) had no Qt equivalent at the time (later built in
+Session 5, below); every tab's italic explanatory tip text (wx's
+`*_settings_info_panel`,
 e.g. "Profiling is the process of characterizing...") has no Qt equivalent
 either, a gap not previously called out explicitly but low-priority
 (informational text, not a bound control) and left as future scope; and the
@@ -349,6 +349,60 @@ save-path launch buttons, profile-name token expansion + the `?` preview, the
 readouts, the black-point-rate advanced control, and the 3D LUT encoding /
 HDR / content-colorspace sub-controls. These depend on tools, dialogs or the
 Stage-4 flow and are rebuilt natively as those land.
+
+**Session 5 — calibration/profile-file header bar.** Built the banner Session 4
+flagged as missing: a new `_build_header()` in `main_window.py` adds the green
+strip + blue logo/tagline banner (plain themed app icon + `APPNAME` text rather
+than wx's per-DPI cropped bitmap) and, below it, the functional
+`calibration_file_ctrl` bar — the current-calibration/profile combo (recent
+files + bundled presets, matching wx's `recent_cals`/`presets` bootstrap) plus
+five icon buttons: profile info, load, create session archive, delete, and
+install profile. Chose full functional parity (not just the decorative
+banner) after sizing up the five wx handlers behind it: four
+(`install_profile_handler`, `create_session_archive_handler` +
+producer/consumer, `delete_calibration_handler`, `profile_info_handler`) are
+compact (60-100 lines) and already close to toolkit-neutral; the fifth,
+`load_cal_handler`, is ~890 lines but turned out to be almost entirely pure
+config manipulation already routed through `main_settings`'s per-option
+setters (Stage 0) — porting the *orchestration* around those setters was
+tractable once that was clear.
+
+New toolkit-neutral module `DisplayCAL/calibration_file.py` (mirroring the
+`profile_install.py` / `main_settings.py` precedent) holds: the
+`recent_cals`/`presets` bootstrap and current-file resolution
+(`build_recent_calibrations`, `resolve_calibration_selection`), calibration/
+profile file parsing (`parse_calibration_file`, faithful port of
+`parse_calibration_file`/`validate_icc_profile`/`validate_calibration_data`
+minus the wx dialogs), the `restore_defaults_handler` config-restore logic
+(`restore_defaults`), the dispcal/colprof option dispatch
+(`apply_calibration_options`, calling `main_settings`'s setters), the
+related-files-for-deletion scan (`related_files_for`, `delete_related_files`,
+using `send2trash` same as wx), and session-archive file selection/creation
+(`session_archive_filenames`, `session_archive_has_3dlut_files`,
+`create_session_archive`, faithful port of
+`create_session_archive_producer`). `InstallProfileWindow` (Stage 5+) gained a
+one-line public `load_profile(path)` wrapper around its existing `_load_path`
+so the header's install button can reuse it directly; the header's info
+button reuses `ProfileInfoWindow` the same way.
+
+Deliberately not reproduced (documented in `calibration_file.py`'s module
+docstring, not silently dropped): EDID/instrument-ID auto-matching of a
+loaded profile against the enumerated displays, and the "d" dispcal option's
+virtual-display auto-select (`-dweb`/`-dmadvr`, used by the `video_*`
+pattern-generator presets) — both already-deferred Pile-2 pattern-generator
+scope; the legacy pre-`ARGYLL_DISPCAL_ARGS` `.cal` parsing branch (vanishing
+real-world usage); the `3DLUT_*`/`SIMULATION_PROFILE` HDR config-mapper block
+(the 3D LUT tab's HDR/encoding sub-controls are already-tracked deferred
+scope above); cross-window resync with `lut3dframe`/`reportframe` (not ported
+to Qt); importing compressed session archives via the load button (shows a
+not-yet-available notice instead, matching the CCXX-info-button precedent);
+and the delete-confirmation dialog's per-file checkboxes (wx lets you
+individually toggle which related file gets deleted; Qt's confirmation lists
+them as plain text and always deletes all of them). 18 new regression tests
+in `tests/test_ui_main_window.py` (100 total, up from 82), covering combo
+population/selection, preset loading (real bundled `.icc` presets, not
+fakes), and each button's handler including the background-thread archive
+path (mirroring `InstallProfileWindow`'s progress-dialog pattern).
 
 ### Stage 4 — Calibrate / measure / profile actions — **DONE (orchestration)**
 

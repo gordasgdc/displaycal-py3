@@ -7,6 +7,7 @@ See ``DisplayCAL/ui/MAINFRAME_PORT_PLAN.md`` (Stage 3).
 """
 
 import os
+import time
 
 import pytest
 
@@ -840,3 +841,276 @@ def test_measurement_finished_success_logs(window, monkeypatch):
     window._on_measurement_finished(True)
 
     assert logged
+
+
+# --- calibration/profile-file header bar -----------------------------------
+
+
+def _srgb_preset_path(window):
+    """Return the bundled sRGB preset's path from the window's own recent_cals."""
+    for cal in window.recent_cals:
+        if os.path.basename(cal) == "sRGB.icc":
+            return cal
+    raise AssertionError("sRGB preset not found in recent_cals")
+
+
+def test_header_combo_lists_new_settings_and_presets(window):
+    items = [
+        window.calibration_file_ctrl.itemText(i)
+        for i in range(window.calibration_file_ctrl.count())
+    ]
+    assert items[0] == lang.getstr("settings.new")
+    assert lang.getstr("sRGB.icc") in items
+    assert len(items) == len(window.recent_cals)
+
+
+def test_header_buttons_disabled_without_calibration(window):
+    # ``config.initcfg()`` seeds ``calibration.file`` to the default preset the
+    # first time the (session-shared, test-isolated) config file is created;
+    # clear it explicitly so this test doesn't depend on run order.
+    setcfg("calibration.file", None)
+    window.update_controls()
+
+    assert not window.create_session_archive_btn.isEnabled()
+    assert not window.delete_calibration_btn.isEnabled()
+    assert not window.profile_info_btn.isEnabled()
+    assert not window.install_profile_btn.isEnabled()
+
+
+def test_load_calibration_file_applies_preset(window):
+    path = _srgb_preset_path(window)
+
+    window._load_calibration_file(path, silent=True)
+
+    assert getcfg("calibration.file") == path
+    assert getcfg("trc") == "s"
+    assert getcfg("trc.type") == "g"
+    assert window.calibration_file_ctrl.currentText() == lang.getstr("sRGB.icc")
+    # Bundled presets aren't archivable/deletable, matching wx.
+    assert not window.create_session_archive_btn.isEnabled()
+    assert not window.delete_calibration_btn.isEnabled()
+    assert window.profile_info_btn.isEnabled()
+    assert window.install_profile_btn.isEnabled()
+
+
+def test_calibration_file_ctrl_handler_loads_selected_recent(window):
+    path = _srgb_preset_path(window)
+    idx = window.recent_cals.index(path)
+
+    window.calibration_file_ctrl_handler(idx)
+
+    assert getcfg("calibration.file") == path
+
+
+def test_calibration_file_ctrl_handler_ignores_index_zero(window):
+    path = _srgb_preset_path(window)
+    setcfg("calibration.file", path)
+
+    window.calibration_file_ctrl_handler(0)
+
+    assert getcfg("calibration.file") == path
+
+
+def test_load_calibration_file_missing_path_is_noop(window):
+    before = getcfg("calibration.file", False)
+
+    window._load_calibration_file("/nonexistent/path/profile.icc")
+
+    assert getcfg("calibration.file", False) == before
+
+
+def test_load_calibration_file_rejects_archive_extension(window, monkeypatch):
+    infos = []
+    monkeypatch.setattr(
+        mw.QMessageBox, "information", lambda *a, **k: infos.append(a)
+    )
+    monkeypatch.setattr(mw.os.path, "exists", lambda _path: True)
+
+    window._load_calibration_file("/tmp/session.zip")
+
+    assert infos
+    assert getcfg("calibration.file", False) != "/tmp/session.zip"
+
+
+def test_load_cal_btn_handler_uses_file_dialog(window, monkeypatch):
+    path = _srgb_preset_path(window)
+    monkeypatch.setattr(
+        mw.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (path, ""))
+    )
+
+    window.load_cal_btn_handler()
+
+    assert getcfg("calibration.file") == path
+    assert getcfg("last_cal_or_icc_path") == path
+
+
+def test_load_cal_btn_handler_cancelled_is_noop(window, monkeypatch):
+    before = getcfg("calibration.file", False)
+    monkeypatch.setattr(
+        mw.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: ("", ""))
+    )
+
+    window.load_cal_btn_handler()
+
+    assert getcfg("calibration.file", False) == before
+
+
+def test_profile_info_btn_handler_opens_window(window, monkeypatch):
+    path = _srgb_preset_path(window)
+    window._load_calibration_file(path, silent=True)
+
+    class _FakeProfileInfoWindow:
+        def __init__(self):
+            self.loaded = None
+            self._visible = False
+
+        def load_profile(self, path):
+            self.loaded = path
+
+        def show(self):
+            self._visible = True
+
+        def raise_(self):
+            pass
+
+        def activateWindow(self):
+            pass
+
+    monkeypatch.setattr(mw, "ProfileInfoWindow", _FakeProfileInfoWindow)
+
+    window.profile_info_btn_handler()
+
+    assert window._profile_info_window.loaded == path
+    assert window._profile_info_window._visible
+
+
+def test_profile_info_btn_handler_noop_without_profile(window, monkeypatch):
+    setcfg("calibration.file", None)
+    calls = []
+    monkeypatch.setattr(mw, "ProfileInfoWindow", lambda: calls.append(True))
+
+    window.profile_info_btn_handler()
+
+    assert calls == []
+
+
+def test_install_profile_btn_handler_opens_window(window, monkeypatch):
+    path = _srgb_preset_path(window)
+    window._load_calibration_file(path, silent=True)
+
+    class _FakeInstallProfileWindow:
+        def __init__(self):
+            self.loaded = None
+            self._visible = False
+
+        def load_profile(self, path):
+            self.loaded = path
+
+        def show(self):
+            self._visible = True
+
+        def raise_(self):
+            pass
+
+        def activateWindow(self):
+            pass
+
+    monkeypatch.setattr(mw, "InstallProfileWindow", _FakeInstallProfileWindow)
+
+    window.install_profile_btn_handler()
+
+    assert window._install_profile_window.loaded == path
+
+
+def test_create_session_archive_handler_cancelled_is_noop(window, monkeypatch):
+    path = _srgb_preset_path(window)
+    setcfg("calibration.file", path)
+    monkeypatch.setattr(
+        mw.QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: ("", ""))
+    )
+
+    window.create_session_archive_handler()
+
+    assert window._archive_thread is None
+
+
+def test_create_session_archive_handler_no_file_is_noop(window):
+    setcfg("calibration.file", False)
+
+    window.create_session_archive_handler()
+
+    assert window._archive_thread is None
+
+
+def test_create_session_archive_handler_runs_and_completes(
+    window, monkeypatch, tmp_path, qapp
+):
+    cal_dir = tmp_path / "session"
+    cal_dir.mkdir()
+    cal_file = cal_dir / "test.cal"
+    cal_file.write_text("dummy")
+    setcfg("calibration.file", str(cal_file))
+    archive_path = tmp_path / "test.zip"
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (str(archive_path), "*.zip")),
+    )
+
+    window.create_session_archive_handler()
+
+    deadline = time.time() + 5.0
+    while window._archive_thread is not None and time.time() < deadline:
+        qapp.processEvents()
+        time.sleep(0.01)
+
+    assert archive_path.exists()
+    assert getcfg("last_archive_save_path") == str(archive_path)
+
+
+def test_delete_calibration_handler_declined_keeps_file(window, monkeypatch, tmp_path):
+    cal_dir = tmp_path / "session"
+    cal_dir.mkdir()
+    cal_file = cal_dir / "test.cal"
+    cal_file.write_text("dummy")
+    setcfg("calibration.file", str(cal_file))
+    monkeypatch.setattr(
+        mw.QMessageBox,
+        "question",
+        staticmethod(lambda *a, **k: mw.QMessageBox.No),
+    )
+
+    window.delete_calibration_handler()
+
+    assert cal_file.exists()
+    assert getcfg("calibration.file") == str(cal_file)
+
+
+def test_delete_calibration_handler_confirmed_removes_file(
+    window, monkeypatch, tmp_path
+):
+    cal_dir = tmp_path / "session"
+    cal_dir.mkdir()
+    cal_file = cal_dir / "test.cal"
+    cal_file.write_text("dummy")
+    setcfg("calibration.file", str(cal_file))
+    monkeypatch.setattr(
+        mw.QMessageBox,
+        "question",
+        staticmethod(lambda *a, **k: mw.QMessageBox.Yes),
+    )
+
+    window.delete_calibration_handler()
+
+    assert not cal_file.exists()
+    # Falls back to the default preset, matching wx's own ``setcfg(..., None)``
+    # (config resolves a cleared "calibration.file" to ``DEFAULTS`` rather than
+    # a falsy value).
+    assert getcfg("calibration.file") != str(cal_file)
+    assert getcfg("settings.changed") == 1
+
+
+def test_delete_calibration_handler_no_file_is_noop(window):
+    setcfg("calibration.file", False)
+
+    window.delete_calibration_handler()  # Should not raise.

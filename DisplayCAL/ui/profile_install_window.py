@@ -240,6 +240,10 @@ class InstallProfileWindow(BaseWindow):
         if path:
             self._load_path(path)
 
+    def load_profile(self, path: str) -> None:
+        """Pre-select ``path`` for installation, as if the user had browsed to it."""
+        self._load_path(path)
+
     def _load_path(self, path: str) -> None:
         try:
             profile = pi.load_installable_profile(path)
