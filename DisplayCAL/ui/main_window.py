@@ -59,6 +59,7 @@ from qtpy.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QRadioButton,
     QSizePolicy,
     QSlider,
     QSpinBox,
@@ -478,19 +479,187 @@ class MainWindow(BaseWindow):
         outer.setContentsMargins(16, 16, 16, 16)
         outer.setSpacing(12)
 
+        columns = QHBoxLayout()
+
         display_box = QGroupBox(lang.getstr("display"))
-        display_form = QFormLayout(display_box)
+        display_outer = QVBoxLayout(display_box)
+        display_row = QHBoxLayout()
+        display_form = QFormLayout()
         self.display_ctrl = QComboBox()
         self.display_ctrl.currentIndexChanged.connect(self.display_ctrl_handler)
         display_form.addRow(lang.getstr("display"), self.display_ctrl)
-        outer.addWidget(display_box)
+        self.display_lut_ctrl = QComboBox()
+        self.display_lut_ctrl.currentIndexChanged.connect(
+            self.display_lut_ctrl_handler
+        )
+        display_form.addRow(lang.getstr("lut_access"), self.display_lut_ctrl)
+        display_row.addLayout(display_form, 1)
+
+        self.display_lut_link_ctrl = QToolButton()
+        self.display_lut_link_ctrl.setCheckable(True)
+        self.display_lut_link_ctrl.setAutoRaise(True)
+        self.display_lut_link_ctrl.setToolTip(lang.getstr("display_lut.link"))
+        self.display_lut_link_ctrl.toggled.connect(
+            self.display_lut_link_ctrl_handler
+        )
+        display_row.addWidget(self.display_lut_link_ctrl)
+
+        self.detect_displays_and_ports_btn = QToolButton()
+        self.detect_displays_and_ports_btn.setAutoRaise(True)
+        self.detect_displays_and_ports_btn.setToolTip(
+            lang.getstr("detect_displays_and_ports")
+        )
+        refresh_pixmap = get_theme_pixmap(16, "stock_refresh")
+        if not refresh_pixmap.isNull():
+            self.detect_displays_and_ports_btn.setIcon(refresh_pixmap)
+        self.detect_displays_and_ports_btn.clicked.connect(
+            self.detect_displays_and_ports_btn_handler
+        )
+        display_row.addWidget(self.detect_displays_and_ports_btn)
+        display_outer.addLayout(display_row)
+
+        self.whitelevel_drift_compensation_cb = QCheckBox(
+            lang.getstr("drift_compensation.whitelevel")
+        )
+        self.whitelevel_drift_compensation_cb.setToolTip(
+            lang.getstr("drift_compensation.whitelevel.info")
+        )
+        self._add_check(
+            self.whitelevel_drift_compensation_cb, "drift_compensation.whitelevel"
+        )
+        display_outer.addWidget(self.whitelevel_drift_compensation_cb)
+        columns.addWidget(display_box, 1)
 
         instrument_box = QGroupBox(lang.getstr("instrument"))
-        instrument_form = QFormLayout(instrument_box)
+        instrument_outer = QVBoxLayout(instrument_box)
+        instrument_form = QFormLayout()
         self.comport_ctrl = QComboBox()
         self.comport_ctrl.currentIndexChanged.connect(self.comport_ctrl_handler)
         instrument_form.addRow(lang.getstr("instrument"), self.comport_ctrl)
-        outer.addWidget(instrument_box)
+        instrument_outer.addLayout(instrument_form)
+
+        self.blacklevel_drift_compensation_cb = QCheckBox(
+            lang.getstr("drift_compensation.blacklevel")
+        )
+        self.blacklevel_drift_compensation_cb.setToolTip(
+            lang.getstr("drift_compensation.blacklevel.info")
+        )
+        self._add_check(
+            self.blacklevel_drift_compensation_cb, "drift_compensation.blacklevel"
+        )
+        instrument_outer.addWidget(self.blacklevel_drift_compensation_cb)
+        columns.addWidget(instrument_box, 1)
+
+        outer.addLayout(columns)
+
+        # Display update delay / settle time overrides.
+        delay_form = QFormLayout()
+        override_delay_row = QHBoxLayout()
+        self.override_min_display_update_delay_ms_cb = QCheckBox(
+            lang.getstr("measure.override_min_display_update_delay_ms")
+        )
+        self.override_min_display_update_delay_ms_cb.toggled.connect(
+            self._display_delay_override_toggled
+        )
+        override_delay_row.addWidget(self.override_min_display_update_delay_ms_cb)
+        self.min_display_update_delay_ms_ctrl = QSpinBox()
+        min_val, max_val = config.VALID_RANGES["measure.min_display_update_delay_ms"]
+        self.min_display_update_delay_ms_ctrl.setRange(min_val, max_val)
+        self.min_display_update_delay_ms_ctrl.valueChanged.connect(
+            self._min_display_update_delay_ms_changed
+        )
+        override_delay_row.addWidget(self.min_display_update_delay_ms_ctrl)
+        self.min_display_update_delay_ms_label = QLabel("ms")
+        override_delay_row.addWidget(self.min_display_update_delay_ms_label)
+        override_delay_row.addStretch(1)
+        delay_form.addRow("", self._wrap(override_delay_row))
+
+        override_settle_row = QHBoxLayout()
+        self.override_display_settle_time_mult_cb = QCheckBox(
+            lang.getstr("measure.override_display_settle_time_mult")
+        )
+        self.override_display_settle_time_mult_cb.toggled.connect(
+            self._display_settle_time_mult_override_toggled
+        )
+        override_settle_row.addWidget(self.override_display_settle_time_mult_cb)
+        self.display_settle_time_mult_ctrl = QDoubleSpinBox()
+        min_val, max_val = config.VALID_RANGES["measure.display_settle_time_mult"]
+        self.display_settle_time_mult_ctrl.setDecimals(6)
+        self.display_settle_time_mult_ctrl.setSingleStep(min_val)
+        self.display_settle_time_mult_ctrl.setRange(min_val, max_val)
+        self.display_settle_time_mult_ctrl.valueChanged.connect(
+            self._display_settle_time_mult_changed
+        )
+        override_settle_row.addWidget(self.display_settle_time_mult_ctrl)
+        override_settle_row.addStretch(1)
+        delay_form.addRow("", self._wrap(override_settle_row))
+        outer.addLayout(delay_form)
+
+        # Flash-field-pattern insertion.
+        ffp_row = QHBoxLayout()
+        self.ffp_insertion_cb = QCheckBox(lang.getstr("ffp_insertion"))
+        self.ffp_insertion_cb.toggled.connect(self._ffp_insertion_toggled)
+        ffp_row.addWidget(self.ffp_insertion_cb)
+        ffp_row.addWidget(QLabel(lang.getstr("interval")))
+        self.ffp_insertion_interval_ctrl = QDoubleSpinBox()
+        min_val, max_val = config.VALID_RANGES[
+            "patterngenerator.ffp_insertion.interval"
+        ]
+        self.ffp_insertion_interval_ctrl.setDecimals(1)
+        self.ffp_insertion_interval_ctrl.setSingleStep(0.1)
+        self.ffp_insertion_interval_ctrl.setRange(min_val, max_val)
+        self.ffp_insertion_interval_ctrl.valueChanged.connect(
+            self._ffp_insertion_interval_changed
+        )
+        ffp_row.addWidget(self.ffp_insertion_interval_ctrl)
+        ffp_row.addWidget(QLabel("s"))
+        ffp_row.addWidget(QLabel(lang.getstr("duration")))
+        self.ffp_insertion_duration_ctrl = QDoubleSpinBox()
+        min_val, max_val = config.VALID_RANGES[
+            "patterngenerator.ffp_insertion.duration"
+        ]
+        self.ffp_insertion_duration_ctrl.setDecimals(1)
+        self.ffp_insertion_duration_ctrl.setSingleStep(0.1)
+        self.ffp_insertion_duration_ctrl.setRange(min_val, max_val)
+        self.ffp_insertion_duration_ctrl.valueChanged.connect(
+            self._ffp_insertion_duration_changed
+        )
+        ffp_row.addWidget(self.ffp_insertion_duration_ctrl)
+        ffp_row.addWidget(QLabel("s"))
+        ffp_row.addWidget(QLabel(lang.getstr("level")))
+        self.ffp_insertion_level_ctrl = QSpinBox()
+        self.ffp_insertion_level_ctrl.setRange(0, 100)
+        self.ffp_insertion_level_ctrl.valueChanged.connect(
+            self._ffp_insertion_level_changed
+        )
+        ffp_row.addWidget(self.ffp_insertion_level_ctrl)
+        ffp_row.addWidget(QLabel("%"))
+        ffp_row.addStretch(1)
+        outer.addLayout(ffp_row)
+
+        # Output levels (pattern-generator video-level detection).
+        output_levels_row = QHBoxLayout()
+        output_levels_row.addWidget(QLabel(lang.getstr("output_levels")))
+        self.output_levels_auto = QRadioButton(lang.getstr("auto"))
+        self.output_levels_full_range = QRadioButton(
+            lang.getstr("3dlut.encoding.type_n")
+        )
+        self.output_levels_limited_range = QRadioButton(
+            lang.getstr("3dlut.encoding.type_t")
+        )
+        self._output_levels_group = QButtonGroup(self)
+        for button in (
+            self.output_levels_auto,
+            self.output_levels_full_range,
+            self.output_levels_limited_range,
+        ):
+            self._output_levels_group.addButton(button)
+            output_levels_row.addWidget(button)
+        self._output_levels_group.buttonToggled.connect(
+            self._output_levels_changed
+        )
+        output_levels_row.addStretch(1)
+        outer.addLayout(output_levels_row)
 
         outer.addStretch(1)
         return panel
@@ -867,6 +1036,7 @@ class MainWindow(BaseWindow):
             self.update_displays()
             self.update_comports()
             self.update_observers()
+            self.update_display_instrument_controls()
             self.update_calibration_controls()
             self.update_profile_controls()
             self.update_lut3d_controls()
@@ -906,6 +1076,92 @@ class MainWindow(BaseWindow):
         current = getcfg("observer")
         if current in keys:
             self.observer_ctrl.setCurrentIndex(keys.index(current))
+
+    def update_display_instrument_controls(self) -> None:
+        """Push stored display/instrument config into their Qt controls."""
+        self._sync_check("drift_compensation.whitelevel")
+        self._sync_check("drift_compensation.blacklevel")
+
+        self.update_display_lut_ctrl()
+
+        override_delay = bool(
+            int(getcfg("measure.override_min_display_update_delay_ms"))
+        )
+        self.override_min_display_update_delay_ms_cb.setChecked(override_delay)
+        self.min_display_update_delay_ms_ctrl.setValue(
+            int(getcfg("measure.min_display_update_delay_ms"))
+        )
+        self.min_display_update_delay_ms_ctrl.setEnabled(override_delay)
+        self.min_display_update_delay_ms_label.setEnabled(override_delay)
+
+        override_settle = bool(
+            int(getcfg("measure.override_display_settle_time_mult"))
+        )
+        self.override_display_settle_time_mult_cb.setChecked(override_settle)
+        self.display_settle_time_mult_ctrl.setValue(
+            _as_float(getcfg("measure.display_settle_time_mult")) or 1.0
+        )
+        self.display_settle_time_mult_ctrl.setEnabled(override_settle)
+
+        self.ffp_insertion_cb.setChecked(
+            bool(int(getcfg("patterngenerator.ffp_insertion")))
+        )
+        self.ffp_insertion_interval_ctrl.setValue(
+            _as_float(getcfg("patterngenerator.ffp_insertion.interval")) or 0.0
+        )
+        self.ffp_insertion_duration_ctrl.setValue(
+            _as_float(getcfg("patterngenerator.ffp_insertion.duration")) or 0.0
+        )
+        self.ffp_insertion_level_ctrl.setValue(
+            round(
+                (_as_float(getcfg("patterngenerator.ffp_insertion.level")) or 0.0)
+                * 100
+            )
+        )
+
+        if getcfg("patterngenerator.detect_video_levels"):
+            self.output_levels_auto.setChecked(True)
+        elif getcfg("patterngenerator.use_video_levels"):
+            self.output_levels_limited_range.setChecked(True)
+        else:
+            self.output_levels_full_range.setChecked(True)
+
+    def update_display_lut_ctrl(self) -> None:
+        """Populate the display-LUT selector and sync the link toggle.
+
+        Mirrors wx's ``display_lut_link_ctrl_handler`` population half: the
+        LUT selector only lists displays the worker reports independent LUT
+        access for (``worker.lut_access``); when linked, its selection always
+        follows ``display_ctrl`` rather than the stored ``display_lut.number``.
+        """
+        names = display_items(self.worker.displays)
+        lut_access = self.worker.lut_access
+        lut_items = [
+            name
+            for i, name in enumerate(names)
+            if i < len(lut_access) and lut_access[i]
+        ]
+        self.display_lut_ctrl.clear()
+        self.display_lut_ctrl.addItems(lut_items)
+
+        linked = bool(int(getcfg("display_lut.link")))
+        self.display_lut_link_ctrl.setChecked(linked)
+        self._apply_display_lut_link_icon(linked)
+
+        target = None
+        if linked:
+            target = self.display_ctrl.currentText()
+        else:
+            number = getcfg("display_lut.number")
+            if 0 < number <= len(names):
+                target = names[number - 1]
+        index = (
+            lut_items.index(target)
+            if target in lut_items
+            else (0 if lut_items else -1)
+        )
+        self.display_lut_ctrl.setCurrentIndex(index)
+        self.display_lut_ctrl.setEnabled(not linked and bool(lut_items))
 
     def update_calibration_controls(self) -> None:
         """Push stored calibration config into the Calibration tab controls."""
@@ -1027,6 +1283,122 @@ class MainWindow(BaseWindow):
         keys = list(self._observers)
         if index < len(keys):
             setcfg("observer", keys[index])
+
+    def display_lut_ctrl_handler(self, index: int) -> None:
+        """Persist the selected display-LUT number.
+
+        Args:
+            index (int): The newly selected combo index.
+        """
+        if self._updating or index < 0:
+            return
+        name = self.display_lut_ctrl.itemText(index)
+        names = display_items(self.worker.displays)
+        if name in names:
+            setcfg("display_lut.number", names.index(name) + 1)
+
+    def display_lut_link_ctrl_handler(self, checked: bool) -> None:
+        """Toggle whether the display-LUT selection follows ``display_ctrl``.
+
+        Mirrors wx's ``display_lut_link_ctrl_handler``: when linked, the LUT
+        selector always tracks the selected display; when unlinked, it can be
+        set independently.
+
+        Args:
+            checked (bool): Whether the link toggle is now checked (linked).
+        """
+        self._apply_display_lut_link_icon(checked)
+        self.display_lut_ctrl.setEnabled(
+            not checked and self.display_lut_ctrl.count() > 0
+        )
+        if checked:
+            index = self.display_lut_ctrl.findText(self.display_ctrl.currentText())
+            if index >= 0:
+                self.display_lut_ctrl.setCurrentIndex(index)
+        if self._updating:
+            return
+        setcfg("display_lut.link", int(checked))
+
+    def _apply_display_lut_link_icon(self, linked: bool) -> None:
+        """Swap the link-toggle icon to reflect the current link state."""
+        pixmap = get_theme_pixmap(16, "stock_lock" if linked else "stock_lock-open")
+        if not pixmap.isNull():
+            self.display_lut_link_ctrl.setIcon(pixmap)
+
+    def detect_displays_and_ports_btn_handler(self) -> None:
+        """Re-enumerate displays/instruments and refresh every bound control.
+
+        A synchronous simplification of wx's ``check_update_controls`` (which
+        drives the same worker call through a progress dialog on a background
+        thread); the full worker-driven Argyll execution path is a later
+        slice (see the module docstring).
+        """
+        self.worker.enumerate_displays_and_ports(silent=True)
+        self.update_controls()
+
+    def _display_delay_override_toggled(self, checked: bool) -> None:
+        """Enable the delay spinbox and persist the override flag."""
+        self.min_display_update_delay_ms_ctrl.setEnabled(checked)
+        self.min_display_update_delay_ms_label.setEnabled(checked)
+        if self._updating:
+            return
+        setcfg("measure.override_min_display_update_delay_ms", int(checked))
+
+    def _min_display_update_delay_ms_changed(self, value: int) -> None:
+        """Persist the minimum display-update delay override value."""
+        if self._updating:
+            return
+        setcfg("measure.min_display_update_delay_ms", value)
+
+    def _display_settle_time_mult_override_toggled(self, checked: bool) -> None:
+        """Enable the settle-time-multiplier spinbox and persist the flag."""
+        self.display_settle_time_mult_ctrl.setEnabled(checked)
+        if self._updating:
+            return
+        setcfg("measure.override_display_settle_time_mult", int(checked))
+
+    def _display_settle_time_mult_changed(self, value: float) -> None:
+        """Persist the display-settle-time-multiplier override value."""
+        if self._updating:
+            return
+        setcfg("measure.display_settle_time_mult", value)
+
+    def _ffp_insertion_toggled(self, checked: bool) -> None:
+        """Persist whether flash-field-pattern insertion is enabled."""
+        if self._updating:
+            return
+        setcfg("patterngenerator.ffp_insertion", int(checked))
+
+    def _ffp_insertion_interval_changed(self, value: float) -> None:
+        """Persist the flash-field-pattern insertion interval (seconds)."""
+        if self._updating:
+            return
+        setcfg("patterngenerator.ffp_insertion.interval", value)
+
+    def _ffp_insertion_duration_changed(self, value: float) -> None:
+        """Persist the flash-field-pattern insertion duration (seconds)."""
+        if self._updating:
+            return
+        setcfg("patterngenerator.ffp_insertion.duration", value)
+
+    def _ffp_insertion_level_changed(self, value: int) -> None:
+        """Persist the flash-field-pattern insertion level (0-100 % -> 0-1)."""
+        if self._updating:
+            return
+        setcfg("patterngenerator.ffp_insertion.level", value / 100.0)
+
+    def _output_levels_changed(self, _button: QRadioButton, checked: bool) -> None:
+        """Persist the output-levels radio selection (auto / full / limited)."""
+        if self._updating or not checked:
+            return
+        setcfg(
+            "patterngenerator.detect_video_levels",
+            int(self.output_levels_auto.isChecked()),
+        )
+        setcfg(
+            "patterngenerator.use_video_levels",
+            int(self.output_levels_limited_range.isChecked()),
+        )
 
     # -- generic binder handlers ------------------------------------------
 

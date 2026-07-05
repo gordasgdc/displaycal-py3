@@ -183,6 +183,97 @@ def test_observer_selection_persists_key(window):
     assert getcfg("observer") == target
 
 
+def test_drift_compensation_checkboxes_persist(window):
+    window.whitelevel_drift_compensation_cb.setChecked(True)
+    assert getcfg("drift_compensation.whitelevel") == 1
+    window.blacklevel_drift_compensation_cb.setChecked(True)
+    assert getcfg("drift_compensation.blacklevel") == 1
+
+
+def test_display_delay_override_persists_and_toggles_enabled(window):
+    assert window.min_display_update_delay_ms_ctrl.isEnabled() is False
+    window.override_min_display_update_delay_ms_cb.setChecked(True)
+    assert getcfg("measure.override_min_display_update_delay_ms") == 1
+    assert window.min_display_update_delay_ms_ctrl.isEnabled() is True
+    window.min_display_update_delay_ms_ctrl.setValue(150)
+    assert getcfg("measure.min_display_update_delay_ms") == 150
+
+
+def test_display_settle_time_mult_override_persists_and_toggles_enabled(window):
+    assert window.display_settle_time_mult_ctrl.isEnabled() is False
+    window.override_display_settle_time_mult_cb.setChecked(True)
+    assert getcfg("measure.override_display_settle_time_mult") == 1
+    assert window.display_settle_time_mult_ctrl.isEnabled() is True
+    window.display_settle_time_mult_ctrl.setValue(2.5)
+    assert getcfg("measure.display_settle_time_mult") == 2.5
+
+
+def test_ffp_insertion_group_persists(window):
+    window.ffp_insertion_cb.setChecked(True)
+    assert getcfg("patterngenerator.ffp_insertion") == 1
+    window.ffp_insertion_interval_ctrl.setValue(2.5)
+    assert getcfg("patterngenerator.ffp_insertion.interval") == 2.5
+    window.ffp_insertion_duration_ctrl.setValue(3.5)
+    assert getcfg("patterngenerator.ffp_insertion.duration") == 3.5
+    window.ffp_insertion_level_ctrl.setValue(50)
+    assert getcfg("patterngenerator.ffp_insertion.level") == 0.5
+
+
+def test_output_levels_radio_group_persists(window):
+    window.output_levels_limited_range.setChecked(True)
+    assert getcfg("patterngenerator.detect_video_levels") == 0
+    assert getcfg("patterngenerator.use_video_levels") == 1
+
+    window.output_levels_full_range.setChecked(True)
+    assert getcfg("patterngenerator.detect_video_levels") == 0
+    assert getcfg("patterngenerator.use_video_levels") == 0
+
+    window.output_levels_auto.setChecked(True)
+    assert getcfg("patterngenerator.detect_video_levels") == 1
+
+
+def test_display_lut_ctrl_lists_only_lut_capable_displays(window):
+    window.worker.lut_access = [True, False]
+    window.update_display_lut_ctrl()
+    items = [
+        window.display_lut_ctrl.itemText(i)
+        for i in range(window.display_lut_ctrl.count())
+    ]
+    assert len(items) == 1
+    assert items[0] == window.display_ctrl.itemText(0)
+
+
+def test_display_lut_link_ctrl_follows_display_selection_when_linked(window):
+    window.worker.lut_access = [True, True]
+    setcfg("display_lut.link", 1)
+    window.update_display_lut_ctrl()
+    assert window.display_lut_ctrl.isEnabled() is False
+
+    window.display_ctrl.setCurrentIndex(1)
+    assert window.display_lut_ctrl.currentText() == window.display_ctrl.itemText(1)
+
+
+def test_display_lut_link_ctrl_unlinked_allows_independent_selection(window):
+    window.worker.lut_access = [True, True]
+    setcfg("display_lut.link", 0)
+    window.update_display_lut_ctrl()
+    assert window.display_lut_ctrl.isEnabled() is True
+
+    window.display_lut_ctrl.setCurrentIndex(1)
+    assert getcfg("display_lut.number") == 2
+
+
+def test_detect_displays_and_ports_btn_refreshes_controls(window, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        window.worker,
+        "enumerate_displays_and_ports",
+        lambda *a, **k: calls.append(True),
+    )
+    window.detect_displays_and_ports_btn.click()
+    assert calls == [True]
+
+
 def test_observer_ctrl_lives_on_calibration_tab(window):
     """wx puts ``observer_ctrl`` on the Calibration tab (``main.xrc``
     ``calibration_settings_panel``), not Display & Instrument; a regression
