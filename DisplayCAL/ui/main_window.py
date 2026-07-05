@@ -47,7 +47,7 @@ import sys
 from typing import TYPE_CHECKING, Callable
 
 from qtpy.QtCore import Qt, QThread, QTimer, Signal
-from qtpy.QtGui import QPixmap
+from qtpy.QtGui import QColor, QPainter, QPixmap
 from qtpy.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -503,17 +503,22 @@ class MainWindow(BaseWindow):
         self.setCentralWidget(central)
         self._select_tab("display_instrument")
 
+    #: Logical size (pt) of the wx ``get_header()`` wordmark bitmap.
+    _HEADER_BANNER_SIZE = (222, 64)
+
     def _build_header(self) -> QWidget:
         """Build the calibration/profile-file banner atop the tab bar.
 
         Mirrors ``main.xrc``'s ``headerbordertop`` (green strip) + ``header``
         (logo/tagline banner) + ``headerpanel`` (the functional current-file
         bar: label, ``calibration_file_ctrl`` selector, and the info / load /
-        archive / delete / install-profile buttons) stack. Simplified versus
-        wx: the wordmark is the plain themed app icon plus ``APPNAME`` text
-        rather than wx's per-DPI cropped bitmap, and the bar's icon buttons
-        use their normal themed variants rather than wx's on-the-fly white
-        "-inverted" recolor.
+        archive / delete / install-profile buttons) stack. The wordmark reuses
+        wx's own ``theme/header.png`` artwork (cropped to its logical banner
+        region) instead of a separately-assembled icon+text label, the banner
+        strip carries the same top-to-bottom blue gradient baked into that
+        artwork, and the bar's icon buttons are recolored white to mirror wx's
+        on-the-fly "-inverted" bitmaps (they sit on a permanently dark blue
+        bar regardless of the app's light/dark theme).
         """
         container = QWidget()
         outer = QVBoxLayout(container)
@@ -526,19 +531,20 @@ class MainWindow(BaseWindow):
         outer.addWidget(strip)
 
         banner = QWidget()
-        banner.setStyleSheet("background-color: #0e59a9;")
+        banner.setFixedHeight(self._HEADER_BANNER_SIZE[1])
+        banner.setStyleSheet(
+            "background: qlineargradient(x1:0, y1:0, x2:0, y2:1,"
+            " stop:0 #093d75, stop:1 #0e59a9);"
+        )
         banner_row = QHBoxLayout(banner)
-        banner_row.setContentsMargins(16, 8, 16, 8)
-        icon_path = config.get_data_path("theme/headericon.png")
-        if icon_path:
-            icon_label = QLabel()
-            icon_label.setPixmap(
-                QPixmap(icon_path).scaledToHeight(32, Qt.SmoothTransformation)
-            )
-            banner_row.addWidget(icon_label)
-        tagline = QLabel(APPNAME)
-        tagline.setStyleSheet("color: white; font-weight: bold; font-size: 14pt;")
-        banner_row.addWidget(tagline)
+        banner_row.setContentsMargins(0, 0, 0, 0)
+        banner_row.setSpacing(0)
+        banner_pixmap = self._header_banner_pixmap()
+        if not banner_pixmap.isNull():
+            image_label = QLabel()
+            image_label.setPixmap(banner_pixmap)
+            image_label.setFixedSize(*self._HEADER_BANNER_SIZE)
+            banner_row.addWidget(image_label)
         banner_row.addStretch(1)
         outer.addWidget(banner)
 
@@ -590,13 +596,58 @@ class MainWindow(BaseWindow):
         outer.addWidget(bar)
         return container
 
+    @classmethod
+    def _header_banner_pixmap(cls) -> QPixmap:
+        """Return the ``theme/header.png`` wordmark, cropped to its banner.
+
+        wx's ``get_header()`` draws the top ``222x64`` (logical) region of
+        this artwork, which already bakes in the logo flare, the
+        "DisplayCAL" wordmark and the same blue gradient as the surrounding
+        banner. Loads the ``@2x`` asset when available so it stays crisp on
+        HiDPI displays.
+        """
+        path = config.get_data_path(
+            "theme/header@2x.png"
+        ) or config.get_data_path("theme/header.png")
+        if not path:
+            return QPixmap()
+        source = QPixmap(path)
+        if source.isNull():
+            return source
+        w, h = cls._HEADER_BANNER_SIZE
+        ratio = source.width() / w
+        cropped = source.copy(0, 0, round(w * ratio), round(h * ratio))
+        cropped.setDevicePixelRatio(ratio)
+        return cropped
+
     @staticmethod
+    def _header_icon_pixmap(size: int, name: str) -> QPixmap:
+        """Recolor a themed icon white, mirroring wx's "-inverted" bitmaps.
+
+        The header bar's icon buttons sit on a permanently dark blue banner,
+        so (like wx) they always use the white variant regardless of the
+        app's light/dark theme.
+        """
+        pixmap = get_theme_pixmap(size, name)
+        if pixmap.isNull():
+            return pixmap
+        white = QPixmap(pixmap.size())
+        white.setDevicePixelRatio(pixmap.devicePixelRatio())
+        white.fill(Qt.transparent)
+        painter = QPainter(white)
+        painter.drawPixmap(0, 0, pixmap)
+        painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+        painter.fillRect(white.rect(), QColor("white"))
+        painter.end()
+        return white
+
+    @classmethod
     def _header_tool_button(
-        icon_name: str, tooltip_key: str, slot: Callable[[], None]
+        cls, icon_name: str, tooltip_key: str, slot: Callable[[], None]
     ) -> QToolButton:
         """Build one of the header bar's plain icon buttons."""
         button = QToolButton()
-        pixmap = get_theme_pixmap(16, icon_name)
+        pixmap = cls._header_icon_pixmap(16, icon_name)
         if not pixmap.isNull():
             button.setIcon(pixmap)
         button.setToolTip(lang.getstr(tooltip_key))

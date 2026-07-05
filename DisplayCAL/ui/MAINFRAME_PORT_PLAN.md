@@ -352,12 +352,20 @@ Stage-4 flow and are rebuilt natively as those land.
 
 **Session 5 — calibration/profile-file header bar.** Built the banner Session 4
 flagged as missing: a new `_build_header()` in `main_window.py` adds the green
-strip + blue logo/tagline banner (plain themed app icon + `APPNAME` text rather
-than wx's per-DPI cropped bitmap) and, below it, the functional
+strip + blue logo/tagline banner and, below it, the functional
 `calibration_file_ctrl` bar — the current-calibration/profile combo (recent
 files + bundled presets, matching wx's `recent_cals`/`presets` bootstrap) plus
 five icon buttons: profile info, load, create session archive, delete, and
-install profile. Chose full functional parity (not just the decorative
+install profile. The banner reuses wx's own `theme/header.png` artwork
+(`_header_banner_pixmap()`, cropped to its logical `222x64` banner region and
+loaded at `@2x` for HiDPI) rather than a separately-assembled icon+text label,
+so its baked-in top-to-bottom blue gradient and wordmark colors match wx
+exactly (the banner `QWidget` also carries that same gradient as a Qt
+stylesheet so it extends past the artwork's fixed width); the icon buttons are
+recolored white via `_header_icon_pixmap()` (a `QPainter`
+`CompositionMode_SourceIn` fill), mirroring wx's on-the-fly "-inverted"
+bitmaps, since they sit on a permanently dark blue bar regardless of the app's
+light/dark theme. Chose full functional parity (not just the decorative
 banner) after sizing up the five wx handlers behind it: four
 (`install_profile_handler`, `create_session_archive_handler` +
 producer/consumer, `delete_calibration_handler`, `profile_info_handler`) are
