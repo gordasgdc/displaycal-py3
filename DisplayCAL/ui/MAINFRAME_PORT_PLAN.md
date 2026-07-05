@@ -742,44 +742,56 @@ until the maintainer is ready to make Qt the default experience — not
 bundled into this stage.
 
 **Landed:** `DisplayCAL/ui/startup.py`, covered by `tests/test_ui_startup.py`
-(9 tests, headless offscreen with a fake worker). `StartupController` shows a
-`QSplashScreen` (the splash pixmap picked per `splash.simple`, message via
-`welcome_message()`) while `_EnumerateThread(QThread)` runs
-`Worker.enumerate_displays_and_ports` off the GUI thread — the Qt replacement
-for the wx `delayedresult.startWorker` producer/consumer pair — guarded by a
-20-second `QTimer` that calls `worker.abort_subprocess()` if enumeration hangs
-(matching wx's `CallLater(20000, ...)`). `should_enumerate_ports()` is the
-extracted, unit-tested port of the `enumerate_ports` kwarg derivation
-(`FORCE_SKIP_INITIAL_INSTRUMENT_DETECTION` / `enumerate_ports.auto` / instrument
-count). Enumeration always hands the populated `Worker` to the `on_ready`
-callback, even on exception (printed, not swallowed), matching wx's
-"proceed to the main window regardless" behaviour. `MainWindow.__init__` gained
-an optional `worker` parameter so it adopts this pre-enumerated worker instead
-of re-running `enumerate_displays_and_ports` synchronously on the GUI thread
-(the standalone/test path is unaffected: omitting `worker` keeps the original
-synchronous construction). `main.py::_get_qt_main(None)` now points at
-`startup.main` instead of `main_window.main` directly, so the `--qt`/
-`DISPLAYCAL_UI=qt` main-application entry point shows the splash first.
-Verified end to end against a real Argyll install headless: splash shows,
-background enumeration populates real display/instrument names, `MainWindow`
-picks them up with no second enumeration pass.
+(14 tests, headless offscreen with a fake worker and stubbed frames/sound).
+`StartupController` shows a `QSplashScreen` (the splash pixmap picked per
+`splash.simple`, message via `welcome_message()`) and runs two things
+concurrently rather than wx's serial animation-then-enumerate order:
 
-**Fixed after first landing:** dropping the wx zoom/fade animation left
-nothing holding the splash up when enumeration is fast, so on a quick Argyll
-install it could flash by too fast to read anything on it. `StartupController`
-now enforces a `_min_show_ms` (1200ms) floor: `_on_done` measures elapsed time
-since `start()` and defers the `on_ready` handoff via `QTimer.singleShot` for
-whatever remains, so the splash is visible for at least that long regardless
-of how fast enumeration finishes (slow enumeration is unaffected, it already
-exceeds the floor).
+- `_EnumerateThread(QThread)` runs `Worker.enumerate_displays_and_ports` off
+  the GUI thread — the Qt replacement for the wx `delayedresult.startWorker`
+  producer/consumer pair — guarded by a 20-second `QTimer` that calls
+  `worker.abort_subprocess()` if enumeration hangs (matching wx's
+  `CallLater(20000, ...)`). `should_enumerate_ports()` is the extracted,
+  unit-tested port of the `enumerate_ports` kwarg derivation
+  (`FORCE_SKIP_INITIAL_INSTRUMENT_DETECTION` / `enumerate_ports.auto` /
+  instrument count).
+- `_SplashAnimator` plays the wx icon-reveal (`theme/splash_anim`, 16 frames)
+  and fading-in version-number overlay (`theme/splash_version`, 11 alpha
+  steps via `load_version_frames()`), optionally preceded by the `splash.zoom`
+  ease-out zoom-in effect (`zoom_scales()`, ported from
+  `colormath.special_pow(t, -2084)`), composing each frame with `QPainter` and
+  pushing it via `QSplashScreen.setPixmap()` (re-applying `showMessage()` each
+  frame, since `setPixmap` clears it).
+- `play_startup_sound()` is the verbatim port of the `startup_sound.enable`
+  block (`audio.safe_init()` + `audio.Sound("theme/intro_new.wav")`).
+
+`StartupController._maybe_finish()` only hands the populated `Worker` to
+`on_ready` once *both* the animation and enumeration have finished (matching
+wx's "proceed to the main window regardless" behaviour even on an enumeration
+exception, which is printed, not swallowed), so the splash is naturally up for
+at least as long as the animation takes rather than an artificial timer —
+this also is what fixes the initial version's problem of the splash flashing
+by too fast to see anything on a fast Argyll install. `MainWindow.__init__`
+gained an optional `worker` parameter so it adopts this pre-enumerated worker
+instead of re-running `enumerate_displays_and_ports` synchronously on the GUI
+thread (the standalone/test path is unaffected: omitting `worker` keeps the
+original synchronous construction). `main.py::_get_qt_main(None)` now points
+at `startup.main` instead of `main_window.main` directly, so the `--qt`/
+`DISPLAYCAL_UI=qt` main-application entry point shows the splash first.
+Verified end to end against a real Argyll install headless: splash animates
+through all frames, sound subsystem initializes (`pyglet`), background
+enumeration populates real display/instrument names, `MainWindow` picks them
+up with no second enumeration pass.
 
 **Dropped** (Qt natively supports translucent PNG windows, none of this is
 needed): the desktop-screenshot-behind-a-shaped-window trick (`grab_image`,
 its macOS `screencapture` / Wayland `gnome-screenshot`/`spectacle` paths and
-gamma correction), the zoom-in/fade animation and frame-by-frame version-number
-fade, and the startup sound. **Deferred** (Pile 2 dialogs not yet ported): the
-update-check prompt and the instrument-setup/donation nag that wx runs right
-after the main window appears.
+gamma correction), and reapplying the base bitmap's alpha channel / blurring
+each zoom frame (`QImage` keeps alpha through scaling natively in Qt; the wx
+blur radius was sub-pixel anyway, so dropping it is invisible). **Deferred**
+(Pile 2 dialogs not yet ported): the update-check prompt and the
+instrument-setup/donation nag that wx runs right after the main window
+appears.
 
 ### Stage 7 — Retire wx code paths
 
