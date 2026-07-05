@@ -75,6 +75,7 @@ from DisplayCAL import localization as lang
 from DisplayCAL.colorimeter_correction import ColorimeterCorrectionCatalog
 from DisplayCAL.config import DEFAULTS, getcfg, setcfg, writecfg
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.options import TEST
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import get_theme_pixmap
 from DisplayCAL.ui.base_window import BaseWindow
@@ -507,6 +508,7 @@ class MainWindow(BaseWindow):
             self.display_lut_ctrl_handler
         )
         display_form.addRow(lang.getstr("lut_access"), self.display_lut_ctrl)
+        self._display_lut_form = display_form
         display_row.addLayout(display_form, 1)
 
         self.display_lut_link_ctrl = QToolButton()
@@ -1217,7 +1219,25 @@ class MainWindow(BaseWindow):
         LUT selector only lists displays the worker reports independent LUT
         access for (``worker.lut_access``); when linked, its selection always
         follows ``display_ctrl`` rather than the stored ``display_lut.number``.
+
+        Mirrors wx's ``update_scrollbars``/``display_lut_link_ctrl_handler``
+        row-visibility: the whole selector + link button are hidden unless the
+        worker reports (or the user has forced) separate LUT access, matching
+        wx's ``display_lut_sizer.Show(..., use_lut_ctrl)``. Also matches wx in
+        only ever considering this on Linux (``sys.platform not in ("darwin",
+        "win32")``, ignoring the ``-t``/``--test`` dev override), since macOS
+        and Windows never need separate video-card vs. LUT-capable display
+        selection.
         """
+        use_lut_ctrl = (sys.platform not in ("darwin", "win32") or TEST) and (
+            self.worker.has_separate_lut_access()
+            or bool(getcfg("use_separate_lut_access"))
+        )
+        self._display_lut_form.setRowVisible(self.display_lut_ctrl, use_lut_ctrl)
+        self.display_lut_link_ctrl.setVisible(use_lut_ctrl)
+        if not use_lut_ctrl:
+            setcfg("display_lut.link", 1)
+            return
         names = display_items(self.worker.displays)
         lut_access = self.worker.lut_access
         lut_items = [

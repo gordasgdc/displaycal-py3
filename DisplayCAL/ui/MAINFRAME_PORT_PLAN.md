@@ -239,7 +239,12 @@ provides:
   matching `main.xrc`'s `display_instrument_panel`: the display-LUT selector
   and link toggle (`display_lut_ctrl`/`display_lut_link_ctrl`, filtered to
   `Worker.lut_access`-capable displays, following `display_ctrl` while
-  linked); the `detect_displays_and_ports_btn` refresh button (a synchronous
+  linked, and — since a wx-vs-Qt screenshot comparison (Session 4, see below)
+  caught this row being unconditionally visible — now hidden unless
+  `Worker.has_separate_lut_access()` (or the `use_separate_lut_access`
+  override) says otherwise, and only ever considered on Linux, matching wx's
+  `sys.platform not in ("darwin", "win32")` gate around the whole feature;
+  the `detect_displays_and_ports_btn` refresh button (a synchronous
   simplification of wx's progress-dialog-driven `check_update_controls`);
   white/black-level drift compensation checkboxes; the display-update-delay
   and display-settle-time-multiplier override controls; the flash-field-
@@ -300,6 +305,42 @@ through generic `_add_check` / `_add_value_combo` helpers plus the `_updating`
 re-entrancy guard, so construction-time repopulation never clobbers stored
 config. The `get_*` settings getters deferred from Stage 0 are realised here as
 the control-reading logic behind these tabs.
+
+**Session 4 — wx-vs-Qt screenshot comparison.** Rendered every Qt settings tab
+(`QWidget.grab()`, offscreen) and every wx settings panel (`wx.WindowDC` +
+`wx.MemoryDC.Blit`, real window) side by side against an identical stubbed
+`Worker` (fixed fake displays/instruments, matching `tests/test_ui_main_window
+.py`'s `stub_worker`), the first rendered-pixel comparison done in this
+parity-hardening effort (previous sessions only diffed `main.xrc` structurally).
+Found and fixed one real regression: `display_lut_ctrl`/`display_lut_link_ctrl`
+(Session 2) were unconditionally visible in Qt, where wx only shows that row on
+Linux and only when `Worker.has_separate_lut_access()` (or
+`use_separate_lut_access`) is true — on macOS/Windows wx hides it
+unconditionally and forces `display_lut.link=1`. `update_display_lut_ctrl()`
+now reproduces both conditions (`sys.platform not in ("darwin", "win32")` gate
+plus the capability check) via `QFormLayout.setRowVisible`; 2 new regression
+tests added (`test_display_lut_row_hidden_on_macos_and_windows`,
+`test_display_lut_row_hidden_without_separate_lut_access`), and the 3 existing
+population tests now force `sys.platform = "linux"` so they still exercise the
+algorithm (82 total in `tests/test_ui_main_window.py`, up from 80).
+
+Everything else the comparison surfaced was already-documented deferred scope,
+now visually confirmed rather than newly discovered: the colorful wx header
+banner (logo + tagline + `<Current>` settings-file selector with info/open/
+save/delete/download icons) has no Qt equivalent — this is intentional, not a
+gap, per this file's own "header-less vertical layout" description of the Qt
+shell; every tab's italic explanatory tip text (wx's `*_settings_info_panel`,
+e.g. "Profiling is the process of characterizing...") has no Qt equivalent
+either, a gap not previously called out explicitly but low-priority
+(informational text, not a bound control) and left as future scope; and the
+`show_advanced_options` menu toggle (Qt has no menu items beyond File yet)
+that in wx hides/shows a large fraction of controls across all four tabs by
+default (black level, colortemp locus, display-delay overrides, ffp insertion,
+output levels, ambient/black-point-correction, observer, profile type/gamap/
+patch-sequence, 3D LUT encoding) — already tracked below, now confirmed via
+screenshots to be the single largest source of visible wx/Qt mismatch since Qt
+shows all of these unconditionally rather than gating them behind the toggle
+(default off in wx).
 
 **Deferred to later slices (Pile 2 / Stage 4-5):** the measure / visual-editor /
 ambient-measure buttons, the gamap and testchart-editor / file-picker / profile

@@ -232,7 +232,9 @@ def test_output_levels_radio_group_persists(window):
     assert getcfg("patterngenerator.detect_video_levels") == 1
 
 
-def test_display_lut_ctrl_lists_only_lut_capable_displays(window):
+def test_display_lut_ctrl_lists_only_lut_capable_displays(window, monkeypatch):
+    monkeypatch.setattr(mw.sys, "platform", "linux")
+    setcfg("use_separate_lut_access", 1)
     window.worker.lut_access = [True, False]
     window.update_display_lut_ctrl()
     items = [
@@ -243,7 +245,11 @@ def test_display_lut_ctrl_lists_only_lut_capable_displays(window):
     assert items[0] == window.display_ctrl.itemText(0)
 
 
-def test_display_lut_link_ctrl_follows_display_selection_when_linked(window):
+def test_display_lut_link_ctrl_follows_display_selection_when_linked(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw.sys, "platform", "linux")
+    setcfg("use_separate_lut_access", 1)
     window.worker.lut_access = [True, True]
     setcfg("display_lut.link", 1)
     window.update_display_lut_ctrl()
@@ -253,7 +259,11 @@ def test_display_lut_link_ctrl_follows_display_selection_when_linked(window):
     assert window.display_lut_ctrl.currentText() == window.display_ctrl.itemText(1)
 
 
-def test_display_lut_link_ctrl_unlinked_allows_independent_selection(window):
+def test_display_lut_link_ctrl_unlinked_allows_independent_selection(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw.sys, "platform", "linux")
+    setcfg("use_separate_lut_access", 1)
     window.worker.lut_access = [True, True]
     setcfg("display_lut.link", 0)
     window.update_display_lut_ctrl()
@@ -261,6 +271,25 @@ def test_display_lut_link_ctrl_unlinked_allows_independent_selection(window):
 
     window.display_lut_ctrl.setCurrentIndex(1)
     assert getcfg("display_lut.number") == 2
+
+
+def test_display_lut_row_hidden_on_macos_and_windows(window, monkeypatch):
+    """wx never shows this row on darwin/win32, regardless of capability."""
+    setcfg("use_separate_lut_access", 1)
+    window.worker.lut_access = [True, False]
+    for platform in ("darwin", "win32"):
+        monkeypatch.setattr(mw.sys, "platform", platform)
+        window.update_display_lut_ctrl()
+        assert window.display_lut_ctrl.count() == 0
+        assert getcfg("display_lut.link") == 1
+
+
+def test_display_lut_row_hidden_without_separate_lut_access(window, monkeypatch):
+    monkeypatch.setattr(mw.sys, "platform", "linux")
+    setcfg("use_separate_lut_access", 0)
+    window.worker.lut_access = [False, False]
+    window.update_display_lut_ctrl()
+    assert window.display_lut_ctrl.count() == 0
 
 
 def test_detect_displays_and_ports_btn_refreshes_controls(window, monkeypatch):
