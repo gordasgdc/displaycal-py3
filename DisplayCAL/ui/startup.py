@@ -32,8 +32,8 @@ import sys
 import traceback
 from typing import Callable
 
-from qtpy.QtCore import QObject, Qt, QThread, QTimer, Signal
-from qtpy.QtGui import QPainter, QPixmap
+from qtpy.QtCore import QObject, QRect, Qt, QThread, QTimer, Signal
+from qtpy.QtGui import QColor, QPainter, QPixmap
 from qtpy.QtWidgets import QSplashScreen
 
 from DisplayCAL import audio, colormath, config
@@ -98,7 +98,7 @@ def should_enumerate_ports() -> bool:
 
 
 def load_anim_frames() -> list[QPixmap]:
-    """Load the icon-reveal animation frames (``theme/splash_anim``).
+    """Load the icon-reveal animation frames (``theme/splash_anim_unpremultiplied``).
 
     Returns:
         list[QPixmap]: The frames in playback order (empty if missing).
@@ -208,6 +208,28 @@ class _EnumerateThread(QThread):
             self.done.emit(None)
 
 
+def _draw_embossed_message(painter: QPainter, w: int, h: int, message: str) -> None:
+    """Draw the status message with wx's raised/embossed text style.
+
+    Mirrors ``StartupFrame.Draw``'s three-pass label draw (a dark shadow,
+    then black, then light gray drawn last on top): wx never actually shows
+    solid black text, the topmost and most visible layer is light gray, with
+    a subtle dark bevel underneath it for contrast against both the lighter
+    and darker regions of the splash image.
+
+    Args:
+        painter (QPainter): The active painter to draw into.
+        w (int): The splash pixmap width.
+        h (int): The splash pixmap height.
+        message (str): The (possibly multi-line) status message.
+    """
+    rect = QRect(0, round(h * 0.75), w, 40)
+    align = int(Qt.AlignHCenter | Qt.AlignTop)
+    for color, dy in (("#101010", 2), ("#000000", 1), ("#CCCCCC", 0)):
+        painter.setPen(QColor(color))
+        painter.drawText(rect.translated(0, dy), align, message)
+
+
 class _SplashAnimator(QObject):
     """Drive the splash-screen icon-reveal / version-fade animation.
 
@@ -268,6 +290,7 @@ class _SplashAnimator(QObject):
         if index < len(self._zoom_scales):
             if self._anim_frames:
                 painter.drawPixmap(0, 0, self._anim_frames[0])
+            _draw_embossed_message(painter, w, h, self._message)
             painter.end()
             scale = self._zoom_scales[index]
             scaled = composite.scaled(
@@ -294,12 +317,10 @@ class _SplashAnimator(QObject):
             version_index = index - len(self._zoom_scales) - len(self._anim_frames)
             if 0 <= version_index < len(self._version_frames):
                 painter.drawPixmap(0, 0, self._version_frames[version_index])
+            _draw_embossed_message(painter, w, h, self._message)
             painter.end()
             frame_pixmap = composite
         self._splash.setPixmap(frame_pixmap)
-        self._splash.showMessage(
-            self._message, int(Qt.AlignHCenter | Qt.AlignBottom), Qt.black
-        )
 
 
 class StartupController(QObject):
@@ -318,6 +339,9 @@ class StartupController(QObject):
     #: ``wx.CallLater(20000, self.worker.abort_subprocess)``).
     _timeout_ms = 20000
 
+    #: Extra time to hold the splash up once animation + enumeration finish.
+    _hold_ms = 1000
+
     def __init__(
         self,
         on_ready: Callable[[Worker], None],
@@ -326,7 +350,14 @@ class StartupController(QObject):
         super().__init__()
         self.worker = worker if worker is not None else Worker()
         self._on_ready = on_ready
-        self.splash = QSplashScreen(splash_pixmap())
+        self.splash = QSplashScreen(
+            splash_pixmap(), Qt.WindowStaysOnTopHint | Qt.SplashScreen
+        )
+        # Requires the splash/anim/version PNGs to carry a correctly
+        # premultiplied alpha channel (no baked-in matte on the antialiased
+        # edges); otherwise the edge pixels' matte color shows through as a
+        # fringe against the real desktop.
+        self.splash.setAttribute(Qt.WA_TranslucentBackground)
         self._animator = _SplashAnimator(self.splash, welcome_message())
         self._thread: _EnumerateThread | None = None
         self._enum_done = False
@@ -339,6 +370,8 @@ class StartupController(QObject):
     def start(self) -> None:
         """Show the splash screen and start the animation + enumeration."""
         self.splash.show()
+        self.splash.raise_()
+        self.splash.activateWindow()
         play_startup_sound()
         self._timeout_timer.start(self._timeout_ms)
         self._thread = _EnumerateThread(self.worker, should_enumerate_ports(), self)
@@ -363,7 +396,7 @@ class StartupController(QObject):
             traceback.print_exception(
                 type(self._enum_error), self._enum_error, self._enum_error.__traceback__
             )
-        self._on_ready(self.worker)
+        QTimer.singleShot(self._hold_ms, lambda: self._on_ready(self.worker))
 
 
 def main() -> int:
