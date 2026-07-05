@@ -36,7 +36,19 @@ modules:
       build-args:
         - --share=network
     build-commands:
-      - pip3 install --prefix=/app wxPython==4.2.2
+      # wxPython has no PyPI wheel for Linux, so a plain `pip install
+      # wxPython` builds it from source, which is what made this module the
+      # slowest part of the build by far. Pull the prebuilt wheel from
+      # extras.wxpython.org instead (same source our pytest.yml CI uses),
+      # matching it to whatever Python version org.freedesktop.Sdk ships.
+      # It's built against Ubuntu 24.04's GTK3/WebKit2GTK, not the SDK's own,
+      # so if the resulting wxPython fails to import at runtime, that ABI
+      # mismatch is the first thing to suspect and this module should fall
+      # back to building from source.
+      - >-
+        py_tag=$(python3 -c "import sys; print(f'{sys.version_info[0]}{sys.version_info[1]}')") &&
+        pip3 install --prefix=/app
+        "https://extras.wxpython.org/wxPython4/extras/linux/gtk3/ubuntu-24.04/wxPython-4.2.2-cp${py_tag}-cp${py_tag}-linux_x86_64.whl"
 
   - name: python-dbus
     buildsystem: simple
