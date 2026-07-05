@@ -469,10 +469,10 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Install runtime libraries needed by wxPython
+      - name: Install runtime libraries needed by wxPython, and dbus-python build deps
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y libgtk-3-0 libnotify4 libsdl2-2.0-0 libwebkit2gtk-4.1-0
+          sudo apt-get install -y libgtk-3-0 libnotify4 libsdl2-2.0-0 libwebkit2gtk-4.1-0 libdbus-1-dev
 
       - name: Install Python build dependencies
         run: uv pip install --system wheel

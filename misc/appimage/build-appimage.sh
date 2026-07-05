@@ -40,6 +40,14 @@ cp -a "$SYS_PYTHON_LIB" "$APPDIR/usr/lib/python${PYVER}"
 rm -rf "$APPDIR/usr/lib/python${PYVER}/site-packages" "$APPDIR/usr/lib/python${PYVER}/dist-packages"
 mkdir -p "$APPDIR/usr/lib/python${PYVER}/site-packages"
 
+# Python.h and friends, needed since dbus-python (a DisplayCAL dependency on
+# Linux) has no prebuilt wheel and gets compiled from source below. sysconfig
+# resolves this path relative to sys.prefix, which the copied interpreter
+# re-derives from its own location, so it must exist under $APPDIR/usr too.
+SYS_PYTHON_INCLUDE="$(python3 -c 'import sysconfig; print(sysconfig.get_path("include"))')"
+mkdir -p "$APPDIR/usr/include"
+cp -a "$SYS_PYTHON_INCLUDE" "$APPDIR/usr/include/python${PYVER}"
+
 # libpython itself is dlopen()'d by the interpreter binary at startup.
 LIBPYTHON="$(ldd "$(command -v "python${PYVER}")" | awk '/libpython/{print $3}')"
 [ -n "$LIBPYTHON" ] && cp -L "$LIBPYTHON" "$APPDIR/usr/lib/"
