@@ -448,3 +448,119 @@ jobs:
           asset_content_type: application/x-rpm
           max_releases: 1
           ignore_hash: true
+
+  linux-appimage:
+    name: Build Linux AppImage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install runtime libraries needed by wxPython
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y libgtk-3-0 libnotify4 libsdl2-2.0-0 libwebkit2gtk-4.1-0
+
+      - name: Install Python build dependencies
+        run: uv pip install --system wheel
+
+      - name: Build DisplayCAL wheel
+        run: |
+          uv build
+          VERSION=$(cat VERSION)
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+
+      - name: Build AppImage
+        run: |
+          WHEEL_FILE=$(ls dist/displaycal-${{ env.VERSION }}-*.whl)
+          chmod +x misc/appimage/build-appimage.sh
+          misc/appimage/build-appimage.sh "$WHEEL_FILE" "${{ env.VERSION }}" dist/DisplayCAL-x86_64.AppImage
+
+      - name: Delete old nightly AppImage asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "/repos/${{ github.repository }}/releases/291565678/assets" \
+            --jq '.[] | select(.name | test("nightly-Linux.*\\.AppImage$")) | .id' \
+            | while read -r id; do
+              echo "Deleting old asset ID: $id"
+              gh api --method DELETE "/repos/${{ github.repository }}/releases/assets/$id"
+            done
+
+      - name: Upload AppImage to nightly release
+        uses: WebFreak001/deploy-nightly@v3.2.0
+        with:
+          upload_url: https://uploads.github.com/repos/eoyilmaz/displaycal-py3/releases/291565678/assets{?name,label}
+          release_id: 291565678
+          asset_path: dist/DisplayCAL-x86_64.AppImage
+          asset_name: DisplayCAL-${{ env.VERSION }}-nightly-Linux-x86_64.AppImage
+          asset_content_type: application/x-executable
+          max_releases: 1
+          ignore_hash: true
+
+  linux-flatpak:
+    name: Build Linux Flatpak
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install flatpak-builder
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y flatpak flatpak-builder
+          sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
+      - name: Install Flatpak runtime and SDK
+        run: |
+          sudo flatpak install --system -y flathub org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08
+
+      - name: Build Flatpak
+        run: |
+          VERSION=$(cat VERSION)
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          flatpak-builder --force-clean --repo=repo build-dir misc/flatpak/net.displaycal.DisplayCAL.yml
+
+      - name: Create Flatpak bundle
+        run: |
+          flatpak build-bundle \
+            --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo \
+            repo dist/DisplayCAL-x86_64.flatpak net.displaycal.DisplayCAL
+
+      - name: Delete old nightly Flatpak asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "/repos/${{ github.repository }}/releases/291565678/assets" \
+            --jq '.[] | select(.name | test("nightly-Linux.*\\.flatpak$")) | .id' \
+            | while read -r id; do
+              echo "Deleting old asset ID: $id"
+              gh api --method DELETE "/repos/${{ github.repository }}/releases/assets/$id"
+            done
+
+      - name: Upload Flatpak to nightly release
+        uses: WebFreak001/deploy-nightly@v3.2.0
+        with:
+          upload_url: https://uploads.github.com/repos/eoyilmaz/displaycal-py3/releases/291565678/assets{?name,label}
+          release_id: 291565678
+          asset_path: dist/DisplayCAL-x86_64.flatpak
+          asset_name: DisplayCAL-${{ env.VERSION }}-nightly-Linux-x86_64.flatpak
+          asset_content_type: application/vnd.flatpak
+          max_releases: 1
+          ignore_hash: true

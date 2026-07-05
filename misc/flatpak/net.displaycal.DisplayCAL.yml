@@ -1,0 +1,91 @@
+id: net.displaycal.DisplayCAL
+runtime: org.freedesktop.Platform
+runtime-version: "25.08"
+sdk: org.freedesktop.Sdk
+rename-desktop-file: displaycal.desktop
+rename-icon: displaycal
+copy-icon: true
+command: displaycal
+
+# Argyll CMS is not bundled here: DisplayCAL already offers to download and
+# install matching Argyll binaries into its per-user config dir on first run
+# (see DisplayCAL/worker.py process_argyll_download), so `--share=network`
+# and a writable config dir (both granted by default under the app's own
+# `~/.var/app/net.displaycal.DisplayCAL` home) are enough to get there.
+finish-args:
+  - --share=ipc
+  - --share=network
+  # X11 is required even under Wayland, not just as a fallback.
+  - --socket=x11
+  - --socket=wayland
+  - --device=all
+  - --system-talk-name=org.freedesktop.ColorManager
+  - --talk-name=org.freedesktop.PowerManagement
+  - --talk-name=org.freedesktop.ScreenSaver
+  - --talk-name=org.gnome.Mutter.DisplayConfig
+  - --talk-name=org.gnome.SessionManager
+  - --talk-name=org.gnome.SettingsDaemon.Power
+
+cleanup:
+  - /share/man
+
+modules:
+  - name: python-wxPython
+    buildsystem: simple
+    build-options:
+      build-args:
+        - --share=network
+    build-commands:
+      - pip3 install --prefix=/app wxPython==4.2.2
+
+  - name: python-dbus
+    buildsystem: simple
+    build-options:
+      build-args:
+        - --share=network
+    build-commands:
+      - pip3 install --prefix=/app dbus-python
+
+  - name: displaycal
+    buildsystem: simple
+    build-options:
+      build-args:
+        - --share=network
+    build-commands:
+      - pip3 install --prefix=/app -r requirements.txt
+      - pip3 install --prefix=/app --no-build-isolation .
+      # displaycal-apply-profiles has no pip console-script entry point (it's
+      # dispatched via argv[0] sniffing in DisplayCAL/main.py, wired up only
+      # by the legacy setup.py packaging path), so it's skipped here rather
+      # than shipping a desktop entry with a dangling Exec=.
+      - >-
+        for pair in
+        displaycal-vrml-to-x3d-converter:vrml-to-x3d-converter
+        displaycal-synthprofile:synthprofile
+        displaycal-profile-info:profile-info
+        displaycal-curve-viewer:curve-viewer
+        displaycal-scripting-client:scripting-client
+        displaycal-testchart-editor:testchart-editor
+        displaycal-3dlut-maker:3dlut-maker
+        displaycal-eecolor-to-madvr-converter:eecolor-to-madvr-converter
+        ;
+        do
+          source="${pair%%:*}";
+          dest="${pair##*:}";
+          mv "/app/share/applications/${source}.desktop" "/app/share/applications/net.displaycal.DisplayCAL.${dest}.desktop";
+          for s in 16 22 24 32 48 64 128 256 512; do
+            icon="/app/share/icons/hicolor/${s}x${s}/apps/${source}.png";
+            [ -f "${icon}" ] || continue;
+            cp "${icon}" "/app/share/icons/hicolor/${s}x${s}/apps/net.displaycal.DisplayCAL.${dest}.png";
+          done;
+          desktop-file-edit --set-icon="net.displaycal.DisplayCAL.${dest}" "/app/share/applications/net.displaycal.DisplayCAL.${dest}.desktop";
+        done
+      - install -Dm644 misc/net.displaycal.DisplayCAL.appdata.xml /app/share/metainfo/net.displaycal.DisplayCAL.appdata.xml
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - .git
+          - .venv
+          - dist
+          - build
