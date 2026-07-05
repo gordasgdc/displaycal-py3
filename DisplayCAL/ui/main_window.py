@@ -490,9 +490,6 @@ class MainWindow(BaseWindow):
         self.comport_ctrl = QComboBox()
         self.comport_ctrl.currentIndexChanged.connect(self.comport_ctrl_handler)
         instrument_form.addRow(lang.getstr("instrument"), self.comport_ctrl)
-        self.observer_ctrl = QComboBox()
-        self.observer_ctrl.currentIndexChanged.connect(self.observer_ctrl_handler)
-        instrument_form.addRow(lang.getstr("observer"), self.observer_ctrl)
         outer.addWidget(instrument_box)
 
         outer.addStretch(1)
@@ -522,6 +519,12 @@ class MainWindow(BaseWindow):
 
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+        # Observer (wx places this at the top of the Calibration tab, right
+        # after the two toggles, not on the Display & Instrument tab).
+        self.observer_ctrl = QComboBox()
+        self.observer_ctrl.currentIndexChanged.connect(self.observer_ctrl_handler)
+        form.addRow(lang.getstr("observer"), self.observer_ctrl)
 
         # Whitepoint: mode + colortemp / x,y fields.
         self.whitepoint_ctrl = QComboBox()
@@ -629,17 +632,6 @@ class MainWindow(BaseWindow):
             self.black_output_offset_ctrl,
         )
 
-        # Black point correction (0-100 %).
-        self.black_point_correction_ctrl = QSlider(Qt.Horizontal)
-        self.black_point_correction_ctrl.setRange(0, 100)
-        self.black_point_correction_ctrl.valueChanged.connect(
-            self._black_point_correction_changed
-        )
-        form.addRow(
-            lang.getstr("calibration.black_point_correction"),
-            self.black_point_correction_ctrl,
-        )
-
         # Ambient light level adjustment.
         self.ambient_adjust_cb = QCheckBox(
             lang.getstr("calibration.ambient_viewcond_adjust")
@@ -657,6 +649,17 @@ class MainWindow(BaseWindow):
         ambient_row.addWidget(self.ambient_adjust_textctrl)
         ambient_row.addStretch(1)
         form.addRow("", self._wrap(ambient_row))
+
+        # Black point correction (0-100 %).
+        self.black_point_correction_ctrl = QSlider(Qt.Horizontal)
+        self.black_point_correction_ctrl.setRange(0, 100)
+        self.black_point_correction_ctrl.valueChanged.connect(
+            self._black_point_correction_changed
+        )
+        form.addRow(
+            lang.getstr("calibration.black_point_correction"),
+            self.black_point_correction_ctrl,
+        )
 
         # Calibration quality / speed.
         self.calibration_quality_ctrl = QSlider(Qt.Horizontal)

@@ -183,6 +183,27 @@ def test_observer_selection_persists_key(window):
     assert getcfg("observer") == target
 
 
+def test_observer_ctrl_lives_on_calibration_tab(window):
+    """wx puts ``observer_ctrl`` on the Calibration tab (``main.xrc``
+    ``calibration_settings_panel``), not Display & Instrument; a regression
+    guard for that layout-parity mistake."""
+    assert window._panels["calibration"].isAncestorOf(window.observer_ctrl)
+    assert not window._panels["display_instrument"].isAncestorOf(
+        window.observer_ctrl
+    )
+
+
+def test_calibration_tab_control_order_matches_wx(window):
+    """wx's ``main.xrc`` orders the ambient-adjust row before black-point
+    correction; guard against the two being swapped again."""
+    from qtpy.QtCore import QPoint
+
+    panel = window._panels["calibration"]
+    ambient_y = window.ambient_adjust_cb.mapTo(panel, QPoint(0, 0)).y()
+    bpc_y = window.black_point_correction_ctrl.mapTo(panel, QPoint(0, 0)).y()
+    assert ambient_y <= bpc_y
+
+
 def test_populating_does_not_write_config(qapp, stub_worker):
     """Repopulating controls must not clobber config via the guard flag."""
     setcfg("display.number", 2)

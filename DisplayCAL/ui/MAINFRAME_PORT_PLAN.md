@@ -227,13 +227,15 @@ provides:
 - A tab bar of exclusive `QToolButton` toggles (Display, Calibration, Profiling,
   3D LUT) switching a `QStackedWidget` — the Qt equivalent of the wx custom
   `TabButton` / show-hide-settings-panel mechanism.
-- The **Display & Instrument** tab fully wired: display / instrument (comport) /
-  observer `QComboBox`es populated from `Worker.enumerate_displays_and_ports`
-  and `config`, persisting `display.number` / `comport.number` / `observer`
-  through an `_updating` re-entrancy guard (so repopulation never clobbers the
-  stored selection). The name-marshalling (`display_items`, `instrument_items`)
-  is factored into pure module functions and unit-tested; observer items reuse
-  Stage-2 `observer_items()`.
+- The **Display & Instrument** tab fully wired: display / instrument (comport)
+  `QComboBox`es populated from `Worker.enumerate_displays_and_ports` and
+  `config`, persisting `display.number` / `comport.number` through an
+  `_updating` re-entrancy guard (so repopulation never clobbers the stored
+  selection). The name-marshalling (`display_items`, `instrument_items`) is
+  factored into pure module functions and unit-tested. The **observer**
+  `QComboBox` lives on the **Calibration** tab instead, matching wx's
+  `main.xrc` (`calibration_settings_panel`, right after the two toggles); it
+  persists `observer` and reuses Stage-2 `observer_items()`.
 - The calibrate / calibrate&profile / profile action buttons (present but
   disabled — Stage 4 wires them to `flow`, a `MeasurementFlow`).
 - Gated behind `--qt`: `DisplayCAL/main.py::_get_qt_main(None)` now returns this
