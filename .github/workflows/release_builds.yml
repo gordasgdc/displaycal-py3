@@ -388,7 +388,7 @@ jobs:
       - name: Build DisplayCAL wheel
         run: |
           uv build
-          VERSION=$(cat VERSION)
+          VERSION=$(cat DisplayCAL/VERSION)
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
 
       - name: Build AppImage

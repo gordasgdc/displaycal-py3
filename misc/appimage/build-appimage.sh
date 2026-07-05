@@ -22,7 +22,9 @@ WORK_DIR="$(mktemp -d)"
 APPDIR="$WORK_DIR/DisplayCAL.AppDir"
 
 PYVER="$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
-SYS_PYTHON_LIB="/usr/lib/python${PYVER}"
+# Query sysconfig rather than assuming /usr/lib/pythonX.Y, since actions/setup-python
+# installs into hostedtoolcache rather than the system prefix.
+SYS_PYTHON_LIB="$(python3 -c 'import sysconfig; print(sysconfig.get_path("stdlib"))')"
 UBUNTU_RELEASE="$(. /etc/os-release && echo "$VERSION_ID")"
 
 echo "Building AppImage for DisplayCAL ${VERSION} (Python ${PYVER}, Ubuntu ${UBUNTU_RELEASE})"

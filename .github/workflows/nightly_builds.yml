@@ -480,7 +480,7 @@ jobs:
       - name: Build DisplayCAL wheel
         run: |
           uv build
-          VERSION=$(cat VERSION)
+          VERSION=$(cat DisplayCAL/VERSION)
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
 
       - name: Build AppImage
@@ -533,7 +533,7 @@ jobs:
 
       - name: Build Flatpak
         run: |
-          VERSION=$(cat VERSION)
+          VERSION=$(cat DisplayCAL/VERSION)
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
           flatpak-builder --force-clean --repo=repo build-dir misc/flatpak/net.displaycal.DisplayCAL.yml
 
