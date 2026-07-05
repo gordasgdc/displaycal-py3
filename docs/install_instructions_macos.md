@@ -17,7 +17,7 @@ want to test the latest code).
 > In **MacOS**, after installing DisplayCAL you need to run the following in Terminal:
 >
 > ```shell
-> xattr -dr com.apple.quarantine /Applications/DisplayCAL.app
+> xattr -dr com.apple.quarantine /Applications/DisplayCAL
 > ```
 
 Install through PyPI or Build From Source
