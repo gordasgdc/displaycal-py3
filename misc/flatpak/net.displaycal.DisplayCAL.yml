@@ -65,7 +65,16 @@ modules:
         - --share=network
     build-commands:
       - pip3 install --prefix=/app -r requirements.txt
-      - pip3 install --prefix=/app --no-build-isolation .
+      # A direct `pip install .` invokes setup.py's bdist_wheel path only, but
+      # setup.py's data_files logic (DisplayCAL/setup.py's doc/copyright/
+      # appdata entries) is only populated as a side effect of the `sdist`
+      # command (see setup.py's `buildservice`/`create_appdata` flags), which
+      # bdist_wheel alone never triggers. `python -m build`'s default
+      # (sdist-then-wheel-from-sdist) two-phase build is what actually
+      # generates and bundles dist/copyright and the appdata.xml first, same
+      # as `uv build` does for the other CI jobs.
+      - python3 -m build --no-isolation --outdir dist .
+      - pip3 install --prefix=/app --no-build-isolation dist/displaycal-*.whl
       # displaycal-apply-profiles has no pip console-script entry point (it's
       # dispatched via argv[0] sniffing in DisplayCAL/main.py, wired up only
       # by the legacy setup.py packaging path), so it's skipped here rather
