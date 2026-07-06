@@ -539,9 +539,10 @@ jobs:
 
       - name: Create Flatpak bundle
         run: |
-          flatpak build-bundle \
-            --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo \
-            repo dist/DisplayCAL-x86_64.flatpak net.displaycal.DisplayCAL
+            mkdir -p dist
+            flatpak build-bundle \
+              --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo \
+              repo dist/DisplayCAL-x86_64.flatpak net.displaycal.DisplayCAL
 
       - name: Delete old nightly Flatpak asset
         env:
