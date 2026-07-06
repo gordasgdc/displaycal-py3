@@ -3231,14 +3231,15 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self.Bind(
             wx.EVT_MENU, self.startup_sound_enable_handler, self.menuitem_startup_sound
         )
-        self.menuitem_use_simple_splash = options.FindItemById(
-            options.FindItem("splash.simple")
-        )
-        self.Bind(
-            wx.EVT_MENU,
-            self.use_simple_splash_handler,
-            self.menuitem_use_simple_splash,
-        )
+        if (use_simple_splash_menu_id := options.FindItem("splash.simple")) is not None:
+            self.menuitem_use_simple_splash = options.FindItemById(
+                use_simple_splash_menu_id
+            )
+            self.Bind(
+                wx.EVT_MENU,
+                self.use_simple_splash_handler,
+                self.menuitem_use_simple_splash,
+            )
         self.menuitem_use_fancy_progress = options.FindItemById(
             options.FindItem("use_fancy_progress")
         )
