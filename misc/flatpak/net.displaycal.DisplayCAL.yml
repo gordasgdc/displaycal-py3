@@ -30,6 +30,16 @@ cleanup:
   - /share/man
 
 modules:
+  - name: libjpeg8
+    buildsystem: simple
+    build-commands:
+      - |
+        curl -L -O http://mirrors.kernel.org/ubuntu/pool/main/libj/libjpeg-turbo/libjpeg-turbo8_2.1.2-0ubuntu1_amd64.deb
+        ar -x libjpeg-turbo8_2.1.2-0ubuntu1_amd64.deb
+        tar -xf data.tar.xz
+        install -D usr/lib/x86_64-linux-gnu/libjpeg.so.8.2.2 /app/lib/libjpeg.so.8.2.2
+        ln -s libjpeg.so.8.2.2 /app/lib/libjpeg.so.8
+
   - name: python-wxPython
     buildsystem: simple
     build-options:
