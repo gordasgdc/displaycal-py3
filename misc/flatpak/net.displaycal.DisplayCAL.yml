@@ -34,7 +34,7 @@ modules:
     sources:
       - type: file
         url: http://mirrors.kernel.org/ubuntu/pool/main/libj/libjpeg-turbo/libjpeg-turbo8_2.1.2-0ubuntu1_amd64.deb
-        sha256: 2242c6d67c85335e3b10c9e42001b55945f4f4f44621532ddacd01c93a741406
+        sha256: bb9538fa94f06bf6b7907105439f0a0a30e3ec27030832820a6c2cc2dc6578a8
     buildsystem: simple
     build-commands:
       - |
