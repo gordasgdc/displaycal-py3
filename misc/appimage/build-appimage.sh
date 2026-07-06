@@ -14,7 +14,11 @@ set -euo pipefail
 
 WHEEL_PATH="$1"
 VERSION="$2"
-OUTPUT_PATH="$3"
+# Resolve to an absolute path before we `cd "$WORK_DIR"` below: a relative
+# path (as the CI workflow passes, e.g. "dist/DisplayCAL-x86_64.AppImage")
+# would otherwise land inside the temp work dir and get wiped out by the
+# final `rm -rf "$WORK_DIR"`.
+OUTPUT_PATH="$(realpath -m "$3")"
 
 MISC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(dirname "$MISC_DIR")"
