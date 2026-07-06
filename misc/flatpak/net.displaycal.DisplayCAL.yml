@@ -103,7 +103,11 @@ modules:
           done;
           desktop-file-edit --set-icon="net.displaycal.DisplayCAL.${dest}" "/app/share/applications/net.displaycal.DisplayCAL.${dest}.desktop";
         done
-      - install -Dm644 misc/net.displaycal.DisplayCAL.appdata.xml /app/share/metainfo/net.displaycal.DisplayCAL.appdata.xml
+      # Install the generated copy, not misc/net.displaycal.DisplayCAL.appdata.xml:
+      # the latter is the raw ${...} template, its placeholders (including
+      # <id>) are only substituted into dist/ by the `python3 -m build` step
+      # above.
+      - install -Dm644 dist/net.displaycal.DisplayCAL.appdata.xml /app/share/metainfo/net.displaycal.DisplayCAL.appdata.xml
     sources:
       - type: dir
         path: ../..
