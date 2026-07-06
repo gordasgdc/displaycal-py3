@@ -48,7 +48,7 @@ modules:
       # the SDK's own, so if the resulting wxPython fails to import at
       # runtime, that ABI mismatch is the first thing to suspect and this
       # module should fall back to building from source.
-      - pip3 install --prefix=/app --extra-index-url https://extras.wxpython.org/wxPython4/extras/linux/gtk3/ubuntu-22.04/ wxPython
+      - pip3 install --prefix=/app --find-links https://extras.wxpython.org/wxPython4/extras/linux/gtk3/ubuntu-22.04/ wxPython
 
   - name: python-dbus
     buildsystem: simple

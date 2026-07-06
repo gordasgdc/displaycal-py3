@@ -57,7 +57,7 @@ LIBPYTHON="$(ldd "$(command -v "python${PYVER}")" | awk '/libpython/{print $3}')
 "$APPDIR/usr/bin/python3" -m ensurepip --upgrade
 "$APPDIR/usr/bin/python3" -m pip install --upgrade \
   --prefix "$APPDIR/usr" \
-  --extra-index-url "https://extras.wxpython.org/wxPython4/extras/linux/gtk3/ubuntu-${UBUNTU_RELEASE}/" \
+  --find-links "https://extras.wxpython.org/wxPython4/extras/linux/gtk3/ubuntu-${UBUNTU_RELEASE}/" \
   "$WHEEL_PATH"
 
 # 3. Desktop integration files.
