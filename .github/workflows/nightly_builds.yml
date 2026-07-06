@@ -474,6 +474,11 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y libgtk-3-0 libnotify4 libsdl2-2.0-0 libwebkit2gtk-4.1-0 libdbus-1-dev libglib2.0-dev gdk-pixbuf2.0-dev librsvg2-common shared-mime-info
 
+      - name: Update GTK icon and pixbuf caches
+        run: |
+          sudo gtk-update-icon-cache /usr/share/icons/hicolor || true
+          sudo gdk-pixbuf-queryloaders --update-cache || true
+
       - name: Install Python build dependencies
         run: uv pip install --system wheel
 

@@ -31,10 +31,13 @@ cleanup:
 
 modules:
   - name: libjpeg8
+    sources:
+      - type: file
+        url: http://mirrors.kernel.org/ubuntu/pool/main/libj/libjpeg-turbo/libjpeg-turbo8_2.1.2-0ubuntu1_amd64.deb
+        sha256: 2242c6d67c85335e3b10c9e42001b55945f4f4f44621532ddacd01c93a741406
     buildsystem: simple
     build-commands:
       - |
-        curl -L -O http://mirrors.kernel.org/ubuntu/pool/main/libj/libjpeg-turbo/libjpeg-turbo8_2.1.2-0ubuntu1_amd64.deb
         ar -x libjpeg-turbo8_2.1.2-0ubuntu1_amd64.deb
         tar -xf data.tar.xz
         install -D usr/lib/x86_64-linux-gnu/libjpeg.so.8.2.2 /app/lib/libjpeg.so.8
