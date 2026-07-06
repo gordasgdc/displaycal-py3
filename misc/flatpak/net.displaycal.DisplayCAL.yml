@@ -39,7 +39,7 @@ modules:
     build-commands:
       - |
         ar -x libjpeg-turbo8_2.1.2-0ubuntu1_amd64.deb
-        tar -xf data.tar.xz
+        tar -xf data.tar.*
         install -D usr/lib/x86_64-linux-gnu/libjpeg.so.8.2.2 /app/lib/libjpeg.so.8
 
   - name: python-wxPython
