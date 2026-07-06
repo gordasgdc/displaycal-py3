@@ -42,6 +42,18 @@ modules:
         tar -xf data.tar.*
         install -D usr/lib/x86_64-linux-gnu/libjpeg.so.8.2.2 /app/lib/libjpeg.so.8
 
+  - name: libtiff5
+    sources:
+      - type: file
+        url: http://mirrors.kernel.org/ubuntu/pool/main/t/tiff/libtiff5_4.3.0-6ubuntu0.8_amd64.deb
+        sha256: 35a864828d221683652d8978c4b1b820e0927878987b89d53514d334e3e15777
+    buildsystem: simple
+    build-commands:
+      - |
+        ar -x libtiff5_4.3.0-6ubuntu0.8_amd64.deb
+        tar -xf data.tar.*
+        install -D usr/lib/x86_64-linux-gnu/libtiff.so.5.7.0 /app/lib/libtiff.so.5
+
   - name: python-wxPython
     buildsystem: simple
     build-options:
