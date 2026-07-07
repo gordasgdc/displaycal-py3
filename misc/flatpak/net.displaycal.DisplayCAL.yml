@@ -54,6 +54,18 @@ modules:
         tar -xf data.tar.*
         install -D usr/lib/x86_64-linux-gnu/libtiff.so.5.7.0 /app/lib/libtiff.so.5
 
+  - name: libjbig0
+    sources:
+      - type: file
+        url: http://archive.ubuntu.com/ubuntu/pool/main/j/jbigkit/libjbig0_2.1-3.1ubuntu0.22.04.1_amd64.deb
+        sha256: 4666c37d8620b6d17a2d4acf2cb1459f071e74881dc490a159e90244d7a98cc6
+    buildsystem: simple
+    build-commands:
+      - |
+        ar -x libjbig0_2.1-3.1ubuntu0.22.04.1_amd64.deb
+        tar -xf data.tar.*
+        install -D usr/lib/x86_64-linux-gnu/libjbig.so.0 /app/lib/libjbig.so.0
+
   - name: python-wxPython
     buildsystem: simple
     build-options:
