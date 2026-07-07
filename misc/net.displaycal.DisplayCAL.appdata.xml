@@ -8,6 +8,7 @@
     <name xml:lang="en">${APPNAME}</name>
     <summary>${SUMMARY}</summary>
     <summary xml:lang="en">${SUMMARY}</summary>
+    <icon type="stock">${APPSTREAM_ID}</icon>
     <icon type="remote" width="256" height="256">${URL}theme/icons/256x256/${APPNAME_LOWER}.png</icon>
     <launchable type="desktop-id">${APPNAME_LOWER}.desktop</launchable>
     <description>

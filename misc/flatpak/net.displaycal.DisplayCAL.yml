@@ -1,0 +1,169 @@
+id: net.displaycal.DisplayCAL
+runtime: org.freedesktop.Platform
+runtime-version: "25.08"
+sdk: org.freedesktop.Sdk
+rename-desktop-file: displaycal.desktop
+rename-icon: displaycal
+copy-icon: true
+command: displaycal
+
+# Argyll CMS is not bundled here: DisplayCAL already offers to download and
+# install matching Argyll binaries into its per-user config dir on first run
+# (see DisplayCAL/worker.py process_argyll_download), so `--share=network`
+# and a writable config dir (both granted by default under the app's own
+# `~/.var/app/net.displaycal.DisplayCAL` home) are enough to get there.
+finish-args:
+  - --share=ipc
+  - --share=network
+  # X11 is required even under Wayland, not just as a fallback.
+  - --socket=x11
+  - --socket=wayland
+  - --device=all
+  - --system-talk-name=org.freedesktop.ColorManager
+  - --talk-name=org.freedesktop.PowerManagement
+  - --talk-name=org.freedesktop.ScreenSaver
+  - --talk-name=org.gnome.Mutter.DisplayConfig
+  - --talk-name=org.gnome.SessionManager
+  - --talk-name=org.gnome.SettingsDaemon.Power
+
+cleanup:
+  - /share/man
+
+modules:
+  - name: libjpeg8
+    sources:
+      - type: file
+        url: http://archive.ubuntu.com/ubuntu/pool/main/libj/libjpeg-turbo/libjpeg-turbo8_2.1.2-0ubuntu1_amd64.deb
+        sha256: bb9538fa94f06bf6b7907105439f0a0a30e3ec27030832820a6c2cc2dc6578a8
+    buildsystem: simple
+    build-commands:
+      - |
+        ar -x libjpeg-turbo8_2.1.2-0ubuntu1_amd64.deb
+        tar -xf data.tar.*
+        install -D usr/lib/x86_64-linux-gnu/libjpeg.so.8.2.2 /app/lib/libjpeg.so.8
+
+  - name: libtiff5
+    sources:
+      - type: file
+        url: http://archive.ubuntu.com/ubuntu/pool/main/t/tiff/libtiff5_4.3.0-6ubuntu0.13_amd64.deb
+        sha256: 298a778a6a579a556f6bb4e32512cd76e0483b57b4a379ee85397f62fe21f225
+    buildsystem: simple
+    build-commands:
+      - |
+        ar -x libtiff5_4.3.0-6ubuntu0.13_amd64.deb
+        tar -xf data.tar.*
+        install -D usr/lib/x86_64-linux-gnu/libtiff.so.5.7.0 /app/lib/libtiff.so.5
+
+  - name: libjbig0
+    sources:
+      - type: file
+        url: http://archive.ubuntu.com/ubuntu/pool/main/j/jbigkit/libjbig0_2.1-3.1ubuntu0.22.04.1_amd64.deb
+        sha256: 4666c37d8620b6d17a2d4acf2cb1459f071e74881dc490a159e90244d7a98cc6
+    buildsystem: simple
+    build-commands:
+      - |
+        ar -x libjbig0_2.1-3.1ubuntu0.22.04.1_amd64.deb
+        tar -xf data.tar.*
+        install -D usr/lib/x86_64-linux-gnu/libjbig.so.0 /app/lib/libjbig.so.0
+
+  # libtiff5 4.3.0 links against libdeflate for its DEFLATE compression
+  # codec, which the freedesktop runtime doesn't ship, so wxPython fails to
+  # import with "libdeflate.so.0: cannot open shared object file" otherwise.
+  - name: libdeflate0
+    sources:
+      - type: file
+        url: http://archive.ubuntu.com/ubuntu/pool/main/libd/libdeflate/libdeflate0_1.10-2_amd64.deb
+        sha256: a64f7f93a487e57e1a01404d378a8ef1428b1c6b0ecf24fc484c89b681a051c9
+    buildsystem: simple
+    build-commands:
+      - |
+        ar -x libdeflate0_1.10-2_amd64.deb
+        tar -xf data.tar.*
+        install -D usr/lib/x86_64-linux-gnu/libdeflate.so.0 /app/lib/libdeflate.so.0
+
+  - name: python-wxPython
+    buildsystem: simple
+    build-options:
+      build-args:
+        - --share=network
+    build-commands:
+      # wxPython has no PyPI wheel for Linux, so a plain `pip install
+      # wxPython` builds it from source, which is what made this module the
+      # slowest part of the build by far (and outright fails on Python 3.13,
+      # which is what org.freedesktop.Sdk 25.08 ships: wxPython 4.2.2's
+      # bundled build.py monkey-patches distutils.copy_file() with a
+      # signature that no longer matches modern setuptools). Point pip at
+      # the same extras.wxpython.org index our pytest.yml CI uses instead,
+      # letting it resolve the newest compatible version rather than pinning
+      # one by hand. It's built against Ubuntu 22.04's GTK3/WebKit2GTK, not
+      # the SDK's own, so if the resulting wxPython fails to import at
+      # runtime, that ABI mismatch is the first thing to suspect and this
+      # module should fall back to building from source.
+      - pip3 install --prefix=/app --find-links https://extras.wxpython.org/wxPython4/extras/linux/gtk3/ubuntu-22.04/ wxPython
+
+  - name: python-dbus
+    buildsystem: simple
+    build-options:
+      build-args:
+        - --share=network
+    build-commands:
+      - pip3 install --prefix=/app dbus-python
+
+  - name: displaycal
+    buildsystem: simple
+    build-options:
+      build-args:
+        - --share=network
+    build-commands:
+      - pip3 install --prefix=/app -r requirements.txt
+      # A direct `pip install .` invokes setup.py's bdist_wheel path only, but
+      # setup.py's data_files logic (DisplayCAL/setup.py's doc/copyright/
+      # appdata entries) is only populated as a side effect of the `sdist`
+      # command (see setup.py's `buildservice`/`create_appdata` flags), which
+      # bdist_wheel alone never triggers. `python -m build`'s default
+      # (sdist-then-wheel-from-sdist) two-phase build is what actually
+      # generates and bundles dist/copyright and the appdata.xml first, same
+      # as `uv build` does for the other CI jobs.
+      - python3 -m build --no-isolation --outdir dist .
+      - pip3 install --prefix=/app --no-build-isolation dist/displaycal-*.whl
+      # displaycal-apply-profiles has no pip console-script entry point (it's
+      # dispatched via argv[0] sniffing in DisplayCAL/main.py, wired up only
+      # by the legacy setup.py packaging path), so it's skipped here rather
+      # than shipping a desktop entry with a dangling Exec=. Likewise,
+      # eeColor-to-madVR-converter has no misc/*.desktop file at all (setup.py
+      # excludes it the same way, see its Zeroinstall entry-point generation),
+      # so there's nothing under /app/share/applications to rename for it.
+      - >-
+        for pair in
+        displaycal-vrml-to-x3d-converter:vrml-to-x3d-converter
+        displaycal-synthprofile:synthprofile
+        displaycal-profile-info:profile-info
+        displaycal-curve-viewer:curve-viewer
+        displaycal-scripting-client:scripting-client
+        displaycal-testchart-editor:testchart-editor
+        displaycal-3dlut-maker:3dlut-maker
+        ;
+        do
+          source="${pair%%:*}";
+          dest="${pair##*:}";
+          mv "/app/share/applications/${source}.desktop" "/app/share/applications/net.displaycal.DisplayCAL.${dest}.desktop";
+          for s in 16 22 24 32 48 64 128 256 512; do
+            icon="/app/share/icons/hicolor/${s}x${s}/apps/${source}.png";
+            [ -f "${icon}" ] || continue;
+            cp "${icon}" "/app/share/icons/hicolor/${s}x${s}/apps/net.displaycal.DisplayCAL.${dest}.png";
+          done;
+          desktop-file-edit --set-icon="net.displaycal.DisplayCAL.${dest}" "/app/share/applications/net.displaycal.DisplayCAL.${dest}.desktop";
+        done
+      # Install the generated copy, not misc/net.displaycal.DisplayCAL.appdata.xml:
+      # the latter is the raw ${...} template, its placeholders (including
+      # <id>) are only substituted into dist/ by the `python3 -m build` step
+      # above.
+      - install -Dm644 dist/net.displaycal.DisplayCAL.appdata.xml /app/share/metainfo/net.displaycal.DisplayCAL.appdata.xml
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - .git
+          - .venv
+          - dist
+          - build

@@ -3231,14 +3231,16 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self.Bind(
             wx.EVT_MENU, self.startup_sound_enable_handler, self.menuitem_startup_sound
         )
-        self.menuitem_use_simple_splash = options.FindItemById(
-            options.FindItem("splash.simple")
-        )
-        self.Bind(
-            wx.EVT_MENU,
-            self.use_simple_splash_handler,
-            self.menuitem_use_simple_splash,
-        )
+        self.menuitem_use_simple_splash = None
+        if (use_simple_splash_menu_id := options.FindItem("splash.simple")) is not None:
+            self.menuitem_use_simple_splash = options.FindItemById(
+                use_simple_splash_menu_id
+            )
+            self.Bind(
+                wx.EVT_MENU,
+                self.use_simple_splash_handler,
+                self.menuitem_use_simple_splash,
+            )
         self.menuitem_use_fancy_progress = options.FindItemById(
             options.FindItem("use_fancy_progress")
         )
@@ -3329,10 +3331,12 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             tools_advanced.FindItem("measure.testchart")
         )
         self.Bind(wx.EVT_MENU, self.measure_handler, self.menuitem_measure_testchart)
-        self.menuitem_specplot_run = tools_advanced.FindItemById(
-            tools_advanced.FindItem("specplot.run")
-        )
-        self.Bind(wx.EVT_MENU, self.specplot_handler, self.menuitem_specplot_run)
+        self.menuitem_specplot_run = None
+        if (specplot_run_menu_id := tools_advanced.FindItem("specplot.run")) is not None:
+            self.menuitem_specplot_run = tools_advanced.FindItemById(
+                specplot_run_menu_id
+            )
+            self.Bind(wx.EVT_MENU, self.specplot_handler, self.menuitem_specplot_run)
 
         self.menuitem_profile_hires_b2a = tools_advanced.FindItemById(
             tools_advanced.FindItem("profile.b2a.hires")
@@ -3564,7 +3568,8 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self.menuitem_measure_testchart.Enable(
             bool(self.worker.displays) and bool(self.worker.instruments)
         )
-        self.menuitem_specplot_run.Enable(self.worker.argyll_version > [0, 0, 0])
+        if self.menuitem_specplot_run:
+            self.menuitem_specplot_run.Enable(self.worker.argyll_version > [0, 0, 0])
         self.menuitem_create_profile.Enable(bool(self.worker.displays))
         edid = self.worker.get_display_edid()
         self.menuitem_create_profile_from_edid.Enable(
@@ -3616,7 +3621,8 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self.menuitem_enable_argyll_debug.Check(bool(getcfg("argyll.debug")))
         self.menuitem_enable_dry_run.Check(bool(getcfg("dry_run")))
         self.menuitem_startup_sound.Check(bool(getcfg("startup_sound.enable")))
-        self.menuitem_use_simple_splash.Check(bool(getcfg("splash.simple")))
+        if self.menuitem_use_simple_splash:
+            self.menuitem_use_simple_splash.Check(bool(getcfg("splash.simple")))
         self.menuitem_use_fancy_progress.Check(bool(getcfg("use_fancy_progress")))
         self.menuitem_advanced_options.Enable(bool(getcfg("show_advanced_options")))
         spyd2en = get_argyll_util("spyd2en")

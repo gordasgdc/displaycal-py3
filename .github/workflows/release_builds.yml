@@ -355,11 +355,99 @@ jobs:
             dist/DisplayCAL-${{ github.ref_name }}-Linux-x86_64.rpm
 
   # -----------------------------------------------------------------------
+  # Linux  (AppImage, x86_64)
+  # -----------------------------------------------------------------------
+  linux-appimage:
+    name: Build Linux AppImage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install runtime libraries needed by wxPython, and dbus-python build deps
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y libgtk-3-0 libnotify4 libsdl2-2.0-0 libwebkit2gtk-4.1-0 libdbus-1-dev libglib2.0-dev gdk-pixbuf2.0-dev librsvg2-common shared-mime-info
+
+      - name: Install Python build dependencies
+        run: uv pip install --system wheel
+
+      - name: Build DisplayCAL wheel
+        run: |
+          uv build
+          VERSION=$(cat DisplayCAL/VERSION)
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+
+      - name: Build AppImage
+        run: |
+          WHEEL_FILE=$(ls dist/displaycal-${{ env.VERSION }}-*.whl)
+          chmod +x misc/appimage/build-appimage.sh
+          misc/appimage/build-appimage.sh "$WHEEL_FILE" "${{ env.VERSION }}" \
+            "dist/DisplayCAL-${{ github.ref_name }}-Linux-x86_64.AppImage"
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: dist/DisplayCAL-${{ github.ref_name }}-Linux-x86_64.AppImage
+
+  # -----------------------------------------------------------------------
+  # Linux  (Flatpak, x86_64)
+  # -----------------------------------------------------------------------
+  linux-flatpak:
+    name: Build Linux Flatpak
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install flatpak-builder
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y flatpak flatpak-builder
+          sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
+      - name: Install Flatpak runtime and SDK
+        run: |
+          sudo flatpak install --system -y flathub org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08
+
+      - name: Build Flatpak
+        run: flatpak-builder --force-clean --repo=repo build-dir misc/flatpak/net.displaycal.DisplayCAL.yml
+
+      - name: Create Flatpak bundle
+        run: |
+          flatpak build-bundle \
+            --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo \
+            repo "dist/DisplayCAL-${{ github.ref_name }}-Linux-x86_64.flatpak" net.displaycal.DisplayCAL
+
+      - name: Upload Flatpak artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-flatpak
+          path: dist/DisplayCAL-${{ github.ref_name }}-Linux-x86_64.flatpak
+
+  # -----------------------------------------------------------------------
   # Create GitHub Release and attach all platform assets
   # -----------------------------------------------------------------------
   release:
     name: Create GitHub Release
-    needs: [windows, macOS, linux]
+    needs: [windows, macOS, linux, linux-appimage, linux-flatpak]
     runs-on: ubuntu-latest
     permissions:
       contents: write
