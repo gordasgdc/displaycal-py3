@@ -66,6 +66,21 @@ modules:
         tar -xf data.tar.*
         install -D usr/lib/x86_64-linux-gnu/libjbig.so.0 /app/lib/libjbig.so.0
 
+  # libtiff5 4.3.0 links against libdeflate for its DEFLATE compression
+  # codec, which the freedesktop runtime doesn't ship, so wxPython fails to
+  # import with "libdeflate.so.0: cannot open shared object file" otherwise.
+  - name: libdeflate0
+    sources:
+      - type: file
+        url: http://archive.ubuntu.com/ubuntu/pool/main/libd/libdeflate/libdeflate0_1.10-2_amd64.deb
+        sha256: a64f7f93a487e57e1a01404d378a8ef1428b1c6b0ecf24fc484c89b681a051c9
+    buildsystem: simple
+    build-commands:
+      - |
+        ar -x libdeflate0_1.10-2_amd64.deb
+        tar -xf data.tar.*
+        install -D usr/lib/x86_64-linux-gnu/libdeflate.so.0 /app/lib/libdeflate.so.0
+
   - name: python-wxPython
     buildsystem: simple
     build-options:
