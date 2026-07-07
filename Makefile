@@ -93,6 +93,8 @@ new-release:
 	git merge develop
 	git tag $(VERSION)
 	git push origin main --tags
+	git tag -f nightly
+	git push --force origin nightly
 	@source ./$(VIRTUALENV_DIR)/bin/activate; \
 	printf "\n\033[36m--- $@: Using python interpreter '`which python`' ---\033[0m\n"; \
 	uv pip install -r requirements.txt -r requirements-dev.txt; \
