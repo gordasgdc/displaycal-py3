@@ -219,6 +219,7 @@ def initialize_pool_manager(
     # Do it all in in the main thread of the current instance, by default
     pool_class = FakePool
     manager = None
+    event = None
     queue_class = FakeQueue
     if num_workers > 1:
         pool_class = NonDaemonicPool
