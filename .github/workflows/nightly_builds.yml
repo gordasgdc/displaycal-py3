@@ -348,6 +348,7 @@ jobs:
           #!/bin/sh
           set -e
           INSTALL_DIR=/opt/displaycal
+          echo "DisplayCAL: setting up virtual environment in ${INSTALL_DIR}/venv ..."
           python3 -m venv "${INSTALL_DIR}/venv"
           PIP="${INSTALL_DIR}/venv/bin/pip"
 
@@ -382,7 +383,13 @@ jobs:
             fi
           fi
 
-          "${PIP}" install --quiet ${WX_FIND_LINKS} "${INSTALL_DIR}"/displaycal-*.whl
+          if [ -n "${WX_FIND_LINKS}" ]; then
+            echo "DisplayCAL: installing DisplayCAL and its dependencies (using a prebuilt wxPython wheel) ..."
+          else
+            echo "DisplayCAL: installing DisplayCAL and its dependencies (no prebuilt wxPython wheel found for this distro, so it will be built from source, this can take a long time) ..."
+          fi
+          "${PIP}" install --progress-bar=on ${WX_FIND_LINKS} "${INSTALL_DIR}"/displaycal-*.whl
+          echo "DisplayCAL: install complete."
           if [ -d /etc/udev/rules.d ]; then
             udevadm control --reload-rules 2>/dev/null || true
           fi
