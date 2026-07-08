@@ -1229,3 +1229,213 @@ def test_display_instrument_tab_has_both_info_panel_texts(window):
     assert any(
         "Disable any and all dynamic picture settings" in text for text in labels
     )
+
+
+# --- show_advanced_options --------------------------------------------------
+#
+# Mirrors wx's ``MainFrame.show_advanced_options_handler`` and the helpers it
+# calls (``show_display_delay_ctrls``, ``show_ffp_ctrls``,
+# ``show_output_levels_ctrls``, ``show_observer_ctrl``, ``show_trc_controls``).
+# ``QWidget.isHidden()`` reports a widget's own explicit visibility flag
+# regardless of whether its tab is currently selected or the window is shown
+# (unlike ``isVisible()``/``isVisibleTo()``, which also require every
+# ancestor -- including the settings ``QStackedWidget``'s non-current pages --
+# to be on-screen); ``QFormLayout.isRowVisible()`` is likewise independent of
+# the ancestor chain.
+#
+# Every test below sets every config key its assertions depend on explicitly
+# (rather than assuming a freshly-initialized default) and calls the
+# ``_update_*`` refresh method directly rather than relying on
+# ``QAction.setChecked`` to detect a change: ``config.setcfg`` only mutates
+# the in-memory ``CFG`` singleton, so a value an earlier test left behind
+# (e.g. ``argyll.version``) otherwise survives ``_init_config``'s
+# ``initcfg()`` call, and a ``setChecked(True)`` that finds the action
+# already checked from such a leak is a silent no-op (Qt only emits
+# ``toggled`` on an actual state change), leaving stale visibility behind.
+
+
+def test_show_advanced_options_menu_action_syncs_from_config(window):
+    setcfg("show_advanced_options", 0)
+    window._update_advanced_options_visibility()
+    assert window.show_advanced_options_action.isChecked() is False
+
+    setcfg("show_advanced_options", 1)
+    window._update_advanced_options_visibility()
+    assert window.show_advanced_options_action.isChecked() is True
+
+
+def test_show_advanced_options_toggle_persists_config(window):
+    window.show_advanced_options_action.setChecked(False)
+    window.show_advanced_options_action.setChecked(True)
+    assert getcfg("show_advanced_options") == 1
+    window.show_advanced_options_action.setChecked(False)
+    assert getcfg("show_advanced_options") == 0
+
+
+def test_show_advanced_options_gates_profile_type_row(window):
+    setcfg("show_advanced_options", 0)
+    window._update_advanced_options_visibility()
+    assert window._profiling_form.isRowVisible(window._profile_type_row_widget) is False
+
+    setcfg("show_advanced_options", 1)
+    window._update_advanced_options_visibility()
+    assert window._profiling_form.isRowVisible(window._profile_type_row_widget) is True
+
+
+def test_show_advanced_options_gates_black_luminance_row(window):
+    setcfg("show_advanced_options", 0)
+    window._update_advanced_options_visibility()
+    assert (
+        window._calibration_form.isRowVisible(window._black_luminance_row_widget)
+        is False
+    )
+
+    setcfg("show_advanced_options", 1)
+    window._update_advanced_options_visibility()
+    assert (
+        window._calibration_form.isRowVisible(window._black_luminance_row_widget)
+        is True
+    )
+
+
+def test_show_advanced_options_gates_observer_row(window, monkeypatch):
+    monkeypatch.setattr(
+        Worker, "instrument_can_use_nondefault_observer", lambda self, *a, **k: True
+    )
+    setcfg("calibration.interactive_display_adjustment", 1)
+
+    setcfg("show_advanced_options", 0)
+    window._update_observer_visibility()
+    assert window._calibration_form.isRowVisible(window.observer_ctrl) is False
+
+    setcfg("show_advanced_options", 1)
+    window._update_observer_visibility()
+    assert window._calibration_form.isRowVisible(window.observer_ctrl) is True
+
+    # Also gated on interactive-adjustment/TRC being on, independent of advanced.
+    setcfg("calibration.interactive_display_adjustment", 0)
+    setcfg("trc", "")
+    window._update_observer_visibility()
+    assert window._calibration_form.isRowVisible(window.observer_ctrl) is False
+
+
+def test_show_advanced_options_gates_observer_row_without_nondefault_support(
+    window, monkeypatch
+):
+    monkeypatch.setattr(
+        Worker, "instrument_can_use_nondefault_observer", lambda self, *a, **k: False
+    )
+    setcfg("calibration.interactive_display_adjustment", 1)
+    setcfg("show_advanced_options", 1)
+    window._update_observer_visibility()
+    assert window._calibration_form.isRowVisible(window.observer_ctrl) is False
+
+
+def test_trc_dependent_rows_hidden_for_as_measured_regardless_of_advanced(window):
+    window.trc_ctrl.setCurrentIndex(0)  # "as measured"
+    for advanced in (0, 1):
+        setcfg("show_advanced_options", advanced)
+        window._apply_trc_mode()
+        assert (
+            window._calibration_form.isRowVisible(window._quality_row_widget)
+            is False
+        )
+        assert (
+            window._calibration_form.isRowVisible(window._ambient_row_widget)
+            is False
+        )
+        assert (
+            window._calibration_form.isRowVisible(window.black_output_offset_ctrl)
+            is False
+        )
+        assert (
+            window._calibration_form.isRowVisible(window.black_point_correction_ctrl)
+            is False
+        )
+
+
+def test_trc_typed_gamma_row_needs_advanced_options(window):
+    # Row 1 ("Gamma 2.2") is a typed-gamma row: its text/type fields and the
+    # black-point-correction slider only appear with advanced options on.
+    window.trc_ctrl.setCurrentIndex(1)
+
+    setcfg("show_advanced_options", 0)
+    window._apply_trc_mode()
+    assert window.trc_textctrl.isHidden() is True
+    assert window.trc_type_ctrl.isHidden() is True
+    assert (
+        window._calibration_form.isRowVisible(window.black_point_correction_ctrl)
+        is False
+    )
+    # The calibration-speed row only needs a non-"as measured" TRC, not advanced.
+    assert window._calibration_form.isRowVisible(window._quality_row_widget) is True
+
+    setcfg("show_advanced_options", 1)
+    window._apply_trc_mode()
+    assert window.trc_textctrl.isHidden() is False
+    assert window.trc_type_ctrl.isHidden() is False
+    assert (
+        window._calibration_form.isRowVisible(window.black_point_correction_ctrl)
+        is True
+    )
+
+
+def test_trc_custom_row_always_shows_gamma_fields(window):
+    # Row 7 ("custom") shows the gamma text/type fields even without advanced
+    # options, since there's no other way to enter the value.
+    setcfg("show_advanced_options", 0)
+    window.trc_ctrl.setCurrentIndex(7)
+    window._apply_trc_mode()
+    assert window.trc_textctrl.isHidden() is False
+    assert window.trc_type_ctrl.isHidden() is False
+
+
+def test_show_advanced_options_gates_output_levels_row(window):
+    setcfg("show_advanced_options", 0)
+    window._update_advanced_options_visibility()
+    assert window._output_levels_row_widget.isHidden() is True
+
+    setcfg("show_advanced_options", 1)
+    window._update_advanced_options_visibility()
+    assert window._output_levels_row_widget.isHidden() is False
+
+
+def test_show_advanced_options_keeps_ffp_row_hidden_for_ordinary_display(window):
+    # ffp insertion only applies to Prisma/Resolve/madVR pattern generators;
+    # an ordinary monitor keeps the row hidden even with advanced options on.
+    setcfg("show_advanced_options", 1)
+    window._update_advanced_options_visibility()
+    assert window._ffp_row_widget.isHidden() is True
+
+
+def test_show_advanced_options_gates_display_delay_override_rows(window):
+    setcfg("argyll.version", "1.9.2")
+
+    setcfg("show_advanced_options", 0)
+    window._update_advanced_options_visibility()
+    assert window._delay_form.isRowVisible(window._override_delay_row_widget) is False
+    assert (
+        window._delay_form.isRowVisible(window._override_settle_row_widget) is False
+    )
+
+    setcfg("show_advanced_options", 1)
+    window._update_advanced_options_visibility()
+    assert window._delay_form.isRowVisible(window._override_delay_row_widget) is True
+    assert window._delay_form.isRowVisible(window._override_settle_row_widget) is True
+
+
+def test_show_advanced_options_hides_settle_override_for_old_argyll(window):
+    setcfg("argyll.version", "1.6.0")
+    setcfg("show_advanced_options", 1)
+    window._update_advanced_options_visibility()
+    assert window._delay_form.isRowVisible(window._override_delay_row_widget) is True
+    assert (
+        window._delay_form.isRowVisible(window._override_settle_row_widget) is False
+    )
+
+
+def test_update_controls_resyncs_advanced_options_menu_action(window):
+    setcfg("show_advanced_options", 1)
+    window.update_controls()
+    assert window.show_advanced_options_action.isChecked() is True
+    assert window._profiling_form.isRowVisible(window._profile_type_row_widget) is True

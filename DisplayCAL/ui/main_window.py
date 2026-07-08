@@ -30,9 +30,14 @@ behind :attr:`MainWindow.measurement_requested` (the progress dialog and
 interactive display-adjustment window), the pattern-generator setup dialogs
 (Prisma / madTPG / Resolve), the pre-flight confirmation / overwrite dialogs, the
 visual-editor / ambient-measure buttons, the gamap and testchart-editor /
-file-picker launch buttons, profile-name token expansion, the advanced-option
-show/hide gating, the estimated-measurement-time readouts and the
-black-point-rate advanced control.
+file-picker launch buttons, profile-name token expansion, the estimated-
+measurement-time readouts and the black-point-rate advanced control (and, by
+extension, the ``show_advanced_options`` gating of anything built on top of
+these: the testchart-patch-sequence row, the gamap button, the whitepoint
+colour-temperature-locus row, and the 3D LUT gamut-mapping / apply-cal-on-
+create controls). ``show_advanced_options`` itself is wired (an Options-menu
+checkbox gating every other row it controls that this port does have), see
+:meth:`MainWindow._update_advanced_options_visibility`.
 
 The window is opt-in behind ``DISPLAYCAL_UI=qt`` / ``--qt`` (wired in
 :mod:`DisplayCAL.main`), so it never displaces the still-shipping wx main window.
@@ -511,6 +516,7 @@ class MainWindow(BaseWindow):
 
         self._build_ui()
         self.init_menubar()
+        self._build_options_menu()
         self.setup_language()
         # Run the committed Argyll measurement when a run is requested.
         self.measurement_requested.connect(self._on_measurement_requested)
@@ -595,6 +601,103 @@ class MainWindow(BaseWindow):
         frame = self.frameGeometry()
         frame.moveCenter(screen.availableGeometry().center())
         self.move(frame.topLeft())
+
+    def _build_options_menu(self) -> None:
+        """Add an Options menu with the "show advanced options" toggle.
+
+        Toolkit-neutral scope note: wx's ``menu.options`` also carries the
+        startup-sound/splash/fancy-progress/3D-LUT-tab-visibility toggles and
+        a whole "advanced" submenu of debug switches (``use_separate_lut_access``,
+        ``enable_argyll_debug``, ``extra_args``, etc., see ``mainmenu.xrc``);
+        none of that is reproduced here, only ``show_advanced_options`` itself,
+        since it's the one setting that gates the visibility of controls this
+        window already has.
+        """
+        options_menu = self.menuBar().addMenu(f"&{lang.getstr('menu.options')}")
+        self.show_advanced_options_action = options_menu.addAction(
+            lang.getstr("show_advanced_options")
+        )
+        self.show_advanced_options_action.setCheckable(True)
+        self.show_advanced_options_action.setChecked(
+            bool(getcfg("show_advanced_options"))
+        )
+        self.show_advanced_options_action.toggled.connect(
+            self._show_advanced_options_toggled
+        )
+
+    def _show_advanced_options_toggled(self, checked: bool) -> None:
+        """Persist the ``show_advanced_options`` flag and refresh gated rows."""
+        if self._updating:
+            return
+        setcfg("show_advanced_options", int(checked))
+        self._update_advanced_options_visibility()
+
+    def _update_advanced_options_visibility(self) -> None:
+        """Show or hide every control gated behind ``show_advanced_options``.
+
+        Mirrors wx's ``MainFrame.show_advanced_options_handler`` and the
+        ``show_display_delay_ctrls`` / ``show_ffp_ctrls`` /
+        ``show_output_levels_ctrls`` helpers it calls. Two groups from the wx
+        method aren't reproduced because the controls themselves don't exist
+        in this Qt port yet (see the module docstring's "Deferred" list):
+        the testchart-patch-sequence row and the gamap button (Profiling tab),
+        and the 3D LUT gamut-mapping / apply-cal-on-create controls, plus the
+        whitepoint colour-temperature locus row (Calibration tab).
+        """
+        show_advanced = bool(getcfg("show_advanced_options"))
+        self.show_advanced_options_action.setChecked(show_advanced)
+
+        self._profiling_form.setRowVisible(
+            self._profile_type_row_widget, show_advanced
+        )
+        self._calibration_form.setRowVisible(
+            self._black_luminance_row_widget, show_advanced
+        )
+
+        not_untethered = config.get_display_name(None, True) != "Untethered"
+        self._delay_form.setRowVisible(
+            self._override_delay_row_widget, show_advanced and not_untethered
+        )
+        self._delay_form.setRowVisible(
+            self._override_settle_row_widget,
+            show_advanced
+            and not_untethered
+            and getcfg("argyll.version") >= "1.7",
+        )
+
+        display_name = config.get_display_name(None, True)
+        ffp_visible = show_advanced and (
+            (
+                display_name == "Prisma"
+                and not DEFAULTS["patterngenerator.prisma.argyll"]
+            )
+            or display_name == "Resolve"
+            or (
+                display_name == "madVR"
+                and (
+                    sys.platform != "win32"
+                    or not getcfg("madtpg.native")
+                    or bool(self.worker.argyll_virtual_display)
+                )
+            )
+        )
+        self._ffp_row_widget.setVisible(ffp_visible)
+
+        self._output_levels_row_widget.setVisible(
+            show_advanced and display_name not in ("madVR", "Untethered")
+        )
+
+        self._apply_trc_mode()
+        self._update_observer_visibility()
+
+    def _update_observer_visibility(self) -> None:
+        """Show the observer row per wx's ``MainFrame.show_observer_ctrl``."""
+        show = bool(
+            (getcfg("calibration.interactive_display_adjustment") or getcfg("trc"))
+            and getcfg("show_advanced_options")
+            and self.worker.instrument_can_use_nondefault_observer()
+        )
+        self._calibration_form.setRowVisible(self.observer_ctrl, show)
 
     #: Logical size (pt) of the wx ``get_header()`` wordmark bitmap.
     _HEADER_BANNER_SIZE = (222, 64)
@@ -985,6 +1088,7 @@ class MainWindow(BaseWindow):
 
         # Display update delay / settle time overrides.
         delay_form = QFormLayout()
+        self._delay_form = delay_form
         override_delay_row = QHBoxLayout()
         self.override_min_display_update_delay_ms_cb = QCheckBox(
             lang.getstr("measure.override_min_display_update_delay_ms")
@@ -1003,7 +1107,8 @@ class MainWindow(BaseWindow):
         self.min_display_update_delay_ms_label = QLabel("ms")
         override_delay_row.addWidget(self.min_display_update_delay_ms_label)
         override_delay_row.addStretch(1)
-        delay_form.addRow("", self._wrap(override_delay_row))
+        self._override_delay_row_widget = self._wrap(override_delay_row)
+        delay_form.addRow("", self._override_delay_row_widget)
 
         override_settle_row = QHBoxLayout()
         self.override_display_settle_time_mult_cb = QCheckBox(
@@ -1023,7 +1128,8 @@ class MainWindow(BaseWindow):
         )
         override_settle_row.addWidget(self.display_settle_time_mult_ctrl)
         override_settle_row.addStretch(1)
-        delay_form.addRow("", self._wrap(override_settle_row))
+        self._override_settle_row_widget = self._wrap(override_settle_row)
+        delay_form.addRow("", self._override_settle_row_widget)
         outer.addLayout(delay_form)
 
         # Flash-field-pattern insertion.
@@ -1066,7 +1172,8 @@ class MainWindow(BaseWindow):
         ffp_row.addWidget(self.ffp_insertion_level_ctrl)
         ffp_row.addWidget(QLabel("%"))
         ffp_row.addStretch(1)
-        outer.addLayout(ffp_row)
+        self._ffp_row_widget = self._wrap(ffp_row)
+        outer.addWidget(self._ffp_row_widget)
 
         # Output levels (pattern-generator video-level detection).
         output_levels_row = QHBoxLayout()
@@ -1090,7 +1197,8 @@ class MainWindow(BaseWindow):
             self._output_levels_changed
         )
         output_levels_row.addStretch(1)
-        outer.addLayout(output_levels_row)
+        self._output_levels_row_widget = self._wrap(output_levels_row)
+        outer.addWidget(self._output_levels_row_widget)
 
         # Colorimeter-correction-matrix (CCMX/CCSS) row.
         ccmx_row = QHBoxLayout()
@@ -1186,6 +1294,7 @@ class MainWindow(BaseWindow):
 
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self._calibration_form = form
 
         # Observer (wx places this at the top of the Calibration tab, right
         # after the two toggles, not on the Display & Instrument tab).
@@ -1264,9 +1373,10 @@ class MainWindow(BaseWindow):
         black_luminance_row.addWidget(self.black_luminance_ctrl)
         black_luminance_row.addWidget(self.black_luminance_textctrl)
         black_luminance_row.addStretch(1)
+        self._black_luminance_row_widget = self._wrap(black_luminance_row)
         form.addRow(
             lang.getstr("calibration.black_luminance"),
-            self._wrap(black_luminance_row),
+            self._black_luminance_row_widget,
         )
 
         # Tone response curve.
@@ -1315,7 +1425,8 @@ class MainWindow(BaseWindow):
         ambient_row.addWidget(self.ambient_adjust_cb)
         ambient_row.addWidget(self.ambient_adjust_textctrl)
         ambient_row.addStretch(1)
-        form.addRow("", self._wrap(ambient_row))
+        self._ambient_row_widget = self._wrap(ambient_row)
+        form.addRow("", self._ambient_row_widget)
 
         # Black point correction (0-100 %).
         self.black_point_correction_ctrl = QSlider(Qt.Horizontal)
@@ -1339,7 +1450,8 @@ class MainWindow(BaseWindow):
         quality_row.addWidget(self.calibration_quality_ctrl)
         quality_row.addWidget(self.calibration_quality_info)
         quality_row.addStretch(1)
-        form.addRow(lang.getstr("calibration.speed"), self._wrap(quality_row))
+        self._quality_row_widget = self._wrap(quality_row)
+        form.addRow(lang.getstr("calibration.speed"), self._quality_row_widget)
 
         outer.addLayout(form)
         outer.addWidget(
@@ -1359,6 +1471,7 @@ class MainWindow(BaseWindow):
 
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self._profiling_form = form
 
         self.profile_type_ctrl = QComboBox()
         self._add_value_combo(self.profile_type_ctrl, "profile.type", PROFILE_TYPES)
@@ -1372,7 +1485,8 @@ class MainWindow(BaseWindow):
         type_row.addWidget(self.profile_type_ctrl)
         type_row.addWidget(self.black_point_compensation_cb)
         type_row.addStretch(1)
-        form.addRow(lang.getstr("profile.type"), self._wrap(type_row))
+        self._profile_type_row_widget = self._wrap(type_row)
+        form.addRow(lang.getstr("profile.type"), self._profile_type_row_widget)
 
         self.profile_quality_ctrl = QSlider(Qt.Horizontal)
         self.profile_quality_ctrl.setRange(1, len(PROFILE_QUALITY_LEVELS))
@@ -1558,6 +1672,7 @@ class MainWindow(BaseWindow):
             self.update_calibration_controls()
             self.update_profile_controls()
             self.update_lut3d_controls()
+            self._update_advanced_options_visibility()
         finally:
             self._updating = False
         self._update_action_buttons()
@@ -2033,8 +2148,7 @@ class MainWindow(BaseWindow):
         Toolkit-neutral port of wx's
         ``update_colorimeter_correction_matrix_ctrl_items`` via
         :func:`colorimeter_correction.resolve_colorimeter_correction_selection`.
-        Malformed-file trashing and the observer-control visibility toggle
-        (``show_observer_ctrl``) are not reproduced; see that function's
+        Malformed-file trashing is not reproduced; see that function's
         docstring for the full list of deliberate simplifications.
 
         Args:
@@ -2069,6 +2183,7 @@ class MainWindow(BaseWindow):
             self.observer_ctrl.setEnabled(True)
         if result.measurement_mode is not None:
             self.update_measurement_mode_ctrl()
+        self._update_observer_visibility()
         if result.mismatch_warning:
             QMessageBox.warning(
                 self,
@@ -2221,6 +2336,7 @@ class MainWindow(BaseWindow):
             return
         setcfg(config_key, 1 if checked else 0)
         self._update_action_buttons()
+        self._update_observer_visibility()
 
     def _value_combo_handler(self, config_key: str, index: int, cast: type) -> None:
         """Persist a bound value-combo selection."""
@@ -2294,15 +2410,48 @@ class MainWindow(BaseWindow):
             setcfg("calibration.black_luminance", None)
 
     def _apply_trc_mode(self) -> None:
-        """Enable the gamma text / type fields only for text-driven TRC rows."""
-        is_text = self.trc_ctrl.currentIndex() in _TRC_TEXT_ROWS
+        """Show the TRC-selection-dependent rows, per wx's ``show_trc_controls``.
+
+        Several rows below the TRC combo are gated on a mix of the selected
+        row and ``show_advanced_options`` (custom-gamma row 7 always shows
+        them; rows 1/4, the "typed gamma" ones, only show them when advanced
+        options are on): the gamma text/type fields, the ambient-adjustment
+        row, and the black-output-offset / black-point-correction sliders.
+        The calibration-speed row is simpler, tracking only whether a TRC is
+        selected at all (row 0, "as measured", hides it) regardless of
+        advanced options.
+
+        Not reproduced (see the wx ``black_point_correction_auto_handler``
+        this doubles as): the "auto" black-point-correction checkbox and its
+        rate sub-controls, which this Qt port doesn't have yet, so
+        ``black_point_correction_ctrl`` is always treated as the manual
+        (non-auto) case.
+        """
+        show_advanced = bool(getcfg("show_advanced_options"))
+        index = self.trc_ctrl.currentIndex()
+
+        is_text = index == 7 or (index in (1, 4) and show_advanced)
         self.trc_textctrl.setVisible(is_text)
         self.trc_type_ctrl.setVisible(is_text)
+
+        self._calibration_form.setRowVisible(
+            self._ambient_row_widget,
+            index in (3, 5) or (index > 0 and show_advanced),
+        )
+        self._calibration_form.setRowVisible(
+            self.black_output_offset_ctrl,
+            index == 7 or (index > 0 and show_advanced),
+        )
+        self._calibration_form.setRowVisible(
+            self.black_point_correction_ctrl, index > 0 and show_advanced
+        )
+        self._calibration_form.setRowVisible(self._quality_row_widget, index > 0)
 
     def _trc_changed(self, *_args: object) -> None:
         """Persist the tone-response-curve selection to ``trc`` / ``trc.type``."""
         self._apply_trc_mode()
         self._update_action_buttons()
+        self._update_observer_visibility()
         if self._updating:
             return
         index = self.trc_ctrl.currentIndex()

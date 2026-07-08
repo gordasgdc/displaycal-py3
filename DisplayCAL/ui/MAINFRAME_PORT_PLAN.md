@@ -345,10 +345,12 @@ shows all of these unconditionally rather than gating them behind the toggle
 **Deferred to later slices (Pile 2 / Stage 4-5):** the measure / visual-editor /
 ambient-measure buttons, the gamap and testchart-editor / file-picker / profile
 save-path launch buttons, profile-name token expansion + the `?` preview, the
-`show_advanced_options` show/hide gating, the estimated-measurement-time
-readouts, the black-point-rate advanced control, and the 3D LUT encoding /
-HDR / content-colorspace sub-controls. These depend on tools, dialogs or the
-Stage-4 flow and are rebuilt natively as those land.
+estimated-measurement-time readouts, the black-point-rate advanced control,
+and the 3D LUT encoding / HDR / content-colorspace sub-controls. These depend
+on tools, dialogs or the Stage-4 flow and are rebuilt natively as those land.
+(`show_advanced_options` itself is wired as of Session 8, below — this list is
+now the reason its gating of *these specific* rows, which don't exist in Qt
+yet, is also still deferred.)
 
 **Session 5 — calibration/profile-file header bar.** Built the banner Session 4
 flagged as missing: a new `_build_header()` in `main_window.py` adds the green
@@ -456,6 +458,60 @@ larger mini-dialog feature rather than a tip-text gap, left as its own future
 slice. 6 new regression tests in `tests/test_ui_main_window.py` (106 total, up
 from 100): markup-to-HTML conversion, the scroll-area wrapping, and each
 tab's info text being present and translated.
+
+**Session 8 — `show_advanced_options`.** Ported wx's `show_advanced_options`
+Options-menu toggle (Session 4 had flagged it as the single largest confirmed
+wx/Qt visual mismatch): a new `_build_options_menu()` adds an Options menu
+with just this one checkable action — deliberately not the rest of wx's
+`menu.options` (startup-sound/splash/fancy-progress/3D-LUT-tab toggles, or the
+whole `menu.options.advanced` submenu of debug switches like
+`enable_argyll_debug`/`extra_args`), since none of those gate anything this Qt
+port has. `MainWindow._update_advanced_options_visibility()` mirrors wx's
+`show_advanced_options_handler()` plus the `show_display_delay_ctrls()` /
+`show_ffp_ctrls()` / `show_output_levels_ctrls()` helpers it calls, gating:
+the Profiling tab's profile-type/black-point-compensation row; the
+Calibration tab's black-luminance row; the Display & Instrument tab's
+display-update-delay and display-settle-time-multiplier override rows (also
+gated on a non-"Untethered" display and, for the settle-time row,
+`argyll.version >= "1.7"`); the flash-field-pattern-insertion row (also gated
+on the display being a Prisma/Resolve/madVR pattern generator); and the
+output-levels row (also gated on the display not being madVR/Untethered).
+
+Porting this also meant filling in wx's `show_trc_controls()` /
+`show_observer_ctrl()`, which the Calibration tab's TRC-selection-dependent
+rows had never had (Stage 3 always showed them regardless of the selected
+TRC row): `_apply_trc_mode()` now shows the gamma text/type fields for the
+custom row (7) unconditionally but only for the two typed-gamma rows (1, 4)
+when advanced options are on; the ambient-adjustment row for the two fixed
+Rec.709/SMPTE-240M rows or any row when advanced; the black-output-offset
+slider for the custom row or any row when advanced; the black-point-correction
+slider only when advanced (its wx counterpart is also gated on a manual/auto
+toggle this Qt port doesn't have, so the slider is always treated as manual);
+and the calibration-speed row for any row but "as measured", independent of
+advanced options — a real pre-existing gap (not an advanced-options one),
+since Stage 3 had this row always visible. `_update_observer_visibility()`
+(replacing the "not reproduced" note left in Session 3's colorimeter-
+correction port) shows the observer row when interactive-adjustment or a TRC
+is set, advanced options are on, and the instrument supports a non-default
+observer, wired into the same handlers wx calls it from (TRC change, any
+checkbox toggle, comport/CCMX changes) plus the menu toggle itself and
+`update_controls()`.
+
+Not reproduced, because the controls themselves don't exist in this Qt port
+yet (see the "Deferred" list above): the testchart-patch-sequence row and
+gamap button (Profiling tab), the whitepoint colour-temperature-locus row and
+the black-point-correction auto-checkbox/rate sub-controls (Calibration tab),
+and the 3D LUT gamut-mapping / apply-cal-on-create controls. 14 new
+regression tests in `tests/test_ui_main_window.py` (122 total, up from 108),
+each setting every config key its assertions depend on explicitly and calling
+the `_update_*` method directly rather than relying on `QAction.setChecked` to
+detect a change — a real flakiness trap this session hit and fixed: `setcfg()`
+only mutates the in-memory `CFG` singleton, or a value an earlier test left
+behind (this test file has no per-test config reset beyond `initcfg()`,
+which doesn't clear already-set in-memory keys) survives into the next test,
+and a `setChecked(True)` that finds the action already checked from such a
+leak is a silent no-op (Qt only emits `toggled` on an actual state change),
+leaving stale visibility behind.
 
 ### Stage 4 — Calibrate / measure / profile actions — **DONE (orchestration)**
 
