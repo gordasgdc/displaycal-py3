@@ -1827,12 +1827,19 @@ class MainWindow(BaseWindow):
     def display_ctrl_handler(self, index: int) -> None:
         """Persist the selected display number.
 
+        Mirrors wx's ``display_ctrl_handler``, which re-runs
+        ``display_lut_link_ctrl_handler`` whenever the LUT link row is
+        shown, so a linked ``display_lut_ctrl`` keeps following the newly
+        selected display.
+
         Args:
             index (int): The newly selected combo index.
         """
         if self._updating or index < 0:
             return
         setcfg("display.number", index + 1)
+        if self.display_lut_link_ctrl.isVisibleTo(self):
+            self.display_lut_link_ctrl_handler(self.display_lut_link_ctrl.isChecked())
 
     def comport_ctrl_handler(self, index: int) -> None:
         """Persist the selected instrument (comport) number.
