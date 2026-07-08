@@ -95,7 +95,14 @@ default_logging_level = logging.INFO
 logger = logging.getLogger(__name__ + ".manager")
 logger.setLevel(default_logging_level)
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-ch = logging.StreamHandler()
+# Only attach a real stderr handler when stderr is an interactive console.
+# A frozen windowed exe (py2exe) replaces sys.stderr with a lazily-opening
+# log-file shim that pops up an "Errors in ..." dialog on exit for ANY
+# write, even plain INFO messages, so stay silent there (see #804).
+if hasattr(sys.stderr, "isatty") and sys.stderr.isatty():
+    ch = logging.StreamHandler()
+else:
+    ch = logging.NullHandler()
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 logger.propagate = False
