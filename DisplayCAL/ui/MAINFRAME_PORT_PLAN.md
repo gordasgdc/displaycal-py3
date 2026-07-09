@@ -1192,6 +1192,85 @@ where dozens of earlier tests already populate `lang.LDICT` first). Moved
 `lang.init()` into the `window` fixture itself, ahead of construction, so
 translations are always loaded regardless of worker/test order.
 
+**3D LUT install-offer chain — DONE (2026-07-09).** Picked from the
+"Remaining gaps" list (maintainer's choice, over `Worker.authenticate()`'s
+elevated-scope profile install and the measurement-report edge cases).
+Closes three related deferrals noted since the "3D LUT creation" and
+"3D LUT tab" sessions above: `lut3d_create_btn_handler`'s completion was
+silent on success instead of offering to install the result;
+`3dlut.create` only hid the manual create button instead of actually
+auto-chaining LUT creation after a profiling run; and
+`MainFrame.lut3d_check_bpc`'s black-point-compensation warning had no Qt
+equivalent at all.
+
+`DisplayCAL/lut3d_settings.py` gains `install_via_copy()`, a faithful port
+of the `copy_from_path` branch of `LUT3DMixin.lut3d_create_handler`
+(`wx_lut_3d_frame.py:880-1009`, minus the dead `MasterEffect` sub-branch
+guarded upstream by a hardcoded `use_mclut3d = False`): eeColor's 6
+companion 1D-LUT files, and ReShade's install-layout detection (>=3.x
+`reshade-shaders/{Textures,Shaders}` split, or <3.0's `ReShade.fx` --
+following it if it's a symlink -- patched in place) plus writing a
+templated `ColorLookupTable.fx` next to the copied texture. **Fixed a
+latent bug found while porting** (in both `wx_lut_3d_frame.py` and this new
+module): the <3.0 `ReShade.fx` patch ran `re.sub` with `str` patterns
+against `reshade_fx`, which is `bytes` (`open(..., "rb")`) -- a `TypeError`
+in real Python 3, so this branch could never have actually run without
+crashing. Fixed at the source with `bytes` patterns, so the still-shipping
+wx path gets the fix too (previously unreachable/untested since it needs an
+actual pre-3.0 ReShade install with a non-symlinked `ReShade.fx` on disk).
+
+`main_window.py`: `_on_lut3d_create_finished` now offers to install/copy a
+successfully created 3D LUT via `_offer_install_3dlut()` (a port of the
+3D-LUT branch of `MainFrame.profile_finish`, taken once the LUT file exists
+on disk -- the OK-button label mirrors wx's install/save-as distinction).
+Accepting routes through `_install_3dlut()` (a port of
+`profile_finish_action`'s `install_3dlut_api` branch): the generic
+copy-to-path and ReShade destinations actually install via
+`lut3d_settings.install_via_copy()` behind a new
+`_prompt_3dlut_copy_destination()` (a folder picker for ReShade, a save-file
+dialog with the format's usual extension otherwise, reusing
+`_check_overwrite()`); the madVR (via `madtpg`) and Prisma (its HTTP REST
+API) destinations both install through the already-toolkit-neutral
+`Worker.install_3dlut`, but reaching that point in wx needs the
+still-unported `setup_patterngenerator` connection dialogs (the Prisma host
+prompt with mDNS discovery, the madTPG connect-wait dialog) -- so, matching
+the CCXX-info-button / elevated-install-scope precedent, this port shows a
+not-yet-available notice for that branch instead of attempting an
+unconfigured connection.
+
+`3dlut.create` now really auto-chains: `_on_profile_build_finished` checks
+it before showing the plain profile-install offer and, if set, calls the
+new `_chain_3dlut_after_profile()` instead (matching wx, which never offers
+to install the *profile* in this case, only the 3D LUT) -- if the LUT file
+doesn't exist yet this creates it via the existing
+`lut3d_create_btn_handler()` (identical validation/creation logic to the
+manual button click, since wx uses the very same handler for both), which
+chains into the install offer itself once creation succeeds; if the file
+already exists, the offer is shown directly. wx picks the offer's message
+(`"calibration_profiling.complete"` vs. falling back to
+`"profiling.complete"`) from whether `3dlut.create` is checked at
+*completion* time, not from which caller triggered creation, so
+`_on_lut3d_create_finished` does the same rather than threading a
+caller-specific message through.
+
+New `_check_lut3d_bpc()` ports `MainFrame.lut3d_check_bpc`: wired into
+`_check_handler` so both the black-point-compensation and `3dlut.create`
+checkboxes trigger it (mirroring wx calling it from both handlers
+unconditionally; the warning itself is a no-op unless both are currently
+checked). Accepting turns BPC back off and re-runs `_update_bpc()`;
+declining leaves both settings as chosen.
+
+**Dropped / deferred versus wx:** the madVR/Prisma **API** install
+destinations (see above -- needs `setup_patterngenerator`); the
+share-profile button and calibration-preview / show-LUT / show-profile-info
+checkboxes on the install-offer dialog (the same cuts
+`_on_profile_build_finished`'s plain profile-install offer already makes);
+and the `EDID`/instrument-ID auto-matching `check_overwrite` variants that
+don't apply to 3D LUTs. 6 new tests in `tests/test_lut3d_settings.py` for
+`install_via_copy()` (plain single-file, eeColor companions present/absent,
+ReShade modern-shaders-folder, ReShade legacy-patch, ReShade no-existing-layout)
+plus 26 new/updated regression tests in `tests/test_ui_main_window.py`.
+
 ### Stage 5+ — Reporting, colorimeter corrections, install/share
 
 The remaining large features, each its own slice: measurement report

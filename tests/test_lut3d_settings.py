@@ -439,3 +439,108 @@ def test_lut3d_bitdepth_controls_visible():
     assert l3d.lut3d_bitdepth_controls_visible("3dl") == (True, True)
     assert l3d.lut3d_bitdepth_controls_visible("png") == (False, True)
     assert l3d.lut3d_bitdepth_controls_visible("cube") == (False, False)
+
+
+# -- install_via_copy --------------------------------------------------------
+
+
+def test_install_via_copy_plain_single_file(tmp_path):
+    src = tmp_path / "lut.cube"
+    src.write_bytes(b"cube data")
+    dst = tmp_path / "dest" / "lut.cube"
+    dst.parent.mkdir()
+
+    result = l3d.install_via_copy("cube", 33, 16, str(src), str(dst))
+
+    assert result == [str(dst)]
+    assert dst.read_bytes() == b"cube data"
+
+
+def test_install_via_copy_eecolor_copies_companion_1d_luts(tmp_path):
+    src = tmp_path / "lut-3d.txt"
+    src.write_bytes(b"3d lut")
+    for part in ("first", "second"):
+        for channel in ("blue", "green", "red"):
+            (tmp_path / f"lut-3d-{part}1d{channel}.txt").write_bytes(
+                f"{part}-{channel}".encode()
+            )
+    dst_dir = tmp_path / "dest"
+    dst_dir.mkdir()
+    dst = dst_dir / "installed.txt"
+
+    result = l3d.install_via_copy("eeColor", 17, 16, str(src), str(dst))
+
+    assert len(result) == 7  # primary LUT + 6 companions
+    assert dst.read_bytes() == b"3d lut"
+    for part in ("first", "second"):
+        for channel in ("blue", "green", "red"):
+            companion = dst_dir / f"installed-{part}1d{channel}.txt"
+            assert companion.read_bytes() == f"{part}-{channel}".encode()
+
+
+def test_install_via_copy_eecolor_skips_missing_companions(tmp_path):
+    src = tmp_path / "lut-3d.txt"
+    src.write_bytes(b"3d lut")
+    dst_dir = tmp_path / "dest"
+    dst_dir.mkdir()
+    dst = dst_dir / "installed.txt"
+
+    result = l3d.install_via_copy("eeColor", 17, 16, str(src), str(dst))
+
+    assert result == [str(dst)]
+
+
+def test_install_via_copy_reshade_modern_shaders_folder(tmp_path):
+    src = tmp_path / "lut.png"
+    src.write_bytes(b"png data")
+    dst_dir = tmp_path / "install"
+    shaders = dst_dir / "reshade-shaders"
+    (shaders / "Textures").mkdir(parents=True)
+    (shaders / "Shaders").mkdir(parents=True)
+    dst = dst_dir / "ColorLookupTable.png"
+
+    result = l3d.install_via_copy("ReShade", 32, 16, str(src), str(dst))
+
+    installed_texture = shaders / "Textures" / "ColorLookupTable.png"
+    installed_fx = shaders / "Shaders" / "ColorLookupTable.fx"
+    assert result == [str(installed_texture)]
+    assert installed_texture.read_bytes() == b"png data"
+    assert installed_fx.is_file()
+    fx_text = installed_fx.read_text()
+    assert "${WIDTH}" not in fx_text
+    assert "${HEIGHT}" not in fx_text
+    assert "1024" in fx_text  # WIDTH = size**2 = 32**2
+    assert "RGBA16" in fx_text
+
+
+def test_install_via_copy_reshade_legacy_patches_existing_fx(tmp_path):
+    src = tmp_path / "lut.png"
+    src.write_bytes(b"png data")
+    dst_dir = tmp_path / "install"
+    dst_dir.mkdir()
+    (dst_dir / "ReShade.fx").write_bytes(b"// existing shader content\n")
+    dst = dst_dir / "ColorLookupTable.png"
+
+    result = l3d.install_via_copy("ReShade", 32, 16, str(src), str(dst))
+
+    assert result == [str(dst)]
+    assert dst.read_bytes() == b"png data"
+    patched = (dst_dir / "ReShade.fx").read_bytes()
+    assert b'#include "ColorLookupTable.fx"' in patched
+    assert b"// existing shader content" in patched
+    assert (dst_dir / "ColorLookupTable.fx").is_file()
+
+
+def test_install_via_copy_reshade_no_existing_layout_writes_shader_only(tmp_path):
+    src = tmp_path / "lut.png"
+    src.write_bytes(b"png data")
+    dst_dir = tmp_path / "install"
+    dst_dir.mkdir()
+    dst = dst_dir / "ColorLookupTable.png"
+
+    result = l3d.install_via_copy("ReShade", 32, 16, str(src), str(dst))
+
+    assert result == [str(dst)]
+    assert dst.read_bytes() == b"png data"
+    assert (dst_dir / "ColorLookupTable.fx").is_file()
+    assert not (dst_dir / "ReShade.fx").exists()

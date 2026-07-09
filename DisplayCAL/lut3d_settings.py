@@ -15,22 +15,41 @@ the embedded tab and the standalone 3D LUT maker's own (independently
 written) ``create_3dlut``; the rest of that method is a flat, untestable
 config-to-kwarg mapping and is built inline by each caller.
 
+Also includes :func:`install_via_copy`, the toolkit-neutral half of
+``LUT3DMixin.lut3d_create_handler``'s ``copy_from_path`` branch (the
+"copy an already-created 3D LUT to its install location" flow used by both
+the manual create button and the ``3dlut.create`` auto-chain's install
+offer): eeColor's 6 companion 1D-LUT files, and ReShade's folder-layout
+detection + shader patching. The madVR/Prisma **API** install path
+(``Worker.install_3dlut``) is not wrapped here since it needs a live
+``madtpg``/pattern-generator connection and the (still unported)
+``setup_patterngenerator`` Prisma-host-prompt / madTPG-connect-wait dialogs;
+:mod:`DisplayCAL.ui.main_window` shows a not-yet-available notice for that
+branch instead, matching the CCXX-info-button precedent.
+
 Not reproduced: ``XYZbpout`` (the last measured/loaded profile's output black
 point) which wx factors into ``lut3d_show_trc_controls``'s black-output-offset
 row visibility; this port treats it as always ``[0, 0, 0]`` (its value before
 any profile has been measured), so that row's visibility reduces to just
-``3dlut.create``; and ``MainFrame.lut3d_check_bpc``'s warning (offering to
-turn off profile black-point compensation when both it and ``3dlut.create``
-are enabled together), which wx shows from the BPC checkbox's own handler, not
-from 3D LUT creation itself.
+``3dlut.create``; and the dead ``MasterEffect`` sub-branch of the ReShade copy
+flow (guarded upstream by a hardcoded ``use_mclut3d = False``, so it can never
+run).
 """
 
 from __future__ import annotations
 
+import os
+import re
+import shutil
 from dataclasses import dataclass
 
 from DisplayCAL import colormath
 from DisplayCAL.argyll_names import VIDEO_ENCODINGS
+from DisplayCAL.config import get_data_path
+from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.meta import VERSION_STRING
+from DisplayCAL.util_os import islink, readlink
+from DisplayCAL.util_str import strtr
 
 #: 3D LUT tone curve combo rows, in UI order (``lut3d_trc_ctrl``'s ``main.xrc``
 #: population order, distinct from ``config.VALID_VALUES["3dlut.trc"]``'s
@@ -458,3 +477,117 @@ def resolve_creation_whitepoint(
     if not x or not y:
         return None
     return colormath.xyY2XYZ(x, y)
+
+
+def install_via_copy(
+    file_format: str, size: int, bitdepth_output: int, src_path: str, dst_path: str
+) -> list[str]:
+    """Copy an already-created 3D LUT file to its install location.
+
+    Faithful port of the ``copy_from_path`` branch of
+    ``LUT3DMixin.lut3d_create_handler`` (``wx_lut_3d_frame.py:880-1009``),
+    minus the dead ``MasterEffect`` sub-branch. Two formats need more than a
+    single file copy:
+
+    - ``eeColor``: also copies the 6 companion 1D-LUT ``.txt`` files
+      (``-first1d{red,green,blue}.txt`` / ``-second1d...``) that sit next to
+      ``src_path``, if present.
+    - ``ReShade``: detects the ReShade install layout at ``dst_path``'s
+      directory (>=3.x ``reshade-shaders/{Textures,Shaders}`` split, or <3.0's
+      ``ReShade.fx`` -- following it if it's a symlink -- patched in place to
+      ``#include`` the generated shader) and writes ``ColorLookupTable.fx``
+      (templated from the bundled ``ColorLookupTable.fx`` data file) next to
+      the copied texture.
+
+    Args:
+        file_format: ``3dlut.format`` at creation time.
+        size: ``3dlut.size`` (only used for the ReShade shader template).
+        bitdepth_output: ``3dlut.bitdepth.output`` (ditto).
+        src_path: Path to the already-created 3D LUT file.
+        dst_path: The user-chosen destination (for ReShade, the target
+            texture path inside the chosen folder).
+
+    Returns:
+        The destination paths actually written, in copy order (the first
+        entry is always the primary LUT file's final path, which may differ
+        from ``dst_path`` for ReShade once its folder layout is resolved).
+
+    Raises:
+        FileNotFoundError: If the bundled ``ColorLookupTable.fx`` template is
+            missing (a packaging error, not a user error).
+    """
+    src_paths = [src_path]
+    dst_paths = [dst_path]
+    if file_format == "eeColor":
+        src_name = os.path.splitext(src_path)[0]
+        dst_name = os.path.splitext(dst_path)[0]
+        for part in ("first", "second"):
+            for channel in ("blue", "green", "red"):
+                companion = f"{src_name}-{part}1d{channel}.txt"
+                if os.path.isfile(companion):
+                    src_paths.append(companion)
+                    dst_paths.append(f"{dst_name}-{part}1d{channel}.txt")
+    elif file_format == "ReShade":
+        dst_dir = os.path.dirname(dst_path)
+        clut_fx_path = get_data_path("ColorLookupTable.fx")
+        if not clut_fx_path:
+            raise FileNotFoundError("ColorLookupTable.fx")
+        with open(clut_fx_path, "rb") as clut_fx_file:
+            clut_fx = clut_fx_file.read()
+        clut_fx = strtr(
+            clut_fx,
+            {
+                "${VERSION}": VERSION_STRING,
+                "${WIDTH}": str(size**2),
+                "${HEIGHT}": str(size),
+                "${FORMAT}": f"RGBA{bitdepth_output}",
+            },
+        )
+        reshade_shaders = os.path.join(dst_dir, "reshade-shaders")
+        if os.path.isdir(reshade_shaders):
+            # ReShade >= 3.x with default shaders
+            dst_path = os.path.join(
+                reshade_shaders, "Textures", os.path.basename(dst_path)
+            )
+            dst_paths = [dst_path]
+            dst_dir = os.path.join(reshade_shaders, "Shaders")
+        else:
+            reshade_fx_path = os.path.join(dst_dir, "ReShade.fx")
+            if islink(reshade_fx_path):
+                # ReShade < 3.0
+                reshade_fx_path = readlink(reshade_fx_path)
+                dst_dir = os.path.dirname(reshade_fx_path)
+                dst_path = os.path.join(dst_dir, os.path.basename(dst_path))
+                dst_paths = [dst_path]
+            if os.path.isfile(reshade_fx_path):
+                # ReShade < 3.0: alter existing ReShade.fx
+                with open(reshade_fx_path, "rb") as reshade_fx_file:
+                    reshade_fx = reshade_fx_file.read()
+                # Remove existing shader include
+                reshade_fx = re.sub(
+                    rb"[ \t]*//\s*Automatically\s+\S+\s+by\s+"
+                    + re.escape(APPNAME.encode())
+                    + rb"\s+.+[ \t]*\r?\n?",
+                    b"",
+                    reshade_fx,
+                )
+                reshade_fx = re.sub(
+                    rb'[ \t]*#include\s+"ColorLookupTable.fx"[ \t]*\r?\n?',
+                    b"",
+                    reshade_fx,
+                ).rstrip(b"\r\n")
+                reshade_fx += (
+                    f"{os.linesep * 2}// Automatically added by "
+                    f"{APPNAME} {VERSION_STRING}{os.linesep}"
+                ).encode()
+                reshade_fx += (
+                    f'#include "ColorLookupTable.fx"{os.linesep}'
+                ).encode()
+                with open(reshade_fx_path, "wb") as reshade_fx_file:
+                    reshade_fx_file.write(reshade_fx)
+        clut_fx_dst = os.path.join(dst_dir, "ColorLookupTable.fx")
+        with open(clut_fx_dst, "wb") as clut_fx_file:
+            clut_fx_file.write(clut_fx)
+    for src, dst in zip(src_paths, dst_paths):
+        shutil.copyfile(src, dst)
+    return dst_paths

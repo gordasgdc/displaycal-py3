@@ -40,8 +40,21 @@ def qapp():
 
 @pytest.fixture(autouse=True)
 def _init_config():
-    """Initialise config (default values) before each test."""
+    """Initialise config (default values) before each test.
+
+    ``initcfg()`` only fills in missing keys -- it does not clear ones a
+    prior test already set in the shared in-memory ``config.CFG`` (the
+    "config leaks between tests" trap this file's history already warns
+    about). ``3dlut.create`` / ``profile.black_point_compensation`` are
+    explicitly reset here: either being left ``1`` by an earlier test used
+    to be harmless, but now drives ``_check_handler`` into showing a real,
+    usually-unmocked ``QMessageBox`` via ``_check_lut3d_bpc`` whenever a
+    later test flips either checkbox through the UI -- hanging the whole run
+    (the "Qt test modal-hang gotcha").
+    """
     config.initcfg()
+    setcfg("3dlut.create", 0)
+    setcfg("profile.black_point_compensation", 0)
     yield
 
 
@@ -658,6 +671,91 @@ def test_profile_type_ctrl_nudges_bpc_default(window):
     assert getcfg("profile.black_point_compensation") == 0
     window.profile_type_ctrl.setCurrentIndex(4)  # 1xCurve+MTX ("S")
     assert getcfg("profile.black_point_compensation") == 1
+
+
+# --- lut3d_check_bpc warning -------------------------------------------------
+
+
+def test_check_lut3d_bpc_noop_when_3dlut_create_off(window, monkeypatch):
+    setcfg("3dlut.create", 0)
+    setcfg("profile.black_point_compensation", 1)
+    exec_calls = []
+    monkeypatch.setattr(mw.QMessageBox, "exec_", lambda self: exec_calls.append(True))
+
+    window._check_lut3d_bpc()
+
+    assert exec_calls == []
+
+
+def test_check_lut3d_bpc_noop_when_bpc_off(window, monkeypatch):
+    setcfg("3dlut.create", 1)
+    setcfg("profile.black_point_compensation", 0)
+    exec_calls = []
+    monkeypatch.setattr(mw.QMessageBox, "exec_", lambda self: exec_calls.append(True))
+
+    window._check_lut3d_bpc()
+
+    assert exec_calls == []
+
+
+def test_check_lut3d_bpc_turn_off_disables_bpc(window, monkeypatch):
+    setcfg("3dlut.create", 1)
+    setcfg("profile.black_point_compensation", 1)
+    monkeypatch.setattr(mw, "QMessageBox", _FakeTwoButtonMessageBox)
+    _FakeTwoButtonMessageBox.clicked_role = "accept"
+    updated = []
+    monkeypatch.setattr(window, "_update_bpc", lambda *a, **k: updated.append(True))
+
+    window._check_lut3d_bpc()
+
+    assert getcfg("profile.black_point_compensation") == 0
+    assert updated == [True]
+
+
+def test_check_lut3d_bpc_keep_current_leaves_bpc(window, monkeypatch):
+    setcfg("3dlut.create", 1)
+    setcfg("profile.black_point_compensation", 1)
+    monkeypatch.setattr(mw, "QMessageBox", _FakeTwoButtonMessageBox)
+    _FakeTwoButtonMessageBox.clicked_role = "reject"
+
+    window._check_lut3d_bpc()
+
+    assert getcfg("profile.black_point_compensation") == 1
+
+
+def test_check_handler_bpc_change_triggers_bpc_warning(window, monkeypatch):
+    setcfg("3dlut.create", 1)
+    checked = []
+    monkeypatch.setattr(
+        window, "_check_lut3d_bpc", lambda: checked.append(True)
+    )
+
+    window._check_handler("profile.black_point_compensation", True)
+
+    assert checked == [True]
+
+
+def test_check_handler_lut3d_create_change_triggers_bpc_warning(window, monkeypatch):
+    setcfg("profile.black_point_compensation", 1)
+    checked = []
+    monkeypatch.setattr(
+        window, "_check_lut3d_bpc", lambda: checked.append(True)
+    )
+
+    window._check_handler("3dlut.create", True)
+
+    assert checked == [True]
+
+
+def test_check_handler_unrelated_key_does_not_trigger_bpc_warning(window, monkeypatch):
+    checked = []
+    monkeypatch.setattr(
+        window, "_check_lut3d_bpc", lambda: checked.append(True)
+    )
+
+    window._check_handler("calibration.interactive_display_adjustment", True)
+
+    assert checked == []
 
 
 def test_testchart_ctrl_populates_with_auto_first(window):
@@ -1910,6 +2008,46 @@ def test_fast_matrix_shaper_choice_maps_clicked_button(
     assert window._fast_matrix_shaper_choice(_fast_matrix_shaper_info()) is expected
 
 
+class _FakeTwoButtonMessageBox:
+    """Stand-in for ``mw.QMessageBox`` for the 2-button ``addButton`` dialogs
+    :meth:`_check_lut3d_bpc` and :meth:`_offer_install_3dlut` build (an
+    ``AcceptRole`` button plus a ``RejectRole`` one), the same shape as
+    :class:`_FakeFastMatrixShaperMessageBox` minus the third button."""
+
+    Question = 0
+    Warning = 1
+    AcceptRole = 1
+    RejectRole = 3
+
+    clicked_role = None  # "accept" | "reject", set per-test
+
+    def __init__(self, parent=None):
+        self._buttons = {}
+
+    def setWindowTitle(self, title):
+        pass
+
+    def setIcon(self, icon):
+        pass
+
+    def setText(self, text):
+        self.text = text
+
+    def addButton(self, text, role):
+        button = (text, role)
+        self._buttons[role] = button
+        return button
+
+    def exec_(self):
+        return None
+
+    def clickedButton(self):
+        role = {"accept": self.AcceptRole, "reject": self.RejectRole}[
+            self.clicked_role
+        ]
+        return self._buttons[role]
+
+
 def test_profile_btn_handler_stashes_apply_calibration_and_begins(
     window, monkeypatch
 ):
@@ -2505,6 +2643,7 @@ def test_profile_build_finished_success_offers_install(
     window, monkeypatch, srgb_profile_path
 ):
     setcfg("calibration.file", None)
+    setcfg("3dlut.create", 0)
     monkeypatch.setattr(window.worker, "log", lambda *a, **k: None)
     updated = []
     monkeypatch.setattr(
@@ -2529,6 +2668,7 @@ def test_profile_build_finished_success_declines_install(
     window, monkeypatch, srgb_profile_path
 ):
     setcfg("calibration.file", None)
+    setcfg("3dlut.create", 0)
     monkeypatch.setattr(window.worker, "log", lambda *a, **k: None)
     monkeypatch.setattr(window, "update_calibration_file_ctrl", lambda: None)
     monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.No)
@@ -2737,14 +2877,334 @@ def test_on_lut3d_create_finished_exception_shows_error(window, monkeypatch):
     assert "collink failed" in errors[0][2]
 
 
-def test_on_lut3d_create_finished_success_is_silent(window, monkeypatch):
+def test_on_lut3d_create_finished_incomplete_is_silent(window, monkeypatch):
     monkeypatch.setattr(window.worker, "wrapup", lambda *a, **k: None)
     errors = []
     monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
 
-    window._on_lut3d_create_finished(True)
+    window._on_lut3d_create_finished(False)
 
     assert errors == []
+
+
+def test_on_lut3d_create_finished_success_no_file_on_disk_no_offer(window, monkeypatch):
+    # ``worker.lut3d_get_filename`` is deterministic from config but nothing
+    # actually wrote a file there, so the offer is skipped (mirrors wx, which
+    # only shows the ConfirmDialog once ``self.lut3d_path`` exists on disk).
+    monkeypatch.setattr(window.worker, "wrapup", lambda *a, **k: None)
+    exec_calls = []
+    monkeypatch.setattr(mw.QMessageBox, "exec_", lambda self: exec_calls.append(True))
+
+    window._on_lut3d_create_finished(True)
+
+    assert exec_calls == []
+
+
+# --- 3D LUT install-offer chain ---------------------------------------------
+
+
+def test_offer_install_3dlut_ok_label_madvr_uses_install_wording(
+    window, monkeypatch, tmp_path
+):
+    lut_path = tmp_path / "lut.3dlut"
+    lut_path.write_bytes(b"lut")
+    monkeypatch.setattr(window.worker, "lut3d_get_filename", lambda: str(lut_path))
+    setcfg("3dlut.format", "madVR")
+    monkeypatch.setattr(mw, "QMessageBox", _FakeTwoButtonMessageBox)
+    _FakeTwoButtonMessageBox.clicked_role = "reject"
+    boxes = []
+
+    def fake_init(self, parent=None):
+        boxes.append(self)
+        self._buttons = {}
+
+    monkeypatch.setattr(_FakeTwoButtonMessageBox, "__init__", fake_init)
+
+    window._offer_install_3dlut()
+
+    assert boxes
+    ok_label, _role = boxes[0]._buttons[_FakeTwoButtonMessageBox.AcceptRole]
+    assert ok_label == lang.getstr("3dlut.install")
+
+
+def test_offer_install_3dlut_ok_label_plain_format_uses_save_as_wording(
+    window, monkeypatch, tmp_path
+):
+    lut_path = tmp_path / "lut.cube"
+    lut_path.write_bytes(b"lut")
+    monkeypatch.setattr(window.worker, "lut3d_get_filename", lambda: str(lut_path))
+    setcfg("3dlut.format", "cube")
+    monkeypatch.setattr(mw, "QMessageBox", _FakeTwoButtonMessageBox)
+    _FakeTwoButtonMessageBox.clicked_role = "reject"
+    boxes = []
+
+    def fake_init(self, parent=None):
+        boxes.append(self)
+        self._buttons = {}
+
+    monkeypatch.setattr(_FakeTwoButtonMessageBox, "__init__", fake_init)
+
+    window._offer_install_3dlut()
+
+    assert boxes
+    ok_label, _role = boxes[0]._buttons[_FakeTwoButtonMessageBox.AcceptRole]
+    assert ok_label == lang.getstr("3dlut.save_as")
+
+
+def test_offer_install_3dlut_declines_does_not_install(window, monkeypatch, tmp_path):
+    lut_path = tmp_path / "lut.cube"
+    lut_path.write_bytes(b"lut")
+    monkeypatch.setattr(window.worker, "lut3d_get_filename", lambda: str(lut_path))
+    setcfg("3dlut.format", "cube")
+    monkeypatch.setattr(mw, "QMessageBox", _FakeTwoButtonMessageBox)
+    _FakeTwoButtonMessageBox.clicked_role = "reject"
+    installed = []
+    monkeypatch.setattr(window, "_install_3dlut", lambda *a, **k: installed.append(True))
+
+    window._offer_install_3dlut()
+
+    assert installed == []
+
+
+def test_offer_install_3dlut_accepts_routes_to_install(window, monkeypatch, tmp_path):
+    lut_path = tmp_path / "lut.cube"
+    lut_path.write_bytes(b"lut")
+    monkeypatch.setattr(window.worker, "lut3d_get_filename", lambda: str(lut_path))
+    setcfg("3dlut.format", "cube")
+    monkeypatch.setattr(mw, "QMessageBox", _FakeTwoButtonMessageBox)
+    _FakeTwoButtonMessageBox.clicked_role = "accept"
+    calls = []
+    monkeypatch.setattr(
+        window,
+        "_install_3dlut",
+        lambda path, fmt, prisma: calls.append((path, fmt, prisma)),
+    )
+
+    window._offer_install_3dlut("custom message")
+
+    assert calls == [(str(lut_path), "cube", False)]
+
+
+def test_install_3dlut_madvr_shows_not_available_notice(window, monkeypatch):
+    setcfg("3dlut.trc", "gamma2.2")
+    infos = []
+    monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: infos.append(a))
+    copies = []
+    monkeypatch.setattr(
+        mw.lut3d_settings, "install_via_copy", lambda *a, **k: copies.append(a)
+    )
+
+    window._install_3dlut("/tmp/lut.3dlut", "madVR", False)
+
+    assert infos
+    assert copies == []
+
+
+def test_install_3dlut_prisma_shows_not_available_notice(window, monkeypatch):
+    infos = []
+    monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: infos.append(a))
+    copies = []
+    monkeypatch.setattr(
+        mw.lut3d_settings, "install_via_copy", lambda *a, **k: copies.append(a)
+    )
+
+    window._install_3dlut("/tmp/lut.3dl", "3dl", True)
+
+    assert infos
+    assert copies == []
+
+
+def test_install_3dlut_plain_format_prompts_and_copies(window, monkeypatch, tmp_path):
+    src = tmp_path / "lut.cube"
+    src.write_bytes(b"lut data")
+    dst = tmp_path / "dest.cube"
+    monkeypatch.setattr(
+        window, "_prompt_3dlut_copy_destination", lambda fmt, path: str(dst)
+    )
+    setcfg("3dlut.size", 33)
+    setcfg("3dlut.bitdepth.output", 16)
+
+    window._install_3dlut(str(src), "cube", False)
+
+    assert dst.read_bytes() == b"lut data"
+    assert getcfg("last_3dlut_path") == str(dst)
+
+
+def test_install_3dlut_cancelled_prompt_does_not_copy(window, monkeypatch, tmp_path):
+    src = tmp_path / "lut.cube"
+    src.write_bytes(b"lut data")
+    monkeypatch.setattr(
+        window, "_prompt_3dlut_copy_destination", lambda fmt, path: ""
+    )
+    copies = []
+    monkeypatch.setattr(
+        mw.lut3d_settings, "install_via_copy", lambda *a, **k: copies.append(a)
+    )
+
+    window._install_3dlut(str(src), "cube", False)
+
+    assert copies == []
+
+
+def test_install_3dlut_copy_oserror_shows_critical(window, monkeypatch, tmp_path):
+    src = tmp_path / "lut.cube"
+    src.write_bytes(b"lut data")
+    dst = tmp_path / "dest.cube"
+    monkeypatch.setattr(
+        window, "_prompt_3dlut_copy_destination", lambda fmt, path: str(dst)
+    )
+    monkeypatch.setattr(
+        mw.lut3d_settings,
+        "install_via_copy",
+        lambda *a, **k: (_ for _ in ()).throw(OSError("disk full")),
+    )
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+
+    window._install_3dlut(str(src), "cube", False)
+
+    assert errors
+    assert "disk full" in errors[0][2]
+
+
+def test_prompt_3dlut_copy_destination_reshade_uses_folder_dialog(
+    window, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(
+        mw.QFileDialog, "getExistingDirectory", lambda *a, **k: str(tmp_path)
+    )
+
+    result = window._prompt_3dlut_copy_destination("ReShade", "/tmp/x.png")
+
+    assert result == os.path.join(str(tmp_path), "ColorLookupTable.png")
+
+
+def test_prompt_3dlut_copy_destination_reshade_cancel_returns_empty(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw.QFileDialog, "getExistingDirectory", lambda *a, **k: "")
+
+    result = window._prompt_3dlut_copy_destination("ReShade", "/tmp/x.png")
+
+    assert result == ""
+
+
+def test_prompt_3dlut_copy_destination_plain_uses_save_dialog_with_extension(
+    window, monkeypatch, tmp_path
+):
+    chosen = str(tmp_path / "installed")
+    monkeypatch.setattr(
+        mw.QFileDialog, "getSaveFileName", lambda *a, **k: (chosen, "")
+    )
+
+    result = window._prompt_3dlut_copy_destination("eeColor", "/tmp/lut-3d.txt")
+
+    assert result == chosen + ".txt"
+
+
+def test_prompt_3dlut_copy_destination_cancel_returns_empty(window, monkeypatch):
+    monkeypatch.setattr(mw.QFileDialog, "getSaveFileName", lambda *a, **k: ("", ""))
+
+    result = window._prompt_3dlut_copy_destination("cube", "/tmp/lut.cube")
+
+    assert result == ""
+
+
+def test_prompt_3dlut_copy_destination_overwrite_declined_returns_empty(
+    window, monkeypatch, tmp_path
+):
+    existing = tmp_path / "installed.cube"
+    existing.write_bytes(b"already there")
+    monkeypatch.setattr(
+        mw.QFileDialog, "getSaveFileName", lambda *a, **k: (str(existing), "")
+    )
+    monkeypatch.setattr(window, "_check_overwrite", lambda **k: False)
+
+    result = window._prompt_3dlut_copy_destination("cube", "/tmp/lut.cube")
+
+    assert result == ""
+
+
+# --- 3dlut.create auto-chain after profiling --------------------------------
+
+
+def test_chain_3dlut_after_profile_creates_when_missing(window, monkeypatch, tmp_path):
+    missing = tmp_path / "not_there.cube"
+    monkeypatch.setattr(window.worker, "lut3d_get_filename", lambda: str(missing))
+    created = []
+    monkeypatch.setattr(
+        window, "lut3d_create_btn_handler", lambda: created.append(True)
+    )
+    offered = []
+    monkeypatch.setattr(
+        window, "_offer_install_3dlut", lambda *a, **k: offered.append(True)
+    )
+
+    window._chain_3dlut_after_profile()
+
+    assert created == [True]
+    assert offered == []
+
+
+def test_chain_3dlut_after_profile_offers_when_lut_already_exists(
+    window, monkeypatch, tmp_path
+):
+    existing = tmp_path / "already_there.cube"
+    existing.write_bytes(b"lut")
+    monkeypatch.setattr(window.worker, "lut3d_get_filename", lambda: str(existing))
+    created = []
+    monkeypatch.setattr(
+        window, "lut3d_create_btn_handler", lambda: created.append(True)
+    )
+    offered = []
+    monkeypatch.setattr(
+        window, "_offer_install_3dlut", lambda *a, **k: offered.append(a)
+    )
+
+    window._chain_3dlut_after_profile()
+
+    assert created == []
+    assert offered == [(lang.getstr("calibration_profiling.complete"),)]
+
+
+def test_profile_build_finished_3dlut_create_on_chains_instead_of_profile_offer(
+    window, monkeypatch, srgb_profile_path
+):
+    setcfg("calibration.file", None)
+    setcfg("3dlut.create", 1)
+    monkeypatch.setattr(window.worker, "log", lambda *a, **k: None)
+    monkeypatch.setattr(window, "update_calibration_file_ctrl", lambda: None)
+    chained = []
+    monkeypatch.setattr(
+        window, "_chain_3dlut_after_profile", lambda: chained.append(True)
+    )
+    questions = []
+    monkeypatch.setattr(
+        mw.QMessageBox, "question", lambda *a, **k: questions.append(a) or mw.QMessageBox.Yes
+    )
+
+    window._on_profile_build_finished(srgb_profile_path)
+
+    assert chained == [True]
+    assert questions == []  # the plain profile-install offer never shown
+
+
+def test_profile_build_finished_3dlut_create_off_shows_profile_offer_as_before(
+    window, monkeypatch, srgb_profile_path
+):
+    setcfg("calibration.file", None)
+    setcfg("3dlut.create", 0)
+    monkeypatch.setattr(window.worker, "log", lambda *a, **k: None)
+    monkeypatch.setattr(window, "update_calibration_file_ctrl", lambda: None)
+    chained = []
+    monkeypatch.setattr(
+        window, "_chain_3dlut_after_profile", lambda: chained.append(True)
+    )
+    monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.No)
+
+    window._on_profile_build_finished(srgb_profile_path)
+
+    assert chained == []
 
 
 def test_update_action_buttons_shows_lut3d_create_btn_when_manual(window):

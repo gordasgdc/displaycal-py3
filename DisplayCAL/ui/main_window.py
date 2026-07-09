@@ -35,7 +35,20 @@ profile buttons whenever the 3D LUT tab is active with manual creation) now
 runs ``worker.create_3dlut`` through the same
 :class:`~DisplayCAL.ui.worker_runner.WorkerRunController` the other action
 buttons use; see :mod:`DisplayCAL.lut3d_settings`'s module docstring for what
-isn't reproduced there. The measurement-report settings window
+isn't reproduced there. On success (:meth:`MainWindow._on_lut3d_create_finished`)
+it now also offers to install/copy the result
+(:meth:`MainWindow._offer_install_3dlut` / :meth:`_install_3dlut`, a port of
+wx's ``profile_finish`` re-entry from ``lut3d_create_consumer``), and
+``3dlut.create`` now really does auto-chain LUT creation after a profiling
+run instead of only hiding the manual button
+(:meth:`MainWindow._chain_3dlut_after_profile`, called from
+:meth:`_on_profile_build_finished`), with :meth:`MainWindow._check_lut3d_bpc`
+(a port of ``MainFrame.lut3d_check_bpc``) warning if profile black-point
+compensation is on at the same time. The madVR/Prisma **API** install branch
+still isn't reproduced -- it needs the unported ``setup_patterngenerator``
+connection dialogs -- so it shows a not-yet-available notice; only the
+generic copy-to-path and ReShade-folder-detection destinations actually
+install. The measurement-report settings window
 (:meth:`MainWindow.measurement_report_btn_handler`) reuses the already-ported
 :mod:`DisplayCAL.ui.tools.testchart_editor` for its "edit chart" button, and its
 Measure button now runs the full chart/profile resolution, worker-driven
@@ -3725,6 +3738,8 @@ class MainWindow(BaseWindow):
         setcfg(config_key, 1 if checked else 0)
         self._update_action_buttons()
         self._update_observer_visibility()
+        if config_key in ("profile.black_point_compensation", "3dlut.create"):
+            self._check_lut3d_bpc()
 
     def _value_combo_handler(self, config_key: str, index: int, cast: type) -> None:
         """Persist a bound value-combo selection."""
@@ -4676,11 +4691,9 @@ class MainWindow(BaseWindow):
         maker does): the path comes from ``Worker.lut3d_get_filename`` and any
         existing file at that path is confirmed via the same overwrite dialog
         the other action buttons use. Runs ``worker.create_3dlut`` through the
-        shared :class:`~DisplayCAL.ui.worker_runner.WorkerRunController`. Not
-        reproduced (see :mod:`DisplayCAL.lut3d_settings`'s module docstring):
-        wx's success path chaining into ``profile_finish`` to offer installing
-        the created 3D LUT -- this port's completion is silent on success
-        (matching the standalone maker's own behavior), reporting only errors.
+        shared :class:`~DisplayCAL.ui.worker_runner.WorkerRunController`. On
+        success, :meth:`_on_lut3d_create_finished` offers to install the
+        result, mirroring wx's success path chaining into ``profile_finish``.
         """
         if not check_set_argyll_bin():
             return
@@ -4790,17 +4803,203 @@ class MainWindow(BaseWindow):
         )
 
     def _on_lut3d_create_finished(self, result: object) -> None:
-        """Report the outcome of ``create_3dlut`` on the GUI thread.
+        """Report the outcome of ``create_3dlut`` and offer to install it.
 
-        Qt port of ``LUT3DMixin.lut3d_create_consumer``'s error branch (its
-        success branch, chaining into ``profile_finish`` to offer installing
-        the 3D LUT, isn't reproduced -- see :meth:`lut3d_create_btn_handler`).
-        Mirrors the standalone 3D LUT maker's own ``_on_create_done``, which
-        is likewise silent on success since the file is simply on disk.
+        Qt port of ``LUT3DMixin.lut3d_create_consumer``: on an ``Exception``,
+        shows it; on a falsy non-exception result (incomplete/cancelled), wx
+        does nothing further and so does this port; on success, offers to
+        install/copy the 3D LUT via :meth:`_offer_install_3dlut`. wx picks the
+        offer's message from whether ``3dlut.create`` is checked at
+        completion time, not from which caller triggered creation (the manual
+        button or the :meth:`_on_profile_build_finished` auto-chain both funnel
+        through here), so this port does the same.
         """
         self.worker.wrapup(False)
         if isinstance(result, Exception):
             QMessageBox.critical(self, APPNAME, str(result))
+            return
+        if not result:
+            return
+        message = (
+            lang.getstr("calibration_profiling.complete")
+            if getcfg("3dlut.create")
+            else ""
+        )
+        self._offer_install_3dlut(message)
+
+    def _offer_install_3dlut(self, message: str = "") -> None:
+        """Offer to install/copy a just-created 3D LUT, then route to it.
+
+        Qt port of the 3D-LUT branch of ``MainFrame.profile_finish`` (taken
+        once ``self.lut3d_path`` exists on disk): the OK-button label mirrors
+        wx's install/save distinction, and accepting routes to whichever
+        destination ``3dlut.format`` implies (see :meth:`_install_3dlut`).
+        Dropped versus wx: the share-profile button and the calibration-
+        preview / show-LUT / show-profile-info checkboxes (same cuts
+        :meth:`_on_profile_build_finished` already makes for the plain
+        profile-install offer).
+
+        Args:
+            message: Heading for the offer, or ``""`` to fall back to
+                ``lang.getstr("profiling.complete")`` (wx's fallback for this
+                non-``installable`` branch).
+        """
+        lut3d_path = self.worker.lut3d_get_filename()
+        if not os.path.isfile(lut3d_path):
+            return
+        file_format = getcfg("3dlut.format")
+        is_prisma = config.check_3dlut_format("Prisma")
+        ok_key = (
+            "3dlut.install"
+            if file_format in ("madVR", "ReShade") or is_prisma
+            else "3dlut.save_as"
+        )
+        text = message or lang.getstr("profiling.complete")
+        try:
+            built = profile_finish.validate_built_profile(getcfg("calibration.file"))
+        except (
+            profile_finish.ProfileFinishInvalidError,
+            profile_finish.ProfileFinishNotDisplayError,
+            OSError,
+        ):
+            pass
+        else:
+            extra = profile_finish.format_completion_extra(built.profile)
+            if extra:
+                text = f"{text}\n\n{extra}"
+        box = QMessageBox(self)
+        box.setWindowTitle(APPNAME)
+        box.setIcon(QMessageBox.Question)
+        box.setText(text)
+        install_button = box.addButton(lang.getstr(ok_key), QMessageBox.AcceptRole)
+        box.addButton(lang.getstr("cancel"), QMessageBox.RejectRole)
+        box.exec_()
+        if box.clickedButton() is not install_button:
+            return
+        self._install_3dlut(lut3d_path, file_format, is_prisma)
+
+    def _install_3dlut(self, lut3d_path: str, file_format: str, is_prisma: bool) -> None:
+        """Route an accepted 3D LUT install offer to its destination.
+
+        Qt port of ``profile_finish_action``'s ``install_3dlut_api`` branch
+        (``display_cal.py:12504-12556``). madVR (via ``madtpg``) and Prisma
+        (its HTTP REST API) both install through ``Worker.install_3dlut``,
+        which is already toolkit-neutral, but reaching that point needs the
+        still-unported ``setup_patterngenerator`` connection dialogs (the
+        Prisma host prompt with mDNS discovery, the madTPG connect-wait
+        dialog) -- so, matching the CCXX-info-button / elevated-install-scope
+        precedent, this port shows a not-yet-available notice for that branch
+        instead of attempting an unconfigured connection. Every other format
+        copies the file to a user-chosen location (:meth:`lut3d_settings
+        .install_via_copy`, which also detects and patches a ReShade install).
+
+        Args:
+            lut3d_path: Path to the already-created 3D LUT file.
+            file_format: ``3dlut.format`` at creation time.
+            is_prisma: Whether ``3dlut.format``/size/bitdepth currently match
+                Prisma's fixed requirements (:func:`config.check_3dlut_format`).
+        """
+        madtpg = getattr(self.worker, "madtpg", None)
+        install_via_api = (
+            file_format == "madVR"
+            and (
+                not getcfg("3dlut.trc").startswith("smpte2084")
+                or hasattr(madtpg, "load_hdr_3dlut_file")
+            )
+        ) or is_prisma
+        if install_via_api:
+            QMessageBox.information(
+                self,
+                self.windowTitle(),
+                "Installing directly to madVR or Prisma isn't available in "
+                "this Qt build yet. Choose a plain 3D LUT format (not madVR) "
+                "to save the file to a location of your choice instead.",
+            )
+            return
+        dst_path = self._prompt_3dlut_copy_destination(file_format, lut3d_path)
+        if not dst_path:
+            return
+        try:
+            written = lut3d_settings.install_via_copy(
+                file_format,
+                getcfg("3dlut.size"),
+                getcfg("3dlut.bitdepth.output"),
+                lut3d_path,
+                dst_path,
+            )
+        except OSError as exception:
+            QMessageBox.critical(self, APPNAME, str(exception))
+            return
+        setcfg("last_3dlut_path", written[0])
+
+    def _prompt_3dlut_copy_destination(self, file_format: str, lut3d_path: str) -> str:
+        """Prompt for the 3D LUT copy destination, per ``3dlut.format``.
+
+        Qt port of the save-dialog half of ``LUT3DMixin.lut3d_create_handler``
+        (``wx_lut_3d_frame.py:812-846``): a folder picker for ``ReShade``
+        (the fixed ``ColorLookupTable.png`` filename is appended, matching
+        wx), otherwise a save-file dialog with the format's usual extension.
+        Overwrite confirmation reuses :meth:`_check_overwrite`.
+
+        Args:
+            file_format: ``3dlut.format`` at creation time.
+            lut3d_path: The just-created 3D LUT's own path (used for the
+                default filename).
+
+        Returns:
+            The chosen path, or ``""`` if the user cancelled.
+        """
+        default_dir, _default_file = get_verified_path("last_3dlut_path")
+        if file_format == "ReShade":
+            directory = QFileDialog.getExistingDirectory(
+                self, lang.getstr("3dlut.install"), default_dir
+            )
+            if not directory:
+                return ""
+            return os.path.join(directory.rstrip(os.path.sep), "ColorLookupTable.png")
+        ext = {"eeColor": "txt", "madVR": "3dlut", "icc": PROFILE_EXT[1:]}.get(
+            file_format, file_format.lower()
+        )
+        default_file = os.path.splitext(os.path.basename(lut3d_path))[0] + "." + ext
+        path, _filter = QFileDialog.getSaveFileName(
+            self,
+            lang.getstr("3dlut.save_as"),
+            os.path.join(default_dir, default_file),
+            f"*.{ext}",
+        )
+        if not path:
+            return ""
+        if os.path.splitext(path)[1][1:].lower() != ext.lower():
+            path += f".{ext}"
+        if os.path.isfile(path) and not self._check_overwrite(filename=path):
+            return ""
+        return path
+
+    def _check_lut3d_bpc(self) -> None:
+        """Warn when profile BPC and automatic 3D LUT creation are both on.
+
+        Qt port of ``MainFrame.lut3d_check_bpc`` (``display_cal.py:6404-6417``):
+        wx calls this unconditionally from both the black-point-compensation
+        and ``3dlut.create`` checkbox handlers, and the warning itself is a
+        no-op unless *both* are currently checked, so :meth:`_check_handler`
+        does the same. Accepting turns BPC back off (compensated black points
+        confuse 3D LUT profiling, which expects the profile's uncompensated
+        response); declining leaves both settings as chosen.
+        """
+        if not (getcfg("3dlut.create") and getcfg("profile.black_point_compensation")):
+            return
+        box = QMessageBox(self)
+        box.setWindowTitle(APPNAME)
+        box.setIcon(QMessageBox.Warning)
+        box.setText(lang.getstr("black_point_compensation.3dlut.warning"))
+        turn_off_button = box.addButton(
+            lang.getstr("turn_off"), QMessageBox.AcceptRole
+        )
+        box.addButton(lang.getstr("setting.keep_current"), QMessageBox.RejectRole)
+        box.exec_()
+        if box.clickedButton() is turn_off_button:
+            setcfg("profile.black_point_compensation", 0)
+            self._update_bpc()
 
     def _check_overwrite(self, ext: str = "", filename: str | None = None) -> bool:
         """Qt port of ``MainFrame.check_overwrite``.
@@ -5204,9 +5403,11 @@ class MainWindow(BaseWindow):
         Ports the validation branches of ``profile_finish`` via
         :mod:`DisplayCAL.profile_finish`. The elaborate install-offer dialog
         (share-profile button, calibration-preview / show-LUT / show-profile-info
-        checkboxes, automatic 3D LUT creation) is dropped in favour of a plain
-        yes/no confirm that reuses the already-ported :class:`InstallProfileWindow`
-        for the actual install step.
+        checkboxes) is dropped in favour of a plain yes/no confirm that reuses
+        the already-ported :class:`InstallProfileWindow` for the actual install
+        step. When ``3dlut.create`` is checked, this instead chains into
+        :meth:`_chain_3dlut_after_profile` -- matching wx, which never offers
+        to install the *profile* in that case, only the 3D LUT.
 
         Args:
             result (object): The built profile's path on success, ``False`` /
@@ -5240,6 +5441,9 @@ class MainWindow(BaseWindow):
         if profile_finish.sync_calibration_file_config(profile_path):
             self.update_calibration_file_ctrl()
         self.worker.log(f"{APPNAME}: Profile created: {profile_path}")
+        if getcfg("3dlut.create"):
+            self._chain_3dlut_after_profile()
+            return
         message = success_msg or lang.getstr("profiling.complete")
         extra = profile_finish.format_completion_extra(built.profile)
         if extra:
@@ -5257,6 +5461,24 @@ class MainWindow(BaseWindow):
         )
         if answer == QMessageBox.Yes:
             self.install_profile_btn_handler()
+
+    def _chain_3dlut_after_profile(self) -> None:
+        """Auto-create (or offer to install) the 3D LUT after profiling.
+
+        Qt port of the ``install_3dlut and getcfg("3dlut.create") and not
+        os.path.isfile(self.lut3d_path)`` branch at the top of
+        ``MainFrame.profile_finish`` (``display_cal.py:12151-12160``),
+        reached from :meth:`_on_profile_build_finished` whenever
+        ``3dlut.create`` is checked. If the LUT file already exists (e.g. a
+        prior run already built one at this exact path) this shows the
+        install offer directly; otherwise it creates the LUT first via
+        :meth:`lut3d_create_btn_handler`, which chains into the offer itself
+        through :meth:`_on_lut3d_create_finished` once creation succeeds.
+        """
+        if os.path.isfile(self.worker.lut3d_get_filename()):
+            self._offer_install_3dlut(lang.getstr("calibration_profiling.complete"))
+        else:
+            self.lut3d_create_btn_handler()
 
     def _ensure_adjustment_controller(self) -> AdjustmentController:
         """Create the interactive-adjustment window / driver once, on first run."""
