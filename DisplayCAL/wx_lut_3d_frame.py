@@ -910,20 +910,23 @@ class LUT3DMixin:
                             with open(me_header_path, "rb") as me_header_file:
                                 me_header = me_header_file.read()
                             # Enable LUT
+                            # (re.sub needs a bytes pattern here since
+                            # me_header was read as bytes -- a str
+                            # pattern raises TypeError)
                             me_header = re.sub(
-                                r"#define\s+USE_LUT\s+0", "#define USE_LUT 1", me_header
+                                rb"#define\s+USE_LUT\s+0", b"#define USE_LUT 1", me_header
                             )
                             # iLookupTableMode 2 = use mclut3d.png
                             me_header = re.sub(
-                                r"#define\s+iLookupTableMode\s+\d+",
-                                "#define iLookupTableMode 2",
+                                rb"#define\s+iLookupTableMode\s+\d+",
+                                b"#define iLookupTableMode 2",
                                 me_header,
                             )
                             # Amount of color change by lookup table.
                             # 1.0 means full effect.
                             me_header = re.sub(
-                                r"#define\s+fLookupTableMix\s+\d+(?:\.\d+)",
-                                "#define fLookupTableMix 1.0",
+                                rb"#define\s+fLookupTableMix\s+\d+(?:\.\d+)",
+                                b"#define fLookupTableMix 1.0",
                                 me_header,
                             )
                             with open(me_header_path, "wb") as me_header_file:
@@ -979,26 +982,29 @@ class LUT3DMixin:
                                     with open(reshade_fx_path, "rb") as reshade_fx_file:
                                         reshade_fx = reshade_fx_file.read()
                                     # Remove existing shader include
+                                    # (re.sub needs a bytes pattern here since
+                                    # reshade_fx was read as bytes -- a str
+                                    # pattern raises TypeError)
                                     reshade_fx = re.sub(
-                                        r"[ \t]*//\s*Automatically\s+\S+\s+by\s+"
-                                        f"{APPNAME}"
-                                        r"\s+.+[ \t]*\r?\n?",
-                                        "",
+                                        rb"[ \t]*//\s*Automatically\s+\S+\s+by\s+"
+                                        + re.escape(APPNAME.encode())
+                                        + rb"\s+.+[ \t]*\r?\n?",
+                                        b"",
                                         reshade_fx,
                                     )
                                     reshade_fx = re.sub(
-                                        r'[ \t]*#include\s+"ColorLookupTable.fx"'
-                                        "[ \t]*\r?\n?",
-                                        "",
+                                        rb'[ \t]*#include\s+"ColorLookupTable.fx"'
+                                        rb"[ \t]*\r?\n?",
+                                        b"",
                                         reshade_fx,
-                                    ).rstrip("\r\n")
+                                    ).rstrip(b"\r\n")
                                     reshade_fx += (
                                         f"{os.linesep * 2}// Automatically added by "
                                         f"{APPNAME} {VERSION_STRING}{os.linesep}"
-                                    )
+                                    ).encode()
                                     reshade_fx += (
                                         '#include "ColorLookupTable.fx"' + os.linesep
-                                    )
+                                    ).encode()
                                     with open(reshade_fx_path, "wb") as reshade_fx_file:
                                         reshade_fx_file.write(reshade_fx)
                             clut_fx_path = os.path.join(dst_dir, "ColorLookupTable.fx")
