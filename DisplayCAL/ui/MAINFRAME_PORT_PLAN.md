@@ -569,6 +569,49 @@ toggles a checkable button's state directly without necessarily emitting
 reconnected to `toggled` (guarded to only act when becoming checked) instead,
 which fires for both.
 
+**Session 10 (3D LUT tab: TRC/HDR/content-colorspace/gamut-mapping/encoding,
+2026-07-09).** Closed the "Remaining gaps" item deferred since Session 9: the
+3D LUT tab's full functional control set from `main.xrc`'s
+`lut3d_settings_panel`. The Stage-3 placeholder (`lut3d_apply_trc_cb` /
+`lut3d_apply_black_offset_cb`) had invented two checkboxes that don't exist in
+`main.xrc` at all — removed and replaced with the real control set: input
+colorspace, the combined TRC/gamma/gamma-type/HDR-peak-luminance row, the HDR
+preserve-luminance/-saturation and preserve-hue sliders, mastering
+black/peak-luminance + roll-off diffuse-white readout + alternate-clip
+checkbox, HLG ambient luminance + system-gamma readout, the content-colorspace
+combo and its 4x2 primaries editor grid, black output offset, apply-calibration
+checkbox, gamut-mapping-mode radios, format + madVR HDR-display sub-mode,
+encoding input/output, size, and bitdepth in/out. New toolkit-neutral
+`DisplayCAL/lut3d_settings.py` ports the logic from wx's `LUT3DMixin`
+(`wx_lut_3d_frame.py`, shared between the standalone `LUT3DFrame` tool window
+and this embedded tab) specialized for the tab's fixed context
+(`isinstance(self, LUT3DFrame)` always False, `hasattr(self, "lut3d_create_cb")`
+always True): TRC combo selection <-> config mapping (including its
+self-correcting `"3dlut.trc"` rewrites), the full `lut3d_show_trc_controls`
+visibility cascade as a `Lut3dTrcVisibility` dataclass, BT.2390 diffuse-white
+and HLG system-gamma readouts (reusing `colormath.BT2390`/`colormath.HLG`
+directly), content-colorspace primaries lookup/resolution, 3D LUT size
+snapping, and the format-change cascade (`lut3d_format_ctrl_handler`'s
+encoding/size/bitdepth overrides per format). `update_lut3d_controls` gained
+its own re-entrancy guard (mirroring
+`update_colorimeter_correction_matrix_ctrl_items`) so any control's handler
+can call it directly for a full, safe re-sync after an interdependent config
+change, rather than threading partial updates through every call site.
+
+Not reproduced (documented in `lut3d_settings.py`'s module docstring): the
+`XYZbpout` (last measured/loaded profile's black point) factor in the
+black-output-offset row's visibility, treated as always `[0, 0, 0]` (its value
+before any profile has been measured) so that visibility reduces to just
+`3dlut.create`; and, as already covered by the "worker-driven Argyll
+execution" deferral, actually creating a 3D LUT (`lut3d_create_handler`) plus
+the black-point-compensation and relative-colorimetric-rendering-intent
+confirmation dialogs that gate it (`lut3d_create_btn` isn't wired into the
+button bar at all yet). 50 new tests in `tests/test_lut3d_settings.py` for the
+pure module, plus 21 new regression tests in `tests/test_ui_main_window.py`
+(163 total, up from 142). Verified visually via offscreen `QWidget.grab()`
+screenshots (SMPTE 2084 roll-off with a preset colorspace, and again with a
+hand-edited "Custom" one showing the primaries grid).
+
 ### Stage 4 — Calibrate / measure / profile actions — **DONE (orchestration)**
 
 Wire the action buttons to the Stage-2 flow, running the measure-frame

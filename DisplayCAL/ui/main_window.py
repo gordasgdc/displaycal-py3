@@ -32,16 +32,21 @@ interactive display-adjustment window), the pattern-generator setup dialogs
 visual-editor / ambient-measure buttons, the gamap options window and testchart
 editor themselves (their launch buttons exist and show a not-yet-available
 notice; see :mod:`DisplayCAL.profile_name`'s module docstring), the
-black-point-rate advanced control, and (by extension) the ``show_advanced_options``
-gating of the whitepoint colour-temperature-locus row and the 3D LUT
-gamut-mapping / apply-cal-on-create controls, none of which exist in this Qt
-port yet. ``show_advanced_options`` itself is wired (an Options-menu checkbox
-gating every other row it controls that this port does have, including the
-profile-type row's gamap button and the testchart-patch-sequence row), see
+black-point-rate advanced control, actually creating a 3D LUT
+(``lut3d_create_btn`` isn't wired into the button bar yet; see
+:mod:`DisplayCAL.lut3d_settings`'s module docstring), and (by extension) the
+``show_advanced_options`` gating of the whitepoint colour-temperature-locus row
+(Calibration tab), the only row of its kind left ungated since the 3D LUT tab's
+own ``show_advanced_options``-gated rows are wired as of
+:meth:`MainWindow._apply_lut3d_visibility`. ``show_advanced_options`` itself is
+wired (an Options-menu checkbox gating every other row it controls that this
+port does have, including the profile-type row's gamap button and the
+testchart-patch-sequence row), see
 :meth:`MainWindow._update_advanced_options_visibility`. Profile-name token
 expansion and the testchart chooser / patch-count / estimated-measurement-time
 controls are wired via the toolkit-neutral :mod:`DisplayCAL.profile_name`
-helpers.
+helpers, and the 3D LUT tab's TRC/HDR/content-colorspace/gamut-mapping/encoding
+controls via :mod:`DisplayCAL.lut3d_settings`.
 
 The window is opt-in behind ``DISPLAYCAL_UI=qt`` / ``--qt`` (wired in
 :mod:`DisplayCAL.main`), so it never displaces the still-shipping wx main window.
@@ -53,6 +58,7 @@ import contextlib
 import enum
 import os
 import platform
+import re
 import sys
 from decimal import Decimal
 from typing import TYPE_CHECKING, Callable
@@ -87,14 +93,32 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from DisplayCAL import calibration_file, colorimeter_correction, config
+from DisplayCAL import (
+    calibration_file,
+    colorimeter_correction,
+    config,
+    lut3d_settings,
+)
 from DisplayCAL import localization as lang
 from DisplayCAL import profile_name as profile_name_mod
 from DisplayCAL.argyll import make_argyll_compatible_path
 from DisplayCAL.cgats import CGATSError
 from DisplayCAL.colorimeter_correction import ColorimeterCorrectionCatalog
-from DisplayCAL.config import DEFAULTS, get_verified_path, getcfg, setcfg, writecfg
-from DisplayCAL.icc_profile import ICCProfile, ICCProfileInvalidError
+from DisplayCAL.config import (
+    DEFAULTS,
+    get_verified_path,
+    getcfg,
+    setcfg,
+    setcfg_cond,
+    writecfg,
+)
+from DisplayCAL.icc_profile import (
+    CurveType,
+    ICCProfile,
+    ICCProfileInvalidError,
+    LUT16Type,
+    VideoCardGammaType,
+)
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.options import TEST
 from DisplayCAL.ui.application import Application
@@ -118,6 +142,7 @@ from DisplayCAL.ui.progress_dialog import ProgressDialog
 from DisplayCAL.ui.tools.profile_info import ProfileInfoWindow
 from DisplayCAL.ui.worker_runner import AdjustmentController, WorkerRunController
 from DisplayCAL.util_decimal import stripzeros
+from DisplayCAL.util_dict import dict_sort
 from DisplayCAL.util_os import get_program_file
 from DisplayCAL.worker import (
     Worker,
@@ -407,19 +432,29 @@ def trc_selection_from_config(
     return 0, "", type_row
 
 
-def lut3d_format_items() -> list[tuple[str, str]]:
-    """Return ``(config value, label)`` pairs for the 3D LUT file formats."""
+def lut3d_format_items(argyll_version: str = "0.0.0") -> list[tuple[str, str]]:
+    """Return ``(config value, label)`` pairs for the 3D LUT file formats.
+
+    Mirrors ``LUT3DMixin.lut3d_setup_language``: madVR is only offered with
+    Argyll 1.6+.
+    """
     return [
         (fmt, lang.getstr(f"3dlut.format.{fmt}"))
         for fmt in config.VALID_VALUES["3dlut.format"]
+        if fmt != "madVR" or argyll_version >= "1.6"
     ]
 
 
-def lut3d_rendering_intent_items() -> list[tuple[str, str]]:
-    """Return ``(config value, label)`` pairs for the 3D LUT rendering intents."""
+def lut3d_rendering_intent_items(argyll_version: str = "0.0.0") -> list[tuple[str, str]]:
+    """Return ``(config value, label)`` pairs for the 3D LUT rendering intents.
+
+    Mirrors ``LUT3DMixin.lut3d_setup_language``: "Perceptual, LUT proof"
+    (``"lp"``) needs Argyll 1.8.3+.
+    """
     return [
         (ri, lang.getstr(f"gamap.intents.{ri}"))
         for ri in config.VALID_VALUES["3dlut.rendering_intent"]
+        if ri != "lp" or argyll_version >= "1.8.3"
     ]
 
 
@@ -434,6 +469,16 @@ def lut3d_size_items() -> list[tuple[int, str]]:
 def lut3d_bitdepth_items() -> list[tuple[int, str]]:
     """Return ``(config value, label)`` pairs for the 3D LUT bit depths."""
     return [(bit, str(bit)) for bit in config.VALID_VALUES["3dlut.bitdepth.input"]]
+
+
+def lut3d_content_colorspace_items() -> list[str]:
+    """Return the content-colorspace combo labels (named spaces + "custom")."""
+    return [*lut3d_settings.CONTENT_COLORSPACE_NAMES, lang.getstr("custom")]
+
+
+def lut3d_encoding_items(codes: list[str]) -> list[tuple[str, str]]:
+    """Return ``(config value, label)`` pairs for a list of encoding codes."""
+    return [(code, lang.getstr(f"3dlut.encoding.type_{code}")) for code in codes]
 
 
 class _HeaderBanner(QWidget):
@@ -549,6 +594,10 @@ class MainWindow(BaseWindow):
         #: always triggers an initial population).
         self._testchart_paths: list[str] = []
         self._current_testchart_path: str | None = None
+        #: 3D LUT input-colorspace combo: description -> profile path,
+        #: mirroring wx's ``MainFrame.input_profiles`` (populated once from
+        #: the bundled reference profiles, see ``_lut3d_init_input_profiles``).
+        self.input_profiles: dict[str, str] = {}
 
         self._build_ui()
         self.init_menubar()
@@ -559,6 +608,7 @@ class MainWindow(BaseWindow):
 
         if not adopted_worker:
             self.worker.enumerate_displays_and_ports(silent=True)
+        self._lut3d_init_input_profiles()
         self.update_controls()
         self._apply_initial_geometry()
 
@@ -673,13 +723,16 @@ class MainWindow(BaseWindow):
 
         Mirrors wx's ``MainFrame.show_advanced_options_handler`` and the
         ``show_display_delay_ctrls`` / ``show_ffp_ctrls`` /
-        ``show_output_levels_ctrls`` helpers it calls. One group from the wx
-        method isn't reproduced because the controls themselves don't exist
-        in this Qt port yet (see the module docstring's "Deferred" list): the
-        3D LUT gamut-mapping / apply-cal-on-create controls, plus the
-        whitepoint colour-temperature locus row (Calibration tab). The
-        gamap button (part of the profile-type row) and the
-        testchart-patch-sequence row are gated below.
+        ``show_output_levels_ctrls`` helpers it calls, plus the 3D LUT tab's
+        ``LUT3DMixin.lut3d_show_trc_controls`` / ``MainFrame.lut3d_show_controls``
+        gating (the gamut-mapping-mode / apply-cal-on-create rows, and the
+        TRC/HDR block's ``show_advanced_options``-gated rows, both driven by
+        :meth:`_apply_lut3d_visibility`). One group from the wx method isn't
+        reproduced because the controls themselves don't exist in this Qt port
+        yet (see the module docstring's "Deferred" list): the whitepoint
+        colour-temperature locus row (Calibration tab). The gamap button (part
+        of the profile-type row) and the testchart-patch-sequence row are
+        gated below.
         """
         show_advanced = bool(getcfg("show_advanced_options"))
         self.show_advanced_options_action.setChecked(show_advanced)
@@ -727,6 +780,7 @@ class MainWindow(BaseWindow):
 
         self._apply_trc_mode()
         self._update_observer_visibility()
+        self._apply_lut3d_visibility()
 
     def _update_observer_visibility(self) -> None:
         """Show the observer row per wx's ``MainFrame.show_observer_ctrl``."""
@@ -1639,7 +1693,17 @@ class MainWindow(BaseWindow):
         return panel
 
     def _build_lut3d_tab(self) -> QWidget:
-        """Build the 3D LUT settings panel."""
+        """Build the 3D LUT settings panel.
+
+        Follows ``main.xrc``'s ``lut3d_settings_panel`` control set/order (see
+        ``DisplayCAL/lut3d_settings.py``'s module docstring for what's
+        deliberately not reproduced). Units that wx renders as a trailing
+        ``cd/m²``/``%`` static text next to a numeric field are folded into
+        that field's ``QDoubleSpinBox``/``QSpinBox`` suffix instead (matching
+        this port's existing Calibration-tab luminance fields), so most rows
+        map one-to-one to a single visibility flag from
+        :func:`DisplayCAL.lut3d_settings.compute_trc_visibility`.
+        """
         panel = QWidget()
         outer = QVBoxLayout(panel)
         outer.setContentsMargins(16, 16, 16, 16)
@@ -1651,12 +1715,303 @@ class MainWindow(BaseWindow):
 
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self._lut3d_form = form
 
-        self.lut3d_format_ctrl = QComboBox()
-        self._add_value_combo(
-            self.lut3d_format_ctrl, "3dlut.format", lut3d_format_items()
+        # Input colorspace.
+        self.lut3d_input_profile_ctrl = QComboBox()
+        self.lut3d_input_profile_ctrl.currentIndexChanged.connect(
+            self._lut3d_input_profile_changed
         )
-        form.addRow(lang.getstr("3dlut.format"), self.lut3d_format_ctrl)
+        form.addRow(
+            lang.getstr("3dlut.input.colorspace"), self.lut3d_input_profile_ctrl
+        )
+
+        # TRC row: mode + gamma + gamma type + HDR peak luminance, one line
+        # (mirrors wx grouping all four under a single "trc" label).
+        self.lut3d_trc_ctrl = QComboBox()
+        self.lut3d_trc_ctrl.addItems(
+            [
+                "Gamma 2.2",
+                lang.getstr("trc.rec1886"),
+                lang.getstr("trc.smpte2084.hardclip"),
+                lang.getstr("trc.smpte2084.rolloffclip"),
+                lang.getstr("trc.hlg"),
+                lang.getstr("custom"),
+            ]
+        )
+        self.lut3d_trc_ctrl.currentIndexChanged.connect(self._lut3d_trc_ctrl_changed)
+        self.lut3d_trc_gamma_label = QLabel(lang.getstr("trc.gamma"))
+        self.lut3d_trc_gamma_ctrl = QComboBox()
+        self.lut3d_trc_gamma_ctrl.setEditable(True)
+        self.lut3d_trc_gamma_ctrl.addItems(["2.2", "2.4"])
+        self.lut3d_trc_gamma_ctrl.setMaximumWidth(80)
+        self.lut3d_trc_gamma_ctrl.lineEdit().editingFinished.connect(
+            self._lut3d_trc_gamma_changed
+        )
+        self.lut3d_trc_gamma_ctrl.activated.connect(
+            lambda _i: self._lut3d_trc_gamma_changed()
+        )
+        self.lut3d_trc_gamma_type_ctrl = QComboBox()
+        self.lut3d_trc_gamma_type_ctrl.addItems(
+            [lang.getstr("trc.type.relative"), lang.getstr("trc.type.absolute")]
+        )
+        self.lut3d_trc_gamma_type_ctrl.currentIndexChanged.connect(
+            self._lut3d_trc_gamma_type_changed
+        )
+        self.lut3d_hdr_peak_luminance_label = QLabel(
+            lang.getstr("display_peak_luminance")
+        )
+        self.lut3d_hdr_peak_luminance_ctrl = QDoubleSpinBox()
+        self.lut3d_hdr_peak_luminance_ctrl.setRange(100, 10000)
+        self.lut3d_hdr_peak_luminance_ctrl.setDecimals(0)
+        self.lut3d_hdr_peak_luminance_ctrl.setSuffix(" cd/m²")
+        self.lut3d_hdr_peak_luminance_ctrl.setMaximumWidth(110)
+        self.lut3d_hdr_peak_luminance_ctrl.valueChanged.connect(
+            self._lut3d_hdr_peak_luminance_changed
+        )
+        trc_row = QHBoxLayout()
+        for widget in (
+            self.lut3d_trc_ctrl,
+            self.lut3d_trc_gamma_label,
+            self.lut3d_trc_gamma_ctrl,
+            self.lut3d_trc_gamma_type_ctrl,
+            self.lut3d_hdr_peak_luminance_label,
+            self.lut3d_hdr_peak_luminance_ctrl,
+        ):
+            trc_row.addWidget(widget)
+        trc_row.addStretch(1)
+        form.addRow(lang.getstr("trc"), self._wrap(trc_row))
+
+        # HDR preserve luminance/saturation (a single slider trades off
+        # between the two, mirroring wx's linked lum%/sat% readouts).
+        self.lut3d_hdr_sat_ctrl = QSlider(Qt.Horizontal)
+        self.lut3d_hdr_sat_ctrl.setRange(0, 100)
+        self.lut3d_hdr_sat_ctrl.valueChanged.connect(self._lut3d_hdr_sat_changed)
+        self.lut3d_hdr_sat_lum_val = QLabel()
+        self.lut3d_hdr_sat_sat_val = QLabel()
+        sat_row = QHBoxLayout()
+        sat_row.addWidget(QLabel(lang.getstr("preserve_luminance")))
+        sat_row.addWidget(self.lut3d_hdr_sat_lum_val)
+        sat_row.addWidget(self.lut3d_hdr_sat_ctrl)
+        sat_row.addWidget(self.lut3d_hdr_sat_sat_val)
+        sat_row.addWidget(QLabel(lang.getstr("preserve_saturation")))
+        sat_row.addStretch(1)
+        self._lut3d_hdr_sat_row_widget = self._wrap(sat_row)
+        form.addRow("", self._lut3d_hdr_sat_row_widget)
+
+        # HDR preserve hue.
+        self.lut3d_hdr_hue_ctrl = QSlider(Qt.Horizontal)
+        self.lut3d_hdr_hue_ctrl.setRange(0, 100)
+        self.lut3d_hdr_hue_intctrl = QSpinBox()
+        self.lut3d_hdr_hue_intctrl.setRange(0, 100)
+        self.lut3d_hdr_hue_intctrl.setSuffix("%")
+        self.lut3d_hdr_hue_ctrl.valueChanged.connect(self._lut3d_hdr_hue_slider_changed)
+        self.lut3d_hdr_hue_intctrl.valueChanged.connect(
+            self._lut3d_hdr_hue_intctrl_changed
+        )
+        hue_row = QHBoxLayout()
+        hue_row.addWidget(self.lut3d_hdr_hue_ctrl)
+        hue_row.addWidget(self.lut3d_hdr_hue_intctrl)
+        hue_row.addStretch(1)
+        self._lut3d_hdr_hue_row_widget = self._wrap(hue_row)
+        form.addRow(lang.getstr("preserve_hue"), self._lut3d_hdr_hue_row_widget)
+
+        # HDR mastering display black/peak luminance.
+        self.lut3d_hdr_minmll_ctrl = QDoubleSpinBox()
+        self.lut3d_hdr_minmll_ctrl.setRange(0.0, 0.1)
+        self.lut3d_hdr_minmll_ctrl.setDecimals(4)
+        self.lut3d_hdr_minmll_ctrl.setSingleStep(0.0001)
+        self.lut3d_hdr_minmll_ctrl.setSuffix(" cd/m²")
+        self.lut3d_hdr_minmll_ctrl.valueChanged.connect(
+            self._lut3d_hdr_minmll_changed
+        )
+        form.addRow(
+            lang.getstr("mastering_display_black_luminance"),
+            self.lut3d_hdr_minmll_ctrl,
+        )
+
+        self.lut3d_hdr_maxmll_ctrl = QDoubleSpinBox()
+        self.lut3d_hdr_maxmll_ctrl.setRange(100, 10000)
+        self.lut3d_hdr_maxmll_ctrl.setDecimals(0)
+        self.lut3d_hdr_maxmll_ctrl.setSuffix(" cd/m²")
+        self.lut3d_hdr_maxmll_ctrl.valueChanged.connect(
+            self._lut3d_hdr_maxmll_changed
+        )
+        self.lut3d_hdr_maxmll_alt_clip_cb = QCheckBox(lang.getstr("adjust_rolloff"))
+        self.lut3d_hdr_maxmll_alt_clip_cb.toggled.connect(
+            self._lut3d_hdr_maxmll_alt_clip_changed
+        )
+        maxmll_row = QHBoxLayout()
+        maxmll_row.addWidget(self.lut3d_hdr_maxmll_ctrl)
+        maxmll_row.addWidget(self.lut3d_hdr_maxmll_alt_clip_cb)
+        maxmll_row.addStretch(1)
+        self._lut3d_hdr_maxmll_row_widget = self._wrap(maxmll_row)
+        form.addRow(
+            lang.getstr("mastering_display_peak_luminance"),
+            self._lut3d_hdr_maxmll_row_widget,
+        )
+
+        # HDR roll-off diffuse-white preview (read-only, live-computed).
+        self.lut3d_hdr_diffuse_white_txt = QLabel()
+        self._lut3d_hdr_diffuse_white_row_widget = self.lut3d_hdr_diffuse_white_txt
+        form.addRow(
+            lang.getstr("3dlut.hdr.rolloff.diffuse_white"),
+            self.lut3d_hdr_diffuse_white_txt,
+        )
+
+        # HDR (HLG) ambient viewing-condition luminance + system gamma.
+        self.lut3d_hdr_ambient_luminance_ctrl = QDoubleSpinBox()
+        self.lut3d_hdr_ambient_luminance_ctrl.setRange(0.01, 10000)
+        self.lut3d_hdr_ambient_luminance_ctrl.setDecimals(2)
+        self.lut3d_hdr_ambient_luminance_ctrl.setSuffix(" cd/m²")
+        self.lut3d_hdr_ambient_luminance_ctrl.valueChanged.connect(
+            self._lut3d_hdr_ambient_luminance_changed
+        )
+        form.addRow(
+            lang.getstr("calibration.ambient_viewcond_adjust"),
+            self.lut3d_hdr_ambient_luminance_ctrl,
+        )
+
+        self.lut3d_hdr_system_gamma_txt = QLabel()
+        form.addRow(
+            lang.getstr("3dlut.hdr.system_gamma"), self.lut3d_hdr_system_gamma_txt
+        )
+
+        # Content colorspace (only meaningful for SMPTE 2084 roll-off / HLG).
+        self.lut3d_content_colorspace_ctrl = QComboBox()
+        self.lut3d_content_colorspace_ctrl.addItems(lut3d_content_colorspace_items())
+        self.lut3d_content_colorspace_ctrl.currentIndexChanged.connect(
+            self._lut3d_content_colorspace_changed
+        )
+        form.addRow(
+            lang.getstr("3dlut.content.colorspace"),
+            self.lut3d_content_colorspace_ctrl,
+        )
+
+        primaries_grid = QGridLayout()
+        primaries_grid.setHorizontalSpacing(8)
+        self._lut3d_content_colorspace_xy_ctrls = {}
+        for row, (color, label_key) in enumerate(
+            (("white", "white"), ("red", "red"), ("green", "green"), ("blue", "blue"))
+        ):
+            primaries_grid.addWidget(QLabel(lang.getstr(label_key)), row, 0)
+            for col_offset, coord in enumerate("xy"):
+                spin = QDoubleSpinBox()
+                spin.setRange(-1.0, 1.0)
+                spin.setDecimals(4)
+                spin.setSingleStep(0.0001)
+                spin.setPrefix(f"{coord} ")
+                spin.valueChanged.connect(
+                    self._make_lut3d_content_colorspace_xy_handler(color, coord)
+                )
+                self._lut3d_content_colorspace_xy_ctrls[(color, coord)] = spin
+                primaries_grid.addWidget(spin, row, 1 + col_offset)
+        primaries_holder = QWidget()
+        primaries_holder.setLayout(primaries_grid)
+        self._lut3d_content_colorspace_xy_row_widget = primaries_holder
+        form.addRow("", primaries_holder)
+
+        # Black output offset (0-100 %).
+        self.lut3d_trc_black_output_offset_ctrl = QSlider(Qt.Horizontal)
+        self.lut3d_trc_black_output_offset_ctrl.setRange(0, 100)
+        self.lut3d_trc_black_output_offset_intctrl = QSpinBox()
+        self.lut3d_trc_black_output_offset_intctrl.setRange(0, 100)
+        self.lut3d_trc_black_output_offset_intctrl.setSuffix("%")
+        self.lut3d_trc_black_output_offset_ctrl.valueChanged.connect(
+            self._lut3d_black_output_offset_slider_changed
+        )
+        self.lut3d_trc_black_output_offset_intctrl.valueChanged.connect(
+            self._lut3d_black_output_offset_intctrl_changed
+        )
+        boo_row = QHBoxLayout()
+        boo_row.addWidget(self.lut3d_trc_black_output_offset_ctrl)
+        boo_row.addWidget(self.lut3d_trc_black_output_offset_intctrl)
+        boo_row.addStretch(1)
+        self._lut3d_black_output_offset_row_widget = self._wrap(boo_row)
+        form.addRow(
+            lang.getstr("calibration.black_output_offset"),
+            self._lut3d_black_output_offset_row_widget,
+        )
+
+        # Apply calibration (only meaningful with show_advanced_options, like
+        # the gamut-mapping-mode row below).
+        self.lut3d_apply_cal_cb = QCheckBox(lang.getstr("apply_cal"))
+        self.lut3d_apply_cal_cb.toggled.connect(self._lut3d_apply_cal_changed)
+        form.addRow("", self.lut3d_apply_cal_cb)
+
+        self.gamut_mapping_inverse_a2b = QRadioButton(
+            lang.getstr("gamut_mapping.mode.inverse_a2b")
+        )
+        self.gamut_mapping_b2a = QRadioButton(lang.getstr("gamut_mapping.mode.b2a"))
+        self._gamut_mapping_group = QButtonGroup(self)
+        self._gamut_mapping_group.addButton(self.gamut_mapping_inverse_a2b)
+        self._gamut_mapping_group.addButton(self.gamut_mapping_b2a)
+        self.gamut_mapping_inverse_a2b.toggled.connect(
+            self._lut3d_gamut_mapping_mode_changed
+        )
+        gamut_row = QHBoxLayout()
+        gamut_row.addWidget(self.gamut_mapping_inverse_a2b)
+        gamut_row.addWidget(self.gamut_mapping_b2a)
+        gamut_row.addStretch(1)
+        self._lut3d_gamut_mapping_row_widget = self._wrap(gamut_row)
+        form.addRow(
+            lang.getstr("gamut_mapping.mode"), self._lut3d_gamut_mapping_row_widget
+        )
+
+        self.lut3d_rendering_intent_ctrl = QComboBox()
+        self._add_value_combo(
+            self.lut3d_rendering_intent_ctrl,
+            "3dlut.rendering_intent",
+            lut3d_rendering_intent_items(getcfg("argyll.version")),
+        )
+        form.addRow(
+            lang.getstr("rendering_intent"), self.lut3d_rendering_intent_ctrl
+        )
+
+        # Format + (madVR-only) HDR display sub-mode.
+        self.lut3d_format_ctrl = QComboBox()
+        format_items = lut3d_format_items(getcfg("argyll.version"))
+        #: ``lut3d_format_ctrl`` row index -> config value (built once, like
+        #: wx's ``lut3d_formats_ab``; the Argyll-version-gated item set
+        #: doesn't change during a session).
+        self._lut3d_format_values = [value for value, _label in format_items]
+        self.lut3d_format_ctrl.addItems([label for _value, label in format_items])
+        self.lut3d_format_ctrl.currentIndexChanged.connect(
+            self._lut3d_format_ctrl_changed
+        )
+        self.lut3d_hdr_display_ctrl = QComboBox()
+        self.lut3d_hdr_display_ctrl.addItems(
+            [
+                lang.getstr(item)
+                for item in ("3dlut.format.madVR.hdr_to_sdr", "3dlut.format.madVR.hdr")
+            ]
+        )
+        self.lut3d_hdr_display_ctrl.currentIndexChanged.connect(
+            self._lut3d_hdr_display_changed
+        )
+        format_row = QHBoxLayout()
+        format_row.addWidget(self.lut3d_format_ctrl)
+        format_row.addWidget(self.lut3d_hdr_display_ctrl)
+        format_row.addStretch(1)
+        form.addRow(lang.getstr("3dlut.format"), self._wrap(format_row))
+
+        #: ``encoding_input_ctrl`` / ``encoding_output_ctrl`` row index ->
+        #: config value, rebuilt on every format change by
+        #: :meth:`_lut3d_update_encoding_controls`.
+        self._lut3d_encoding_input_values: list[str] = []
+        self._lut3d_encoding_output_values: list[str] = []
+
+        self.encoding_input_ctrl = QComboBox()
+        self.encoding_input_ctrl.currentIndexChanged.connect(
+            self._lut3d_encoding_input_changed
+        )
+        form.addRow(lang.getstr("3dlut.encoding.input"), self.encoding_input_ctrl)
+
+        self.encoding_output_ctrl = QComboBox()
+        self.encoding_output_ctrl.currentIndexChanged.connect(
+            self._lut3d_encoding_output_changed
+        )
+        form.addRow(lang.getstr("3dlut.encoding.output"), self.encoding_output_ctrl)
 
         self.lut3d_size_ctrl = QComboBox()
         self._add_value_combo(
@@ -1683,28 +2038,6 @@ class MainWindow(BaseWindow):
         form.addRow(
             lang.getstr("3dlut.bitdepth.output"), self.lut3d_bitdepth_output_ctrl
         )
-
-        self.lut3d_rendering_intent_ctrl = QComboBox()
-        self._add_value_combo(
-            self.lut3d_rendering_intent_ctrl,
-            "3dlut.rendering_intent",
-            lut3d_rendering_intent_items(),
-        )
-        form.addRow(
-            lang.getstr("rendering_intent"), self.lut3d_rendering_intent_ctrl
-        )
-
-        self.lut3d_apply_trc_cb = QCheckBox(
-            f"{lang.getstr('apply')} {lang.getstr('trc')}"
-        )
-        self._add_check(self.lut3d_apply_trc_cb, "3dlut.apply_trc")
-        form.addRow("", self.lut3d_apply_trc_cb)
-
-        self.lut3d_apply_black_offset_cb = QCheckBox(
-            lang.getstr("apply_black_output_offset")
-        )
-        self._add_check(self.lut3d_apply_black_offset_cb, "3dlut.apply_black_offset")
-        form.addRow("", self.lut3d_apply_black_offset_cb)
 
         outer.addLayout(form)
         outer.addWidget(
@@ -2062,15 +2395,615 @@ class MainWindow(BaseWindow):
         self._set_testchart(getcfg("testchart.file"))
 
     def update_lut3d_controls(self) -> None:
-        """Push stored 3D LUT config into the 3D LUT tab controls."""
-        self._sync_check("3dlut.create")
-        self._sync_value_combo("3dlut.format", cast=str)
-        self._sync_value_combo("3dlut.size", cast=int)
-        self._sync_value_combo("3dlut.bitdepth.input", cast=int)
-        self._sync_value_combo("3dlut.bitdepth.output", cast=int)
-        self._sync_value_combo("3dlut.rendering_intent", cast=str)
-        self._sync_check("3dlut.apply_trc")
-        self._sync_check("3dlut.apply_black_offset")
+        """Push stored 3D LUT config into the 3D LUT tab controls.
+
+        Toolkit-neutral port of ``MainFrame.lut3d_update_controls`` +
+        ``LUT3DMixin.lut3d_update_shared_controls`` / ``lut3d_update_trc_controls``,
+        specialized for this Qt port (see ``DisplayCAL/lut3d_settings.py``'s
+        module docstring for what's deliberately not reproduced). Wrapped in
+        its own re-entrancy guard (mirroring
+        :meth:`update_colorimeter_correction_matrix_ctrl_items`) so any 3D LUT
+        handler can call it directly for a full re-sync after an
+        interdependent config change, without needing to route through
+        :meth:`update_controls`.
+        """
+        was_updating = self._updating
+        self._updating = True
+        try:
+            self._sync_check("3dlut.create")
+
+            lut3d_input_profile = getcfg("3dlut.input.profile")
+            if lut3d_input_profile not in self.input_profiles.values():
+                if not lut3d_input_profile or not os.path.isfile(lut3d_input_profile):
+                    lut3d_input_profile = DEFAULTS["3dlut.input.profile"]
+                    setcfg("3dlut.input.profile", lut3d_input_profile)
+                else:
+                    try:
+                        profile = ICCProfile(lut3d_input_profile)
+                    except (OSError, ICCProfileInvalidError) as exception:
+                        print(f"{lut3d_input_profile}:", exception)
+                    else:
+                        desc = self._lut3d_profile_description(profile)
+                        self.input_profiles[desc] = lut3d_input_profile
+                        self.lut3d_input_profile_ctrl.addItem(desc)
+            paths = list(self.input_profiles.values())
+            if lut3d_input_profile in paths:
+                self.lut3d_input_profile_ctrl.setCurrentIndex(
+                    paths.index(lut3d_input_profile)
+                )
+            self.lut3d_input_profile_ctrl.setToolTip(lut3d_input_profile)
+
+            trc = str(getcfg("3dlut.trc"))
+            trc_gamma_type = str(getcfg("3dlut.trc_gamma_type"))
+            trc_output_offset = getcfg("3dlut.trc_output_offset")
+            trc_gamma = getcfg("3dlut.trc_gamma")
+            index, corrected_trc = lut3d_settings.resolve_trc_selection(
+                trc, trc_gamma_type, trc_output_offset, trc_gamma
+            )
+            if corrected_trc != trc:
+                setcfg("3dlut.trc", corrected_trc)
+                trc = corrected_trc
+            self.lut3d_trc_ctrl.setCurrentIndex(index)
+            self.lut3d_trc_gamma_ctrl.setCurrentText(str(trc_gamma))
+            self.lut3d_trc_gamma_type_ctrl.setCurrentIndex(
+                lut3d_settings.TRC_GAMMA_TYPE_BA.get(trc_gamma_type, 0)
+            )
+            outoffset = int(round(float(trc_output_offset) * 100))
+            self.lut3d_trc_black_output_offset_ctrl.setValue(outoffset)
+            self.lut3d_trc_black_output_offset_intctrl.setValue(outoffset)
+
+            target_peak = getcfg("3dlut.hdr_peak_luminance")
+            maxmll = getcfg("3dlut.hdr_maxmll")
+            # Don't allow maxmll < target peak: technically unrestricted, but
+            # practically nonsensical (mirrors wx's identical clamp).
+            if maxmll < target_peak:
+                maxmll = target_peak
+                setcfg("3dlut.hdr_maxmll", maxmll)
+            self.lut3d_hdr_maxmll_ctrl.setMinimum(target_peak)
+            self.lut3d_hdr_peak_luminance_ctrl.setValue(target_peak)
+            self.lut3d_hdr_minmll_ctrl.setValue(getcfg("3dlut.hdr_minmll"))
+            self.lut3d_hdr_maxmll_ctrl.setValue(maxmll)
+            self.lut3d_hdr_maxmll_alt_clip_cb.setChecked(
+                not bool(getcfg("3dlut.hdr_maxmll_alt_clip"))
+            )
+            self._update_lut3d_diffuse_white()
+            self.lut3d_hdr_ambient_luminance_ctrl.setValue(
+                getcfg("3dlut.hdr_ambient_luminance")
+            )
+            self._update_lut3d_system_gamma()
+
+            colors_xy = {
+                f"3dlut.content.colorspace.{color}.{coord}": getcfg(
+                    f"3dlut.content.colorspace.{color}.{coord}"
+                )
+                for color in ("white", "red", "green", "blue")
+                for coord in "xy"
+            }
+            for (color, coord), spin in self._lut3d_content_colorspace_xy_ctrls.items():
+                spin.setValue(colors_xy[f"3dlut.content.colorspace.{color}.{coord}"])
+            cc_index = lut3d_settings.resolve_content_colorspace_selection(colors_xy)
+            self.lut3d_content_colorspace_ctrl.setCurrentIndex(cc_index)
+
+            self.lut3d_hdr_sat_ctrl.setValue(round(getcfg("3dlut.hdr_sat") * 100))
+            self._update_lut3d_sat_val()
+            hue = round(getcfg("3dlut.hdr_hue") * 100)
+            self.lut3d_hdr_hue_ctrl.setValue(hue)
+            self.lut3d_hdr_hue_intctrl.setValue(hue)
+
+            self._update_lut3d_apply_cal_control()
+            self._update_lut3d_b2a_controls()
+
+            self._sync_value_combo("3dlut.rendering_intent", cast=str)
+            self._sync_lut3d_format_ctrl()
+            self.lut3d_hdr_display_ctrl.setCurrentIndex(int(getcfg("3dlut.hdr_display")))
+            self._sync_value_combo("3dlut.size", cast=int)
+            self._sync_value_combo("3dlut.bitdepth.input", cast=int)
+            self._sync_value_combo("3dlut.bitdepth.output", cast=int)
+
+            self._apply_lut3d_visibility()
+        finally:
+            self._updating = was_updating
+
+    @staticmethod
+    def _lut3d_profile_description(profile: ICCProfile) -> str:
+        """Return a 3D LUT input-profile combo description for ``profile``.
+
+        Mirrors the description cleanup in ``MainFrame.lut3d_init_input_profiles``
+        / ``lut3d_update_controls``.
+        """
+        desc = profile.getDescription()
+        return re.sub(
+            r"\s*(?:color profile|primaries with \S+ transfer function)$", "", desc
+        )
+
+    def _lut3d_init_input_profiles(self) -> None:
+        """Populate the input-colorspace combo from the bundled reference profiles.
+
+        Mirrors ``MainFrame.lut3d_init_input_profiles``. Called once from
+        :meth:`__init__`; per-update selection sync happens in
+        :meth:`update_lut3d_controls`.
+        """
+        self.input_profiles = {}
+        for profile_filename in (
+            "ACES.icm",
+            "ACEScg.icm",
+            "DCDM X'Y'Z'.icm",
+            "Rec709.icm",
+            "Rec2020.icm",
+            "EBU3213_PAL.icm",
+            "SMPTE_RP145_NTSC.icm",
+            "SMPTE431_P3.icm",
+            "SMPTE431_P3_D65.icm",
+            getcfg("3dlut.input.profile"),
+        ):
+            if not profile_filename:
+                continue
+            path = (
+                profile_filename
+                if os.path.isabs(profile_filename)
+                else config.get_data_path("ref/" + profile_filename)
+            )
+            if not path:
+                continue
+            try:
+                profile = ICCProfile(path)
+            except (OSError, ICCProfileInvalidError) as exception:
+                print(f"{path}:", exception)
+                continue
+            if path not in self.input_profiles.values():
+                self.input_profiles[self._lut3d_profile_description(profile)] = path
+        self.input_profiles = dict_sort(self.input_profiles)
+        self.lut3d_input_profile_ctrl.clear()
+        self.lut3d_input_profile_ctrl.addItems(list(self.input_profiles.keys()))
+
+    def _sync_lut3d_format_ctrl(self) -> None:
+        """Select the format combo row matching stored config, then cascade."""
+        file_format = getcfg("3dlut.format")
+        if file_format not in self._lut3d_format_values:
+            # madVR unavailable on this Argyll version -> fall back like wx.
+            file_format = DEFAULTS["3dlut.format"]
+        if file_format in self._lut3d_format_values:
+            self.lut3d_format_ctrl.setCurrentIndex(
+                self._lut3d_format_values.index(file_format)
+            )
+        self._lut3d_update_encoding_controls()
+        self.lut3d_size_ctrl.setEnabled(file_format not in ("eeColor", "madVR"))
+        bitdepth_input_visible, bitdepth_output_visible = (
+            lut3d_settings.lut3d_bitdepth_controls_visible(file_format)
+        )
+        self._lut3d_form.setRowVisible(
+            self.lut3d_bitdepth_input_ctrl, bitdepth_input_visible
+        )
+        self._lut3d_form.setRowVisible(
+            self.lut3d_bitdepth_output_ctrl, bitdepth_output_visible
+        )
+
+    def _lut3d_update_encoding_controls(self) -> None:
+        """Rebuild the encoding input/output combos for the current format.
+
+        Mirrors ``LUT3DMixin.lut3d_setup_encoding_ctrl`` +
+        ``lut3d_update_encoding_controls``.
+        """
+        file_format = getcfg("3dlut.format")
+        argyll_version = getcfg("argyll.version")
+        input_codes, output_codes = lut3d_settings.lut3d_encoding_codes(
+            file_format, argyll_version
+        )
+        self._lut3d_encoding_input_values = input_codes
+        self._lut3d_encoding_output_values = output_codes
+
+        self.encoding_input_ctrl.blockSignals(True)
+        self.encoding_input_ctrl.clear()
+        self.encoding_input_ctrl.addItems(
+            [label for _code, label in lut3d_encoding_items(input_codes)]
+        )
+        input_value = getcfg("3dlut.encoding.input")
+        if input_value in input_codes:
+            self.encoding_input_ctrl.setCurrentIndex(input_codes.index(input_value))
+        self.encoding_input_ctrl.blockSignals(False)
+        self.encoding_input_ctrl.setEnabled(len(input_codes) > 1)
+
+        self.encoding_output_ctrl.blockSignals(True)
+        self.encoding_output_ctrl.clear()
+        self.encoding_output_ctrl.addItems(
+            [label for _code, label in lut3d_encoding_items(output_codes)]
+        )
+        output_value = getcfg("3dlut.encoding.output")
+        if output_value in output_codes:
+            self.encoding_output_ctrl.setCurrentIndex(
+                output_codes.index(output_value)
+            )
+        self.encoding_output_ctrl.blockSignals(False)
+        self.encoding_output_ctrl.setEnabled(file_format not in ("dcl", "madVR"))
+
+    def _update_lut3d_diffuse_white(self) -> None:
+        """Refresh the HDR roll-off diffuse-white readout."""
+        value, below_reference = lut3d_settings.diffuse_white_cdm2(
+            getcfg("3dlut.hdr_peak_luminance"),
+            getcfg("3dlut.hdr_minmll"),
+            getcfg("3dlut.hdr_maxmll"),
+            getcfg("3dlut.hdr_maxmll_alt_clip"),
+        )
+        color = "#CC0000" if below_reference else "#008000"
+        self.lut3d_hdr_diffuse_white_txt.setText(f"{value:.2f} cd/m²")
+        self.lut3d_hdr_diffuse_white_txt.setStyleSheet(f"color: {color};")
+
+    def _update_lut3d_system_gamma(self) -> None:
+        """Refresh the HLG system-gamma readout."""
+        gamma = lut3d_settings.hlg_system_gamma(getcfg("3dlut.hdr_ambient_luminance"))
+        self.lut3d_hdr_system_gamma_txt.setText(str(stripzeros(f"{gamma:.4f}")))
+
+    def _update_lut3d_sat_val(self) -> None:
+        """Refresh the preserve-luminance/-saturation percentage readouts."""
+        v = getcfg("3dlut.hdr_sat") * 100
+        self.lut3d_hdr_sat_lum_val.setText(f"{100 - v}%")
+        self.lut3d_hdr_sat_sat_val.setText(f"{v}%")
+
+    def _update_lut3d_apply_cal_control(self) -> None:
+        """Sync the "Apply calibration" checkbox's value/enabled state.
+
+        Mirrors ``MainFrame.lut3d_update_apply_cal_control``.
+        """
+        lut3d_create = bool(getcfg("3dlut.create"))
+        profile = not lut3d_create and config.get_current_profile(True)
+        enable_apply_cal = bool(
+            lut3d_create
+            or (profile and isinstance(profile.tags.get("vcgt"), VideoCardGammaType))
+        )
+        self.lut3d_apply_cal_cb.setChecked(
+            enable_apply_cal and bool(getcfg("3dlut.output.profile.apply_cal"))
+        )
+        self.lut3d_apply_cal_cb.setEnabled(enable_apply_cal)
+
+    def _update_lut3d_b2a_controls(self) -> None:
+        """Sync the gamut-mapping-mode radios' value/enabled state.
+
+        Mirrors ``MainFrame.lut3d_update_b2a_controls``.
+        """
+        if getcfg("3dlut.create"):
+            allow_b2a_gamap = getcfg("profile.type") in ("l", "x", "X") and getcfg(
+                "profile.b2a.hires"
+            )
+        else:
+            profile = config.get_current_profile(True)
+            allow_b2a_gamap = bool(
+                profile
+                and "B2A0" in profile.tags
+                and isinstance(profile.tags.B2A0, LUT16Type)
+                and profile.tags.B2A0.clut_grid_steps >= 17
+            )
+        self.gamut_mapping_b2a.setEnabled(bool(allow_b2a_gamap))
+        if not allow_b2a_gamap:
+            setcfg("3dlut.gamap.use_b2a", 0)
+        self.gamut_mapping_inverse_a2b.setChecked(not getcfg("3dlut.gamap.use_b2a"))
+        self.gamut_mapping_b2a.setChecked(bool(getcfg("3dlut.gamap.use_b2a")))
+
+    def _apply_lut3d_visibility(self) -> None:
+        """Show/hide 3D LUT tab rows for the current config.
+
+        Mirrors ``LUT3DMixin.lut3d_show_trc_controls`` / ``lut3d_show_encoding_controls``
+        and ``MainFrame.lut3d_show_controls``, via
+        :func:`DisplayCAL.lut3d_settings.compute_trc_visibility`.
+        """
+        argyll_version = getcfg("argyll.version")
+        cc_is_custom = self.lut3d_content_colorspace_ctrl.currentIndex() == len(
+            lut3d_settings.CONTENT_COLORSPACE_NAMES
+        )
+        v = lut3d_settings.compute_trc_visibility(
+            trc=str(getcfg("3dlut.trc")),
+            trc_format=getcfg("3dlut.format"),
+            argyll_version=argyll_version,
+            show_advanced_options=bool(getcfg("show_advanced_options")),
+            lut3d_create=bool(getcfg("3dlut.create")),
+            hdr_maxmll=getcfg("3dlut.hdr_maxmll"),
+            content_colorspace_is_custom=cc_is_custom,
+        )
+        self.lut3d_trc_ctrl.setVisible(v.trc_row)
+        self.lut3d_trc_gamma_label.setVisible(v.trc_gamma)
+        self.lut3d_trc_gamma_ctrl.setVisible(v.trc_gamma)
+        self.lut3d_trc_gamma_type_ctrl.setVisible(v.trc_gamma_type)
+        self.lut3d_hdr_peak_luminance_label.setVisible(v.hdr_peak_luminance)
+        self.lut3d_hdr_peak_luminance_ctrl.setVisible(v.hdr_peak_luminance)
+        self._lut3d_form.setRowVisible(self._lut3d_hdr_sat_row_widget, v.hdr_sat_hue)
+        self._lut3d_form.setRowVisible(self._lut3d_hdr_hue_row_widget, v.hdr_sat_hue)
+        self._lut3d_form.setRowVisible(self.lut3d_hdr_minmll_ctrl, v.hdr_minmll)
+        self._lut3d_form.setRowVisible(
+            self._lut3d_hdr_maxmll_row_widget, v.hdr_maxmll
+        )
+        self.lut3d_hdr_maxmll_alt_clip_cb.setVisible(v.hdr_maxmll_alt_clip)
+        self._lut3d_form.setRowVisible(
+            self._lut3d_hdr_diffuse_white_row_widget, v.hdr_diffuse_white
+        )
+        self._lut3d_form.setRowVisible(
+            self.lut3d_hdr_ambient_luminance_ctrl, v.hdr_ambient_luminance
+        )
+        self._lut3d_form.setRowVisible(
+            self.lut3d_hdr_system_gamma_txt, v.hdr_system_gamma
+        )
+        self._lut3d_form.setRowVisible(
+            self.lut3d_content_colorspace_ctrl, v.content_colorspace
+        )
+        self._lut3d_form.setRowVisible(
+            self._lut3d_content_colorspace_xy_row_widget, v.content_colorspace_xy
+        )
+        self._lut3d_form.setRowVisible(
+            self._lut3d_black_output_offset_row_widget, v.black_output_offset
+        )
+        self.lut3d_hdr_display_ctrl.setVisible(v.hdr_display)
+
+        show_advanced = bool(getcfg("show_advanced_options"))
+        self._lut3d_form.setRowVisible(self.lut3d_apply_cal_cb, show_advanced)
+        self._lut3d_form.setRowVisible(
+            self._lut3d_gamut_mapping_row_widget, show_advanced
+        )
+
+        encoding_visible = lut3d_settings.lut3d_encoding_controls_visible(
+            argyll_version
+        )
+        self._lut3d_form.setRowVisible(self.encoding_input_ctrl, encoding_visible)
+        self._lut3d_form.setRowVisible(self.encoding_output_ctrl, encoding_visible)
+
+    # -- 3D LUT handlers ----------------------------------------------------
+
+    def _lut3d_input_profile_changed(self, index: int) -> None:
+        """Persist the selected 3D LUT input-colorspace profile.
+
+        Mirrors ``MainFrame.lut3d_input_colorspace_handler``.
+        """
+        if self._updating or index < 0:
+            return
+        paths = list(self.input_profiles.values())
+        if index >= len(paths):
+            return
+        path = paths[index]
+        setcfg("3dlut.input.profile", path)
+        try:
+            profile = ICCProfile(path)
+        except (OSError, ICCProfileInvalidError):
+            profile = None
+        if (
+            profile
+            and "rTRC" in profile.tags
+            and "gTRC" in profile.tags
+            and "bTRC" in profile.tags
+            and profile.tags.rTRC == profile.tags.gTRC == profile.tags.bTRC
+            and isinstance(profile.tags.rTRC, CurveType)
+        ):
+            tf = profile.tags.rTRC.get_transfer_function(outoffset=1.0)
+            changed = setcfg_cond(
+                tf[0][0].startswith("Gamma"), "3dlut.trc_gamma", round(tf[0][1], 2), True
+            )
+            if changed:
+                self.update_lut3d_controls()
+        self.lut3d_input_profile_ctrl.setToolTip(path)
+
+    def _lut3d_trc_ctrl_changed(self, index: int) -> None:
+        """Apply the TRC combo's implied config, then re-sync everything.
+
+        Mirrors ``LUT3DMixin.lut3d_trc_ctrl_handler`` (minus the custom-gamma
+        focus/select-all UI action, which has no config-visible effect).
+        """
+        if self._updating or index < 0:
+            return
+        for key, value in lut3d_settings.trc_selection_side_effects(index).items():
+            setcfg(key, value)
+        self.update_lut3d_controls()
+
+    def _lut3d_trc_gamma_changed(self) -> None:
+        """Validate and persist a hand-edited custom-gamma value."""
+        if self._updating:
+            return
+        text = self.lut3d_trc_gamma_ctrl.currentText()
+        low, high = config.VALID_RANGES["3dlut.trc_gamma"]
+        try:
+            value = float(text.replace(",", "."))
+            if not low <= value <= high:
+                raise ValueError
+        except ValueError:
+            QApplication.beep()
+            self.lut3d_trc_gamma_ctrl.setCurrentText(str(getcfg("3dlut.trc_gamma")))
+            return
+        if str(value) != text:
+            self.lut3d_trc_gamma_ctrl.setCurrentText(str(value))
+        if value != getcfg("3dlut.trc_gamma"):
+            setcfg("3dlut.trc_gamma", value)
+            self.update_lut3d_controls()
+
+    def _lut3d_trc_gamma_type_changed(self, index: int) -> None:
+        if self._updating or index < 0:
+            return
+        value = lut3d_settings.TRC_GAMMA_TYPE_AB.get(index, "b")
+        if value != getcfg("3dlut.trc_gamma_type"):
+            setcfg("3dlut.trc_gamma_type", value)
+            self.update_lut3d_controls()
+
+    def _lut3d_hdr_peak_luminance_changed(self, value: float) -> None:
+        if self._updating:
+            return
+        if getcfg("3dlut.hdr_maxmll") < value:
+            setcfg("3dlut.hdr_maxmll", value)
+        setcfg("3dlut.hdr_peak_luminance", value)
+        self.update_lut3d_controls()
+
+    def _lut3d_hdr_minmll_changed(self, value: float) -> None:
+        if self._updating:
+            return
+        setcfg("3dlut.hdr_minmll", value)
+        self.update_lut3d_controls()
+
+    def _lut3d_hdr_maxmll_changed(self, value: float) -> None:
+        if self._updating:
+            return
+        setcfg("3dlut.hdr_maxmll", value)
+        self.update_lut3d_controls()
+
+    def _lut3d_hdr_maxmll_alt_clip_changed(self, checked: bool) -> None:
+        if self._updating:
+            return
+        setcfg("3dlut.hdr_maxmll_alt_clip", int(not checked))
+        self.update_lut3d_controls()
+
+    def _lut3d_hdr_ambient_luminance_changed(self, value: float) -> None:
+        if self._updating:
+            return
+        setcfg("3dlut.hdr_ambient_luminance", value)
+        self._update_lut3d_system_gamma()
+
+    def _lut3d_hdr_sat_changed(self, value: int) -> None:
+        if self._updating:
+            return
+        setcfg("3dlut.hdr_sat", value / 100.0)
+        self._update_lut3d_sat_val()
+
+    def _commit_lut3d_hdr_hue(self, value: int) -> None:
+        v = value / 100.0
+        if v != getcfg("3dlut.hdr_hue"):
+            setcfg("3dlut.hdr_hue", v)
+
+    def _lut3d_hdr_hue_slider_changed(self, value: int) -> None:
+        if self._updating:
+            return
+        self.lut3d_hdr_hue_intctrl.setValue(value)
+        self._commit_lut3d_hdr_hue(value)
+
+    def _lut3d_hdr_hue_intctrl_changed(self, value: int) -> None:
+        if self._updating:
+            return
+        self.lut3d_hdr_hue_ctrl.setValue(value)
+        self._commit_lut3d_hdr_hue(value)
+
+    def _commit_lut3d_black_output_offset(self, value: int) -> None:
+        v = value / 100.0
+        if v != getcfg("3dlut.trc_output_offset"):
+            setcfg("3dlut.trc_output_offset", v)
+            self.update_lut3d_controls()
+
+    def _lut3d_black_output_offset_slider_changed(self, value: int) -> None:
+        if self._updating:
+            return
+        self.lut3d_trc_black_output_offset_intctrl.setValue(value)
+        self._commit_lut3d_black_output_offset(value)
+
+    def _lut3d_black_output_offset_intctrl_changed(self, value: int) -> None:
+        if self._updating:
+            return
+        self.lut3d_trc_black_output_offset_ctrl.setValue(value)
+        self._commit_lut3d_black_output_offset(value)
+
+    def _lut3d_content_colorspace_changed(self, index: int) -> None:
+        if self._updating or index < 0:
+            return
+        if index < len(lut3d_settings.CONTENT_COLORSPACE_NAMES):
+            name = lut3d_settings.CONTENT_COLORSPACE_NAMES[index]
+            for key, value in lut3d_settings.content_colorspace_xy(name).items():
+                setcfg(key, value)
+        self.update_lut3d_controls()
+
+    def _make_lut3d_content_colorspace_xy_handler(
+        self, color: str, coord: str
+    ) -> Callable[[float], None]:
+        """Return a value-changed handler bound to one primaries-editor spin box."""
+
+        def handler(value: float) -> None:
+            if self._updating:
+                return
+            setcfg(f"3dlut.content.colorspace.{color}.{coord}", value)
+            self.update_lut3d_controls()
+
+        return handler
+
+    def _lut3d_apply_cal_changed(self, checked: bool) -> None:
+        if self._updating:
+            return
+        setcfg("3dlut.output.profile.apply_cal", int(checked))
+
+    def _lut3d_gamut_mapping_mode_changed(self, checked: bool) -> None:
+        """Handle ``gamut_mapping_inverse_a2b``'s ``toggled`` signal.
+
+        The two radios are mutually exclusive (:class:`QButtonGroup`), so
+        ``checked`` alone (inverse-A2B selected vs. B2A selected) is enough.
+        """
+        if self._updating:
+            return
+        setcfg("3dlut.gamap.use_b2a", 0 if checked else 1)
+
+    def _lut3d_format_ctrl_changed(self, index: int) -> None:
+        """Apply the format combo's cascading config side effects.
+
+        Mirrors ``LUT3DMixin.lut3d_format_ctrl_handler``.
+        """
+        if self._updating or index < 0 or index >= len(self._lut3d_format_values):
+            return
+        old_format = getcfg("3dlut.format")
+        new_format = self._lut3d_format_values[index]
+        cfg_snapshot = {
+            key: getcfg(key)
+            for key in (
+                "3dlut.encoding.input",
+                "3dlut.encoding.output",
+                "3dlut.encoding.input.backup",
+                "3dlut.encoding.output.backup",
+                "3dlut.size",
+                "3dlut.size.backup",
+                "3dlut.bitdepth.output",
+            )
+        }
+        updates = lut3d_settings.lut3d_format_side_effects(
+            old_format, new_format, cfg_snapshot
+        )
+        for key, value in updates.items():
+            setcfg(key, value)
+        self.update_lut3d_controls()
+
+    def _lut3d_hdr_display_changed(self, index: int) -> None:
+        """Handle the madVR HDR/HDR-to-SDR sub-mode combo.
+
+        Mirrors ``LUT3DMixin.lut3d_hdr_display_handler``: turning HDR mode on
+        shows a one-time informational confirmation (there is no cancel path,
+        the dialog just needs to be acknowledged).
+        """
+        if self._updating or index < 0:
+            return
+        if index and not getcfg("3dlut.hdr_display"):
+            QMessageBox.information(
+                self, APPNAME, lang.getstr("3dlut.format.madVR.hdr.confirm")
+            )
+        setcfg("3dlut.hdr_display", index)
+
+    def _lut3d_encoding_input_changed(self, index: int) -> None:
+        if (
+            self._updating
+            or index < 0
+            or index >= len(self._lut3d_encoding_input_values)
+        ):
+            return
+        setcfg("3dlut.encoding.input", self._lut3d_encoding_input_values[index])
+        self._lut3d_update_encoding_controls()
+
+    def _lut3d_encoding_output_changed(self, index: int) -> None:
+        if (
+            self._updating
+            or index < 0
+            or index >= len(self._lut3d_encoding_output_values)
+        ):
+            return
+        encoding = self._lut3d_encoding_output_values[index]
+        if getcfg("3dlut.format") == "madVR" and encoding != "t":
+            result = QMessageBox.question(
+                self,
+                APPNAME,
+                lang.getstr(
+                    "3dlut.encoding.output.warning.madvr",
+                    lang.getstr("device.name.placeholder"),
+                ),
+                QMessageBox.Ok | QMessageBox.Cancel,
+                QMessageBox.Cancel,
+            )
+            if result != QMessageBox.Ok:
+                self._lut3d_update_encoding_controls()
+                return
+        setcfg("3dlut.encoding.output", encoding)
+        self._lut3d_update_encoding_controls()
 
     def _sync_check(self, config_key: str) -> None:
         """Set a bound checkbox from the stored int config value."""

@@ -13,6 +13,7 @@ import pytest
 
 from DisplayCAL import config
 from DisplayCAL import localization as lang
+from DisplayCAL import lut3d_settings as l3d
 from DisplayCAL.config import getcfg, setcfg
 from DisplayCAL.worker import Worker
 
@@ -771,6 +772,192 @@ def test_lut3d_rendering_intent_persists(window):
     intents = config.VALID_VALUES["3dlut.rendering_intent"]
     window.lut3d_rendering_intent_ctrl.setCurrentIndex(2)
     assert getcfg("3dlut.rendering_intent") == intents[2]
+
+
+def test_lut3d_trc_ctrl_gamma22_persists(window):
+    window.lut3d_trc_ctrl.setCurrentIndex(0)
+    assert getcfg("3dlut.trc") == "gamma2.2"
+    assert getcfg("3dlut.trc_gamma") == 2.2
+    assert getcfg("3dlut.trc_gamma_type") == "b"
+    assert getcfg("3dlut.trc_output_offset") == 1.0
+
+
+def test_lut3d_trc_ctrl_bt1886_persists(window):
+    window.lut3d_trc_ctrl.setCurrentIndex(1)
+    assert getcfg("3dlut.trc") == "bt1886"
+    assert getcfg("3dlut.trc_gamma") == 2.4
+    assert getcfg("3dlut.trc_gamma_type") == "B"
+
+
+def test_lut3d_trc_ctrl_smpte2084_hardclip_forces_maxmll_10000(window):
+    setcfg("3dlut.hdr_maxmll", 1000.0)
+    window.lut3d_trc_ctrl.setCurrentIndex(2)
+    assert getcfg("3dlut.trc") == "smpte2084.hardclip"
+    assert getcfg("3dlut.hdr_maxmll") == 10000
+
+
+def test_lut3d_trc_ctrl_hlg_persists(window):
+    window.lut3d_trc_ctrl.setCurrentIndex(4)
+    assert getcfg("3dlut.trc") == "hlg"
+
+
+def test_lut3d_trc_gamma_ctrl_rejects_out_of_range_value(window):
+    window.lut3d_trc_ctrl.setCurrentIndex(5)  # custom
+    before = getcfg("3dlut.trc_gamma")
+    window.lut3d_trc_gamma_ctrl.setCurrentText("99")
+    window._lut3d_trc_gamma_changed()
+    assert getcfg("3dlut.trc_gamma") == before
+    assert window.lut3d_trc_gamma_ctrl.currentText() == str(before)
+
+
+def test_lut3d_trc_gamma_ctrl_accepts_valid_value(window):
+    window.lut3d_trc_ctrl.setCurrentIndex(5)  # custom
+    window.lut3d_trc_gamma_ctrl.setCurrentText("1.8")
+    window._lut3d_trc_gamma_changed()
+    assert getcfg("3dlut.trc_gamma") == 1.8
+
+
+def test_lut3d_content_colorspace_selection_sets_primaries(window):
+    window.lut3d_content_colorspace_ctrl.setCurrentIndex(2)  # Rec. 709
+    assert getcfg("3dlut.content.colorspace.red.x") == 0.64
+    assert getcfg("3dlut.content.colorspace.red.y") == 0.33
+
+
+def test_lut3d_content_colorspace_xy_edit_persists_and_selects_custom(window):
+    window.lut3d_content_colorspace_ctrl.setCurrentIndex(2)  # Rec. 709
+    red_x = window._lut3d_content_colorspace_xy_ctrls[("red", "x")]
+    red_x.setValue(0.5)
+    assert getcfg("3dlut.content.colorspace.red.x") == 0.5
+    assert window.lut3d_content_colorspace_ctrl.currentIndex() == len(
+        l3d.CONTENT_COLORSPACE_NAMES
+    )
+
+
+def test_lut3d_hdr_peak_luminance_raises_maxmll_floor(window):
+    setcfg("3dlut.hdr_maxmll", 1000.0)
+    window.lut3d_hdr_peak_luminance_ctrl.setValue(4000.0)
+    assert getcfg("3dlut.hdr_peak_luminance") == 4000.0
+    assert getcfg("3dlut.hdr_maxmll") == 4000.0
+    assert window.lut3d_hdr_maxmll_ctrl.minimum() == 4000.0
+
+
+def test_lut3d_hdr_maxmll_alt_clip_checkbox_is_inverted(window):
+    setcfg("3dlut.hdr_maxmll_alt_clip", 1)
+    window.update_lut3d_controls()
+    assert window.lut3d_hdr_maxmll_alt_clip_cb.isChecked() is False
+    window.lut3d_hdr_maxmll_alt_clip_cb.setChecked(True)
+    assert getcfg("3dlut.hdr_maxmll_alt_clip") == 0
+
+
+def test_lut3d_hdr_sat_slider_persists_and_updates_readout(window):
+    window.lut3d_hdr_sat_ctrl.setValue(30)
+    assert getcfg("3dlut.hdr_sat") == 0.3
+    assert window.lut3d_hdr_sat_sat_val.text() == "30.0%"
+    assert window.lut3d_hdr_sat_lum_val.text() == "70.0%"
+
+
+def test_lut3d_hdr_hue_slider_and_intctrl_stay_in_sync(window):
+    window.lut3d_hdr_hue_ctrl.setValue(40)
+    assert window.lut3d_hdr_hue_intctrl.value() == 40
+    assert getcfg("3dlut.hdr_hue") == 0.4
+
+    window.lut3d_hdr_hue_intctrl.setValue(60)
+    assert window.lut3d_hdr_hue_ctrl.value() == 60
+    assert getcfg("3dlut.hdr_hue") == 0.6
+
+
+def test_lut3d_black_output_offset_slider_and_intctrl_stay_in_sync(window):
+    window.lut3d_trc_black_output_offset_ctrl.setValue(25)
+    assert window.lut3d_trc_black_output_offset_intctrl.value() == 25
+    assert getcfg("3dlut.trc_output_offset") == 0.25
+
+
+def test_lut3d_apply_cal_checkbox_persists(window):
+    setcfg("3dlut.create", 1)
+    window.update_lut3d_controls()
+    assert window.lut3d_apply_cal_cb.isEnabled() is True
+    window.lut3d_apply_cal_cb.setChecked(True)
+    assert getcfg("3dlut.output.profile.apply_cal") == 1
+    window.lut3d_apply_cal_cb.setChecked(False)
+    assert getcfg("3dlut.output.profile.apply_cal") == 0
+
+
+def test_lut3d_gamut_mapping_radios_persist_use_b2a(window):
+    setcfg("3dlut.create", 1)
+    setcfg("profile.type", "l")
+    setcfg("profile.b2a.hires", 1)
+    window.update_lut3d_controls()
+    assert window.gamut_mapping_b2a.isEnabled() is True
+
+    window.gamut_mapping_b2a.setChecked(True)
+    assert getcfg("3dlut.gamap.use_b2a") == 1
+
+    window.gamut_mapping_inverse_a2b.setChecked(True)
+    assert getcfg("3dlut.gamap.use_b2a") == 0
+
+
+def test_lut3d_format_madvr_forces_encoding_and_size(qapp, stub_worker):
+    # madVR is only offered in the format combo for Argyll 1.6+, and that
+    # combo's item set is fixed at window-construction time (mirrors wx's
+    # ``lut3d_setup_language``), so pin the version before constructing.
+    setcfg("argyll.version", "1.9.0")
+    win = mw.MainWindow()
+    try:
+        values = win._lut3d_format_values
+        assert "madVR" in values
+        win.lut3d_format_ctrl.setCurrentIndex(values.index("madVR"))
+        assert getcfg("3dlut.format") == "madVR"
+        assert getcfg("3dlut.encoding.input") == "t"
+        assert getcfg("3dlut.encoding.output") == "t"
+        assert getcfg("3dlut.size") == 65
+    finally:
+        win.close()
+
+
+def test_lut3d_format_change_rebuilds_encoding_combo(window):
+    values = window._lut3d_format_values
+    window.lut3d_format_ctrl.setCurrentIndex(values.index("dcl"))
+    assert window._lut3d_encoding_input_values == ["n"]
+    assert window.encoding_input_ctrl.count() == 1
+
+
+def test_lut3d_visibility_trc_gamma_hidden_without_advanced_options(window):
+    setcfg("show_advanced_options", 0)
+    window.lut3d_trc_ctrl.setCurrentIndex(1)  # BT.1886
+    assert window.lut3d_trc_gamma_ctrl.isHidden() is True
+
+
+def test_lut3d_visibility_apply_cal_row_gated_by_advanced_options(window):
+    setcfg("show_advanced_options", 0)
+    window.update_lut3d_controls()
+    assert window._lut3d_form.isRowVisible(window.lut3d_apply_cal_cb) is False
+
+    setcfg("show_advanced_options", 1)
+    window._update_advanced_options_visibility()
+    assert window._lut3d_form.isRowVisible(window.lut3d_apply_cal_cb) is True
+
+
+def test_lut3d_visibility_hdr_display_only_for_smpte2084_madvr(qapp, stub_worker):
+    setcfg("argyll.version", "1.9.0")
+    win = mw.MainWindow()
+    try:
+        values = win._lut3d_format_values
+        win.lut3d_format_ctrl.setCurrentIndex(values.index("madVR"))
+        win.lut3d_trc_ctrl.setCurrentIndex(2)  # SMPTE 2084 hard clip
+        assert win.lut3d_hdr_display_ctrl.isHidden() is False
+
+        win.lut3d_trc_ctrl.setCurrentIndex(4)  # HLG
+        assert win.lut3d_hdr_display_ctrl.isHidden() is True
+    finally:
+        win.close()
+
+
+def test_lut3d_input_profile_ctrl_persists_selection(window):
+    assert window.lut3d_input_profile_ctrl.count() > 0
+    paths = list(window.input_profiles.values())
+    window.lut3d_input_profile_ctrl.setCurrentIndex(len(paths) - 1)
+    assert getcfg("3dlut.input.profile") == paths[-1]
+    assert window.lut3d_input_profile_ctrl.toolTip() == paths[-1]
 
 
 def test_populating_calibration_does_not_write_config(qapp, stub_worker):
