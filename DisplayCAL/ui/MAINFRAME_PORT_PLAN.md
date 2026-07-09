@@ -513,6 +513,62 @@ and a `setChecked(True)` that finds the action already checked from such a
 leak is a silent no-op (Qt only emits `toggled` on an actual state change),
 leaving stale visibility behind.
 
+**Session 9 (Profiling tab: testchart chooser, patch controls, profile-name
+tokens, 2026-07-08/09).** Picked from the "Remaining gaps" list: the
+Profiling tab's remaining functional controls (3D LUT tab deferred as its own,
+larger follow-up — its HDR/gamut-mapping/encoding sub-controls are a
+comparably-sized slice on their own). New toolkit-neutral module
+`DisplayCAL/profile_name.py` ports `MainFrame.create_profile_name` (the full
+`%`-placeholder expansion), `check_profile_name`/the sanitizing fallback in
+`profile_name_ctrl_handler`, `get_testchart_names`, the auto-optimize
+patch-count/profile-type-nudge math from `testchart_patches_amount_ctrl_handler`,
+`load_testchart_from_file`, and the estimated-measurement-time computation from
+`wx_report_frame.ReportFrame.update_estimated_measurement_time`. Wired in
+`main_window.py`: testchart chooser combo + browse button (validates
+`.ti1`/`.ti3`/`.icc`/`.icm`, the last needing an embedded TI3), the
+auto-optimize slider + computed patch count + patch-sequence combo (gated by
+`show_advanced_options`, joining `gamap_btn` in that gating) + estimated
+measurement-time label, and the profile-name live preview + placeholder-legend
+info button + save-path picker. `gamap_btn` (opens wx's separate `GamapFrame`)
+and `create_testchart_btn` (opens wx's separate `TestchartEditor`) show a
+not-yet-available notice, matching the CCXX-info-button precedent — neither
+tool window is ported.
+
+Also added the Stage-0-deferred settings getters this needed
+(`get_trc`/`get_trc_type`/`get_whitepoint`/`get_whitepoint_locus`/
+`get_luminance`/`get_black_luminance`/`get_ambient`/`get_black_output_offset`/
+`get_black_point_correction`/`get_calibration_quality`/`get_profile_type`),
+and restored `profile_type_ctrl`'s side effects (`gamap_btn` enabled only for
+LUT types, black-point-compensation nudged to the type's usual default on
+first entering a category, profile quality locked to "high" for the two
+gamma-only types) that Stage 3 had never wired — a real pre-existing gap, not
+new deferred scope. Fixed a latent bug found while touching this exact row:
+`profile_type_ctrl` was seeded straight from `PROFILE_TYPES`' label *keys*
+(e.g. `"profile.type.lut_matrix.xyz"`) without `lang.getstr()`, so it showed
+raw translation keys instead of real labels.
+
+Not reproduced (documented in `profile_name.py`'s module docstring): the
+CCXX-testchart-recommendation confirm dialog
+(`check_testchart_patches_amount`), `set_default_testchart`'s testchart reset
+on profile-type category change (`TESTCHART_DEFAULTS` only ever resolves to
+`"auto"` in this codebase, so the effect is narrow), and the testchart-editor
+live-refresh side effect of `set_testchart` (no editor to refresh). 20 new
+regression tests in `tests/test_ui_main_window.py` (142 total, up from 122)
+plus 46 in a new `tests/test_profile_name.py` for the pure module. Hit two
+more instances of the `config.CFG`-leaks-between-tests trap (this time
+leaking *out* of a test into unrelated ones): a test that loaded the bundled
+`ccxx.ti1` testchart left `testchart.file` pointed at it, which flips
+`config.is_ccxx_testchart()` for every later test in the session and broke
+two already-passing action-button tests; switched that test to a
+non-CCXX-named bundled testchart plus an explicit reset. Separately, found and
+fixed a real (if narrow) accessibility bug while screenshot-verifying the
+result in the live app: the tab bar's `QToolButton`s were wired to `clicked`,
+but macOS's `AXPress` action (used by VoiceOver and by UI-automation tooling)
+toggles a checkable button's state directly without necessarily emitting
+`clicked`, leaving a tab visually checked but the stack not switched;
+reconnected to `toggled` (guarded to only act when becoming checked) instead,
+which fires for both.
+
 ### Stage 4 — Calibrate / measure / profile actions — **DONE (orchestration)**
 
 Wire the action buttons to the Stage-2 flow, running the measure-frame

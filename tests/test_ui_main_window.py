@@ -565,6 +565,195 @@ def test_profile_name_persists(window):
     assert getcfg("profile.name") == "my profile"
 
 
+def test_profile_name_sanitizes_invalid_text(window):
+    window.profile_name_textctrl.setText("bad/name:here")
+    window._profile_name_changed()
+    assert window.profile_name_textctrl.text() == "badnamehere"
+    assert getcfg("profile.name") == "badnamehere"
+
+
+def test_profile_type_ctrl_translates_labels(window):
+    # A regression guard for the labels being untranslated lang keys.
+    assert window.profile_type_ctrl.itemText(0) == lang.getstr(
+        "profile.type.lut_matrix.xyz"
+    )
+
+
+def test_profile_type_ctrl_enables_gamap_only_for_lut_types(window):
+    window.profile_type_ctrl.setCurrentIndex(2)  # LabLUT ("l", a LUT type)
+    assert window.gamap_btn.isEnabled()
+    window.profile_type_ctrl.setCurrentIndex(4)  # 1xCurve+MTX ("S", not LUT)
+    assert not window.gamap_btn.isEnabled()
+
+
+def test_profile_type_ctrl_locks_quality_for_gamma_types(window):
+    window.profile_type_ctrl.setCurrentIndex(5)  # 3xGamma+MTX ("g")
+    assert not window.profile_quality_ctrl.isEnabled()
+    assert getcfg("profile.quality") == "h"
+    window.profile_type_ctrl.setCurrentIndex(0)  # back to a non-gamma type
+    assert window.profile_quality_ctrl.isEnabled()
+
+
+def test_profile_type_ctrl_nudges_bpc_default(window):
+    setcfg("profile.type", "s")  # shaper+matrix, not yet a LUT type
+    window.black_point_compensation_cb.setChecked(False)
+    window.profile_type_ctrl.setCurrentIndex(1)  # XYZLUT ("x", a LUT type)
+    assert getcfg("profile.black_point_compensation") == 0
+    window.profile_type_ctrl.setCurrentIndex(4)  # 1xCurve+MTX ("S")
+    assert getcfg("profile.black_point_compensation") == 1
+
+
+def test_testchart_ctrl_populates_with_auto_first(window):
+    assert window.testchart_ctrl.count() > 1
+    assert window.testchart_ctrl.itemText(0) == lang.getstr("auto_optimized")
+    assert window._testchart_paths[0] == "auto"
+
+
+def test_testchart_patches_row_hidden_for_fixed_testchart(window):
+    assert not window._patches_row_widget.isHidden()
+    window.testchart_ctrl.setCurrentIndex(1)
+    assert window._patches_row_widget.isHidden()
+
+
+def test_testchart_patches_amount_slider_updates_meas_time_and_name(window):
+    window.testchart_patches_amount_ctrl.setValue(3)
+    assert window.testchart_patches_amount.text() == "115"
+    assert getcfg("testchart.auto_optimize") == 3
+    assert window.testchart_meas_time.text()
+
+
+def test_testchart_patches_amount_high_auto_nudges_profile_type(window):
+    setcfg("3dlut.create", 0)
+    setcfg("profile.type", "S")
+    window.testchart_patches_amount_ctrl.setValue(10)
+    assert getcfg("profile.type") == "X"
+
+
+def test_testchart_patch_sequence_persists(window):
+    setcfg("show_advanced_options", 1)
+    window._update_advanced_options_visibility()
+    window.testchart_patch_sequence_ctrl.setCurrentIndex(1)
+    assert getcfg("testchart.patch_sequence") == "maximize_lightness_difference"
+
+
+def test_testchart_patch_sequence_row_gated_by_advanced_options(window):
+    setcfg("show_advanced_options", 0)
+    window._update_advanced_options_visibility()
+    assert window._profiling_form.isRowVisible(window.testchart_patch_sequence_ctrl) is False
+    setcfg("show_advanced_options", 1)
+    window._update_advanced_options_visibility()
+    assert window._profiling_form.isRowVisible(window.testchart_patch_sequence_ctrl) is True
+
+
+def test_gamap_btn_shows_notice(window, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        mw.QMessageBox, "information", staticmethod(lambda *a, **k: calls.append(True))
+    )
+    window._gamap_btn_handler()
+    assert calls == [True]
+
+
+def test_create_testchart_btn_shows_notice(window, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        mw.QMessageBox, "information", staticmethod(lambda *a, **k: calls.append(True))
+    )
+    window._create_testchart_btn_handler()
+    assert calls == [True]
+
+
+def test_testchart_btn_handler_cancelled_is_noop(window, monkeypatch):
+    monkeypatch.setattr(
+        mw.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: ("", ""))
+    )
+    before = getcfg("testchart.file")
+    window._testchart_btn_handler()
+    assert getcfg("testchart.file") == before
+
+
+def test_testchart_btn_handler_missing_file_shows_error(window, monkeypatch, tmp_path):
+    missing = str(tmp_path / "nope.ti1")
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *a, **k: (missing, "")),
+    )
+    calls = []
+    monkeypatch.setattr(
+        mw.QMessageBox, "critical", staticmethod(lambda *a, **k: calls.append(True))
+    )
+    window._testchart_btn_handler()
+    assert calls == [True]
+
+
+def test_testchart_btn_handler_loads_bundled_ti1(window, monkeypatch):
+    # Deliberately not "ccxx.ti1": loading it would flip the process-global
+    # ``is_ccxx_testchart()`` result for every test that runs afterwards
+    # (config.CFG isn't reset between tests, only reloaded from disk -- see
+    # the test-flakiness note in MAINFRAME_PORT_PLAN.md's Stage 3 Session 8).
+    path = os.path.join(
+        os.path.dirname(config.__file__), "ti1", "d3-e4-s2-g28-m0-b0-f0.ti1"
+    )
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *a, **k: (path, "")),
+    )
+    try:
+        window._testchart_btn_handler()
+        assert getcfg("testchart.file") == path
+        assert window._patches_row_widget.isHidden()
+        assert window.testchart_patches_amount.text() != "0"
+    finally:
+        setcfg("testchart.file", "auto")
+
+
+def test_profile_name_info_btn_shows_placeholders(window, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        mw.QMessageBox,
+        "information",
+        staticmethod(lambda parent, title, msg: calls.append(msg)),
+    )
+    window._profile_name_info_btn_handler()
+    assert calls and "%dn" in calls[0]
+
+
+def test_profile_save_path_btn_cancelled_is_noop(window, monkeypatch):
+    monkeypatch.setattr(
+        mw.QFileDialog, "getExistingDirectory", staticmethod(lambda *a, **k: "")
+    )
+    before = getcfg("profile.save_path")
+    window._profile_save_path_btn_handler()
+    assert getcfg("profile.save_path") == before
+
+
+def test_profile_save_path_btn_persists_and_updates_name(window, monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getExistingDirectory",
+        staticmethod(lambda *a, **k: str(tmp_path)),
+    )
+    window._profile_save_path_btn_handler()
+    assert getcfg("profile.save_path") == str(tmp_path)
+
+
+def test_update_profile_name_reflects_display_selection(window):
+    # Explicit template: this test's own subject is the %dns placeholder, not
+    # whatever ``profile.name`` a previous test happened to leave behind
+    # (config.CFG leaks between tests, see the note above).
+    setcfg("profile.name", "%dns")
+    window.profile_name_textctrl.setText("%dns")
+    window.display_ctrl.setCurrentIndex(0)
+    window.update_profile_name()
+    first = window.profile_name_label.text()
+    assert window.display_ctrl.count() > 1
+    window.display_ctrl.setCurrentIndex(1)
+    window.update_profile_name()
+    assert window.profile_name_label.text() != first
+
+
 # --- 3D LUT tab wiring -----------------------------------------------------
 
 

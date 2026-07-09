@@ -29,15 +29,19 @@ Deferred to later slices (Pile 2 / Stage 5): the worker-driven Argyll execution
 behind :attr:`MainWindow.measurement_requested` (the progress dialog and
 interactive display-adjustment window), the pattern-generator setup dialogs
 (Prisma / madTPG / Resolve), the pre-flight confirmation / overwrite dialogs, the
-visual-editor / ambient-measure buttons, the gamap and testchart-editor /
-file-picker launch buttons, profile-name token expansion, the estimated-
-measurement-time readouts and the black-point-rate advanced control (and, by
-extension, the ``show_advanced_options`` gating of anything built on top of
-these: the testchart-patch-sequence row, the gamap button, the whitepoint
-colour-temperature-locus row, and the 3D LUT gamut-mapping / apply-cal-on-
-create controls). ``show_advanced_options`` itself is wired (an Options-menu
-checkbox gating every other row it controls that this port does have), see
-:meth:`MainWindow._update_advanced_options_visibility`.
+visual-editor / ambient-measure buttons, the gamap options window and testchart
+editor themselves (their launch buttons exist and show a not-yet-available
+notice; see :mod:`DisplayCAL.profile_name`'s module docstring), the
+black-point-rate advanced control, and (by extension) the ``show_advanced_options``
+gating of the whitepoint colour-temperature-locus row and the 3D LUT
+gamut-mapping / apply-cal-on-create controls, none of which exist in this Qt
+port yet. ``show_advanced_options`` itself is wired (an Options-menu checkbox
+gating every other row it controls that this port does have, including the
+profile-type row's gamap button and the testchart-patch-sequence row), see
+:meth:`MainWindow._update_advanced_options_visibility`. Profile-name token
+expansion and the testchart chooser / patch-count / estimated-measurement-time
+controls are wired via the toolkit-neutral :mod:`DisplayCAL.profile_name`
+helpers.
 
 The window is opt-in behind ``DISPLAYCAL_UI=qt`` / ``--qt`` (wired in
 :mod:`DisplayCAL.main`), so it never displaces the still-shipping wx main window.
@@ -48,7 +52,9 @@ from __future__ import annotations
 import contextlib
 import enum
 import os
+import platform
 import sys
+from decimal import Decimal
 from typing import TYPE_CHECKING, Callable
 
 from qtpy.QtCore import QSize, Qt, QThread, QTimer, Signal
@@ -83,9 +89,12 @@ from qtpy.QtWidgets import (
 
 from DisplayCAL import calibration_file, colorimeter_correction, config
 from DisplayCAL import localization as lang
+from DisplayCAL import profile_name as profile_name_mod
+from DisplayCAL.argyll import make_argyll_compatible_path
 from DisplayCAL.cgats import CGATSError
 from DisplayCAL.colorimeter_correction import ColorimeterCorrectionCatalog
 from DisplayCAL.config import DEFAULTS, get_verified_path, getcfg, setcfg, writecfg
+from DisplayCAL.icc_profile import ICCProfile, ICCProfileInvalidError
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.options import TEST
 from DisplayCAL.ui.application import Application
@@ -110,7 +119,12 @@ from DisplayCAL.ui.tools.profile_info import ProfileInfoWindow
 from DisplayCAL.ui.worker_runner import AdjustmentController, WorkerRunController
 from DisplayCAL.util_decimal import stripzeros
 from DisplayCAL.util_os import get_program_file
-from DisplayCAL.worker import Worker, get_options_from_cal, get_options_from_profile
+from DisplayCAL.worker import (
+    Worker,
+    check_file_isfile,
+    get_options_from_cal,
+    get_options_from_profile,
+)
 
 if TYPE_CHECKING:
     from qtpy.QtGui import QPaintEvent, QShowEvent
@@ -144,16 +158,32 @@ _CALIBRATION_SPEED_LABELS = {
 #: quality letter -> ``calibration.quality.<x>`` suffix (for the profile slider).
 _PROFILE_QUALITY_LABELS = {"l": "low", "m": "medium", "h": "high", "u": "ultra"}
 
-#: Profile types for modern Argyll (>= 1.1.0 RC4), matching the wx ordering in
-#: ``update_profile_type_ctrl_items``: ``(config value, label key)``.
-PROFILE_TYPES = (
-    ("X", "profile.type.lut_matrix.xyz"),
-    ("x", "profile.type.lut.xyz"),
-    ("l", "profile.type.lut.lab"),
-    ("s", "profile.type.shaper_matrix"),
-    ("S", "profile.type.single_shaper_matrix"),
-    ("g", "profile.type.gamma_matrix"),
-    ("G", "profile.type.single_gamma_matrix"),
+#: ``(config value, label key)`` pairs for the ``profile_type_ctrl`` combo, in
+#: wx's ``update_profile_type_ctrl_items`` order. ``ProfileType`` (see
+#: :mod:`DisplayCAL.profile_name`) is the source of truth; re-exported here
+#: under its established name for this module's combo-building code and
+#: ``tests/test_ui_main_window.py``.
+PROFILE_TYPES = profile_name_mod.PROFILE_TYPES
+ProfileType = profile_name_mod.ProfileType
+
+#: Profile types whose gamut can be usefully remapped (enables ``gamap_btn``);
+#: black point compensation also defaults off the first time one is selected.
+_GAMUT_MAPPABLE_PROFILE_TYPES = (
+    ProfileType.LAB_LUT,
+    ProfileType.XYZ_LUT,
+    ProfileType.XYZ_LUT_MATRIX,
+)
+#: Curve+matrix profile types; black point compensation defaults on the first
+#: time one is selected.
+_CURVE_MATRIX_PROFILE_TYPES = (
+    ProfileType.SHAPER_MATRIX,
+    ProfileType.SINGLE_SHAPER_MATRIX,
+)
+#: Gamma-only profile types: Argyll only supports one profile-quality level
+#: for these, so the quality slider is locked to "high".
+_GAMMA_ONLY_PROFILE_TYPES = (
+    ProfileType.GAMMA_MATRIX,
+    ProfileType.SINGLE_GAMMA_MATRIX,
 )
 
 #: Calibration TRC selector entries, in display order (row index == combo row).
@@ -513,6 +543,12 @@ class MainWindow(BaseWindow):
         self._profile_info_window: ProfileInfoWindow | None = None
         self._archive_thread: _SessionArchiveThread | None = None
         self._archive_progress: QProgressDialog | None = None
+        #: Testchart combo paths, parallel to its display names (populated by
+        #: :meth:`_set_testcharts`; empty until then, mirroring wx's
+        #: ``self.testcharts``, so the first :meth:`_set_testchart` call
+        #: always triggers an initial population).
+        self._testchart_paths: list[str] = []
+        self._current_testchart_path: str | None = None
 
         self._build_ui()
         self.init_menubar()
@@ -637,12 +673,13 @@ class MainWindow(BaseWindow):
 
         Mirrors wx's ``MainFrame.show_advanced_options_handler`` and the
         ``show_display_delay_ctrls`` / ``show_ffp_ctrls`` /
-        ``show_output_levels_ctrls`` helpers it calls. Two groups from the wx
-        method aren't reproduced because the controls themselves don't exist
-        in this Qt port yet (see the module docstring's "Deferred" list):
-        the testchart-patch-sequence row and the gamap button (Profiling tab),
-        and the 3D LUT gamut-mapping / apply-cal-on-create controls, plus the
-        whitepoint colour-temperature locus row (Calibration tab).
+        ``show_output_levels_ctrls`` helpers it calls. One group from the wx
+        method isn't reproduced because the controls themselves don't exist
+        in this Qt port yet (see the module docstring's "Deferred" list): the
+        3D LUT gamut-mapping / apply-cal-on-create controls, plus the
+        whitepoint colour-temperature locus row (Calibration tab). The
+        gamap button (part of the profile-type row) and the
+        testchart-patch-sequence row are gated below.
         """
         show_advanced = bool(getcfg("show_advanced_options"))
         self.show_advanced_options_action.setChecked(show_advanced)
@@ -650,6 +687,7 @@ class MainWindow(BaseWindow):
         self._profiling_form.setRowVisible(
             self._profile_type_row_widget, show_advanced
         )
+        self._testchart_patch_sequence_row_gate()
         self._calibration_form.setRowVisible(
             self._black_luminance_row_widget, show_advanced
         )
@@ -932,7 +970,14 @@ class MainWindow(BaseWindow):
             if not pixmap.isNull():
                 button.setIcon(pixmap)
             button.setText(lang.getstr(label_key))
-            button.clicked.connect(lambda _checked, k=key: self._select_tab(k))
+            # ``toggled`` (not ``clicked``): macOS accessibility clients (incl.
+            # VoiceOver, and the ``AXPress`` action used by automated UI
+            # testing) toggle a checkable ``QToolButton``'s state directly
+            # without necessarily emitting ``clicked``, which would otherwise
+            # leave the tab visually checked but the stack not switched.
+            button.toggled.connect(
+                lambda checked, k=key: self._select_tab(k) if checked else None
+            )
             self._tab_group.addButton(button)
             self._tab_buttons[key] = button
             row.addWidget(button)
@@ -1474,7 +1519,19 @@ class MainWindow(BaseWindow):
         self._profiling_form = form
 
         self.profile_type_ctrl = QComboBox()
-        self._add_value_combo(self.profile_type_ctrl, "profile.type", PROFILE_TYPES)
+        self.profile_type_ctrl.addItems(
+            [lang.getstr(label_key) for _value, label_key in PROFILE_TYPES]
+        )
+        self._value_combos["profile.type"] = (
+            self.profile_type_ctrl,
+            [value for value, _label_key in PROFILE_TYPES],
+        )
+        self.profile_type_ctrl.currentIndexChanged.connect(
+            self._profile_type_ctrl_changed
+        )
+        self.gamap_btn = self._tool_button(
+            "applications-system", "profile.advanced_gamap", self._gamap_btn_handler
+        )
         self.black_point_compensation_cb = QCheckBox(
             lang.getstr("black_point_compensation")
         )
@@ -1483,6 +1540,7 @@ class MainWindow(BaseWindow):
         )
         type_row = QHBoxLayout()
         type_row.addWidget(self.profile_type_ctrl)
+        type_row.addWidget(self.gamap_btn)
         type_row.addWidget(self.black_point_compensation_cb)
         type_row.addStretch(1)
         self._profile_type_row_widget = self._wrap(type_row)
@@ -1498,9 +1556,78 @@ class MainWindow(BaseWindow):
         quality_row.addStretch(1)
         form.addRow(lang.getstr("profile.quality"), self._wrap(quality_row))
 
+        # Testchart chooser.
+        self.testchart_ctrl = QComboBox()
+        self.testchart_ctrl.currentIndexChanged.connect(self._testchart_ctrl_changed)
+        self.testchart_btn = self._tool_button(
+            "document-open", "testchart.set", self._testchart_btn_handler
+        )
+        self.create_testchart_btn = self._tool_button(
+            "rgbsquares", "testchart.edit", self._create_testchart_btn_handler
+        )
+        testchart_row = QHBoxLayout()
+        testchart_row.addWidget(self.testchart_ctrl, 1)
+        testchart_row.addWidget(self.testchart_btn)
+        testchart_row.addWidget(self.create_testchart_btn)
+        form.addRow(lang.getstr("testchart.file"), self._wrap(testchart_row))
+
+        # Patch count: computed amount (fixed testcharts) or an auto-optimize
+        # slider (only shown when testchart.file == "auto").
+        self.testchart_patches_amount = QLabel("0")
+        self.testchart_patches_amount.setToolTip(lang.getstr("testchart.info"))
+        self.testchart_patches_amount_ctrl = QSlider(Qt.Horizontal)
+        self.testchart_patches_amount_ctrl.setRange(
+            config.VALID_VALUES["testchart.auto_optimize"][1],
+            config.VALID_VALUES["testchart.auto_optimize"][-1],
+        )
+        self.testchart_patches_amount_ctrl.valueChanged.connect(
+            self._testchart_patches_amount_changed
+        )
+        patches_row = QHBoxLayout()
+        patches_row.addWidget(self.testchart_patches_amount_ctrl)
+        patches_row.addWidget(self.testchart_patches_amount)
+        patches_row.addStretch(1)
+        self._patches_row_widget = self._wrap(patches_row)
+        form.addRow(
+            lang.getstr("testchart.patches_amount"), self._patches_row_widget
+        )
+
+        # Patch sequence (gated by show_advanced_options, like wx).
+        self.testchart_patch_sequence_ctrl = QComboBox()
+        self._add_value_combo(
+            self.testchart_patch_sequence_ctrl,
+            "testchart.patch_sequence",
+            [
+                (value, lang.getstr(f"testchart.{value}"))
+                for value in config.VALID_VALUES["testchart.patch_sequence"]
+            ],
+        )
+        form.addRow(
+            lang.getstr("testchart.patch_sequence"), self.testchart_patch_sequence_ctrl
+        )
+
+        self.testchart_meas_time = QLabel()
+        form.addRow("", self.testchart_meas_time)
+
         self.profile_name_textctrl = QLineEdit()
         self.profile_name_textctrl.editingFinished.connect(self._profile_name_changed)
-        form.addRow(lang.getstr("profile.name"), self.profile_name_textctrl)
+        self.profile_name_info_btn = self._tool_button(
+            "question", "profile.name.placeholders", self._profile_name_info_btn_handler
+        )
+        self.profile_save_path_btn = self._tool_button(
+            "document-open",
+            "profile.set_save_path",
+            self._profile_save_path_btn_handler,
+        )
+        profile_name_row = QHBoxLayout()
+        profile_name_row.addWidget(self.profile_name_textctrl, 1)
+        profile_name_row.addWidget(self.profile_name_info_btn)
+        profile_name_row.addWidget(self.profile_save_path_btn)
+        form.addRow(lang.getstr("profile.name"), self._wrap(profile_name_row))
+
+        self.profile_name_label = QLabel("?")
+        self.profile_name_label.setWordWrap(True)
+        form.addRow("", self.profile_name_label)
 
         outer.addLayout(form)
         outer.addWidget(
@@ -1633,6 +1760,19 @@ class MainWindow(BaseWindow):
         inner.setContentsMargins(0, 0, 0, 0)
         holder.setLayout(inner)
         return holder
+
+    def _tool_button(
+        self, icon_name: str, tooltip_key: str, handler: Callable[[], None]
+    ) -> QToolButton:
+        """Build a flat 16px icon button, mirroring wx's ``wxBitmapButton`` rows."""
+        button = QToolButton()
+        button.setAutoRaise(True)
+        button.setToolTip(lang.getstr(tooltip_key))
+        pixmap = self._pixmap(16, icon_name)
+        if not pixmap.isNull():
+            button.setIcon(pixmap)
+        button.clicked.connect(handler)
+        return button
 
     def _trc_labels(self) -> list[str]:
         """Return the localized TRC combo labels (``Gamma 2.2`` stays literal)."""
@@ -1907,11 +2047,19 @@ class MainWindow(BaseWindow):
         """Push stored profile config into the Profiling tab controls."""
         self._sync_value_combo("profile.type", cast=str)
         self._sync_check("profile.black_point_compensation")
+        profile_type = self.get_profile_type()
+        self.gamap_btn.setEnabled(profile_type in _GAMUT_MAPPABLE_PROFILE_TYPES)
+        self.profile_quality_ctrl.setEnabled(
+            profile_type not in _GAMMA_ONLY_PROFILE_TYPES
+        )
         self.profile_quality_ctrl.setValue(
             profile_quality_to_slider(getcfg("profile.quality"))
         )
         self._update_profile_quality_label()
         self.profile_name_textctrl.setText(str(getcfg("profile.name")))
+        self._sync_value_combo("testchart.patch_sequence", cast=str)
+        self._testchart_patch_sequence_row_gate()
+        self._set_testchart(getcfg("testchart.file"))
 
     def update_lut3d_controls(self) -> None:
         """Push stored 3D LUT config into the 3D LUT tab controls."""
@@ -2045,6 +2193,77 @@ class MainWindow(BaseWindow):
         return self._measurement_modes_ab.get(instrument_type, {}).get(
             self.measurement_mode_ctrl.currentIndex()
         )
+
+    # -- Settings getters (Stage 0 deferral, mirroring wx's ``MainFrame`` getters) --
+
+    def get_profile_type(self) -> str:
+        """Return the profile type letter for the current combo selection."""
+        _combo, values = self._value_combos["profile.type"]
+        index = self.profile_type_ctrl.currentIndex()
+        if 0 <= index < len(values):
+            return values[index]
+        return getcfg("profile.type")
+
+    def get_whitepoint(self) -> str | None:
+        """Return the whitepoint as a Kelvin/xy string, or ``None`` for native."""
+        mode = self.whitepoint_ctrl.currentIndex()
+        if mode == 1:
+            return str(stripzeros(self.whitepoint_colortemp_ctrl.value()))
+        if mode == 2:
+            x = round(self.whitepoint_x_ctrl.value(), 4)
+            y = round(self.whitepoint_y_ctrl.value(), 4)
+            return f"{stripzeros(x)},{stripzeros(y)}"
+        return None
+
+    def get_whitepoint_locus(self) -> str:
+        """Return the whitepoint locus.
+
+        wx's colour-temperature-locus row (native/D-series toggle) isn't
+        ported yet (a documented, still-open gap), so this always returns
+        the default locus ("t"), matching wx's own fallback when that row's
+        selection is unavailable.
+        """
+        return "t"
+
+    def get_luminance(self) -> str | None:
+        """Return the custom white luminance, or ``None`` for native/default."""
+        if self.luminance_ctrl.currentIndex() == 0:
+            return None
+        return str(stripzeros(self.luminance_textctrl.value()))
+
+    def get_black_luminance(self) -> str | None:
+        """Return the custom black luminance, or ``None`` for native/default."""
+        if self.black_luminance_ctrl.currentIndex() == 0:
+            return None
+        return str(stripzeros(self.black_luminance_textctrl.value()))
+
+    def get_ambient(self) -> str | None:
+        """Return the ambient light level in lux, or ``None`` if disabled."""
+        if self.ambient_adjust_cb.isChecked():
+            return str(stripzeros(self.ambient_adjust_textctrl.value()))
+        return None
+
+    def get_black_output_offset(self) -> str:
+        """Return the black output offset as a 0-1 decimal string."""
+        return str(Decimal(self.black_output_offset_ctrl.value()) / 100)
+
+    def get_black_point_correction(self) -> str:
+        """Return the black point correction as a 0-1 decimal string."""
+        return str(Decimal(self.black_point_correction_ctrl.value()) / 100)
+
+    def get_trc(self) -> str:
+        """Return the ``trc`` config value for the current TRC combo state."""
+        return trc_value_from_selection(
+            self.trc_ctrl.currentIndex(), self.trc_textctrl.text()
+        )
+
+    def get_trc_type(self) -> str:
+        """Return "G" (absolute) or "g" (relative) for the TRC type combo."""
+        return "G" if self.trc_type_ctrl.currentIndex() == 1 else "g"
+
+    def get_calibration_quality(self) -> str:
+        """Return the calibration quality letter for the current slider value."""
+        return slider_to_calibration_quality(self.calibration_quality_ctrl.value())
 
     def measurement_mode_ctrl_handler(self, index: int) -> None:
         """Persist the selected measurement mode.
@@ -2510,10 +2729,404 @@ class MainWindow(BaseWindow):
         )
 
     def _profile_name_changed(self) -> None:
-        """Persist the profile name template."""
+        """Sanitize + persist the profile name template and refresh the preview."""
         if self._updating:
             return
+        value = self.profile_name_textctrl.text()
+        if not profile_name_mod.is_valid_profile_name(value) or len(value) > 80:
+            QApplication.beep()
+            self.profile_name_textctrl.setText(
+                profile_name_mod.sanitize_profile_name(value)
+            )
         setcfg("profile.name", self.profile_name_textctrl.text())
+        self.update_profile_name()
+
+    def _profile_type_ctrl_changed(self, index: int) -> None:
+        """Apply the side effects wx's ``profile_type_ctrl_handler`` performs.
+
+        Enables :attr:`gamap_btn` only for LUT profile types, nudges black
+        point compensation to the type's usual default the first time a type
+        category is entered, and locks profile quality to "high" for the
+        two gamma-only types (Argyll only supports one quality level for
+        those). Not reproduced: ``set_default_testchart``'s testchart reset
+        on type-change (documented in ``profile_name.py``'s deferred list)
+        and the testchart-recommendation confirm dialog
+        (``check_testchart_patches_amount``).
+        """
+        if self._updating or index < 0:
+            return
+        _combo, values = self._value_combos["profile.type"]
+        if index >= len(values):
+            return
+        new_type = values[index]
+        old_type = getcfg("profile.type")
+
+        self.gamap_btn.setEnabled(new_type in _GAMUT_MAPPABLE_PROFILE_TYPES)
+        if new_type in _GAMUT_MAPPABLE_PROFILE_TYPES:
+            if old_type not in _GAMUT_MAPPABLE_PROFILE_TYPES:
+                self.black_point_compensation_cb.setChecked(False)
+        elif new_type in _CURVE_MATRIX_PROFILE_TYPES:
+            if old_type not in _CURVE_MATRIX_PROFILE_TYPES:
+                self.black_point_compensation_cb.setChecked(True)
+        else:
+            self.black_point_compensation_cb.setChecked(False)
+
+        gamma_only = new_type in _GAMMA_ONLY_PROFILE_TYPES
+        self.profile_quality_ctrl.setEnabled(not gamma_only)
+        if gamma_only:
+            self.profile_quality_ctrl.setValue(3)
+
+        if new_type != old_type:
+            self._mark_profile_settings_changed()
+        setcfg("profile.type", new_type)
+        self.update_profile_name()
+
+    # -- Testchart handlers -------------------------------------------------
+
+    def _gamap_btn_handler(self) -> None:
+        """Open the gamut mapping options window.
+
+        Not yet ported: wx's ``GamapFrame`` is a separate tool window, out of
+        scope for this Qt port slice.
+        """
+        QMessageBox.information(
+            self,
+            lang.getstr("profile.advanced_gamap"),
+            "Gamut mapping options aren't available in this Qt build yet.",
+        )
+
+    def _create_testchart_btn_handler(self) -> None:
+        """Open the testchart editor.
+
+        Not yet ported: wx's ``TestchartEditor`` is a separate tool window,
+        out of scope for this Qt port slice.
+        """
+        QMessageBox.information(
+            self,
+            lang.getstr("testchart.edit"),
+            "The testchart editor isn't available in this Qt build yet.",
+        )
+
+    def _testchart_ctrl_changed(self, index: int) -> None:
+        """Load the newly selected testchart."""
+        if self._updating or index < 0 or index >= len(self._testchart_paths):
+            return
+        self._set_testchart(self._testchart_paths[index])
+
+    def _testchart_btn_handler(self) -> None:
+        """Browse for a testchart/profile file and load it as the testchart."""
+        default_dir, default_file = get_verified_path("testchart.file")
+        path, _filter = QFileDialog.getOpenFileName(
+            self,
+            lang.getstr("dialog.set_testchart"),
+            os.path.join(default_dir, default_file),
+            f"{lang.getstr('filetype.icc_ti1_ti3')} (*.icc *.icm *.ti1 *.ti3)",
+        )
+        if not path:
+            return
+        if not os.path.exists(path):
+            QMessageBox.critical(
+                self, self.windowTitle(), lang.getstr("file.missing", path)
+            )
+            return
+        if os.path.splitext(path)[-1].lower() in (".icc", ".icm"):
+            try:
+                profile = ICCProfile(path)
+            except (OSError, ICCProfileInvalidError):
+                QMessageBox.critical(
+                    self,
+                    self.windowTitle(),
+                    lang.getstr("profile.invalid") + "\n" + path,
+                )
+                return
+            if not profile_name_mod.icc_profile_has_embedded_ti3(profile):
+                QMessageBox.critical(
+                    self,
+                    self.windowTitle(),
+                    lang.getstr("profile.no_embedded_ti3") + "\n" + path,
+                )
+                return
+        self._set_testchart(path)
+        writecfg()
+        self._mark_profile_settings_changed()
+
+    def _set_testcharts(self, path: str | None = None) -> None:
+        """Repopulate ``testchart_ctrl`` from the given (or configured) path."""
+        current = self.testchart_ctrl.currentIndex()
+        names, self._testchart_paths = profile_name_mod.get_testchart_names(path)
+        self.testchart_ctrl.blockSignals(True)
+        self.testchart_ctrl.clear()
+        self.testchart_ctrl.addItems(names)
+        if 0 <= current < self.testchart_ctrl.count():
+            self.testchart_ctrl.setCurrentIndex(current)
+        self.testchart_ctrl.blockSignals(False)
+
+    def _set_testchart(self, path: str | None = None) -> None:
+        """Load ``path`` (or the configured testchart) as the active testchart.
+
+        Mirrors wx's ``MainFrame.set_testchart``. Not reproduced (see
+        ``profile_name.py``'s module docstring): the Untethered-display
+        "auto" warning dialog, and the testchart-editor live-refresh
+        (``TestchartEditor`` isn't ported).
+        """
+        if path is None:
+            path = getcfg("testchart.file")
+        filename, ext = os.path.splitext(path)
+        ti1_path = f"{filename}.ti1"
+        if (
+            ext.lower() in (".icc", ".icm")
+            and getcfg("testchart.patch_sequence")
+            != "optimize_display_response_delay"
+            and os.path.isfile(ti1_path)
+        ):
+            path = ti1_path
+
+        self.create_testchart_btn.setEnabled(
+            path != "auto" and not getcfg("profile.update")
+        )
+        self._profiling_form.setRowVisible(self._patches_row_widget, path == "auto")
+
+        if path == "auto":
+            if path != getcfg("testchart.file"):
+                self._mark_profile_settings_changed()
+            setcfg("testchart.file", path)
+            if path not in self._testchart_paths:
+                self._set_testcharts(path)
+            self.testchart_ctrl.blockSignals(True)
+            self.testchart_ctrl.setCurrentIndex(0)
+            self.testchart_ctrl.setToolTip("")
+            self.testchart_ctrl.blockSignals(False)
+            self.worker.options_targen = ["-d3"]
+            auto = int(getcfg("testchart.auto_optimize") or 7)
+            self.testchart_patches_amount_ctrl.blockSignals(True)
+            self.testchart_patches_amount_ctrl.setValue(auto)
+            self.testchart_patches_amount_ctrl.blockSignals(False)
+            self._apply_testchart_patches_amount(auto, from_user_event=False)
+            self._current_testchart_path = path
+        else:
+            self._set_testchart_from_path(path)
+
+        self.update_colorimeter_correction_matrix_ctrl()
+        self.update_profile_name()
+
+    def _set_testchart_from_path(self, path: str) -> None:
+        """Load, validate and select a fixed (non-"auto") testchart file."""
+        result = check_file_isfile(path)
+        if isinstance(result, Exception):
+            QMessageBox.critical(self, self.windowTitle(), str(result))
+            self._set_testchart("auto")
+            return
+        if getattr(self, "_current_testchart_path", None) == path:
+            return
+        try:
+            ti1 = profile_name_mod.load_testchart_from_file(path)
+        except Exception as exception:
+            QMessageBox.critical(
+                self,
+                self.windowTitle(),
+                lang.getstr("error.testchart.read", path) + "\n\n" + str(exception),
+            )
+            self._set_testchart("auto")
+            return
+        if path != getcfg("calibration.file", False):
+            self._mark_profile_settings_changed()
+        setcfg("testchart.file", path)
+        if path not in self._testchart_paths:
+            self._set_testcharts(path)
+        index = calibration_file.index_fallback_ignorecase(
+            self._testchart_paths, path
+        )
+        self.testchart_ctrl.blockSignals(True)
+        self.testchart_ctrl.setCurrentIndex(max(index, 0))
+        self.testchart_ctrl.setToolTip(path)
+        self.testchart_ctrl.blockSignals(False)
+        color_rep = ti1.queryv1("COLOR_REP")
+        if color_rep and color_rep[:3] == "RGB":
+            self.worker.options_targen = ["-d3"]
+        self.testchart_patches_amount.setText(str(ti1.queryv1("NUMBER_OF_SETS")))
+        self._current_testchart_path = path
+        self._update_testchart_meas_time()
+
+    def _testchart_patches_amount_changed(self, value: int) -> None:
+        """Persist the auto-optimize slider value and refresh derived state."""
+        if self._updating:
+            return
+        setcfg("testchart.auto_optimize", value)
+        self._mark_profile_settings_changed()
+        self._apply_testchart_patches_amount(value, from_user_event=True)
+
+    def _apply_testchart_patches_amount(
+        self, auto: int, from_user_event: bool
+    ) -> None:
+        """Recompute the patch count and (on user changes) nudge profile type.
+
+        Port of ``testchart_patches_amount_ctrl_handler``'s non-dialog body
+        (the CCXX-testchart-recommendation confirm dialog is a documented
+        deferral, see ``profile_name.py``).
+        """
+        if from_user_event:
+            old_type = getcfg("profile.type")
+            suggested = profile_name_mod.suggested_profile_type_for_auto(
+                auto, old_type, bool(getcfg("3dlut.create"))
+            )
+            if suggested and suggested != old_type:
+                _combo, values = self._value_combos["profile.type"]
+                index = values.index(suggested)
+                if self.profile_type_ctrl.currentIndex() == index:
+                    # The combo already displays the suggested type (config
+                    # was changed directly, bypassing the combo) -- Qt won't
+                    # emit ``currentIndexChanged`` for a same-index set, so
+                    # apply the side effects directly instead of relying on
+                    # the signal.
+                    self._profile_type_ctrl_changed(index)
+                else:
+                    self.profile_type_ctrl.setCurrentIndex(index)
+        patches_amount = profile_name_mod.testchart_patches_amount_for_auto(auto)
+        self.testchart_patches_amount.setText(str(patches_amount))
+        self._update_testchart_meas_time()
+        self.update_profile_name()
+
+    def _testchart_patch_sequence_row_gate(self) -> None:
+        """Gate the patch-sequence row behind ``show_advanced_options``."""
+        self._profiling_form.setRowVisible(
+            self.testchart_patch_sequence_ctrl, bool(getcfg("show_advanced_options"))
+        )
+
+    def _update_testchart_meas_time(self) -> None:
+        """Refresh the estimated-measurement-time label, per wx's coloring rule."""
+        patches = int(self.testchart_patches_amount.text() or 0)
+        estimate = profile_name_mod.estimate_measurement_time(self.worker, patches)
+        self.testchart_meas_time.setText(estimate.label())
+        self.testchart_meas_time.setStyleSheet(
+            "color: #FF3300;"
+            if estimate.hours is not None and estimate.hours > 7
+            else "color: #F07F00;" if estimate.is_long() else ""
+        )
+
+    def _profile_name_info_btn_handler(self) -> None:
+        """Show the profile-name placeholder legend."""
+        QMessageBox.information(
+            self,
+            lang.getstr("profile.name"),
+            profile_name_mod.profile_name_placeholders(),
+        )
+
+    def _profile_save_path_btn_handler(self) -> None:
+        """Choose the directory profiles/calibrations are saved under."""
+        default_path = os.path.join(*get_verified_path("profile.save_path"))
+        profile_name = getcfg("profile.name.expanded")
+        path = QFileDialog.getExistingDirectory(
+            self,
+            lang.getstr("dialog.set_profile_save_path", profile_name),
+            default_path,
+        )
+        if not path:
+            return
+        profile_save_dir = os.path.join(path, profile_name)
+        if not os.path.isdir(profile_save_dir):
+            os.makedirs(profile_save_dir, exist_ok=True)
+        if not os.access(os.path.dirname(profile_save_dir), os.W_OK):
+            QMessageBox.critical(
+                self,
+                self.windowTitle(),
+                lang.getstr("error.access_denied.write", path),
+            )
+            return
+        with contextlib.suppress(OSError):
+            os.rmdir(profile_save_dir)
+        setcfg("profile.save_path", path)
+        self.update_profile_name()
+
+    def _mark_profile_settings_changed(self) -> None:
+        """Mark settings as changed, prefixing the current file combo entry.
+
+        Port of ``MainFrame.profile_settings_changed``.
+        """
+        if self._updating:
+            return
+        setcfg("settings.changed", 1)
+        if self.calibration_file_ctrl.currentText().startswith("*"):
+            return
+        index = self.calibration_file_ctrl.currentIndex()
+        if index > 0:
+            self.calibration_file_ctrl.blockSignals(True)
+            self.calibration_file_ctrl.setItemText(
+                index, "* " + self.calibration_file_ctrl.itemText(index)
+            )
+            self.calibration_file_ctrl.blockSignals(False)
+
+    def update_profile_name(self) -> None:
+        """Recompute the expanded profile-name preview from current settings.
+
+        Faithful port of ``MainFrame.update_profile_name`` /
+        ``create_profile_name``, built on the toolkit-neutral
+        :mod:`DisplayCAL.profile_name` helpers.
+        """
+        if not hasattr(self, "profile_name_label"):
+            return
+        ctx = self._profile_name_context()
+        profile_name = profile_name_mod.expand_profile_name(
+            self.profile_name_textctrl.text(), ctx
+        )
+        if not profile_name_mod.is_valid_profile_name(profile_name):
+            self.profile_name_textctrl.setText(str(getcfg("profile.name")))
+            profile_name = profile_name_mod.expand_profile_name(
+                self.profile_name_textctrl.text(), self._profile_name_context()
+            )
+            if not profile_name_mod.is_valid_profile_name(profile_name):
+                self.profile_name_textctrl.setText(str(DEFAULTS.get("profile.name", "")))
+                profile_name = profile_name_mod.expand_profile_name(
+                    self.profile_name_textctrl.text(), self._profile_name_context()
+                )
+        profile_name = make_argyll_compatible_path(profile_name)
+        if profile_name != self.profile_name_label.text():
+            setcfg("profile.name", self.profile_name_textctrl.text())
+            self.profile_name_label.setToolTip(profile_name)
+            self.profile_name_label.setText(profile_name.replace("&", "&&"))
+            setcfg("profile.name.expanded", profile_name)
+
+    def _profile_name_context(self) -> profile_name_mod.ProfileNameContext:
+        """Resolve the current widget/worker state into a :class:`ProfileNameContext`."""
+        edid = self.worker.get_display_edid() if self.worker.displays else {}
+        do_cal = bool(
+            self.interactive_adjustment_cb.isChecked() or self.get_trc()
+        )
+        return profile_name_mod.ProfileNameContext(
+            computer_name=platform.node() or None,
+            display_win32_short=self.worker.get_display_name_short(False, False)
+            if self.worker.displays
+            else None,
+            display_win32=self.worker.get_display_name(True, False)
+            if self.worker.displays
+            else None,
+            display_short=self.worker.get_display_name_short(False, True)
+            if self.worker.displays
+            else None,
+            display=self.worker.get_display_name(True, True)
+            if self.worker.displays
+            else None,
+            edid=edid,
+            is_virtual_display=config.is_virtual_display(),
+            display_number=getcfg("display.number"),
+            instrument=self.comport_ctrl.currentText() or None,
+            measurement_mode=self.get_measurement_mode(),
+            trc=self.get_trc(),
+            trc_type=self.get_trc_type(),
+            do_cal=do_cal,
+            whitepoint=self.get_whitepoint(),
+            whitepoint_locus=self.get_whitepoint_locus(),
+            luminance=self.get_luminance(),
+            black_luminance=self.get_black_luminance(),
+            ambient=self.get_ambient(),
+            black_output_offset=self.get_black_output_offset(),
+            black_point_correction=self.get_black_point_correction(),
+            black_point_correction_auto=False,
+            black_point_rate=None,
+            calibration_quality=self.get_calibration_quality(),
+            profile_quality=str(getcfg("profile.quality")),
+            profile_type=self.get_profile_type(),
+            testchart_patches_amount=self.testchart_patches_amount.text() or "0",
+        )
 
     # -- tab switching -----------------------------------------------------
 
