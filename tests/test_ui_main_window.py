@@ -1107,6 +1107,23 @@ def _no_writecfg(monkeypatch):
 
 
 @pytest.fixture
+def _stub_preflight_checks(window, monkeypatch):
+    """Bypass the pre-flight confirm/overwrite dialogs (own tests below).
+
+    ``calibrate_btn_handler`` / ``calibrate_and_profile_btn_handler`` /
+    ``profile_btn_handler`` now show real modal dialogs before staging a
+    measurement (see :meth:`MainWindow._check_overwrite` /
+    :meth:`_check_show_macos_bugs_warning` / :meth:`_current_cal_choice`); tests
+    that only care about the staging/dispatch behaviour need those answered
+    without a live event loop, matching a plain "proceed" click.
+    """
+    monkeypatch.setattr(window, "_check_overwrite", lambda *a, **k: True)
+    monkeypatch.setattr(window, "_check_show_macos_bugs_warning", lambda *a, **k: None)
+    monkeypatch.setattr(window, "_current_cal_choice", lambda *a, **k: True)
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+
+
+@pytest.fixture
 def _stub_measurement_run(window, monkeypatch):
     """Neutralise the worker run so signal-dispatch tests touch no hardware.
 
@@ -1167,7 +1184,13 @@ def _show_action_button(window, monkeypatch, button_attr):
     ],
 )
 def test_action_button_dry_run_emits_request(
-    window, _no_writecfg, _stub_measurement_run, monkeypatch, button_attr, action
+    window,
+    _no_writecfg,
+    _stub_measurement_run,
+    _stub_preflight_checks,
+    monkeypatch,
+    button_attr,
+    action,
 ):
     # Dry run -> the flow calls the pending driver straight away.
     monkeypatch.setattr(config, "get_display_name", lambda *a, **k: "DELL U2413")
@@ -1256,6 +1279,275 @@ def test_measureframe_result_failure_shows_error(window, _no_writecfg, monkeypat
 
     assert errors
     assert "boom" in errors[0][2]
+
+
+# --- pre-flight confirm/overwrite dialogs -----------------------------------
+
+
+def test_check_overwrite_no_existing_file_no_dialog(window, monkeypatch, tmp_path):
+    setcfg("profile.save_path", str(tmp_path))
+    setcfg("profile.name.expanded", "MyProfile")
+    called = []
+    monkeypatch.setattr(
+        mw.QMessageBox, "warning", lambda *a, **k: called.append(a) or mw.QMessageBox.Ok
+    )
+
+    assert window._check_overwrite(".icc") is True
+    assert called == []
+
+
+def test_check_overwrite_existing_file_ok_confirms(window, monkeypatch, tmp_path):
+    setcfg("profile.save_path", str(tmp_path))
+    setcfg("profile.name.expanded", "MyProfile")
+    (tmp_path / "MyProfile").mkdir()
+    (tmp_path / "MyProfile" / "MyProfile.icc").write_bytes(b"x")
+    monkeypatch.setattr(mw.QMessageBox, "warning", lambda *a, **k: mw.QMessageBox.Ok)
+
+    assert window._check_overwrite(".icc") is True
+
+
+def test_check_overwrite_existing_file_cancel_aborts(window, monkeypatch, tmp_path):
+    setcfg("profile.save_path", str(tmp_path))
+    setcfg("profile.name.expanded", "MyProfile")
+    (tmp_path / "MyProfile").mkdir()
+    (tmp_path / "MyProfile" / "MyProfile.icc").write_bytes(b"x")
+    monkeypatch.setattr(
+        mw.QMessageBox, "warning", lambda *a, **k: mw.QMessageBox.Cancel
+    )
+
+    assert window._check_overwrite(".icc") is False
+
+
+def test_macos_bugs_warning_not_applicable_skips_dialog(window, monkeypatch):
+    monkeypatch.setattr(
+        mw.preflight_checks, "macos_bugs_warning_applicable", lambda: False
+    )
+    called = []
+    monkeypatch.setattr(mw.QMessageBox, "warning", lambda *a, **k: called.append(a))
+
+    assert window._check_show_macos_bugs_warning() is None
+    assert called == []
+
+
+def test_macos_bugs_cal_warning_yes_resets_controls(window, monkeypatch):
+    monkeypatch.setattr(
+        mw.preflight_checks, "macos_bugs_warning_applicable", lambda: True
+    )
+    monkeypatch.setattr(
+        mw.preflight_checks, "should_warn_calibration_bugs", lambda: True
+    )
+    monkeypatch.setattr(mw.preflight_checks, "should_warn_profile_bugs", lambda: False)
+    monkeypatch.setattr(mw.QMessageBox, "warning", lambda *a, **k: mw.QMessageBox.Yes)
+    window.black_luminance_ctrl.setCurrentIndex(1)
+    window.black_point_correction_ctrl.setValue(50)
+    setcfg("calibration.black_point_correction.auto", 1)
+
+    assert window._check_show_macos_bugs_warning(profile=False) is None
+
+    assert window.black_luminance_ctrl.currentIndex() == 0
+    assert window.black_point_correction_ctrl.value() == 0
+    assert getcfg("calibration.black_point_correction.auto") == 0
+
+
+def test_macos_bugs_cal_warning_cancel_aborts(window, monkeypatch):
+    monkeypatch.setattr(
+        mw.preflight_checks, "macos_bugs_warning_applicable", lambda: True
+    )
+    monkeypatch.setattr(
+        mw.preflight_checks, "should_warn_calibration_bugs", lambda: True
+    )
+    monkeypatch.setattr(
+        mw.QMessageBox, "warning", lambda *a, **k: mw.QMessageBox.Cancel
+    )
+
+    assert window._check_show_macos_bugs_warning(profile=False) is False
+
+
+def test_macos_bugs_profile_warning_yes_updates_profile_controls(window, monkeypatch):
+    monkeypatch.setattr(
+        mw.preflight_checks, "macos_bugs_warning_applicable", lambda: True
+    )
+    monkeypatch.setattr(mw.preflight_checks, "should_warn_profile_bugs", lambda: True)
+    monkeypatch.setattr(mw.QMessageBox, "warning", lambda *a, **k: mw.QMessageBox.Yes)
+    setcfg("profile.type", "g")
+    setcfg("profile.black_point_compensation", 0)
+
+    assert window._check_show_macos_bugs_warning(cal=False) is None
+
+    assert getcfg("profile.type") == "S"
+    assert getcfg("profile.black_point_compensation") == 1
+    assert window.black_point_compensation_cb.isChecked() is True
+
+
+class _FakeCalChoiceDialog:
+    """Stand-in for ``mw._CalChoiceDialog`` that skips the real modal loop."""
+
+    answer = None  # set per-test
+
+    def __init__(self, info, parent=None):
+        self.info = info
+
+    def exec_(self):
+        return self.__class__.answer
+
+    def embed_cal(self):
+        return self.__class__.embed
+
+    def reset_cal(self):
+        return self.__class__.reset
+
+
+def test_current_cal_choice_uncalibratable_display_returns_false(window, monkeypatch):
+    monkeypatch.setattr(mw.config, "is_uncalibratable_display", lambda: True)
+
+    assert window._current_cal_choice() is False
+
+
+def test_current_cal_choice_invalid_profile_shows_error(window, monkeypatch, tmp_path):
+    monkeypatch.setattr(mw.config, "is_uncalibratable_display", lambda: False)
+    bogus = tmp_path / "bogus.icc"
+    bogus.write_bytes(b"not an icc profile")
+    setcfg("calibration.file", str(bogus))
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+
+    result = window._current_cal_choice()
+
+    assert result is mw.CAL_CHOICE_CANCELLED
+    assert errors
+
+
+def test_current_cal_choice_dialog_cancel_returns_sentinel(window, monkeypatch):
+    monkeypatch.setattr(mw.config, "is_uncalibratable_display", lambda: False)
+    setcfg("calibration.file", None)
+    _FakeCalChoiceDialog.answer = mw.QDialog.Rejected
+    monkeypatch.setattr(mw, "_CalChoiceDialog", _FakeCalChoiceDialog)
+
+    assert window._current_cal_choice() is mw.CAL_CHOICE_CANCELLED
+
+
+def _cal_choice_info(**overrides):
+    base = dict(
+        is_uncalibratable=False,
+        cal_path=None,
+        options_dispcal=None,
+        can_use_current_cal=True,
+        msg_key="dialog.current_cal_warning",
+        icon="warning",
+        show_reset_checkbox=True,
+    )
+    base.update(overrides)
+    return mw.preflight_checks.CalChoiceInfo(**base)
+
+
+def test_current_cal_choice_embed_current_returns_none(window, monkeypatch):
+    monkeypatch.setattr(mw.config, "is_uncalibratable_display", lambda: False)
+    setcfg("calibration.file", None)
+    monkeypatch.setattr(
+        mw.preflight_checks, "resolve_cal_choice_info", lambda worker: _cal_choice_info()
+    )
+    _FakeCalChoiceDialog.answer = mw.QDialog.Accepted
+    _FakeCalChoiceDialog.embed = True
+    _FakeCalChoiceDialog.reset = False
+    monkeypatch.setattr(mw, "_CalChoiceDialog", _FakeCalChoiceDialog)
+    reset_calls = []
+    monkeypatch.setattr(window, "_reset_video_lut", lambda: reset_calls.append(True))
+
+    result = window._current_cal_choice()
+
+    assert result is None
+    assert reset_calls == []
+
+
+def test_current_cal_choice_no_embed_resets_video_lut(window, monkeypatch):
+    monkeypatch.setattr(mw.config, "is_uncalibratable_display", lambda: False)
+    setcfg("calibration.file", None)
+    monkeypatch.setattr(
+        mw.preflight_checks, "resolve_cal_choice_info", lambda worker: _cal_choice_info()
+    )
+    _FakeCalChoiceDialog.answer = mw.QDialog.Accepted
+    _FakeCalChoiceDialog.embed = False
+    _FakeCalChoiceDialog.reset = True
+    monkeypatch.setattr(mw, "_CalChoiceDialog", _FakeCalChoiceDialog)
+    reset_calls = []
+    monkeypatch.setattr(window, "_reset_video_lut", lambda: reset_calls.append(True))
+
+    result = window._current_cal_choice()
+
+    assert result is False
+    assert reset_calls == [True]
+
+
+def test_profile_btn_handler_stashes_apply_calibration_and_begins(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(window, "_check_show_macos_bugs_warning", lambda *a, **k: None)
+    monkeypatch.setattr(window, "_check_overwrite", lambda *a, **k: True)
+    monkeypatch.setattr(window, "_current_cal_choice", lambda *a, **k: "/tmp/x.cal")
+    begin_calls = []
+    monkeypatch.setattr(
+        window, "begin_measurement", lambda action, **k: begin_calls.append(action)
+    )
+
+    window.profile_btn_handler()
+
+    assert window._pending_apply_calibration == "/tmp/x.cal"
+    assert begin_calls == [mw.MeasurementAction.PROFILE]
+
+
+def test_profile_btn_handler_cancelled_cal_choice_aborts(window, monkeypatch):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(window, "_check_show_macos_bugs_warning", lambda *a, **k: None)
+    monkeypatch.setattr(window, "_check_overwrite", lambda *a, **k: True)
+    monkeypatch.setattr(
+        window, "_current_cal_choice", lambda *a, **k: mw.CAL_CHOICE_CANCELLED
+    )
+    begin_calls = []
+    monkeypatch.setattr(
+        window, "begin_measurement", lambda action, **k: begin_calls.append(action)
+    )
+
+    window.profile_btn_handler()
+
+    assert begin_calls == []
+
+
+def test_calibrate_btn_handler_overwrite_cancel_aborts(window, monkeypatch):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(window, "_check_show_macos_bugs_warning", lambda *a, **k: None)
+    monkeypatch.setattr(window, "_check_overwrite", lambda *a, **k: False)
+    begin_calls = []
+    monkeypatch.setattr(
+        window, "begin_measurement", lambda action, **k: begin_calls.append(action)
+    )
+
+    window.calibrate_btn_handler()
+
+    assert begin_calls == []
+
+
+def test_calibrate_and_profile_btn_handler_runs_all_overwrite_checks(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(window, "_check_show_macos_bugs_warning", lambda *a, **k: None)
+    exts = []
+
+    def fake_overwrite(ext="", filename=None):
+        exts.append(ext)
+        return True
+
+    monkeypatch.setattr(window, "_check_overwrite", fake_overwrite)
+    begin_calls = []
+    monkeypatch.setattr(
+        window, "begin_measurement", lambda action, **k: begin_calls.append(action)
+    )
+
+    window.calibrate_and_profile_btn_handler()
+
+    assert exts == [".cal", ".ti3", mw.PROFILE_EXT]
+    assert begin_calls == [mw.MeasurementAction.CALIBRATE_AND_PROFILE]
 
 
 # --- worker execution wiring (Stage 5) -------------------------------------

@@ -28,15 +28,21 @@ the pure marshalling helpers at module scope.
 Deferred to later slices (Pile 2 / Stage 5): the worker-driven Argyll execution
 behind :attr:`MainWindow.measurement_requested` (the progress dialog and
 interactive display-adjustment window), the pattern-generator setup dialogs
-(Prisma / madTPG / Resolve), the pre-flight confirmation / overwrite dialogs, the
-visual-editor / ambient-measure buttons, the black-point-rate advanced control,
-actually creating a 3D LUT (``lut3d_create_btn`` isn't wired into the button bar
-yet; see :mod:`DisplayCAL.lut3d_settings`'s module docstring), and generating an
-actual measurement report (the settings window opens via
-:meth:`MainWindow.measurement_report_btn_handler`, reusing the already-ported
+(Prisma / madTPG / Resolve), the visual-editor / ambient-measure buttons, the
+black-point-rate advanced control, actually creating a 3D LUT (``lut3d_create_btn``
+isn't wired into the button bar yet; see :mod:`DisplayCAL.lut3d_settings`'s module
+docstring), and generating an actual measurement report (the settings window opens
+via :meth:`MainWindow.measurement_report_btn_handler`, reusing the already-ported
 :mod:`DisplayCAL.ui.tools.testchart_editor` for its "edit chart" button, but its
 own Measure button still shows a not-yet-available notice — see
 :mod:`DisplayCAL.ui.measurement_report`'s module docstring for what remains).
+The pre-flight confirmation / overwrite dialogs (:meth:`MainWindow._check_overwrite`
+/ :meth:`MainWindow._check_show_macos_bugs_warning` / :meth:`MainWindow
+._current_cal_choice`, backed by :mod:`DisplayCAL.preflight_checks`) now run ahead
+of every action button; not reproduced there: the fast-matrix-shaper/profile-update
+choice dialog (``calibrate_btn_handler``'s ``dispcal_create_fast_matrix_shaper`` is
+always ``False``) and the ``silent=True`` auto-retry call path (no auto-retry flow
+exists in this port yet).
 Also deferred, by extension: the ``show_advanced_options`` gating of the
 whitepoint colour-temperature-locus row (Calibration tab), the only row of its
 kind left ungated since the 3D LUT tab's own ``show_advanced_options``-gated
@@ -87,6 +93,8 @@ from qtpy.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
@@ -117,15 +125,17 @@ from DisplayCAL import (
     config,
     gamap_settings,
     lut3d_settings,
+    preflight_checks,
     profile_finish,
 )
 from DisplayCAL import localization as lang
 from DisplayCAL import profile_name as profile_name_mod
-from DisplayCAL.argyll import make_argyll_compatible_path
+from DisplayCAL.argyll import check_set_argyll_bin, make_argyll_compatible_path
 from DisplayCAL.cgats import CGATSError
 from DisplayCAL.colorimeter_correction import ColorimeterCorrectionCatalog
 from DisplayCAL.config import (
     DEFAULTS,
+    PROFILE_EXT,
     get_verified_path,
     getcfg,
     setcfg,
@@ -328,6 +338,68 @@ class _SessionArchiveThread(QThread):
     def run(self) -> None:  # noqa: D102 (QThread override)
         result = calibration_file.create_session_archive(self._request, self._exec_cmd)
         self.done.emit(result)
+
+
+#: Sentinel returned by :meth:`MainWindow._current_cal_choice` when the user
+#: cancels, distinguishable from its other possible results (``None``,
+#: ``False``, or a ``.cal`` path) -- the Qt stand-in for wx's ``wx.ID_CANCEL``.
+CAL_CHOICE_CANCELLED = object()
+
+
+class _CalChoiceDialog(QDialog):
+    """Qt port of the checkbox dialog ``MainFrame.current_cal_choice`` builds.
+
+    Presents the "embed calibration" / "use linear instead" checkboxes
+    described by a :class:`~DisplayCAL.preflight_checks.CalChoiceInfo`, mirroring
+    wx's ``embed_cal_ctrl_handler`` (the reset checkbox is only enabled -- and
+    forced back on when disabled -- while embed is checked).
+    """
+
+    def __init__(
+        self, info: preflight_checks.CalChoiceInfo, parent: QWidget | None = None
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(APPNAME)
+        layout = QVBoxLayout(self)
+        label = QLabel(
+            lang.getstr(
+                info.msg_key,
+                os.path.basename(info.cal_path) if info.cal_path else None,
+            )
+        )
+        label.setWordWrap(True)
+        layout.addWidget(label)
+
+        self._reset_cal_cb: QCheckBox | None = None
+        if info.show_reset_checkbox:
+            self._reset_cal_cb = QCheckBox(
+                lang.getstr("calibration.use_linear_instead")
+            )
+            layout.addWidget(self._reset_cal_cb)
+
+        self._embed_cal_cb = QCheckBox(lang.getstr("calibration.embed"))
+        self._embed_cal_cb.setChecked(info.show_reset_checkbox)
+        if self._reset_cal_cb is not None:
+            self._reset_cal_cb.setEnabled(self._embed_cal_cb.isChecked())
+            self._embed_cal_cb.toggled.connect(self._embed_cal_toggled)
+        layout.addWidget(self._embed_cal_cb)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.button(QDialogButtonBox.Ok).setText(lang.getstr("continue"))
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _embed_cal_toggled(self, checked: bool) -> None:
+        self._reset_cal_cb.setEnabled(checked)
+        if not checked:
+            self._reset_cal_cb.setChecked(True)
+
+    def embed_cal(self) -> bool:
+        return self._embed_cal_cb.isChecked()
+
+    def reset_cal(self) -> bool:
+        return bool(self._reset_cal_cb and self._reset_cal_cb.isChecked())
 
 
 def _as_float(value: object) -> float | None:
@@ -597,6 +669,10 @@ class MainWindow(BaseWindow):
         #: interactive calibration run.
         self._adjustment_window: DisplayAdjustmentWindow | None = None
         self._adjustment_controller: AdjustmentController | None = None
+        #: The ``current_cal_choice()`` result for the pending ``PROFILE`` run,
+        #: set by :meth:`profile_btn_handler` and consumed by
+        #: :meth:`_run_profile_measurement`.
+        self._pending_apply_calibration: bool | str | None = True
         #: instrument type -> {combo index: mode code} / {mode code: index},
         #: refreshed each time :meth:`update_measurement_mode_ctrl` repopulates
         #: the measurement-mode combo (mirrors wx's ``measurement_modes_ab``
@@ -4250,16 +4326,198 @@ class MainWindow(BaseWindow):
     # -- measurement actions (Stage 4) ------------------------------------
 
     def calibrate_btn_handler(self) -> None:
-        """Stage a calibration run and present the measurement area."""
+        """Run the pre-flight checks, then stage a calibration run.
+
+        Qt port of ``calibrate_btn_handler``'s guard chain (macOS-bugs warning
+        + overwrite confirmation for the ``.cal`` file, and for
+        ``PROFILE_EXT`` when a calibration update will also build a fast
+        matrix shaper profile). The fast-matrix-shaper/profile-update choice
+        dialog wx shows first is not reproduced (see :meth:`begin_measurement`'s
+        docstring); ``dispcal_create_fast_matrix_shaper`` is always ``False``
+        here, matching a plain "just calibrate" click.
+        """
+        if self._check_show_macos_bugs_warning(profile=False) is False:
+            return
+        if not check_set_argyll_bin():
+            return
+        if not self._check_overwrite(".cal"):
+            return
+        if getcfg("profile.update") or self.worker.dispcal_create_fast_matrix_shaper:
+            if not self._check_overwrite(PROFILE_EXT):
+                return
         self.begin_measurement(MeasurementAction.CALIBRATE)
 
     def calibrate_and_profile_btn_handler(self) -> None:
-        """Stage a combined calibrate + characterize run."""
+        """Run the pre-flight checks, then stage a combined calibrate+profile run.
+
+        Qt port of ``calibrate_and_profile_btn_handler``'s guard chain.
+        """
+        if self._check_show_macos_bugs_warning() is False:
+            return
+        if not check_set_argyll_bin():
+            return
+        if not self._check_overwrite(".cal"):
+            return
+        if not self._check_overwrite(".ti3"):
+            return
+        if not self._check_overwrite(PROFILE_EXT):
+            return
         self.begin_measurement(MeasurementAction.CALIBRATE_AND_PROFILE)
 
     def profile_btn_handler(self) -> None:
-        """Stage a characterization (profiling) run."""
+        """Run the pre-flight checks, then stage a characterization run.
+
+        Qt port of ``profile_btn_handler``'s guard chain, including
+        ``current_cal_choice()`` -- its result is stashed in
+        :attr:`_pending_apply_calibration` for :meth:`_run_profile_measurement`
+        to pick up once the run actually starts (mirrors wx threading the same
+        value through ``setup_measurement(self.just_profile, apply_calibration)``).
+        Always runs the (non-silent) confirmation dialog: the ``silent=True``
+        wx call path only fires from an auto-retry event this Qt port doesn't
+        have yet.
+        """
+        if self._check_show_macos_bugs_warning(cal=False) is False:
+            return
+        if not check_set_argyll_bin():
+            return
+        if not self._check_overwrite(".ti3"):
+            return
+        if not self._check_overwrite(PROFILE_EXT):
+            return
+        apply_calibration = self._current_cal_choice()
+        if apply_calibration is CAL_CHOICE_CANCELLED:
+            return
+        self._pending_apply_calibration = apply_calibration
         self.begin_measurement(MeasurementAction.PROFILE)
+
+    def _check_overwrite(self, ext: str = "", filename: str | None = None) -> bool:
+        """Qt port of ``MainFrame.check_overwrite``.
+
+        Args:
+            ext: The file extension to use if no filename is provided.
+            filename: The name of the file to check.
+
+        Returns:
+            ``True`` if the file does not exist or the user confirms overwrite.
+        """
+        dst_file = preflight_checks.resolve_overwrite_path(ext, filename)
+        if not os.path.exists(dst_file):
+            return True
+        answer = QMessageBox.warning(
+            self,
+            APPNAME,
+            lang.getstr("warning.already_exists", os.path.basename(dst_file)),
+            QMessageBox.Ok | QMessageBox.Cancel,
+            QMessageBox.Cancel,
+        )
+        return answer == QMessageBox.Ok
+
+    def _check_show_macos_bugs_warning(
+        self, cal: bool = True, profile: bool = True
+    ) -> bool | None:
+        """Qt port of ``MainFrame.check_show_macos_bugs_warning``.
+
+        Args:
+            cal: Whether to check for calibration-related bugs.
+            profile: Whether to check for profile-related bugs.
+
+        Returns:
+            ``False`` if the user cancelled, else ``None`` (proceed).
+        """
+        if not preflight_checks.macos_bugs_warning_applicable():
+            return None
+        if cal and preflight_checks.should_warn_calibration_bugs():
+            answer = QMessageBox.warning(
+                self,
+                APPNAME,
+                lang.getstr("macos.bugs.cal.warning"),
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+                QMessageBox.No,
+            )
+            if answer == QMessageBox.Cancel:
+                return False
+            if answer == QMessageBox.Yes:
+                self.black_luminance_ctrl.setCurrentIndex(0)
+                setcfg("calibration.black_point_correction.auto", 0)
+                self.black_point_correction_ctrl.setValue(0)
+        if not profile or not preflight_checks.should_warn_profile_bugs():
+            return None
+        answer = QMessageBox.warning(
+            self,
+            APPNAME,
+            lang.getstr("macos.bugs.profile.warning"),
+            QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+            QMessageBox.No,
+        )
+        if answer == QMessageBox.Cancel:
+            return False
+        if answer == QMessageBox.Yes:
+            setcfg("profile.type", "S")
+            setcfg("profile.black_point_compensation", 1)
+            self.update_profile_controls()
+        return None
+
+    def _current_cal_choice(self, silent: bool = False) -> bool | str | None | object:
+        """Qt port of ``MainFrame.current_cal_choice``.
+
+        Args:
+            silent: If ``True``, skip the confirmation dialog and use its
+                default answer (matches wx's ``silent`` kwarg).
+
+        Returns:
+            ``None`` to embed the current (live) calibration, ``False`` for
+            none, a ``.cal`` file path, or :data:`CAL_CHOICE_CANCELLED`.
+        """
+        if config.is_uncalibratable_display():
+            return False
+        cal = getcfg("calibration.file", False)
+        if cal and os.path.splitext(cal)[1].lower() in (".icc", ".icm"):
+            self.worker.options_dispcal = []
+        try:
+            info = preflight_checks.resolve_cal_choice_info(self.worker)
+        except preflight_checks.CalChoiceProfileInvalidError:
+            QMessageBox.critical(
+                self, APPNAME, f"{lang.getstr('profile.invalid')}\n{cal}"
+            )
+            return CAL_CHOICE_CANCELLED
+        if silent:
+            embed_cal, reset_cal = info.show_reset_checkbox, False
+        else:
+            dialog = _CalChoiceDialog(info, self)
+            if dialog.exec_() != QDialog.Accepted:
+                return CAL_CHOICE_CANCELLED
+            embed_cal, reset_cal = dialog.embed_cal(), dialog.reset_cal()
+        outcome = preflight_checks.compute_cal_choice_result(info, embed_cal, reset_cal)
+        if outcome.reset_video_lut:
+            self._reset_video_lut()
+        if outcome.options_dispcal:
+            self.worker.options_dispcal = outcome.options_dispcal
+        return outcome.apply_calibration
+
+    def _reset_video_lut(self) -> bool | Exception:
+        """Reset the video card gamma table to linear.
+
+        Qt port of ``MainFrame.reset_cal``, minus the embedded curve-viewer
+        preview refresh (``lut_viewer_load_lut``) -- the Qt main window
+        doesn't have one yet -- and the success/failure ``InfoDialog`` (runs
+        silently, matching a background operation rather than a user-facing
+        "reset calibration" button).
+        """
+        if not check_set_argyll_bin():
+            return False
+        cmd, args = self.worker.prepare_dispwin(cal=False)
+        if isinstance(cmd, Exception):
+            return cmd
+        if cmd is None:
+            return False
+        return self.worker.exec_cmd(
+            cmd,
+            args,
+            capture_output=True,
+            low_contrast=False,
+            skip_scripts=True,
+            silent=True,
+        )
 
     def begin_measurement(
         self, action: MeasurementAction, *, wrapup: bool = True
@@ -4416,17 +4674,23 @@ class MainWindow(BaseWindow):
 
         Mirrors the non-interactive setup ``MainFrame.just_profile`` does before
         ``worker.start_measurement`` and runs ``worker.measure`` through the Qt
-        controller. On success, chains into :meth:`_build_profile_from_measurement`
-        (the ``colprof`` stage ``just_profile_finish`` chains into).
+        controller, passing :attr:`_pending_apply_calibration` (the
+        ``current_cal_choice()`` result :meth:`profile_btn_handler` stashed
+        there; defaults to ``True`` for callers that skip that pre-flight step,
+        e.g. direct test invocation). On success, chains into
+        :meth:`_build_profile_from_measurement` (the ``colprof`` stage
+        ``just_profile_finish`` chains into).
         """
         self.worker.dispread_after_dispcal = False
         self.worker.interactive = config.get_display_name() == "Untethered"
         setcfg("calibration.file.previous", None)
+        apply_calibration = self._pending_apply_calibration
+        self._pending_apply_calibration = True
         controller = self._ensure_run_controller()
         controller.run(
             self.worker.measure,
             self._on_measurement_finished,
-            wkwargs={"apply_calibration": True},
+            wkwargs={"apply_calibration": apply_calibration},
             progress_msg=lang.getstr("measuring.characterization"),
             pauseable=True,
         )

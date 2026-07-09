@@ -986,6 +986,63 @@ pre-existing gap, not new deferred scope.
 10 new tests in `tests/test_profile_finish.py` for the pure module, plus 13
 new/updated regression tests in `tests/test_ui_main_window.py` (182 total).
 
+**Sub-slice 5e — pre-flight confirmation / overwrite dialogs — DONE (2026-07-09).**
+Picked from the "Remaining gaps" list (maintainer's choice, over 3D LUT creation
+and measurement report generation). Before this slice the three action buttons
+ran straight into `begin_measurement` with no guard rails at all, so a real run
+could silently overwrite an existing `.cal`/`.ti3`/profile file. Ports wx's
+`check_overwrite`, `check_show_macos_bugs_warning` and `current_cal_choice`
+(`display_cal.py`) into every action button's guard chain.
+
+New toolkit-neutral `DisplayCAL/preflight_checks.py` (mirroring the
+`profile_finish.py` precedent): `resolve_overwrite_path()` (the destination-path
+derivation `check_overwrite` tests for existence), `macos_bugs_warning_applicable()`
+/ `should_warn_calibration_bugs()` / `should_warn_profile_bugs()` (the
+platform/config predicates gating the two macOS-bugs warnings), and
+`resolve_cal_choice_info()` / `compute_cal_choice_result()` (the message/checkbox
+setup and post-dialog branch logic behind `current_cal_choice`, split into a
+pre-dialog `CalChoiceInfo` and a post-dialog `CalChoiceResult` so the wx and Qt
+dialogs can share both halves without either owning the other's widgets). The wx
+`MainFrame` now delegates to all of these (verified against the full
+`test_display_cal.py` suite, unchanged); the actual `ConfirmDialog` construction
+and `self.reset_cal()` call stay in wx, matching the `profile_finish.py` /
+`profile_install.py` split between pure logic and toolkit-owned dialogs.
+
+`MainWindow` gained `_check_overwrite()` (a `QMessageBox.warning` Ok/Cancel),
+`_check_show_macos_bugs_warning()` (two sequential `QMessageBox.warning`
+Yes/No/Cancel prompts, applying the same config resets wx does on "Yes" --
+`black_luminance_ctrl`/`black_point_correction_ctrl` for the calibration
+warning, `profile_type_ctrl`/`update_profile_controls()` for the profile
+warning), `_current_cal_choice()` (a new `_CalChoiceDialog(QDialog)` with the
+"embed calibration" / "use linear instead" checkboxes, since a stock
+`QMessageBox` only supports one), and `_reset_video_lut()` (a synchronous
+`worker.prepare_dispwin`/`exec_cmd` port of `MainFrame.reset_cal`, minus the
+embedded curve-viewer refresh the Qt main window doesn't have). All three
+action-button handlers now run the full wx guard chain before staging a
+measurement; `profile_btn_handler`'s `current_cal_choice()` result is stashed in
+a new `_pending_apply_calibration` attribute for `_run_profile_measurement` to
+thread into `worker.measure(apply_calibration=...)` once the run actually
+starts (previously hardcoded to `True`), mirroring how wx threads the same value
+through `setup_measurement(self.just_profile, apply_calibration)`.
+
+**Dropped / deferred versus the wx handlers:** the fast-matrix-shaper /
+profile-update choice dialog `calibrate_btn_handler` shows first (so
+`dispcal_create_fast_matrix_shaper` is always `False` in this port, matching a
+plain "just calibrate" click); the `silent=True` `current_cal_choice` call path
+(only reachable from an auto-retry event this Qt port doesn't have yet, see
+`measure_auto` -- not ported); and the success/failure `InfoDialog` pair
+`MainFrame.install_cal` shows (`_reset_video_lut` runs silently).
+
+26 new tests in `tests/test_preflight_checks.py` for the pure module, plus 17
+new/updated regression tests in `tests/test_ui_main_window.py` (198 total).
+Hit the same test-modal-hang trap `test_ui_main_window.py`'s own history
+already warns about (see the memory note "Qt test modal-hang gotcha"): the one
+existing test that clicks the action buttons directly (`test_action_button_dry
+_run_emits_request`) started hanging once `profile_btn_handler` began showing a
+real modal `_CalChoiceDialog` mid-click; fixed with a new `_stub_preflight_checks`
+fixture applied there, alongside dedicated tests for every new pre-flight code
+path (each answering its own dialog explicitly rather than letting one hang).
+
 ### Stage 5+ — Reporting, colorimeter corrections, install/share
 
 The remaining large features, each its own slice: measurement report

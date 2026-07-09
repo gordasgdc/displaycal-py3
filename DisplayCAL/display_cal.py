@@ -65,6 +65,7 @@ from DisplayCAL import (
     main_settings,
     madvr,
     measurement_report as measurement_report_utils,
+    preflight_checks,
     profile_install,
     report,
     util_x,
@@ -5664,18 +5665,12 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             profile (bool, optional): Whether to check for profile-related
                 bugs.
         """
-        if sys.platform != "darwin" or intlist(platform.mac_ver()[0].split(".")) < [
-            10,
-            8,
-        ]:
+        if not preflight_checks.macos_bugs_warning_applicable():
             # We assume these macOS bugs exist since 10.8 "Mountain Lion"
             return None
         result = None
-        if cal and (
-            getcfg("calibration.black_point_correction.auto")
-            or getcfg("calibration.black_point_correction")
-            or getcfg("calibration.black_luminance", False)
-        ):  # Warn about calibration bugs
+        if cal and preflight_checks.should_warn_calibration_bugs():
+            # Warn about calibration bugs
             dlg = ConfirmDialog(
                 self,
                 msg=lang.getstr("macos.bugs.cal.warning"),
@@ -5698,10 +5693,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 self.update_black_point_rate_ctrl()
             elif result == wx.ID_CANCEL:
                 return False
-        if not profile or not (
-            getcfg("profile.type") != "S"
-            or not getcfg("profile.black_point_compensation")
-        ):
+        if not profile or not preflight_checks.should_warn_profile_bugs():
             return None
         # Warn about profile bugs
         dlg = ConfirmDialog(
@@ -7938,13 +7930,8 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             bool: True if the file does not exist or the user confirms to
                 overwrite, False if the user cancels the operation.
         """
-        if not filename:
-            filename = getcfg("profile.name.expanded") + ext
-            dst_file = os.path.join(
-                getcfg("profile.save_path"), getcfg("profile.name.expanded"), filename
-            )
-        else:
-            dst_file = os.path.join(getcfg("profile.save_path"), filename)
+        dst_file = preflight_checks.resolve_overwrite_path(ext, filename)
+        filename = os.path.basename(dst_file)
         if os.path.exists(dst_file):
             dlg = ConfirmDialog(
                 self,
@@ -11557,55 +11544,31 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         if config.is_uncalibratable_display():
             return False
         cal = getcfg("calibration.file", False)
-        options_dispcal = None
-        if cal:
-            filename, ext = os.path.splitext(cal)
-            if ext.lower() in (".icc", ".icm"):
-                self.worker.options_dispcal = []
-                try:
-                    profile = ICCProfile(cal)
-                except (OSError, ICCProfileInvalidError):
-                    InfoDialog(
-                        self,
-                        msg=lang.getstr("profile.invalid") + "\n" + cal,
-                        ok=lang.getstr("ok"),
-                        bitmap=get_icon(32, "dialog-error"),
-                    )
-                    self.start_timers()
-                    return wx.ID_CANCEL
-                else:
-                    # get dispcal options if present
-                    options_dispcal = [
-                        f"-{arg}" for arg in get_options_from_profile(profile)[0]
-                    ]
-            cal = f"{filename}.cal" if os.path.isfile(filename + ".cal") else None
-        if self.worker.argyll_version < [1, 1, 0] or not self.worker.has_lut_access():
-            # If Argyll < 1.1, we cannot save the current VideoLUT to use it.
-            # For web, there is no point in using the current VideoLUT as it
-            # may not be from the display we render on (and we cannot save it
-            # to begin with as there is no VideoLUT access).
-            # So an existing .cal file or no calibration are the only options.
-            can_use_current_cal = False
-        else:
-            can_use_current_cal = True
-        if cal:
-            msgstr = "dialog.cal_info"
-            icon = "information"
-        elif can_use_current_cal:
-            msgstr = "dialog.current_cal_warning"
-            icon = "warning"
-        else:
-            msgstr = "dialog.linear_cal_info"
-            icon = "information"
+        if cal and os.path.splitext(cal)[1].lower() in (".icc", ".icm"):
+            self.worker.options_dispcal = []
+        try:
+            info = preflight_checks.resolve_cal_choice_info(self.worker)
+        except preflight_checks.CalChoiceProfileInvalidError:
+            InfoDialog(
+                self,
+                msg=lang.getstr("profile.invalid") + "\n" + cal,
+                ok=lang.getstr("ok"),
+                bitmap=get_icon(32, "dialog-error"),
+            )
+            self.start_timers()
+            return wx.ID_CANCEL
         dlg = ConfirmDialog(
             self,
-            msg=lang.getstr(msgstr, os.path.basename(cal) if cal else None),
+            msg=lang.getstr(
+                info.msg_key,
+                os.path.basename(info.cal_path) if info.cal_path else None,
+            ),
             ok=lang.getstr("continue"),
             cancel=lang.getstr("cancel"),
-            bitmap=get_icon(32, f"dialog-{icon}"),
+            bitmap=get_icon(32, f"dialog-{info.icon}"),
         )
         border = 12
-        if can_use_current_cal or cal:
+        if info.show_reset_checkbox:
             dlg.reset_cal_ctrl = wx.CheckBox(
                 dlg, -1, lang.getstr("calibration.use_linear_instead")
             )
@@ -11622,31 +11585,25 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             if not embed_cal:
                 dlg.reset_cal_ctrl.SetValue(True)
 
-        if can_use_current_cal or cal:
+        if info.show_reset_checkbox:
             dlg.embed_cal_ctrl.Bind(wx.EVT_CHECKBOX, embed_cal_ctrl_handler)
-        dlg.embed_cal_ctrl.SetValue(bool(can_use_current_cal or cal))
+        dlg.embed_cal_ctrl.SetValue(bool(info.show_reset_checkbox))
         dlg.sizer3.Add(dlg.embed_cal_ctrl, flag=wx.TOP | wx.ALIGN_LEFT, border=border)
         dlg.sizer0.SetSizeHints(dlg)
         dlg.sizer0.Layout()
         result = wx.ID_OK if silent else dlg.ShowModal()
-        if can_use_current_cal or cal:
-            reset_cal = dlg.reset_cal_ctrl.GetValue()
+        reset_cal = dlg.reset_cal_ctrl.GetValue() if info.show_reset_checkbox else False
         embed_cal = dlg.embed_cal_ctrl.GetValue()
         dlg.Destroy()
         if result == wx.ID_CANCEL:
             self.start_timers()
             return wx.ID_CANCEL
-        if not embed_cal:
-            if can_use_current_cal and reset_cal:
-                self.reset_cal()
-            return False
-        if not (can_use_current_cal or cal) or reset_cal:
-            return get_data_path("linear.cal")
-        if cal:
-            if options_dispcal:
-                self.worker.options_dispcal = options_dispcal
-            return cal
-        return None
+        outcome = preflight_checks.compute_cal_choice_result(info, embed_cal, reset_cal)
+        if outcome.reset_video_lut:
+            self.reset_cal()
+        if outcome.options_dispcal:
+            self.worker.options_dispcal = outcome.options_dispcal
+        return outcome.apply_calibration
 
     def restore_measurement_mode(self) -> None:
         """Restore the measurement mode from backup."""
