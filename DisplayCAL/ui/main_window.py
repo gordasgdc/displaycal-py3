@@ -117,6 +117,7 @@ from DisplayCAL import (
     config,
     gamap_settings,
     lut3d_settings,
+    profile_finish,
 )
 from DisplayCAL import localization as lang
 from DisplayCAL import profile_name as profile_name_mod
@@ -4415,8 +4416,8 @@ class MainWindow(BaseWindow):
 
         Mirrors the non-interactive setup ``MainFrame.just_profile`` does before
         ``worker.start_measurement`` and runs ``worker.measure`` through the Qt
-        controller. Building the profile from the measurements (the ``colprof``
-        stage ``just_profile_finish`` chains into) is a follow-on slice.
+        controller. On success, chains into :meth:`_build_profile_from_measurement`
+        (the ``colprof`` stage ``just_profile_finish`` chains into).
         """
         self.worker.dispread_after_dispcal = False
         self.worker.interactive = config.get_display_name() == "Untethered"
@@ -4433,8 +4434,9 @@ class MainWindow(BaseWindow):
     def _on_measurement_finished(self, result: object) -> None:
         """Report the outcome of a characterization run on the GUI thread.
 
-        Ports the error / incomplete branches of ``just_profile_finish``; the
-        success branch (profile creation) lands with the ``colprof`` slice.
+        Ports the error / incomplete branches of ``just_profile_finish``; on
+        success, chains into :meth:`_build_profile_from_measurement` (the
+        ``colprof`` stage).
 
         Args:
             result (object): ``True`` on success, ``False`` / ``None`` when the
@@ -4450,6 +4452,85 @@ class MainWindow(BaseWindow):
                 )
             return
         self.worker.log(f"{APPNAME}: Characterization measurements complete")
+        self._build_profile_from_measurement()
+
+    def _build_profile_from_measurement(self) -> None:
+        """Run the ``colprof`` stage to build a profile from the measurement.
+
+        Qt port of ``check_copy_ti3`` + ``start_profile_worker``: copies the
+        working TI3 into the profile save location, then runs
+        ``worker.create_profile`` through the same :class:`WorkerRunController`
+        used for the measurement itself. Drops the measurement-file sanity-check
+        confirmation dialog (``measurement_file_check_confirm``) that gates the
+        wx path's TI3 copy -- always proceeds, matching that dialog's "confirm"
+        branch.
+        """
+        result = self.worker.wrapup(copy=True, remove=False, ext_filter=[".ti3"])
+        if isinstance(result, Exception):
+            QMessageBox.critical(self, APPNAME, str(result))
+            return
+        controller = self._ensure_run_controller()
+        controller.run(
+            self.worker.create_profile,
+            self._on_profile_build_finished,
+            wkwargs={"tags": True},
+            progress_msg=lang.getstr("create_profile"),
+            pauseable=False,
+        )
+
+    def _on_profile_build_finished(self, result: object) -> None:
+        """Report the outcome of the ``colprof`` run and offer to install it.
+
+        Ports the validation branches of ``profile_finish`` via
+        :mod:`DisplayCAL.profile_finish`. The elaborate install-offer dialog
+        (share-profile button, calibration-preview / show-LUT / show-profile-info
+        checkboxes, automatic 3D LUT creation) is dropped in favour of a plain
+        yes/no confirm that reuses the already-ported :class:`InstallProfileWindow`
+        for the actual install step.
+
+        Args:
+            result (object): The built profile's path on success, ``False`` /
+                ``None`` when the run did not complete, or an ``Exception`` on
+                failure.
+        """
+        if isinstance(result, Exception):
+            QMessageBox.critical(self, APPNAME, str(result))
+            return
+        if not result:
+            if not getcfg("dry_run"):
+                QMessageBox.information(
+                    self, APPNAME, lang.getstr("profiling.incomplete")
+                )
+            return
+        profile_path = result
+        try:
+            built = profile_finish.validate_built_profile(profile_path)
+        except profile_finish.ProfileFinishInvalidError as exception:
+            QMessageBox.critical(self, APPNAME, str(exception))
+            return
+        except profile_finish.ProfileFinishNotDisplayError:
+            QMessageBox.information(self, APPNAME, lang.getstr("profiling.complete"))
+            return
+        if profile_finish.sync_calibration_file_config(profile_path):
+            self.update_calibration_file_ctrl()
+        self.worker.log(f"{APPNAME}: Profile created: {profile_path}")
+        message = lang.getstr("profiling.complete")
+        extra = profile_finish.format_completion_extra(built.profile)
+        if extra:
+            message = f"{message}\n\n{extra}"
+        prompt = lang.getstr(
+            "dialog.install_profile",
+            (os.path.basename(profile_path), self.display_ctrl.currentText()),
+        )
+        answer = QMessageBox.question(
+            self,
+            APPNAME,
+            f"{message}\n\n{prompt}",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if answer == QMessageBox.Yes:
+            self.install_profile_btn_handler()
 
     def _ensure_adjustment_controller(self) -> AdjustmentController:
         """Create the interactive-adjustment window / driver once, on first run."""
@@ -4471,10 +4552,10 @@ class MainWindow(BaseWindow):
         interactive display adjustment is enabled (and this is not a calibration
         update) the run drives the interactive
         :class:`~DisplayCAL.ui.display_adjustment_window.DisplayAdjustmentWindow`;
-        otherwise it runs non-interactively over the progress dialog. Building
-        the profile from a ``calibrate & profile`` run (the ``colprof`` stage) is
-        a follow-on slice; on a successful calibration the characterization
-        measurement is chained.
+        otherwise it runs non-interactively over the progress dialog. On a
+        successful calibration the characterization measurement is chained; for
+        ``CALIBRATE_AND_PROFILE`` that in turn builds the profile (the
+        ``colprof`` stage, see :meth:`_build_profile_from_measurement`).
 
         Args:
             action (MeasurementAction): ``CALIBRATE`` or ``CALIBRATE_AND_PROFILE``.
@@ -4511,11 +4592,14 @@ class MainWindow(BaseWindow):
     ) -> None:
         """Report a calibration outcome, chaining the profile run if requested.
 
-        Ports the error / incomplete branches of ``just_calibrate_finish``; the
-        success side effects (loading the calibration, the ``calibration.complete``
-        dialog, building the profile) land with the ``colprof`` slice. For a
-        ``calibrate & profile`` run the characterization measurement is started
-        on success.
+        Ports the error / incomplete branches of ``just_calibrate_finish``. For a
+        ``calibrate & profile`` run the characterization measurement (and, on its
+        success, the ``colprof`` build) is started; this is
+        ``calibrate_and_profile_finish``'s unconditional chain, not
+        ``just_calibrate_finish``'s ``profile.update``-gated one. Not reproduced
+        for a calibrate-only run: ``update_calibration_file_ctrl()``, the
+        ``profile.update``/fast-matrix-shaper auto quick-profile chain, and the
+        TRC-branch ``load_cal`` + completion dialog.
 
         Args:
             action (MeasurementAction): The calibration workflow that finished.

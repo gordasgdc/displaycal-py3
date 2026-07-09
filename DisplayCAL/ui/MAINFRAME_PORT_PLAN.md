@@ -612,7 +612,31 @@ pure module, plus 21 new regression tests in `tests/test_ui_main_window.py`
 screenshots (SMPTE 2084 roll-off with a preset colorspace, and again with a
 hand-edited "Custom" one showing the primaries grid).
 
-**Session 11 (GamapFrame port: gamap_btn, 2026-07-09).** Picked from the
+**Session 11 (wire testchart editor / report window / CCXX import-upload into
+MainWindow, 2026-07-09).** Follow-up on the "wire already-ported standalone
+tool windows" item left over from Session 9's `gamap_btn`/`create_testchart_btn`
+not-yet-available notices: `create_testchart_btn()` now opens
+`TestchartEditorWindow()` instead of the stub notice; a new
+`measurement_report_btn` opens `ReportWindow()` (its `edit_chart_requested`
+signal reuses the same testchart editor instance; its `measure_requested`
+signal still shows a not-yet-available notice, since generating a report is a
+much larger, separate port — see the Stage 5+ measurement-report sub-slice ii
+"Deferred" note); and a new Tools menu wires
+`ImportController()`/`UploadController()` (from
+`DisplayCAL.ui.colorimeter_correction_io`) for colorimeter-correction
+import/upload. `_testchart_editor_window` / `_report_window` follow the same
+lazily-created singleton pattern as `_gamap_window` (Session 12, below) and
+`_install_profile_window` / `_profile_info_window`.
+
+Also fixed a latent crash in `get_total_patches()` found while exercising the
+newly-wired testchart editor without Argyll configured: when Argyll's version
+couldn't be determined, `multi_bcc_steps` stayed `None` and
+`adjust_gray_patches_count()` crashed comparing `None > 1`; now defaults to
+`0`, matching pre-1.6 Argyll behavior (fixed at the source, so the still-
+shipping wx path gets the fix too). 88 new/expanded regression tests in
+`tests/test_ui_main_window.py`.
+
+**Session 12 (GamapFrame port: gamap_btn, 2026-07-09).** Picked from the
 "Remaining gaps" list (maintainer's choice, over 3D LUT creation / measurement
 report generation / the small whitepoint-locus advanced-options gap). Ports
 wx's `GamapFrame` (`display_cal.py`, `xrc/gamap.xrc`), the standalone window
@@ -809,9 +833,10 @@ The `CALIBRATE` / `CALIBRATE_AND_PROFILE` actions need the interactive
 `DisplayAdjustmentFrame` (5c) and surface a not-yet-available notice until then.
 
 **Deferred from 5b-iv:** building the profile from the measurements (the
-`colprof` stage `just_profile_finish` chains into via `start_profile_worker`),
-the pre-flight `check_overwrite` / `current_cal_choice` / macOS-bugs preflight
-dialogs, and verifying the run end-to-end against a real colorimeter.
+`colprof` stage `just_profile_finish` chains into via `start_profile_worker`;
+landed as sub-slice 5d, below), the pre-flight `check_overwrite` /
+`current_cal_choice` / macOS-bugs preflight dialogs, and verifying the run
+end-to-end against a real colorimeter.
 
 **Sub-slice 5c — interactive `DisplayAdjustmentFrame`.** Port
 `wx_display_adjustment_frame.py::DisplayAdjustmentFrame` (the interactive
@@ -901,12 +926,65 @@ from the pure-Qt app (no wx event loop):
   (`_run_profile_measurement`). This replaces the 5b-iv not-yet-available notice.
 
 **Deferred from 5c-iii:** building the profile from a calibrate&profile run (the
-`colprof` stage, shared with the 5b-iv profile deferral), the calibration success
-side effects (`load_cal` + the `calibration.complete` dialog + fast-matrix-shaper
-profile), the wx swap-to-progress-dialog once adjustment ends (the adjustment
-window stays up showing status pulses through the curve measurement), the
-`abort_subprocess` confirm-cancel path (still on the wx `delayedresult` seam, as
-in 5b-iii), and verifying end-to-end against a real colorimeter.
+`colprof` stage, shared with the 5b-iv profile deferral; landed as sub-slice 5d,
+below), the calibration success side effects (`load_cal` + the
+`calibration.complete` dialog + fast-matrix-shaper profile), the wx
+swap-to-progress-dialog once adjustment ends (the adjustment window stays up
+showing status pulses through the curve measurement), the `abort_subprocess`
+confirm-cancel path (still on the wx `delayedresult` seam, as in 5b-iii), and
+verifying end-to-end against a real colorimeter.
+
+**Sub-slice 5d — build the profile from measurements (the `colprof` stage) —
+DONE (2026-07-09).** Picked from the "Remaining gaps" list (maintainer's choice,
+over 3D LUT creation / measurement report generation). Closes the 5b-iv/5c-iii
+deferral: the `PROFILE` and `CALIBRATE_AND_PROFILE` action buttons now actually
+build a `.icc` file, not just run the measurement.
+
+New toolkit-neutral `DisplayCAL/profile_finish.py` (mirroring the
+`profile_install.py`/`main_settings.py` precedent) holds the pure pieces of
+`MainFrame.start_profile_worker` / `profile_finish`: `resolve_profile_path()`
+(the default `profile.save_path`/`profile.name.expanded` derivation),
+`validate_built_profile()` (loads and checks the built profile is an `mntr`/
+`RGB` display profile, raising `ProfileFinishInvalidError` /
+`ProfileFinishNotDisplayError` in place of wx's inline `InfoDialog`+return
+branches), `format_completion_extra()` (the self-check dE / gamut coverage /
+gamut volume summary read from the profile's `meta` tag), and
+`sync_calibration_file_config()` (points `calibration.file` /
+`3dlut.output.profile` / `measurement_report.output_profile` at the new
+profile). `MainWindow._on_measurement_finished` (the consumer of both the
+`PROFILE` action's direct measurement and the `CALIBRATE_AND_PROFILE` chain's
+characterization measurement) now calls `_build_profile_from_measurement()` on
+success, which copies the working TI3 (`worker.wrapup(copy=True, remove=False,
+ext_filter=[".ti3"])`) and runs `worker.create_profile` through the same
+`WorkerRunController` used for the measurement itself; `_on_profile_build_finished`
+validates the result via `profile_finish`, updates the calibration/profile combo,
+and offers to install the new profile via a `QMessageBox.question` that, on Yes,
+reuses the already-ported `InstallProfileWindow` (`install_profile_btn_handler`)
+rather than reproducing wx's install dialog.
+
+**Dropped / simplified versus `profile_finish`** (documented in
+`profile_finish.py`'s module docstring): the big `ConfirmDialog` with its
+share-profile button (dead upstream anyway, see Stage 5+ below) and
+calibration-preview / show-LUT / show-profile-info checkboxes; the
+install-scope radio buttons and Windows profile-loader `getcfg` round trip
+(the reused `InstallProfileWindow` already offers scope, gated the same way);
+the automatic 3D LUT creation offer (`install_3dlut`, `lut3d_create_handler`
+isn't wired yet either, see `lut3d_settings.py`'s deferred item); the
+measurement-file sanity-check confirmation dialog
+(`measurement_file_check_confirm`) that gates wx's TI3 copy (always proceeds,
+matching that dialog's "confirm" branch); and the `options_dispcal and
+options_colprof` branch of `profile_finish`, which calls the giant
+`load_cal_handler` to reload every settings control from the profile's
+embedded cal curves (`sync_calibration_file_config` always takes the simpler
+"just point at the new file" branch instead). Not reproduced for a
+calibrate-only run (`just_calibrate_finish`, a different wx method from the
+`calibrate_and_profile_finish` this sub-slice mirrors):
+`update_calibration_file_ctrl()`, the `profile.update`/fast-matrix-shaper auto
+quick-profile chain, and the TRC-branch `load_cal` + completion dialog — a
+pre-existing gap, not new deferred scope.
+
+10 new tests in `tests/test_profile_finish.py` for the pure module, plus 13
+new/updated regression tests in `tests/test_ui_main_window.py` (182 total).
 
 ### Stage 5+ — Reporting, colorimeter corrections, install/share
 

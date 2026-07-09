@@ -46,6 +46,14 @@ def _init_config():
 
 
 @pytest.fixture
+def srgb_profile_path():
+    """Path to a bundled real ``mntr``/``RGB`` profile with a ``vcgt`` tag."""
+    return os.path.join(
+        os.path.dirname(__file__), "data", "icc", "vcgt_cm_test_cyanish_reddish.icc"
+    )
+
+
+@pytest.fixture
 def stub_worker(monkeypatch):
     """Stub worker enumeration so no Argyll / hardware is needed."""
 
@@ -1395,10 +1403,146 @@ def test_measurement_finished_incomplete_silent_on_dry_run(window, monkeypatch):
 def test_measurement_finished_success_logs(window, monkeypatch):
     logged = []
     monkeypatch.setattr(window.worker, "log", lambda *a, **k: logged.append(a))
+    monkeypatch.setattr(window, "_build_profile_from_measurement", lambda: None)
 
     window._on_measurement_finished(True)
 
     assert logged
+
+
+def test_measurement_finished_success_builds_profile(window, monkeypatch):
+    monkeypatch.setattr(window.worker, "log", lambda *a, **k: None)
+    built = []
+    monkeypatch.setattr(
+        window, "_build_profile_from_measurement", lambda: built.append(True)
+    )
+
+    window._on_measurement_finished(True)
+
+    assert built == [True]
+
+
+# --- building the profile (colprof stage) -----------------------------------
+
+
+def test_build_profile_wrapup_exception_shows_error(window, monkeypatch):
+    monkeypatch.setattr(
+        window.worker, "wrapup", lambda **kwargs: RuntimeError("copy failed")
+    )
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    ran = []
+    monkeypatch.setattr(mw.WorkerRunController, "run", lambda *a, **k: ran.append(True))
+
+    window._build_profile_from_measurement()
+
+    assert errors
+    assert "copy failed" in errors[0][2]
+    assert ran == []
+
+
+def test_build_profile_runs_create_profile_through_controller(window, monkeypatch):
+    monkeypatch.setattr(window.worker, "wrapup", lambda **kwargs: True)
+    calls = {}
+
+    def fake_run(_ctrl, producer, consumer=None, **kwargs):
+        calls["producer"] = producer
+        calls["consumer"] = consumer
+        calls["wkwargs"] = kwargs.get("wkwargs")
+        calls["pauseable"] = kwargs.get("pauseable")
+
+    monkeypatch.setattr(mw.WorkerRunController, "run", fake_run)
+
+    window._build_profile_from_measurement()
+
+    assert calls["producer"] == window.worker.create_profile
+    assert calls["consumer"] == window._on_profile_build_finished
+    assert calls["wkwargs"] == {"tags": True}
+    assert calls["pauseable"] is False
+
+
+def test_profile_build_finished_exception_shows_error(window, monkeypatch):
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+
+    window._on_profile_build_finished(ValueError("colprof boom"))
+
+    assert errors
+    assert "colprof boom" in errors[0][2]
+
+
+def test_profile_build_finished_incomplete_shows_notice(window, monkeypatch):
+    setcfg("dry_run", 0)
+    infos = []
+    monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: infos.append(a))
+
+    window._on_profile_build_finished(False)
+
+    assert infos
+    assert lang.getstr("profiling.incomplete") in infos[0][2]
+
+
+def test_profile_build_finished_incomplete_silent_on_dry_run(window, monkeypatch):
+    setcfg("dry_run", 1)
+    infos = []
+    monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: infos.append(a))
+
+    window._on_profile_build_finished(False)
+
+    assert infos == []
+
+
+def test_profile_build_finished_invalid_profile_shows_error(window, monkeypatch, tmp_path):
+    bogus = tmp_path / "bogus.icc"
+    bogus.write_bytes(b"not a profile")
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+
+    window._on_profile_build_finished(str(bogus))
+
+    assert errors
+    assert str(bogus) in errors[0][2]
+
+
+def test_profile_build_finished_success_offers_install(
+    window, monkeypatch, srgb_profile_path
+):
+    setcfg("calibration.file", None)
+    monkeypatch.setattr(window.worker, "log", lambda *a, **k: None)
+    updated = []
+    monkeypatch.setattr(
+        window, "update_calibration_file_ctrl", lambda: updated.append(True)
+    )
+    monkeypatch.setattr(
+        mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.Yes
+    )
+    installed = []
+    monkeypatch.setattr(
+        window, "install_profile_btn_handler", lambda: installed.append(True)
+    )
+
+    window._on_profile_build_finished(srgb_profile_path)
+
+    assert updated == [True]
+    assert installed == [True]
+    assert getcfg("calibration.file") == srgb_profile_path
+
+
+def test_profile_build_finished_success_declines_install(
+    window, monkeypatch, srgb_profile_path
+):
+    setcfg("calibration.file", None)
+    monkeypatch.setattr(window.worker, "log", lambda *a, **k: None)
+    monkeypatch.setattr(window, "update_calibration_file_ctrl", lambda: None)
+    monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.No)
+    installed = []
+    monkeypatch.setattr(
+        window, "install_profile_btn_handler", lambda: installed.append(True)
+    )
+
+    window._on_profile_build_finished(srgb_profile_path)
+
+    assert installed == []
 
 
 # --- calibration/profile-file header bar -----------------------------------
