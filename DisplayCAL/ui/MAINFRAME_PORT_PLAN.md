@@ -612,6 +612,62 @@ pure module, plus 21 new regression tests in `tests/test_ui_main_window.py`
 screenshots (SMPTE 2084 roll-off with a preset colorspace, and again with a
 hand-edited "Custom" one showing the primaries grid).
 
+**Session 11 (GamapFrame port: gamap_btn, 2026-07-09).** Picked from the
+"Remaining gaps" list (maintainer's choice, over 3D LUT creation / measurement
+report generation / the small whitepoint-locus advanced-options gap). Ports
+wx's `GamapFrame` (`display_cal.py`, `xrc/gamap.xrc`), the standalone window
+opened from the Profiling tab's "Advanced..." button, configuring CIECAM02
+gamut mapping (source profile, perceptual/saturation intents, source/
+destination viewing conditions, default rendering intent) and B2A quality
+(low-quality vs. hi-res PCS-to-device tables, hi-res size, smoothing).
+
+New toolkit-neutral `DisplayCAL/gamap_settings.py` holds the Argyll-version-
+gated item lists (`viewcond_items`, `intent_items`, mirroring
+`GamapFrame.setup_language`'s `VIEWCONDS`/`INTENTS` filtering) and the
+`compute_bpc_enabled` predicate (`MainFrame.update_bpc`'s `enable_bpc` check),
+shared between the new `DisplayCAL/ui/gamap_window.py` (`GamapWindow
+(BaseWindow)`) and `MainWindow` itself. Unlike earlier ported windows,
+`GamapWindow` uses Qt signals (`profile_settings_changed`, `b2a_quality_changed`)
+in place of wx's direct `self.Parent` attribute access
+(`profile_settings_changed()` / `update_bpc()` / `lut3d_update_b2a_controls()`),
+since a signal is the idiomatic Qt equivalent and keeps the window
+independently testable. `MainWindow._gamap_btn_handler` reuses a single
+instance like `_report_window` / `_testchart_editor_window`; the two signals
+connect to `_mark_profile_settings_changed` and a new
+`_on_gamap_b2a_quality_changed` (calling `_update_bpc()` +
+`_update_lut3d_b2a_controls()`, the latter already existing since Session 10).
+The wx `hasattr(self.Parent, "lut3dframe")` branch (a separate standalone 3D
+LUT tool window) has no Qt equivalent since the 3D LUT tab is embedded
+directly in `MainWindow`.
+
+Also wired `MainWindow._update_bpc()` (a port of `MainFrame.update_bpc`,
+never ported in Stage 3 despite the checkbox existing since day one — a real
+pre-existing gap, not new deferred scope) into `update_profile_controls()`
+(initial population) and `_profile_type_ctrl_changed()` (replacing its
+Session-9 ad hoc `setChecked` nudge with a `setcfg` nudge + `_update_bpc()`
+recompute, matching wx's `profile_type_ctrl_handler` exactly: nudge the
+config default, then let `update_bpc()` decide the real enabled/checked
+state).
+
+**Fixed a latent wx bug found while porting** (in both `display_cal.py` and
+this Qt port, see `gamap_window.py`'s module docstring): `GamapFrame
+.gamap_out_viewcond_handler` only ever called `setcfg("gamap_out_viewcond",
+...)` from *inside* the nondisplay-viewcond confirmation branch, so picking
+any regular (non-warning) destination viewing condition from the dropdown —
+e.g. "Monitor in typical work environment" — never persisted to config at
+all. Fixed at the source (dedented the `setcfg` / change-notification out of
+the nested `if`) so the still-shipping wx path gets the fix too. Note:
+`config.VALID_VALUES["gamap_out_viewcond"]` only allows `mt`/`mb`/`md`/`jm`/
+`jd` (a separate, pre-existing constraint unrelated to this bug), so the
+nondisplay codes the confirmation dialog warns about can still never actually
+round-trip through `getcfg` even after confirming — not a regression, just a
+pre-existing quirk of that config key, left alone here.
+
+20 new tests in `tests/test_ui_gamap_window.py` (headless, exercising the B2A
+and CIECAM02 checkbox cascades, viewcond persistence including the bug-fix
+regression test, and the nondisplay confirm/cancel dialog) plus 14 in the new
+`tests/test_gamap_settings.py` for the pure module.
+
 ### Stage 4 — Calibrate / measure / profile actions — **DONE (orchestration)**
 
 Wire the action buttons to the Stage-2 flow, running the measure-frame

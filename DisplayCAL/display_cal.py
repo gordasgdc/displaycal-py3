@@ -1831,6 +1831,7 @@ class GamapFrame(BaseFrame):
             ):
                 self.gamap_out_viewcond_ctrl.SetStringSelection(self.viewconds_ab[cur])
                 return
+        if v != cur:
             setcfg("gamap_out_viewcond", v)
             if self.Parent and hasattr(self.Parent, "profile_settings_changed"):
                 self.Parent.profile_settings_changed()

@@ -12,6 +12,7 @@ import time
 import pytest
 
 from DisplayCAL import config
+from DisplayCAL import gamap_settings
 from DisplayCAL import localization as lang
 from DisplayCAL import lut3d_settings as l3d
 from DisplayCAL.config import getcfg, setcfg
@@ -646,13 +647,47 @@ def test_testchart_patch_sequence_row_gated_by_advanced_options(window):
     assert window._profiling_form.isRowVisible(window.testchart_patch_sequence_ctrl) is True
 
 
-def test_gamap_btn_shows_notice(window, monkeypatch):
-    calls = []
-    monkeypatch.setattr(
-        mw.QMessageBox, "information", staticmethod(lambda *a, **k: calls.append(True))
-    )
+def test_gamap_btn_handler_opens_window(window):
     window._gamap_btn_handler()
-    assert calls == [True]
+    try:
+        assert window._gamap_window is not None
+    finally:
+        window._gamap_window.close()
+
+
+def test_gamap_btn_handler_reuses_window_instance(window):
+    window._gamap_btn_handler()
+    try:
+        first = window._gamap_window
+        window._gamap_btn_handler()
+        assert window._gamap_window is first
+    finally:
+        window._gamap_window.close()
+
+
+def test_gamap_window_profile_settings_changed_marks_calibration_file_ctrl(window):
+    setcfg("settings.changed", 0)
+    window._gamap_btn_handler()
+    try:
+        window._gamap_window.profile_settings_changed.emit()
+        assert getcfg("settings.changed") == 1
+    finally:
+        window._gamap_window.close()
+
+
+def test_gamap_window_b2a_quality_changed_updates_bpc_and_lut3d(window):
+    setcfg("profile.type", "l")
+    window._gamap_btn_handler()
+    try:
+        window.black_point_compensation_cb.setEnabled(False)
+        window._gamap_window.b2a_quality_changed.emit()
+        # _update_bpc / _update_lut3d_b2a_controls both ran without error and
+        # left the checkbox in a config-derived (not stale) enabled state.
+        assert window.black_point_compensation_cb.isEnabled() == gamap_settings.compute_bpc_enabled(
+            "l", bool(getcfg("profile.b2a.hires")), getcfg("profile.quality.b2a")
+        )
+    finally:
+        window._gamap_window.close()
 
 
 def test_create_testchart_btn_handler_opens_window(window):

@@ -29,9 +29,7 @@ Deferred to later slices (Pile 2 / Stage 5): the worker-driven Argyll execution
 behind :attr:`MainWindow.measurement_requested` (the progress dialog and
 interactive display-adjustment window), the pattern-generator setup dialogs
 (Prisma / madTPG / Resolve), the pre-flight confirmation / overwrite dialogs, the
-visual-editor / ambient-measure buttons, the gamap options window itself
-(``GamapFrame`` isn't ported at all yet, so :meth:`MainWindow._gamap_btn_handler`
-still shows a not-yet-available notice), the black-point-rate advanced control,
+visual-editor / ambient-measure buttons, the black-point-rate advanced control,
 actually creating a 3D LUT (``lut3d_create_btn`` isn't wired into the button bar
 yet; see :mod:`DisplayCAL.lut3d_settings`'s module docstring), and generating an
 actual measurement report (the settings window opens via
@@ -54,6 +52,19 @@ controls via :mod:`DisplayCAL.lut3d_settings`. The Tools menu carries the
 colorimeter-correction import/upload actions
 (:mod:`DisplayCAL.ui.colorimeter_correction_io`'s ``ImportController`` /
 ``UploadController``); the rest of wx's larger ``menu.tools`` isn't reproduced.
+
+The Profiling tab's "Advanced..." (gamap) button opens the ported
+:class:`~DisplayCAL.ui.gamap_window.GamapWindow` (:meth:`MainWindow
+._gamap_btn_handler`), a singleton reused across opens like
+:attr:`MainWindow._report_window`. Its ``profile_settings_changed`` /
+``b2a_quality_changed`` signals drive :meth:`MainWindow
+._mark_profile_settings_changed` and :meth:`MainWindow._update_bpc` /
+:meth:`MainWindow._update_lut3d_b2a_controls` respectively, replacing wx's
+direct ``self.Parent`` attribute access. :meth:`MainWindow._update_bpc` (the
+black-point-compensation checkbox's enable/checked state, a port of
+``MainFrame.update_bpc``) is also called from :meth:`update_profile_controls`
+and :meth:`_profile_type_ctrl_changed` — a real pre-existing gap before this
+session, since Stage 3 never wired it at all.
 
 The window is opt-in behind ``DISPLAYCAL_UI=qt`` / ``--qt`` (wired in
 :mod:`DisplayCAL.main`), so it never displaces the still-shipping wx main window.
@@ -104,6 +115,7 @@ from DisplayCAL import (
     calibration_file,
     colorimeter_correction,
     config,
+    gamap_settings,
     lut3d_settings,
 )
 from DisplayCAL import localization as lang
@@ -139,6 +151,7 @@ from DisplayCAL.ui.colorimeter_correction_io import (
 )
 from DisplayCAL.ui.colorimeter_correction_window import CreateCorrectionWindow
 from DisplayCAL.ui.display_adjustment_window import DisplayAdjustmentWindow
+from DisplayCAL.ui.gamap_window import GamapWindow
 from DisplayCAL.ui.measure_frame import MeasureFrame
 from DisplayCAL.ui.measurement_flow import (
     MeasurementFlow,
@@ -611,6 +624,7 @@ class MainWindow(BaseWindow):
         self._current_testchart_path: str | None = None
         self._testchart_editor_window: TestchartEditorWindow | None = None
         self._report_window: ReportWindow | None = None
+        self._gamap_window: GamapWindow | None = None
         #: 3D LUT input-colorspace combo: description -> profile path,
         #: mirroring wx's ``MainFrame.input_profiles`` (populated once from
         #: the bundled reference profiles, see ``_lut3d_init_input_profiles``).
@@ -2447,7 +2461,7 @@ class MainWindow(BaseWindow):
     def update_profile_controls(self) -> None:
         """Push stored profile config into the Profiling tab controls."""
         self._sync_value_combo("profile.type", cast=str)
-        self._sync_check("profile.black_point_compensation")
+        self._update_bpc()
         profile_type = self.get_profile_type()
         self.gamap_btn.setEnabled(profile_type in _GAMUT_MAPPABLE_PROFILE_TYPES)
         self.profile_quality_ctrl.setEnabled(
@@ -2461,6 +2475,33 @@ class MainWindow(BaseWindow):
         self._sync_value_combo("testchart.patch_sequence", cast=str)
         self._testchart_patch_sequence_row_gate()
         self._set_testchart(getcfg("testchart.file"))
+
+    def _update_bpc(self, enable_profile: bool = True) -> None:
+        """Sync the black-point-compensation checkbox's value/enabled state.
+
+        Port of ``MainFrame.update_bpc``. Called from
+        :meth:`update_profile_controls`, from :meth:`_profile_type_ctrl_changed`,
+        and whenever the gamut-mapping window's B2A quality controls change
+        (:meth:`_on_gamap_b2a_quality_changed`).
+
+        Args:
+            enable_profile (bool): Extra caller-supplied gate wx exposes as
+                ``update_bpc(enable_profile=...)``, used by its macOS
+                shaper-profile warning dialog (not ported, so always ``True``
+                here).
+        """
+        enable_bpc = gamap_settings.compute_bpc_enabled(
+            self.get_profile_type(),
+            bool(getcfg("profile.b2a.hires")),
+            getcfg("profile.quality.b2a"),
+            enable_profile,
+        )
+        if not enable_bpc:
+            setcfg("profile.black_point_compensation", 0)
+        self.black_point_compensation_cb.setEnabled(enable_bpc)
+        self.black_point_compensation_cb.setChecked(
+            enable_bpc and bool(int(getcfg("profile.black_point_compensation")))
+        )
 
     def update_lut3d_controls(self) -> None:
         """Push stored 3D LUT config into the 3D LUT tab controls.
@@ -3765,12 +3806,13 @@ class MainWindow(BaseWindow):
         self.gamap_btn.setEnabled(new_type in _GAMUT_MAPPABLE_PROFILE_TYPES)
         if new_type in _GAMUT_MAPPABLE_PROFILE_TYPES:
             if old_type not in _GAMUT_MAPPABLE_PROFILE_TYPES:
-                self.black_point_compensation_cb.setChecked(False)
+                setcfg("profile.black_point_compensation", 0)
         elif new_type in _CURVE_MATRIX_PROFILE_TYPES:
             if old_type not in _CURVE_MATRIX_PROFILE_TYPES:
-                self.black_point_compensation_cb.setChecked(True)
+                setcfg("profile.black_point_compensation", 1)
         else:
-            self.black_point_compensation_cb.setChecked(False)
+            setcfg("profile.black_point_compensation", 0)
+        self._update_bpc()
 
         gamma_only = new_type in _GAMMA_ONLY_PROFILE_TYPES
         self.profile_quality_ctrl.setEnabled(not gamma_only)
@@ -3787,14 +3829,29 @@ class MainWindow(BaseWindow):
     def _gamap_btn_handler(self) -> None:
         """Open the gamut mapping options window.
 
-        Not yet ported: wx's ``GamapFrame`` is a separate tool window, out of
-        scope for this Qt port slice.
+        Mirrors wx's ``self.gamapframe`` singleton: reuses a single window
+        instance, raising it if already open.
         """
-        QMessageBox.information(
-            self,
-            lang.getstr("profile.advanced_gamap"),
-            "Gamut mapping options aren't available in this Qt build yet.",
-        )
+        window = self._gamap_window
+        if window is None:
+            window = GamapWindow(self)
+            window.profile_settings_changed.connect(self._mark_profile_settings_changed)
+            window.b2a_quality_changed.connect(self._on_gamap_b2a_quality_changed)
+            self._gamap_window = window
+        window.update_controls()
+        window.show()
+        window.raise_()
+        window.activateWindow()
+
+    def _on_gamap_b2a_quality_changed(self) -> None:
+        """React to the gamut-mapping window's B2A quality controls changing.
+
+        Mirrors wx's ``self.Parent.update_bpc()`` / ``self.Parent
+        .lut3d_update_b2a_controls()`` pair, called from ``GamapFrame
+        .profile_quality_b2a_ctrl_handler``.
+        """
+        self._update_bpc()
+        self._update_lut3d_b2a_controls()
 
     def _create_testchart_btn_handler(self) -> None:
         """Open the testchart editor."""
