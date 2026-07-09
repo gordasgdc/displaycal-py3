@@ -1120,6 +1120,7 @@ def _stub_preflight_checks(window, monkeypatch):
     monkeypatch.setattr(window, "_check_overwrite", lambda *a, **k: True)
     monkeypatch.setattr(window, "_check_show_macos_bugs_warning", lambda *a, **k: None)
     monkeypatch.setattr(window, "_current_cal_choice", lambda *a, **k: True)
+    monkeypatch.setattr(window, "_fast_matrix_shaper_choice", lambda *a, **k: False)
     monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
 
 
@@ -1478,6 +1479,74 @@ def test_current_cal_choice_no_embed_resets_video_lut(window, monkeypatch):
     assert reset_calls == [True]
 
 
+class _FakeFastMatrixShaperMessageBox:
+    """Stand-in for ``mw.QMessageBox`` that skips the real modal loop.
+
+    ``_fast_matrix_shaper_choice`` builds a 3-button dialog via
+    ``addButton(text, role)``; this fake records the role each button was
+    added with and reports whichever one ``clicked_role`` (set per-test)
+    names as "clicked", the same shape ``clickedButton()`` returns for real.
+    """
+
+    Question = 0
+    AcceptRole = 1
+    ActionRole = 2
+    RejectRole = 3
+
+    clicked_role = None  # "ok" | "calibrate" | "cancel", set per-test
+
+    def __init__(self, parent=None):
+        self._buttons = {}
+
+    def setWindowTitle(self, title):
+        pass
+
+    def setIcon(self, icon):
+        pass
+
+    def setText(self, text):
+        self.text = text
+
+    def addButton(self, text, role):
+        button = (text, role)
+        self._buttons[role] = button
+        return button
+
+    def exec_(self):
+        return None
+
+    def clickedButton(self):
+        role = {
+            "ok": self.AcceptRole,
+            "calibrate": self.ActionRole,
+            "cancel": self.RejectRole,
+        }[self.clicked_role]
+        return self._buttons[role]
+
+
+def _fast_matrix_shaper_info(**overrides):
+    base = dict(
+        show_dialog=True,
+        update_profile=False,
+        msg_key="calibration.create_fast_matrix_shaper_choice",
+        ok_key="calibration.create_fast_matrix_shaper",
+    )
+    base.update(overrides)
+    return mw.preflight_checks.FastMatrixShaperChoiceInfo(**base)
+
+
+@pytest.mark.parametrize(
+    "clicked_role,expected", [("ok", True), ("calibrate", False), ("cancel", None)]
+)
+def test_fast_matrix_shaper_choice_maps_clicked_button(
+    window, monkeypatch, clicked_role, expected
+):
+    monkeypatch.setattr(mw, "QMessageBox", _FakeFastMatrixShaperMessageBox)
+    _FakeFastMatrixShaperMessageBox.clicked_role = clicked_role
+
+    assert window._fast_matrix_shaper_choice(_fast_matrix_shaper_info()) is expected
+
+
 def test_profile_btn_handler_stashes_apply_calibration_and_begins(
     window, monkeypatch
 ):
@@ -1516,6 +1585,7 @@ def test_profile_btn_handler_cancelled_cal_choice_aborts(window, monkeypatch):
 def test_calibrate_btn_handler_overwrite_cancel_aborts(window, monkeypatch):
     monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
     monkeypatch.setattr(window, "_check_show_macos_bugs_warning", lambda *a, **k: None)
+    monkeypatch.setattr(window, "_fast_matrix_shaper_choice", lambda *a, **k: False)
     monkeypatch.setattr(window, "_check_overwrite", lambda *a, **k: False)
     begin_calls = []
     monkeypatch.setattr(
@@ -1525,6 +1595,135 @@ def test_calibrate_btn_handler_overwrite_cancel_aborts(window, monkeypatch):
     window.calibrate_btn_handler()
 
     assert begin_calls == []
+
+
+def test_calibrate_btn_handler_skips_dialog_when_not_applicable(window, monkeypatch):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(window, "_check_show_macos_bugs_warning", lambda *a, **k: None)
+    monkeypatch.setattr(
+        mw.preflight_checks,
+        "resolve_fast_matrix_shaper_choice_info",
+        lambda: _fast_matrix_shaper_info(show_dialog=False),
+    )
+    called = []
+    monkeypatch.setattr(
+        window, "_fast_matrix_shaper_choice", lambda *a, **k: called.append(True)
+    )
+    monkeypatch.setattr(window, "_check_overwrite", lambda *a, **k: True)
+    begin_calls = []
+    monkeypatch.setattr(
+        window, "begin_measurement", lambda action, **k: begin_calls.append(action)
+    )
+
+    window.calibrate_btn_handler()
+
+    assert called == []
+    assert window.worker.dispcal_create_fast_matrix_shaper is False
+    assert begin_calls == [mw.MeasurementAction.CALIBRATE]
+
+
+def test_calibrate_btn_handler_dialog_cancel_aborts(window, monkeypatch):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(window, "_check_show_macos_bugs_warning", lambda *a, **k: None)
+    monkeypatch.setattr(
+        mw.preflight_checks,
+        "resolve_fast_matrix_shaper_choice_info",
+        lambda: _fast_matrix_shaper_info(),
+    )
+    monkeypatch.setattr(window, "_fast_matrix_shaper_choice", lambda info: None)
+    begin_calls = []
+    monkeypatch.setattr(
+        window, "begin_measurement", lambda action, **k: begin_calls.append(action)
+    )
+
+    window.calibrate_btn_handler()
+
+    assert begin_calls == []
+
+
+def test_calibrate_btn_handler_declined_choice_skips_profile_overwrite_check(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(window, "_check_show_macos_bugs_warning", lambda *a, **k: None)
+    monkeypatch.setattr(
+        mw.preflight_checks,
+        "resolve_fast_matrix_shaper_choice_info",
+        lambda: _fast_matrix_shaper_info(),
+    )
+    monkeypatch.setattr(window, "_fast_matrix_shaper_choice", lambda info: False)
+    setcfg("profile.update", 0)
+    exts = []
+
+    def fake_overwrite(ext="", filename=None):
+        exts.append(ext)
+        return True
+
+    monkeypatch.setattr(window, "_check_overwrite", fake_overwrite)
+    begin_calls = []
+    monkeypatch.setattr(
+        window, "begin_measurement", lambda action, **k: begin_calls.append(action)
+    )
+
+    window.calibrate_btn_handler()
+
+    assert exts == [".cal"]
+    assert begin_calls == [mw.MeasurementAction.CALIBRATE]
+    assert window.worker.dispcal_create_fast_matrix_shaper is False
+
+
+def test_calibrate_btn_handler_create_choice_also_checks_profile_overwrite(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(window, "_check_show_macos_bugs_warning", lambda *a, **k: None)
+    monkeypatch.setattr(
+        mw.preflight_checks,
+        "resolve_fast_matrix_shaper_choice_info",
+        lambda: _fast_matrix_shaper_info(),
+    )
+    monkeypatch.setattr(window, "_fast_matrix_shaper_choice", lambda info: True)
+    exts = []
+
+    def fake_overwrite(ext="", filename=None):
+        exts.append(ext)
+        return True
+
+    monkeypatch.setattr(window, "_check_overwrite", fake_overwrite)
+    begin_calls = []
+    monkeypatch.setattr(
+        window, "begin_measurement", lambda action, **k: begin_calls.append(action)
+    )
+
+    window.calibrate_btn_handler()
+
+    assert exts == [".cal", mw.PROFILE_EXT]
+    assert begin_calls == [mw.MeasurementAction.CALIBRATE]
+    assert window.worker.dispcal_create_fast_matrix_shaper is True
+
+
+def test_calibrate_btn_handler_update_profile_choice_persists_config(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(window, "_check_show_macos_bugs_warning", lambda *a, **k: None)
+    setcfg("profile.update", 0)
+    monkeypatch.setattr(
+        mw.preflight_checks,
+        "resolve_fast_matrix_shaper_choice_info",
+        lambda: _fast_matrix_shaper_info(
+            update_profile=True,
+            msg_key="calibration.update_profile_choice",
+            ok_key="profile.update",
+        ),
+    )
+    monkeypatch.setattr(window, "_fast_matrix_shaper_choice", lambda info: True)
+    monkeypatch.setattr(window, "_check_overwrite", lambda *a, **k: True)
+    monkeypatch.setattr(window, "begin_measurement", lambda action, **k: None)
+
+    window.calibrate_btn_handler()
+
+    assert getcfg("profile.update") == 1
 
 
 def test_calibrate_and_profile_btn_handler_runs_all_overwrite_checks(

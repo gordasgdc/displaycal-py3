@@ -70,6 +70,70 @@ def should_warn_profile_bugs() -> bool:
     )
 
 
+@dataclass(frozen=True)
+class FastMatrixShaperChoiceInfo:
+    """Pre-dialog state for ``calibrate_btn_handler``'s fast-matrix-shaper choice.
+
+    Attributes:
+        show_dialog: Whether the choice dialog should be shown at all.
+        update_profile: Whether the "update the existing profile" wording
+            applies (as opposed to the "create a fast matrix shaper profile"
+            one) -- true when a calibration update targets an existing
+            profile.
+        msg_key: The ``lang`` key for the dialog's message.
+        ok_key: The ``lang`` key for the dialog's affirmative-action button
+            label.
+    """
+
+    show_dialog: bool
+    update_profile: bool
+    msg_key: str
+    ok_key: str
+
+
+def resolve_fast_matrix_shaper_choice_info() -> FastMatrixShaperChoiceInfo:
+    """Port of the guard/branch logic in ``calibrate_btn_handler``.
+
+    wx only shows this dialog on a genuine button click (its ``CustomEvent``
+    guard, for programmatic/auto-retry re-invocation, has no Qt equivalent
+    yet -- every Qt caller is a real click, so that half of the condition is
+    omitted here).
+
+    Returns:
+        The resolved :class:`FastMatrixShaperChoiceInfo`.
+    """
+    update_profile = bool(getcfg("calibration.update")) and config.is_profile()
+    show_dialog = (
+        not getcfg("profile.update")
+        and (not getcfg("calibration.update") or config.is_profile())
+        and bool(getcfg("trc"))
+    )
+    if update_profile:
+        msg_key, ok_key = "calibration.update_profile_choice", "profile.update"
+    else:
+        msg_key, ok_key = (
+            "calibration.create_fast_matrix_shaper_choice",
+            "calibration.create_fast_matrix_shaper",
+        )
+    return FastMatrixShaperChoiceInfo(show_dialog, update_profile, msg_key, ok_key)
+
+
+def apply_fast_matrix_shaper_choice(
+    info: FastMatrixShaperChoiceInfo, create: bool
+) -> None:
+    """Port of the post-``ShowModal`` branch in ``calibrate_btn_handler``.
+
+    Args:
+        info: The :class:`FastMatrixShaperChoiceInfo` the dialog was built
+            from.
+        create: Whether the affirmative ("update profile" / "create fast
+            matrix shaper") button was clicked, as opposed to the plain
+            "Calibrate" button.
+    """
+    if info.update_profile and create:
+        config.setcfg("profile.update", 1)
+
+
 class CalChoiceProfileInvalidError(Exception):
     """The calibration file's companion profile could not be read/parsed."""
 

@@ -215,3 +215,78 @@ class TestComputeCalChoiceResult:
         result = pfc.compute_cal_choice_result(info, embed_cal=True, reset_cal=False)
         assert result.apply_calibration is None
         assert result.reset_video_lut is False
+
+
+class TestResolveFastMatrixShaperChoiceInfo:
+    def _setcfg(self, *, profile_update=0, calibration_update=0, trc=2.2):
+        setcfg("profile.update", profile_update)
+        setcfg("calibration.update", calibration_update)
+        setcfg("trc", trc)
+
+    def test_defaults_show_dialog_with_fast_matrix_shaper_wording(self, monkeypatch):
+        monkeypatch.setattr(pfc.config, "is_profile", lambda: False)
+        self._setcfg()
+        info = pfc.resolve_fast_matrix_shaper_choice_info()
+        assert info.show_dialog is True
+        assert info.update_profile is False
+        assert info.msg_key == "calibration.create_fast_matrix_shaper_choice"
+        assert info.ok_key == "calibration.create_fast_matrix_shaper"
+
+    def test_calibration_update_of_a_profile_shows_update_wording(self, monkeypatch):
+        monkeypatch.setattr(pfc.config, "is_profile", lambda: True)
+        self._setcfg(calibration_update=1)
+        info = pfc.resolve_fast_matrix_shaper_choice_info()
+        assert info.show_dialog is True
+        assert info.update_profile is True
+        assert info.msg_key == "calibration.update_profile_choice"
+        assert info.ok_key == "profile.update"
+
+    def test_calibration_update_of_a_non_profile_hides_dialog(self, monkeypatch):
+        monkeypatch.setattr(pfc.config, "is_profile", lambda: False)
+        self._setcfg(calibration_update=1)
+        assert pfc.resolve_fast_matrix_shaper_choice_info().show_dialog is False
+
+    def test_profile_update_already_set_hides_dialog(self, monkeypatch):
+        monkeypatch.setattr(pfc.config, "is_profile", lambda: False)
+        self._setcfg(profile_update=1)
+        assert pfc.resolve_fast_matrix_shaper_choice_info().show_dialog is False
+
+    def test_no_trc_hides_dialog(self, monkeypatch):
+        monkeypatch.setattr(pfc.config, "is_profile", lambda: False)
+        self._setcfg(trc="")
+        assert pfc.resolve_fast_matrix_shaper_choice_info().show_dialog is False
+
+
+class TestApplyFastMatrixShaperChoice:
+    def test_update_profile_and_create_sets_profile_update(self):
+        setcfg("profile.update", 0)
+        info = pfc.FastMatrixShaperChoiceInfo(
+            show_dialog=True,
+            update_profile=True,
+            msg_key="calibration.update_profile_choice",
+            ok_key="profile.update",
+        )
+        pfc.apply_fast_matrix_shaper_choice(info, create=True)
+        assert getcfg("profile.update") == 1
+
+    def test_update_profile_but_declined_leaves_profile_update_unset(self):
+        setcfg("profile.update", 0)
+        info = pfc.FastMatrixShaperChoiceInfo(
+            show_dialog=True,
+            update_profile=True,
+            msg_key="calibration.update_profile_choice",
+            ok_key="profile.update",
+        )
+        pfc.apply_fast_matrix_shaper_choice(info, create=False)
+        assert getcfg("profile.update") == 0
+
+    def test_fast_matrix_shaper_choice_never_sets_profile_update(self):
+        setcfg("profile.update", 0)
+        info = pfc.FastMatrixShaperChoiceInfo(
+            show_dialog=True,
+            update_profile=False,
+            msg_key="calibration.create_fast_matrix_shaper_choice",
+            ok_key="calibration.create_fast_matrix_shaper",
+        )
+        pfc.apply_fast_matrix_shaper_choice(info, create=True)
+        assert getcfg("profile.update") == 0

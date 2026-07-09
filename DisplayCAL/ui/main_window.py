@@ -38,10 +38,9 @@ own Measure button still shows a not-yet-available notice — see
 :mod:`DisplayCAL.ui.measurement_report`'s module docstring for what remains).
 The pre-flight confirmation / overwrite dialogs (:meth:`MainWindow._check_overwrite`
 / :meth:`MainWindow._check_show_macos_bugs_warning` / :meth:`MainWindow
-._current_cal_choice`, backed by :mod:`DisplayCAL.preflight_checks`) now run ahead
-of every action button; not reproduced there: the fast-matrix-shaper/profile-update
-choice dialog (``calibrate_btn_handler``'s ``dispcal_create_fast_matrix_shaper`` is
-always ``False``) and the ``silent=True`` auto-retry call path (no auto-retry flow
+._current_cal_choice` / :meth:`MainWindow._fast_matrix_shaper_choice`, backed by
+:mod:`DisplayCAL.preflight_checks`) now run ahead of every action button; not
+reproduced there: the ``silent=True`` auto-retry call path (no auto-retry flow
 exists in this port yet).
 Also deferred, by extension: the ``show_advanced_options`` gating of the
 whitepoint colour-temperature-locus row (Calibration tab), the only row of its
@@ -4328,16 +4327,22 @@ class MainWindow(BaseWindow):
     def calibrate_btn_handler(self) -> None:
         """Run the pre-flight checks, then stage a calibration run.
 
-        Qt port of ``calibrate_btn_handler``'s guard chain (macOS-bugs warning
-        + overwrite confirmation for the ``.cal`` file, and for
-        ``PROFILE_EXT`` when a calibration update will also build a fast
-        matrix shaper profile). The fast-matrix-shaper/profile-update choice
-        dialog wx shows first is not reproduced (see :meth:`begin_measurement`'s
-        docstring); ``dispcal_create_fast_matrix_shaper`` is always ``False``
-        here, matching a plain "just calibrate" click.
+        Qt port of ``calibrate_btn_handler``'s guard chain: macOS-bugs
+        warning, the fast-matrix-shaper/profile-update choice dialog (see
+        :meth:`_fast_matrix_shaper_choice`), and overwrite confirmation for
+        the ``.cal`` file, plus for ``PROFILE_EXT`` when the choice (or an
+        existing ``profile.update``) will also build a profile.
         """
+        self.worker.dispcal_create_fast_matrix_shaper = False
         if self._check_show_macos_bugs_warning(profile=False) is False:
             return
+        info = preflight_checks.resolve_fast_matrix_shaper_choice_info()
+        if info.show_dialog:
+            choice = self._fast_matrix_shaper_choice(info)
+            if choice is None:
+                return
+            preflight_checks.apply_fast_matrix_shaper_choice(info, choice)
+            self.worker.dispcal_create_fast_matrix_shaper = choice
         if not check_set_argyll_bin():
             return
         if not self._check_overwrite(".cal"):
@@ -4346,6 +4351,37 @@ class MainWindow(BaseWindow):
             if not self._check_overwrite(PROFILE_EXT):
                 return
         self.begin_measurement(MeasurementAction.CALIBRATE)
+
+    def _fast_matrix_shaper_choice(
+        self, info: preflight_checks.FastMatrixShaperChoiceInfo
+    ) -> bool | None:
+        """Qt port of the 3-button ``ConfirmDialog`` in ``calibrate_btn_handler``.
+
+        Args:
+            info: The :class:`~DisplayCAL.preflight_checks.FastMatrixShaperChoiceInfo`
+                describing which message/button labels to show.
+
+        Returns:
+            ``True`` if the affirmative ("update profile" / "create fast
+            matrix shaper") button was clicked, ``False`` for the plain
+            "Calibrate" button (wx's ``alt``), or ``None`` if cancelled.
+        """
+        box = QMessageBox(self)
+        box.setWindowTitle(APPNAME)
+        box.setIcon(QMessageBox.Question)
+        box.setText(lang.getstr(info.msg_key))
+        ok_button = box.addButton(lang.getstr(info.ok_key), QMessageBox.AcceptRole)
+        calibrate_button = box.addButton(
+            lang.getstr("button.calibrate"), QMessageBox.ActionRole
+        )
+        box.addButton(lang.getstr("cancel"), QMessageBox.RejectRole)
+        box.exec_()
+        clicked = box.clickedButton()
+        if clicked is ok_button:
+            return True
+        if clicked is calibrate_button:
+            return False
+        return None
 
     def calibrate_and_profile_btn_handler(self) -> None:
         """Run the pre-flight checks, then stage a combined calibrate+profile run.

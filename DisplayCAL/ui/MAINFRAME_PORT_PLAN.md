@@ -1025,13 +1025,13 @@ thread into `worker.measure(apply_calibration=...)` once the run actually
 starts (previously hardcoded to `True`), mirroring how wx threads the same value
 through `setup_measurement(self.just_profile, apply_calibration)`.
 
-**Dropped / deferred versus the wx handlers:** the fast-matrix-shaper /
-profile-update choice dialog `calibrate_btn_handler` shows first (so
-`dispcal_create_fast_matrix_shaper` is always `False` in this port, matching a
-plain "just calibrate" click); the `silent=True` `current_cal_choice` call path
-(only reachable from an auto-retry event this Qt port doesn't have yet, see
-`measure_auto` -- not ported); and the success/failure `InfoDialog` pair
-`MainFrame.install_cal` shows (`_reset_video_lut` runs silently).
+**Dropped / deferred versus the wx handlers:** the `silent=True`
+`current_cal_choice` call path (only reachable from an auto-retry event this Qt
+port doesn't have yet, see `measure_auto` -- not ported); and the
+success/failure `InfoDialog` pair `MainFrame.install_cal` shows
+(`_reset_video_lut` runs silently). (The fast-matrix-shaper/profile-update
+choice dialog `calibrate_btn_handler` shows first was itself deferred here but
+ported in a later session -- see below.)
 
 26 new tests in `tests/test_preflight_checks.py` for the pure module, plus 17
 new/updated regression tests in `tests/test_ui_main_window.py` (198 total).
@@ -1042,6 +1042,28 @@ _run_emits_request`) started hanging once `profile_btn_handler` began showing a
 real modal `_CalChoiceDialog` mid-click; fixed with a new `_stub_preflight_checks`
 fixture applied there, alongside dedicated tests for every new pre-flight code
 path (each answering its own dialog explicitly rather than letting one hang).
+
+**Fast-matrix-shaper/profile-update choice dialog:** closed the deferral noted
+above. Added `resolve_fast_matrix_shaper_choice_info()` /
+`apply_fast_matrix_shaper_choice()` to `preflight_checks.py`, a faithful port of
+`calibrate_btn_handler`'s guard (`not profile.update and (not calibration.update
+or is_profile()) and trc`) and its `update_profile` message/button-label
+branch, minus the wx `CustomEvent` half of the guard (no Qt caller of
+`calibrate_btn_handler` is ever anything but a real click, so that clause is
+always true here). `MainWindow._fast_matrix_shaper_choice()` builds the 3-button
+`QMessageBox` (`QMessageBox.AcceptRole`/`ActionRole`/`RejectRole`, since a stock
+`QMessageBox` has no custom-labeled third button otherwise) mirroring wx's
+`ConfirmDialog(ok=..., alt=lang.getstr("button.calibrate"), cancel=...)`, and
+`calibrate_btn_handler` now threads its result into
+`self.worker.dispcal_create_fast_matrix_shaper` exactly like the wx handler
+does, so a "create fast matrix shaper" / "update profile" choice now actually
+reaches `worker.prepare_dispcal`'s `-o` flag (dispcal itself builds the profile
+file during calibration; verified this doesn't require a separate `colprof`
+step). Not extended: `_on_calibration_finished`'s existing gap for a
+calibrate-only run (no `update_calibration_file_ctrl()` / install-offer chain
+when the run finishes with `profile.update` or `dispcal_create_fast_matrix_shaper`
+set) predates this session and stays open -- the profile file lands on disk
+correctly either way, only the completion UI chain is unported.
 
 ### Stage 5+ — Reporting, colorimeter corrections, install/share
 
