@@ -526,6 +526,39 @@ def test_whitepoint_native_clears_all(window):
     assert getcfg("whitepoint.x", False) is None
 
 
+def test_whitepoint_locus_persists(window):
+    setcfg("show_advanced_options", 1)
+    window.whitepoint_colortemp_locus_ctrl.setCurrentIndex(1)  # blackbody
+    assert getcfg("whitepoint.colortemp.locus") == "T"
+    window.whitepoint_colortemp_locus_ctrl.setCurrentIndex(0)  # daylight
+    assert getcfg("whitepoint.colortemp.locus") == "t"
+
+
+def test_whitepoint_locus_row_gated_by_advanced_options_and_mode(window):
+    window.whitepoint_ctrl.setCurrentIndex(1)  # color temperature
+
+    setcfg("show_advanced_options", 0)
+    window._apply_whitepoint_mode()
+    assert window.whitepoint_colortemp_locus_ctrl.isHidden() is True
+
+    setcfg("show_advanced_options", 1)
+    window._apply_whitepoint_mode()
+    assert window.whitepoint_colortemp_locus_ctrl.isHidden() is False
+
+    window.whitepoint_ctrl.setCurrentIndex(2)  # x,y chromaticity
+    assert window.whitepoint_colortemp_locus_ctrl.isHidden() is True
+
+
+def test_whitepoint_locus_repopulates_from_config(window):
+    setcfg("whitepoint.colortemp.locus", "T")
+    window.update_calibration_controls()
+    assert window.whitepoint_colortemp_locus_ctrl.currentIndex() == 1
+
+    setcfg("whitepoint.colortemp.locus", "t")
+    window.update_calibration_controls()
+    assert window.whitepoint_colortemp_locus_ctrl.currentIndex() == 0
+
+
 def test_luminance_custom_persists(window):
     window.luminance_ctrl.setCurrentIndex(1)  # custom
     window.luminance_textctrl.setValue(100.0)

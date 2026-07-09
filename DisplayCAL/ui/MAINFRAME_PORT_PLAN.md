@@ -1126,6 +1126,39 @@ filesystem probe, which via `tempfile.TemporaryFile` hung indefinitely in
 this sandboxed environment and, once, left a stray `.cube` file next to the
 checked-in test fixtures -- fixed by mocking `waccess` in those tests.
 
+**Whitepoint colour-temperature-locus row — DONE (2026-07-09).** Picked from
+the "Remaining gaps" list (maintainer's choice, over the 3D LUT install-offer
+chain and `Worker.authenticate()`'s elevated-scope profile install). Closed
+the small gap the module docstring had flagged since Session 8: wx's
+`whitepoint_colortemp_locus_ctrl` (daylight/blackbody choice for the
+color-temperature -> xy conversion) had no Qt equivalent at all.
+
+`main_window.py` gained `whitepoint_colortemp_locus_label` /
+`whitepoint_colortemp_locus_ctrl`, placed in the whitepoint row right after
+the Kelvin spinbox, matching `main.xrc`'s widget order exactly (`whitepoint
+_ctrl`, colortemp spinbox, locus label + combo, then x/y). `_apply_whitepoint
+_mode()` (already the single choke point wx's `whitepoint_ctrl_handler` and
+`show_advanced_options_handler` both drive through) now also gates this row:
+visible for the "as measured" and "color temperature" modes, hidden for
+"x,y chromaticity" (mirrors `whitepoint_ctrl_handler`'s `Hide()` in the
+chromaticity branch), and only ever shown when `show_advanced_options` is on.
+`get_whitepoint_locus()` (a Stage-0 deferral, previously hardcoded to always
+return `"t"`) now reads the combo's selection (`"t"` daylight / `"T"`
+blackbody), and a new `_whitepoint_locus_changed()` persists it to
+`whitepoint.colortemp.locus`, both faithful ports of wx's
+`get_whitepoint_locus` / `whitepoint_colortemp_locus_ctrl_handler`.
+`update_calibration_controls()` repopulates the combo from config on load/
+undo, matching wx's `SetSelection` via the `whitepoint_colortemp_loci_ba`
+reverse map.
+
+Not reproduced: `update_adjustment_controls`'s extra `not auto and do_cal`
+gating condition on this same row, which belongs to the interactive
+calibration-adjustment page (`DisplayAdjustmentWindow`, sub-slice 5c-ii) as a
+separate, independently-scoped page, not this settings tab's row visibility.
+3 new tests in `tests/test_ui_main_window.py` (245 total): value persistence
+(both directions), the advanced-options/whitepoint-mode visibility gate, and
+config-to-control repopulation.
+
 ### Stage 5+ — Reporting, colorimeter corrections, install/share
 
 The remaining large features, each its own slice: measurement report

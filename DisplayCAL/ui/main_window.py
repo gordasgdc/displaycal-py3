@@ -50,13 +50,11 @@ The pre-flight confirmation / overwrite dialogs (:meth:`MainWindow._check_overwr
 :mod:`DisplayCAL.preflight_checks`) now run ahead of every action button; not
 reproduced there: the ``silent=True`` auto-retry call path (no auto-retry flow
 exists in this port yet).
-Also deferred, by extension: the ``show_advanced_options`` gating of the
-whitepoint colour-temperature-locus row (Calibration tab), the only row of its
-kind left ungated since the 3D LUT tab's own ``show_advanced_options``-gated
-rows are wired as of :meth:`MainWindow._apply_lut3d_visibility`.
 ``show_advanced_options`` itself is wired (an Options-menu checkbox gating every
-other row it controls that this port does have, including the profile-type
-row's gamap button and the testchart-patch-sequence row), see
+other row it controls that this port does have, including the whitepoint
+colour-temperature-locus row (Calibration tab, via
+:meth:`MainWindow._apply_whitepoint_mode`), the profile-type row's gamap
+button, and the testchart-patch-sequence row), see
 :meth:`MainWindow._update_advanced_options_visibility`. Profile-name token
 expansion and the testchart chooser / patch-count / estimated-measurement-time
 controls are wired via the toolkit-neutral :mod:`DisplayCAL.profile_name`
@@ -902,16 +900,15 @@ class MainWindow(BaseWindow):
         ``LUT3DMixin.lut3d_show_trc_controls`` / ``MainFrame.lut3d_show_controls``
         gating (the gamut-mapping-mode / apply-cal-on-create rows, and the
         TRC/HDR block's ``show_advanced_options``-gated rows, both driven by
-        :meth:`_apply_lut3d_visibility`). One group from the wx method isn't
-        reproduced because the controls themselves don't exist in this Qt port
-        yet (see the module docstring's "Deferred" list): the whitepoint
-        colour-temperature locus row (Calibration tab). The gamap button (part
-        of the profile-type row) and the testchart-patch-sequence row are
-        gated below.
+        :meth:`_apply_lut3d_visibility`), and the whitepoint colour-temperature
+        locus row (Calibration tab, gated via :meth:`_apply_whitepoint_mode`).
+        The gamap button (part of the profile-type row) and the
+        testchart-patch-sequence row are gated below.
         """
         show_advanced = bool(getcfg("show_advanced_options"))
         self.show_advanced_options_action.setChecked(show_advanced)
 
+        self._apply_whitepoint_mode()
         self._profiling_form.setRowVisible(
             self._profile_type_row_widget, show_advanced
         )
@@ -1591,6 +1588,17 @@ class MainWindow(BaseWindow):
         self.whitepoint_colortemp_ctrl.setSingleStep(50)
         self.whitepoint_colortemp_ctrl.setSuffix(" K")
         self.whitepoint_colortemp_ctrl.valueChanged.connect(self._whitepoint_changed)
+        self.whitepoint_colortemp_locus_label = QLabel(lang.getstr("reference"))
+        self.whitepoint_colortemp_locus_ctrl = QComboBox()
+        self.whitepoint_colortemp_locus_ctrl.addItems(
+            [
+                lang.getstr("whitepoint.colortemp.locus.daylight"),
+                lang.getstr("whitepoint.colortemp.locus.blackbody"),
+            ]
+        )
+        self.whitepoint_colortemp_locus_ctrl.currentIndexChanged.connect(
+            self._whitepoint_locus_changed
+        )
         self.whitepoint_x_ctrl = QDoubleSpinBox()
         self.whitepoint_x_ctrl.setRange(-1.0, 1.0)
         self.whitepoint_x_ctrl.setDecimals(4)
@@ -1606,6 +1614,8 @@ class MainWindow(BaseWindow):
         whitepoint_row = QHBoxLayout()
         whitepoint_row.addWidget(self.whitepoint_ctrl)
         whitepoint_row.addWidget(self.whitepoint_colortemp_ctrl)
+        whitepoint_row.addWidget(self.whitepoint_colortemp_locus_label)
+        whitepoint_row.addWidget(self.whitepoint_colortemp_locus_ctrl)
         whitepoint_row.addWidget(self.whitepoint_x_ctrl)
         whitepoint_row.addWidget(self.whitepoint_y_ctrl)
         whitepoint_row.addStretch(1)
@@ -2531,6 +2541,9 @@ class MainWindow(BaseWindow):
         )
         self.whitepoint_x_ctrl.setValue(round(getcfg("whitepoint.x"), 4))
         self.whitepoint_y_ctrl.setValue(round(getcfg("whitepoint.y"), 4))
+        self.whitepoint_colortemp_locus_ctrl.setCurrentIndex(
+            1 if getcfg("whitepoint.colortemp.locus") == "T" else 0
+        )
         self.whitepoint_ctrl.setCurrentIndex(self._whitepoint_mode_from_config())
         self._apply_whitepoint_mode()
 
@@ -3374,14 +3387,12 @@ class MainWindow(BaseWindow):
         return None
 
     def get_whitepoint_locus(self) -> str:
-        """Return the whitepoint locus.
+        """Return the whitepoint locus ("t" daylight / "T" blackbody/Planckian).
 
-        wx's colour-temperature-locus row (native/D-series toggle) isn't
-        ported yet (a documented, still-open gap), so this always returns
-        the default locus ("t"), matching wx's own fallback when that row's
-        selection is unavailable.
+        Mirrors wx's ``get_whitepoint_locus``.
         """
-        return "t"
+        index = self.whitepoint_colortemp_locus_ctrl.currentIndex()
+        return "T" if index == 1 else "t"
 
     def get_luminance(self) -> str | None:
         """Return the custom white luminance, or ``None`` for native/default."""
@@ -3739,6 +3750,9 @@ class MainWindow(BaseWindow):
         self.whitepoint_colortemp_ctrl.setVisible(mode == 1)
         self.whitepoint_x_ctrl.setVisible(mode == 2)
         self.whitepoint_y_ctrl.setVisible(mode == 2)
+        locus_visible = mode in (0, 1) and bool(getcfg("show_advanced_options"))
+        self.whitepoint_colortemp_locus_label.setVisible(locus_visible)
+        self.whitepoint_colortemp_locus_ctrl.setVisible(locus_visible)
 
     def _whitepoint_changed(self, *_args: object) -> None:
         """Persist the whitepoint mode + value to config."""
@@ -3758,6 +3772,17 @@ class MainWindow(BaseWindow):
             setcfg("whitepoint.colortemp", None)
             setcfg("whitepoint.x", None)
             setcfg("whitepoint.y", None)
+
+    def _whitepoint_locus_changed(self, *_args: object) -> None:
+        """Persist the whitepoint colour-temperature locus ("t"/"T") to config.
+
+        Mirrors wx's ``whitepoint_colortemp_locus_ctrl_handler``.
+        """
+        if self._updating:
+            return
+        v = self.get_whitepoint_locus()
+        if v != getcfg("whitepoint.colortemp.locus"):
+            setcfg("whitepoint.colortemp.locus", v)
 
     def _apply_luminance_mode(self) -> None:
         """Show the luminance / black-luminance value fields only when custom."""
