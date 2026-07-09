@@ -194,20 +194,31 @@ def test_scope_selection_persists_config(window):
 # --- install --------------------------------------------------------------
 
 
-def test_install_with_elevated_scope_shows_notice_without_running(window, monkeypatch):
+def test_install_with_elevated_scope_runs_worker(qapp, window, monkeypatch):
+    # Elevated (local-system) installs authenticate via Worker.authenticate(),
+    # serviced by the window's PasswordPromptAdapter -- no longer a
+    # not-yet-available stub. install_profile() itself is mocked here since
+    # exercising the real sudo/authenticate round-trip is worker.py's own
+    # test coverage (test_worker.py's Sudo.authenticate() prompt-seam tests).
     window._load_path(_VALID_PROFILE)
     window._scope_buttons["l"].setChecked(True)
     monkeypatch.setattr(piw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(piw, "writecfg", lambda *a, **k: None)
+    ran = []
+
+    def fake_install_profile(self, *args, **kwargs):
+        ran.append(True)
+        return True, None, None, None
+
+    monkeypatch.setattr(Worker, "install_profile", fake_install_profile)
     infos = []
     monkeypatch.setattr(piw.QMessageBox, "information", lambda *a, **k: infos.append(a))
-    ran = []
-    monkeypatch.setattr(Worker, "install_profile", lambda *a, **k: ran.append(True))
 
     window._install()
+    assert _spin_until(qapp, lambda: window._thread is None)
 
-    assert infos
-    assert ran == []
-    assert window._thread is None
+    assert ran == [True]
+    assert isinstance(window.worker.password_prompt, piw.PasswordPromptAdapter)
 
 
 def test_install_runs_worker_and_reports_success(qapp, window, monkeypatch):

@@ -29,6 +29,8 @@ from DisplayCAL import localization as lang
 from DisplayCAL.meta import NAME as APPNAME
 
 if TYPE_CHECKING:
+    from qtpy.QtWidgets import QWidget
+
     from DisplayCAL.ui.progress_dialog import ProgressDialog
     from DisplayCAL.worker import Worker
 
@@ -118,6 +120,106 @@ class _ConfirmRequest:
         self.icon = icon
         self.result = False
         self.event = Event()
+
+
+class _PasswordRequest:
+    """A pending sudo password prompt, handed from the worker thread to the GUI thread.
+
+    Mirrors :class:`_ConfirmRequest`, but the GUI thread hands back an entered
+    password (or ``None`` on cancel) instead of a yes/no answer.
+    """
+
+    __slots__ = ("event", "msg", "result")
+
+    def __init__(self, msg: str) -> None:
+        self.msg = msg
+        self.result: str | None = None
+        self.event = Event()
+
+
+class PasswordPromptAdapter(QObject):
+    """Thread-safe stand-in for the wx sudo-password ``ConfirmDialog``.
+
+    ``Sudo.authenticate`` (``DisplayCAL/worker.py``) calls this in place of
+    building its wx password dialog inline when ``Worker.password_prompt`` is
+    set, reproducing the blocking ``ShowModal()`` round-trip: the request is
+    marshalled to the GUI thread (which owns the dialog) and the calling
+    thread blocks until the user answers. Assign an instance to
+    ``Worker.password_prompt`` in any Qt window that offers an elevated
+    (root) install scope (``InstallProfileWindow``,
+    ``colorimeter_correction_io.ImportController``).
+
+    Args:
+        parent (QWidget | None): Parent window for the password dialog.
+    """
+
+    _requested = Signal(object)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._parent = parent
+        self._requested.connect(self._on_requested)
+
+    def __call__(self, msg: str) -> str | None:
+        """Prompt for a password and block the calling thread for the answer.
+
+        Args:
+            msg (str): The prompt message (may include a previous-attempt
+                error, matching ``Sudo.authenticate``'s in-place message
+                update on a rejected password).
+
+        Returns:
+            str | None: The entered password, or None if the user cancelled.
+        """
+        request = _PasswordRequest(msg)
+        if QThread.currentThread() is self.thread():
+            # Already on the GUI thread (unusual): show directly, no blocking.
+            return self._ask(request)
+        self._requested.emit(request)
+        request.event.wait()
+        return request.result
+
+    def _on_requested(self, request: _PasswordRequest) -> None:
+        """Show the password dialog on the GUI thread and release the caller."""
+        try:
+            request.result = self._ask(request)
+        finally:
+            request.event.set()
+
+    def _ask(self, request: _PasswordRequest) -> str | None:
+        """Show the actual Qt password dialog (GUI thread).
+
+        Split out as the single toolkit touch-point so tests can drive the
+        blocking round-trip without a real modal event loop.
+        """
+        from qtpy.QtWidgets import (
+            QDialog,
+            QDialogButtonBox,
+            QLabel,
+            QLineEdit,
+            QVBoxLayout,
+        )
+
+        dialog = QDialog(self._parent)
+        dialog.setWindowTitle(APPNAME)
+        layout = QVBoxLayout(dialog)
+        label = QLabel(request.msg)
+        label.setWordWrap(True)
+        layout.addWidget(label)
+        line_edit = QLineEdit()
+        line_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        line_edit.returnPressed.connect(dialog.accept)
+        layout.addWidget(line_edit)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        line_edit.setFocus()
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            return line_edit.text()
+        return None
 
 
 class _ProducerThread(QThread):

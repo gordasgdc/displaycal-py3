@@ -325,6 +325,89 @@ def test_adapter_confirm_returns_false_on_cancel(qapp):
         dlg.deleteLater()
 
 
+# --- PasswordPromptAdapter (Worker.authenticate() elevated install) --------
+
+
+def test_password_prompt_adapter_same_thread_shows_directly(qapp):
+    # Called on the GUI thread (unusual), the dialog is shown directly.
+    adapter = wr.PasswordPromptAdapter()
+    adapter._ask = lambda request: "hunter2"
+    assert adapter("Enter password:") == "hunter2"
+
+
+def test_password_prompt_adapter_blocks_caller_until_gui_answers(qapp):
+    # A password requested from a worker thread is shown on the GUI thread and
+    # blocks the caller until the GUI answers; the request carries the message.
+    adapter = wr.PasswordPromptAdapter()
+    seen = {}
+
+    def fake_ask(request):
+        seen["msg"] = request.msg
+        return "s3cr3t"
+
+    adapter._ask = fake_ask
+    results = []
+    thread = wr._ProducerThread(lambda: adapter("Enter your password:"))
+    thread.finished_with_result.connect(results.append)
+    try:
+        thread.start()
+        assert _spin_until(qapp, lambda: results)
+        assert results == ["s3cr3t"]
+        assert seen["msg"] == "Enter your password:"
+    finally:
+        thread.wait()
+
+
+def test_password_prompt_adapter_returns_none_on_cancel(qapp):
+    adapter = wr.PasswordPromptAdapter()
+    adapter._ask = lambda request: None
+    results = []
+    thread = wr._ProducerThread(lambda: adapter("x"))
+    thread.finished_with_result.connect(results.append)
+    try:
+        thread.start()
+        assert _spin_until(qapp, lambda: results)
+        assert results == [None]
+    finally:
+        thread.wait()
+
+
+def test_password_prompt_adapter_dialog_round_trip_accept(qapp):
+    # Exercise the real _ask() dialog construction (no mocked _ask): type a
+    # password and accept via the line edit's returnPressed -> accept().
+    from qtpy.QtCore import QTimer
+    from qtpy.QtWidgets import QApplication, QDialog, QLineEdit
+
+    adapter = wr.PasswordPromptAdapter()
+
+    def fill_and_accept():
+        for widget in QApplication.topLevelWidgets():
+            if isinstance(widget, QDialog) and widget.isVisible():
+                line_edit = widget.findChild(QLineEdit)
+                line_edit.setText("typed-pwd")
+                line_edit.returnPressed.emit()
+                return
+
+    QTimer.singleShot(0, fill_and_accept)
+    assert adapter("Enter password:") == "typed-pwd"
+
+
+def test_password_prompt_adapter_dialog_round_trip_cancel(qapp):
+    from qtpy.QtCore import QTimer
+    from qtpy.QtWidgets import QApplication, QDialog
+
+    adapter = wr.PasswordPromptAdapter()
+
+    def reject_dialog():
+        for widget in QApplication.topLevelWidgets():
+            if isinstance(widget, QDialog) and widget.isVisible():
+                widget.reject()
+                return
+
+    QTimer.singleShot(0, reject_dialog)
+    assert adapter("Enter password:") is None
+
+
 # --- interactive calibration driver (5c-iii) -------------------------------
 
 from threading import Event  # noqa: E402

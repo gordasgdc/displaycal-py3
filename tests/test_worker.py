@@ -370,6 +370,32 @@ def test_get_pwd():
     assert worker.pwd == test_value
 
 
+def test_worker_password_prompt_defaults_to_none():
+    """A fresh Worker has no password-prompt seam (wx fallback stays default)."""
+    worker = Worker()
+    assert worker.password_prompt is None
+
+
+def test_worker_authenticate_threads_password_prompt(monkeypatch):
+    """Worker.authenticate() passes Worker.password_prompt to Sudo.authenticate()."""
+    worker = Worker()
+    prompt_seam = object()
+    worker.password_prompt = prompt_seam
+    seen = {}
+
+    def fake_sudo_authenticate(self, args, title, parent=None, prompt=None):
+        seen["prompt"] = prompt
+        return "allowed", "s3cr3t"
+
+    monkeypatch.setattr(Sudo, "authenticate", fake_sudo_authenticate)
+
+    result = worker.authenticate(sys.executable, "Title")
+
+    assert seen["prompt"] is prompt_seam
+    assert result is True
+    assert worker.pwd == "s3cr3t"
+
+
 def test_update_profile_1(random_icc_profile):
     """Testing Worker.update_profile() method."""
     from DisplayCAL import worker
@@ -413,6 +439,130 @@ def test_is_allowed_1():
     sudo = Sudo()
     result = sudo.is_allowed()
     assert result != ""
+
+
+class _FakeSudoProcess:
+    """Stand-in for a ``wexpect.spawn`` handle, driven by a scripted sequence.
+
+    Each ``.expect()`` call consumes the next ``(after, before, exitstatus,
+    alive)`` tuple, mirroring how ``Sudo.authenticate``/``_expect_timeout``
+    read ``.after``/``.before``/``.exitstatus``/``.isalive()`` after a real
+    ``wexpect`` expect call.
+    """
+
+    def __init__(self, script):
+        self._script = list(script)
+        self.after = None
+        self.before = b""
+        self.exitstatus = None
+        self._alive = True
+        self.sent = []
+
+    def expect(self, patterns, timeout=None):  # noqa: ARG002
+        self.after, self.before, self.exitstatus, self._alive = self._script.pop(0)
+        return 0
+
+    def isalive(self):
+        return self._alive
+
+    def send(self, data):
+        self.sent.append(data)
+
+    def sendcontrol(self, char):  # noqa: ARG002
+        pass
+
+    def terminate(self, force=False):  # noqa: ARG002
+        return True
+
+
+def test_sudo_authenticate_uses_prompt_seam(monkeypatch):
+    """Sudo.authenticate() calls a given prompt callable instead of the wx dialog."""
+    from DisplayCAL import worker as worker_module
+    from DisplayCAL import wexpect
+
+    sudo = Sudo()
+    sudo.sudo = "/usr/bin/sudo"
+    monkeypatch.setattr(Sudo, "kill", lambda self: None)
+    monkeypatch.setattr(Sudo, "is_allowed", lambda self, args=None, pwd="": "allowed")
+
+    fake_process = _FakeSudoProcess(
+        [
+            ("Password:", b"", None, True),
+            (wexpect.EOF, b"", 0, False),
+        ]
+    )
+    monkeypatch.setattr(
+        worker_module.wexpect, "spawn", lambda *args, **kwargs: fake_process
+    )
+
+    prompts = []
+
+    def fake_prompt(msg):
+        prompts.append(msg)
+        return "hunter2"
+
+    result, pwd = sudo.authenticate(["true"], "Title", prompt=fake_prompt)
+
+    assert result == "allowed"
+    assert pwd == "hunter2"
+    assert len(prompts) == 1
+    assert fake_process.sent == ["hunter2" + os.linesep]
+
+
+def test_sudo_authenticate_prompt_cancel_returns_false(monkeypatch):
+    """Cancelling the prompt (returning None) aborts authentication."""
+    from DisplayCAL import worker as worker_module
+
+    sudo = Sudo()
+    sudo.sudo = "/usr/bin/sudo"
+    monkeypatch.setattr(Sudo, "kill", lambda self: None)
+    monkeypatch.setattr(Sudo, "_terminate", lambda self: None)
+
+    fake_process = _FakeSudoProcess([("Password:", b"", None, True)])
+    monkeypatch.setattr(
+        worker_module.wexpect, "spawn", lambda *args, **kwargs: fake_process
+    )
+
+    result, pwd = sudo.authenticate(["true"], "Title", prompt=lambda msg: None)
+
+    assert result is False
+    assert pwd == ""
+    assert fake_process.sent == []
+
+
+def test_sudo_authenticate_prompt_retries_on_rejected_password(monkeypatch):
+    """A rejected password re-prompts with the sudo error prepended."""
+    from DisplayCAL import worker as worker_module
+    from DisplayCAL import wexpect
+
+    sudo = Sudo()
+    sudo.sudo = "/usr/bin/sudo"
+    monkeypatch.setattr(Sudo, "kill", lambda self: None)
+    monkeypatch.setattr(Sudo, "is_allowed", lambda self, args=None, pwd="": "allowed")
+
+    fake_process = _FakeSudoProcess(
+        [
+            ("Password:", b"", None, True),
+            ("Password:", b"Sorry, try again.", None, True),
+            (wexpect.EOF, b"", 0, False),
+        ]
+    )
+    monkeypatch.setattr(
+        worker_module.wexpect, "spawn", lambda *args, **kwargs: fake_process
+    )
+
+    prompts = []
+
+    def fake_prompt(msg):
+        prompts.append(msg)
+        return "wrong" if len(prompts) == 1 else "right"
+
+    result, pwd = sudo.authenticate(["true"], "Title", prompt=fake_prompt)
+
+    assert result == "allowed"
+    assert pwd == "right"
+    assert len(prompts) == 2
+    assert "Sorry, try again." in prompts[1]
 
 
 def test_ti3_lookup_to_ti1_1(data_files, setup_argyll):

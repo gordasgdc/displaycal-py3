@@ -1937,7 +1937,7 @@ class Sudo:
                 subprocess_before = subprocess_before.decode(ENC, "replace")
             print(subprocess_before)
 
-    def authenticate(self, args, title, parent=None):
+    def authenticate(self, args, title, parent=None, prompt=None):
         """Authenticate for a given command.
 
         The return value will be a tuple (auth_successful, password).
@@ -1946,6 +1946,14 @@ class Sudo:
         authentication was not successful or the command is not allowed (even
         if the actual string length is non-zero), thus allowing for easy
         boolean comparisons.
+
+        Args:
+            prompt (Callable[[str], str | None] | None): Toolkit-neutral
+                password-prompt seam. When given, called with the prompt
+                message in place of building the wx password dialog below,
+                and expected to return the entered password, or None if the
+                user cancelled. Used by the Qt port
+                (``DisplayCAL.ui.worker_runner.PasswordPromptAdapter``).
 
         """
         # Authentication using sudo is pretty convoluted if dealing with
@@ -1960,28 +1968,32 @@ class Sudo:
         # allowed, so we run sudo -l <command> to determine if it is
         # indeed allowed.
         pwd = ""
-        dlg = ConfirmDialog(
-            parent,
-            title=title,
-            msg=lang.getstr("dialog.enter_password"),
-            ok=lang.getstr("ok"),
-            cancel=lang.getstr("cancel"),
-            bitmap=get_icon(32, "lock"),
-        )
-        dlg.pwd_txt_ctrl = wx.TextCtrl(
-            dlg, -1, pwd, size=(320, -1), style=wx.TE_PASSWORD | wx.TE_PROCESS_ENTER
-        )
-        dlg.pwd_txt_ctrl.Bind(wx.EVT_TEXT_ENTER, lambda event: dlg.EndModal(wx.ID_OK))
-        dlg.sizer3.Add(
-            dlg.pwd_txt_ctrl,
-            1,
-            # flag=wx.TOP | wx.ALIGN_LEFT, border=12)
-            flag=wx.TOP,
-            border=12,
-        )
-        dlg.ok.SetDefault()
-        dlg.sizer0.SetSizeHints(dlg)
-        dlg.sizer0.Layout()
+        dlg = None
+        if prompt is None:
+            dlg = ConfirmDialog(
+                parent,
+                title=title,
+                msg=lang.getstr("dialog.enter_password"),
+                ok=lang.getstr("ok"),
+                cancel=lang.getstr("cancel"),
+                bitmap=get_icon(32, "lock"),
+            )
+            dlg.pwd_txt_ctrl = wx.TextCtrl(
+                dlg, -1, pwd, size=(320, -1), style=wx.TE_PASSWORD | wx.TE_PROCESS_ENTER
+            )
+            dlg.pwd_txt_ctrl.Bind(
+                wx.EVT_TEXT_ENTER, lambda event: dlg.EndModal(wx.ID_OK)
+            )
+            dlg.sizer3.Add(
+                dlg.pwd_txt_ctrl,
+                1,
+                # flag=wx.TOP | wx.ALIGN_LEFT, border=12)
+                flag=wx.TOP,
+                border=12,
+            )
+            dlg.ok.SetDefault()
+            dlg.sizer0.SetSizeHints(dlg)
+            dlg.sizer0.Layout()
         # Remove cached credentials
         self.kill()
         sudo_args = ["-p", "Password:", "true"]
@@ -1999,12 +2011,19 @@ class Sudo:
             )
         self._expect_timeout(["Password:", wexpect.EOF], 10)
         # We need to call isalive() to set the exitstatus
+        msg = lang.getstr("dialog.enter_password")
         while p.isalive() and p.after == "Password:":
             # Ask for password
-            dlg.pwd_txt_ctrl.SetFocus()
-            result = dlg.ShowModal()
-            pwd = dlg.pwd_txt_ctrl.GetValue()
-            if result != wx.ID_OK:
+            if dlg is None:
+                entered = prompt(msg)
+                cancelled = entered is None
+                pwd = entered or ""
+            else:
+                dlg.pwd_txt_ctrl.SetFocus()
+                result = dlg.ShowModal()
+                pwd = dlg.pwd_txt_ctrl.GetValue()
+                cancelled = result != wx.ID_OK
+            if cancelled:
                 self._terminate()
                 return False, pwd
             p.send(pwd + os.linesep)
@@ -2015,12 +2034,14 @@ class Sudo:
                 if errstr:
                     print(errstr)
                     msg = f"{errstr}\n\n{msg}"
-                dlg.message.SetLabel(msg)
-                dlg.message.Wrap(dlg.GetSize()[0] - 32 - 12 * 2)
-                dlg.pwd_txt_ctrl.SetValue("")
-                dlg.sizer0.SetSizeHints(dlg)
-                dlg.sizer0.Layout()
-        dlg.Destroy()
+                if dlg is not None:
+                    dlg.message.SetLabel(msg)
+                    dlg.message.Wrap(dlg.GetSize()[0] - 32 - 12 * 2)
+                    dlg.pwd_txt_ctrl.SetValue("")
+                    dlg.sizer0.SetSizeHints(dlg)
+                    dlg.sizer0.Layout()
+        if dlg is not None:
+            dlg.Destroy()
         if p.after is wexpect.TIMEOUT:
             print("Error: sudo timed out")
             if not p.terminate(force=True):
@@ -2640,6 +2661,11 @@ class Worker(WorkerBase):
         self.resume = False
         self.sudo = None
         self.auth_timestamp = 0
+        # Toolkit-neutral seam for the sudo password prompt Worker.authenticate()
+        # shows: None keeps the wx ConfirmDialog built inline in
+        # Sudo.authenticate(); the Qt port assigns a
+        # DisplayCAL.ui.worker_runner.PasswordPromptAdapter instead.
+        self.password_prompt = None
         self.sessionlogfiles = {}
         self.triggers = ["Password:"]
         self.recent = FilteredStream(
@@ -3017,7 +3043,9 @@ class Worker(WorkerBase):
                         parent = progress_dlg
                     else:
                         parent = self.owner
-                result, pwd = self.sudo.authenticate(args, title, parent)
+                result, pwd = self.sudo.authenticate(
+                    args, title, parent, prompt=self.password_prompt
+                )
                 if result:
                     self.pwd = pwd
                     result = True

@@ -12,6 +12,14 @@ as :mod:`DisplayCAL.ui.tools.lut3d` /
 Reuses the toolkit-neutral :mod:`DisplayCAL.profile_install` validation /
 scope / result-summary helpers shared with the still-shipping wx path.
 
+Installing with an elevated scope (local system / network) authenticates via
+:meth:`DisplayCAL.worker.Worker.authenticate`, whose sudo password prompt is
+serviced by a :class:`~DisplayCAL.ui.worker_runner.PasswordPromptAdapter`
+assigned to ``self.worker.password_prompt`` (in place of the wx
+``ConfirmDialog`` that seam falls back to). Windows elevation (UAC) and
+macOS/Linux "already root" don't go through this prompt at all
+(``Worker.authenticate`` returns early in both cases), matching wx.
+
 Deliberately dropped / deferred versus the wx dialog:
 
 * The calibration-preview and "show LUT" checkboxes depend on a live
@@ -25,13 +33,6 @@ Deliberately dropped / deferred versus the wx dialog:
   :mod:`DisplayCAL.ui.tools.lut3d`.
 * "Profile share" is dead code upstream (icc.opensuse.org has been down since
   #194); not reproduced here either.
-* Installing with an elevated scope (local system / network) needs the wx
-  password-prompt + ``sudo`` credential caching in
-  :meth:`DisplayCAL.worker.Worker.authenticate`, which pops a wx
-  ``ConfirmDialog`` internally. The scope choice is still offered and
-  persisted to ``profile.install_scope`` (so switching toolkits keeps the
-  setting), but installing with it surfaces a not-yet-available notice until
-  that auth flow is ported, instead of silently failing on a permission error.
 * The Windows profile-loader IPC resync (talking to a separately running
   "apply-profiles" tray process over the scripting socket) is not reproduced;
   ``profile.load_on_login`` is still written directly, which is what
@@ -71,6 +72,7 @@ from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
 from DisplayCAL.ui.tools.profile_info import ProfileInfoWindow
+from DisplayCAL.ui.worker_runner import PasswordPromptAdapter
 from DisplayCAL.util_os import is_superuser, which
 from DisplayCAL.worker import Worker
 
@@ -120,6 +122,7 @@ class InstallProfileWindow(BaseWindow):
         self.worker = Worker()
         self.worker.set_argyll_version("dispwin")
         self.worker.enumerate_displays_and_ports(silent=True)
+        self.worker.password_prompt = PasswordPromptAdapter(parent=self)
         self._thread: _InstallThread | None = None
         self._progress: QProgressDialog | None = None
         self._profile: ICCProfile | None = None
@@ -330,16 +333,6 @@ class InstallProfileWindow(BaseWindow):
 
     def _install(self) -> None:
         if not self._profile_path or not check_set_argyll_bin():
-            return
-        if getcfg("profile.install_scope") in ("l", "n"):
-            QMessageBox.information(
-                self,
-                self.windowTitle(),
-                "Installing with this scope requires administrator "
-                "authentication, which isn't available in this Qt build yet. "
-                "Switch to the current-user scope, or use the DisplayCAL "
-                "application to install with elevated privileges.",
-            )
             return
         writecfg()
         self.install_btn.setEnabled(False)

@@ -1565,17 +1565,69 @@ reported through `summarize_install_result()`.
 **Dropped / deferred versus the wx dialog:** the calibration-preview and "show
 LUT" checkboxes need a live calibration session on the running main window
 (the wx dialog reads `self.cal` / `self.preview`); they return with the Qt
-main window. Installing with an elevated scope (local system / network) needs
-the wx password-prompt + `sudo` credential caching in `Worker.authenticate()`,
-which pops a wx `ConfirmDialog` internally; the scope choice is still offered
-and persisted to `profile.install_scope`, but choosing one and clicking
-Install surfaces a not-yet-available notice instead of attempting (and
-silently failing) an unauthenticated elevated install. The Windows
-profile-loader IPC resync (the `send_command("apply-profiles", ...)`
-round-trip to a separately running tray process, in both
-`profile_load_on_login_handler` and `profile_finish`) is not reproduced;
-`profile.load_on_login` is still written directly, which is what
-`Worker.install_profile()` itself reads.
+main window. The Windows profile-loader IPC resync (the
+`send_command("apply-profiles", ...)` round-trip to a separately running tray
+process, in both `profile_load_on_login_handler` and `profile_finish`) is not
+reproduced; `profile.load_on_login` is still written directly, which is what
+`Worker.install_profile()` itself reads. (Installing with an elevated scope
+was deferred here too, until the next entry below closed it.)
+
+**`Worker.authenticate()` elevated install — DONE (2026-07-09).** Picked from
+the "Remaining gaps" list (maintainer's choice, over the pattern-generator
+setup dialogs). Closes the elevated-install deferral left by both
+`profile_install_window.py` above and `colorimeter_correction_io.py`'s
+`ImportController` (Stage 5+ "Colorimeter-correction sub-slice iii"): choosing
+the local-system/network install scope, or the system-wide import-scope radio
+button, no longer shows a not-yet-available notice.
+
+`Sudo.authenticate` (`worker.py`) gained an optional `prompt` callable: when
+given, it's called with the prompt message in place of building the wx
+password `ConfirmDialog` inline, and is expected to return the entered
+password or `None` on cancel; `prompt=None` (the default, so the still-shipping
+wx path is byte-for-byte unchanged) keeps the original dialog. `Worker.authenticate`
+(the higher-level method `exec_cmd` calls when a command needs `asroot`) gained
+a matching `Worker.password_prompt` attribute (`None` by default) threaded into
+that call. `DisplayCAL/ui/worker_runner.py` gains `PasswordPromptAdapter(QObject)`,
+the Qt implementation of the seam: it mirrors `ProgressAdapter.confirm()`'s
+blocking marshal-to-GUI-thread pattern (a `threading.Event`-guarded request
+object, a queued signal, and a same-thread fast path) but shows a small
+`QDialog` with a password-mode `QLineEdit` instead of a yes/no `QMessageBox`,
+returning the typed text or `None` on cancel/reject. `InstallProfileWindow`
+and `ImportController` each assign a `PasswordPromptAdapter` to their
+`Worker.password_prompt` (`ImportController` does so defensively, in case a
+future caller passes in a `Worker` that doesn't already have one), so
+`worker.install_profile()` / the colorimeter-correction import's system-wide
+scope now actually prompt for and use a password when `dispwin -I -Sl`/`-Sn`
+or the OEM importer's asroot path triggers `exec_cmd(asroot=True)`. Windows
+elevation (UAC) and macOS/Linux "already root" still bypass the prompt
+entirely (`Worker.authenticate` returns `None` early in both cases), matching
+wx; no wx behaviour changed since the seam is purely additive (default `None`
+preserves the exact original dialog and loop logic).
+
+**Fixed a real bug found while porting** (in `colorimeter_correction_io.py`,
+not present in the wx path): `ImportController._do_import`'s auto-download
+fallback loop (the second of two `ccxx_helpers.detect_import_kind()` call
+sites) had `asroot` hardcoded to `False` instead of threading
+`self._asroot` through like the first call site — so a system-wide import
+would authenticate for files found locally but silently fall back to a
+user-scope install for anything reached via the automatic OEM-package
+download. Fixed to match wx's single `asroot` parameter threaded through both
+branches of `import_colorimeter_corrections_producer`.
+
+5 new tests in `tests/test_worker.py` (`Sudo.authenticate()`'s prompt seam:
+accept, cancel, and retry-after-rejected-password, each driven by a scripted
+fake `wexpect.spawn` handle so no real `sudo` subprocess runs; plus
+`Worker.password_prompt` defaulting to `None` and being threaded through to
+`Sudo.authenticate()`), 5 new tests in `tests/test_ui_worker_runner.py`
+(`PasswordPromptAdapter`'s same-thread/blocking/cancel paths, plus two
+end-to-end dialog round-trips typing into and accepting/rejecting the real
+`QDialog`), and the two windows' existing not-yet-available-notice tests were
+rewritten to assert the elevated path actually runs (`profile_install_window`
+already had `Worker.install_profile()` mocked at that layer; the
+`colorimeter_correction_io` replacement mocks `detect_import_kind()` and uses
+"files" mode rather than "auto" so the fixture's stub instrument list can't
+trigger a real network download through the unrelated auto-checked
+importers).
 
 ### Stage 6 — StartupFrame — **DONE**
 

@@ -22,18 +22,17 @@ entries``, ``build_web_check_params``, ``build_upload_params``,
 ``validate_upload_originator``, ``detect_import_kind``,
 ``discover_auto_import_paths``).
 
+Choosing the system-wide import-scope radio button authenticates via
+``Worker.authenticate()``, whose sudo password prompt is serviced by a
+:class:`~DisplayCAL.ui.worker_runner.PasswordPromptAdapter` (wired onto the
+shared ``Worker`` the same way as ``DisplayCAL/ui/profile_install_window.py``).
+
 Deliberately dropped / simplified versus the wx handlers:
 
 * The "info" button that plots the spectral/matrix data (``CCXXPlot``) is not
   reproduced anywhere here, matching the drop already made in
   :mod:`DisplayCAL.ui.colorimeter_correction_window` (the wx-only ``CCXXPlot``
   visualization remains a future slice).
-* Choosing an elevated install scope (local system / network) in the import
-  dialog needs the wx sudo password-prompt + credential caching in
-  ``Worker.authenticate()``, not yet ported (see
-  ``DisplayCAL/ui/profile_install_window.py`` for the same deferral); picking
-  one and running shows a not-yet-available notice instead of attempting an
-  unauthenticated elevated install.
 * These flows run standalone (their own ``Worker``, own progress dialogs) and
   are not yet wired to a live main window, so the post-import ``update_
   measurement_modes`` / ``update_colorimeter_correction_matrix_ctrl_items``
@@ -75,6 +74,7 @@ from DisplayCAL.meta import DOMAIN
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.measurement_flow import observer_items
+from DisplayCAL.ui.worker_runner import PasswordPromptAdapter
 from DisplayCAL.worker import Worker, check_create_dir, http_request
 
 if TYPE_CHECKING:
@@ -407,6 +407,11 @@ class ImportController(QObject):
         super().__init__(parent)
         self._worker = worker
         self._parent = parent
+        if worker.password_prompt is None:
+            # Elevated (system-wide) imports authenticate via
+            # Worker.authenticate(); wire the Qt password prompt regardless of
+            # which window constructed this Worker.
+            worker.password_prompt = PasswordPromptAdapter(parent=parent)
         self._thread: _CallThread | None = None
         self._progress: QProgressDialog | None = None
         self._oeminst = get_argyll_util("oeminst")
@@ -425,20 +430,7 @@ class ImportController(QObject):
         if not importers:
             self.finished.emit()
             return
-        asroot = dialog.asroot
-        if asroot:
-            # Elevated install needs Worker.authenticate()'s wx password
-            # prompt, not yet ported (see profile_install_window.py).
-            QMessageBox.information(
-                self._parent,
-                lang.getstr("colorimeter_correction.import"),
-                "Installing system-wide requires administrator "
-                "authentication, which isn't available in this Qt build yet. "
-                "Switch to the current-user scope, or use the DisplayCAL "
-                "application to import with elevated privileges.",
-            )
-            self.finished.emit()
-            return
+        self._asroot = dialog.asroot
 
         paths: list = []
         if dialog.mode == "files":
@@ -496,7 +488,7 @@ class ImportController(QObject):
                 icd,
                 self._oeminst,
                 path,
-                False,
+                self._asroot,
             )
         # Automatic web-download fallback (when an OEM package isn't found
         # locally): the same toolkit-neutral worker calls the wx producer
@@ -537,7 +529,7 @@ class ImportController(QObject):
                     icd,
                     self._oeminst,
                     path,
-                    False,
+                    self._asroot,
                 )
         return result, i1d3, spyd4, icd
 

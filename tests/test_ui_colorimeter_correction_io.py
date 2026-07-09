@@ -198,25 +198,48 @@ class TestImportController:
         assert finished
         assert controller._thread is None
 
-    def test_asroot_shows_not_available_notice(self, qapp, worker, monkeypatch):
+    def test_asroot_choice_threads_through_to_detect_import_kind(
+        self, qapp, worker, monkeypatch
+    ):
+        # A system-wide import authenticates via Worker.authenticate() (the
+        # PasswordPromptAdapter seam), no longer a not-yet-available stub;
+        # detect_import_kind() is mocked here since exercising the real
+        # sudo/authenticate round-trip is worker.py's own coverage. Uses the
+        # "files" mode (not "auto") so the auto-download fallback loop -- which
+        # would otherwise reach out to the real network for any importer the
+        # dialog auto-checked from stub_worker's instrument list -- never runs.
         def _fake_exec(self):
             self._checkboxes["icd"].setChecked(True)
             self._install_systemwide.setChecked(True)
-            self._choose_auto()
+            self._choose_files()
             return ccio.QDialog.Accepted
 
         monkeypatch.setattr(ccio._ImportOptionsDialog, "exec_", _fake_exec)
-        infos = []
         monkeypatch.setattr(
-            ccio.QMessageBox, "information", lambda *a, **k: infos.append(a)
+            ccio.QFileDialog,
+            "getOpenFileNames",
+            lambda *a, **k: (["/tmp/DeviceCorrections.txt"], ""),
         )
+        seen_asroot = []
+
+        def fake_detect(worker_, result, i1d3, i1d3ccss, spyd4, spyd4en, icd, oeminst, path, asroot):
+            seen_asroot.append(asroot)
+            return True, i1d3, spyd4, True
+
+        monkeypatch.setattr(ccio.ccxx_helpers, "detect_import_kind", fake_detect)
+        monkeypatch.setattr(ccio.QMessageBox, "information", lambda *a, **k: None)
+        # The worker fixture's stub instrument list also auto-checks the i1d3
+        # importer box; since only the "icd" file is fed through, _on_done
+        # reports it as a failure -- mock critical() too so that (unrelated to
+        # the asroot seam under test) doesn't pop a real modal dialog.
+        monkeypatch.setattr(ccio.QMessageBox, "critical", lambda *a, **k: None)
         controller = ccio.ImportController(worker, None)
         finished = []
         controller.finished.connect(lambda: finished.append(True))
         controller.run()
-        assert finished
-        assert infos
-        assert controller._thread is None
+        assert _spin_until(qapp, lambda: finished)
+        assert seen_asroot == [True]
+        assert isinstance(worker.password_prompt, ccio.PasswordPromptAdapter)
 
 
 class TestUploadController:
