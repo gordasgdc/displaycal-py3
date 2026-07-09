@@ -14,21 +14,20 @@ its report layer.
 The genuinely window-shaped parts (file-save dialog, overwrite confirm, the
 progress dialog around the worker run) stay in their respective UI layers.
 
-Deliberately not reproduced by :func:`resolve_report_context` /
-:func:`finalize_measurement_report` (both callers -- wx and Qt -- only get the
-simplified behaviour now, matching the drops already made for the calibrate/
-profile pipeline in ``profile_finish.py``):
+Three edge cases originally deferred here are now covered too, each split the
+same way (pure logic here, dialog/worker-run owned by the Qt window):
 
 * The self-check report (holding Alt while clicking Measure looks up the chart
-  through the display profile's own B2A table instead of measuring) -- a
-  distinct diagnostic flow layered on top of the same setup, left for a future
-  slice.
-* ``check_profile_b2a_hires``'s low-res-B2A refusal + "regenerate hires
-  tables?" offer -- always proceeds with the profile as-is now.
+  through the display profile's own B2A table instead of measuring):
+  :func:`perform_self_check_lookup` ports ``measurement_report_handler``'s
+  ``self_check_report`` branch.
+* ``check_profile_b2a_hires``'s low-res-B2A refusal: :func:`profile_b2a_is_lowres`
+  is the pure predicate; the Qt window owns the regenerate-tables offer and the
+  ``worker.update_profile_B2A`` run.
 * ``measurement_file_check_confirm``'s interactive suspicious-patch review
-  grid -- always proceeds with the measured data unmodified (the
-  ``isinstance(result, tuple)`` patch-removal branch in the original consumer
-  can then never trigger and is dropped with it).
+  grid: :func:`resolve_sanity_check` / :func:`recompute_sanity_row` /
+  :func:`apply_sanity_check_result` / :func:`resync_report_ti3_removals` are
+  the pure pieces; the Qt window owns the review-grid dialog.
 """
 
 from __future__ import annotations
@@ -42,8 +41,8 @@ from typing import TYPE_CHECKING
 
 from DisplayCAL import colormath, config, report
 from DisplayCAL import localization as lang
-from DisplayCAL.argyll import make_argyll_compatible_path
-from DisplayCAL.argyll_cgats import extract_cal_from_profile
+from DisplayCAL.argyll import get_argyll_util, make_argyll_compatible_path
+from DisplayCAL.argyll_cgats import extract_cal_from_profile, verify_ti1_rgb_xyz
 from DisplayCAL.cgats import (
     CGATS,
     CGATSError,
@@ -67,6 +66,10 @@ from DisplayCAL.util_decimal import float2dec
 from DisplayCAL.util_os import launch_file
 from DisplayCAL.util_str import ellipsis_
 from DisplayCAL.worker import (
+    _applycal_bug_workaround,
+    check_ti3,
+    check_ti3_criteria1,
+    check_ti3_criteria2,
     get_arg,
     get_cfg_option_from_args,
     get_options_from_profile,
@@ -208,6 +211,30 @@ def report_trc_label(
     if trc_gamma != 2.4 or trc_gamma_type != "B" or trc_output_offset:
         return ""
     return "BT.1886"
+
+
+def profile_b2a_is_lowres(profile: ICCProfile) -> bool:
+    """Whether ``profile`` has a suspiciously low-resolution Argyll B2A table.
+
+    Pure port of ``check_profile_b2a_hires``'s predicate: a colorimetric
+    PCS-to-device table with less than 17 grid steps, built by Argyll itself,
+    is too coarse for reliable use. The caller (the Qt window) is expected to
+    refuse to proceed with the report/install and instead offer to regenerate
+    the table via ``worker.update_profile_B2A``.
+
+    Args:
+        profile: The profile to check.
+
+    Returns:
+        ``True`` if the profile's ``B2A0`` table is a low-resolution table
+        Argyll generated.
+    """
+    return (
+        "B2A0" in profile.tags
+        and isinstance(profile.tags.B2A0, LUT16Type)
+        and profile.tags.B2A0.clut_grid_steps < 17
+        and profile.creator == b"argl"
+    )
 
 
 def resolve_report_context(
@@ -507,6 +534,334 @@ def stage_measurement_files(
     return ti1_path, cal_path
 
 
+def perform_self_check_lookup(
+    worker: Worker,
+    ti1: CGATS,
+    oprof: ICCProfile,
+    devlink: ICCProfile | None,
+    save_path: str,
+) -> tuple[str, ICCProfile]:
+    """Look up the chart through the display profile's own tables instead of
+    measuring -- the "self-check report" (hold Alt while clicking Measure).
+
+    Pure port of the ``self_check_report and oprof`` branch of
+    ``measurement_report_handler``: writes ``oprof`` (baking in its
+    calibration curve first if the device link expects one applied), looks
+    ``ti1`` up through it directly (no instrument involved), and writes the
+    result as a TI3 the caller feeds into :func:`finalize_measurement_report`
+    exactly like a real measurement would.
+
+    Args:
+        worker: The worker whose ``create_tempdir`` / ``chart_lookup`` /
+            ``exec_cmd`` do the actual work.
+        ti1: The TI1 chart to look up (``ReportContext.ti1``).
+        oprof: The original (display) profile.
+        devlink: The device-link profile, if any (only its ``collink.args``
+            metadata is inspected, to decide whether a calibration curve
+            needs to be baked into ``oprof`` first).
+        save_path: The report's destination path (only its basename is used
+            to name the staged files).
+
+    Returns:
+        ``(ti3_path, oprof)``: the staged TI3 file and, when a calibration
+        curve had to be baked in first, the reloaded profile (otherwise the
+        same ``oprof`` passed in) -- both feed into
+        :func:`finalize_measurement_report` as its ``ti3_path`` / ``oprof``.
+
+    Raises:
+        Exception: Whatever ``worker.create_tempdir`` / ``exec_cmd`` /
+            ``chart_lookup`` / file I/O raise, or the ``applycal``
+            invocation's own failure.
+    """
+    temp = worker.create_tempdir()
+    if isinstance(temp, Exception):
+        raise temp
+    name = os.path.splitext(os.path.basename(save_path))[0]
+    ti3_path = os.path.join(temp, f"{name}.ti3")
+    profile_path = os.path.join(temp, f"{name}.icc")
+
+    # Argyll applycal can't deal with single gamma TRC tags or TRC tags with
+    # less than 256 entries.
+    _applycal_bug_workaround(oprof)
+    oprof.write(profile_path)
+
+    apply_cal = bool(devlink) and "-a" in parse_argument_string(
+        devlink.tags.get("meta", {})
+        .get("collink.args", {})
+        .get("value", "-a" if getcfg("3dlut.output.profile.apply_cal") else "")
+    )
+    if apply_cal:
+        oprof_cal_path = os.path.join(temp, f"{name}.cal")
+        extract_cal_from_profile(oprof, oprof_cal_path)
+        profile_with_cal_path = os.path.join(temp, f"{name}_with_cal.icc")
+        applycal = get_argyll_util("applycal")
+        if not applycal:
+            raise Exception(lang.getstr("argyll.util.not_found", "applycal"))
+        result = worker.exec_cmd(
+            applycal,
+            ["-v", oprof_cal_path, profile_path, profile_with_cal_path],
+            capture_output=True,
+            skip_scripts=True,
+        )
+        if not result:
+            result = Exception(
+                "\n\n".join([lang.getstr("apply_cal.error"), "\n".join(worker.errors)])
+            )
+        if isinstance(result, Exception) and not getcfg("dry_run"):
+            raise result
+        odesc = oprof.getDescription()
+        oprof = ICCProfile(profile_with_cal_path)
+        oprof.setDescription(odesc)
+
+    _void, ti3, _void2 = worker.chart_lookup(
+        ti1, oprof, pcs="x", intent="a", white_patches=0
+    )
+    wtpt = list(oprof.tags.wtpt.values())
+    if isinstance(oprof.tags.get("lumi"), XYZType):
+        luminance = oprof.tags.lumi.Y
+    else:
+        luminance = 100
+    white_xyz_cdm2 = [v * luminance for v in wtpt]
+    ti3.add_keyword("LUMINANCE_XYZ_CDM2", "{:.6f} {:.6f} {:.6f}".format(*white_xyz_cdm2))
+
+    with open(ti3_path, "wb") as ti3_file:
+        ti3_file.write(bytes(ti3))
+    return ti3_path, oprof
+
+
+def resolve_working_ti3_path(worker: Worker) -> str | None:
+    """Locate the just-measured working TI3 for the profile-build pipeline.
+
+    Pure port of the default-path derivation in
+    ``measurement_file_check_confirm`` (used when no explicit TI3 is passed,
+    i.e. from ``check_copy_ti3``): the profile-building flow
+    (``MainWindow._build_profile_from_measurement``) doesn't have a TI3
+    object at hand yet the way the measurement-report flow does, only the
+    worker's temp dir and the configured profile name.
+
+    Args:
+        worker: The worker whose ``tempdir`` was populated by the just-run
+            characterization measurement.
+
+    Returns:
+        The working TI3's path, or ``None`` if it can't be found (the caller
+        should then proceed without a sanity check, matching wx's
+        "let the caller handle missing files" comment).
+    """
+    tempdir = worker.tempdir
+    if not tempdir or not os.path.isdir(tempdir):
+        return None
+    name = getcfg("profile.name.expanded")
+    path = os.path.join(tempdir, f"{make_argyll_compatible_path(name)}.ti3")
+    return path if os.path.isfile(path) else None
+
+
+@dataclass
+class SanityCheckRow:
+    """One row the sanity-check review grid renders/edits.
+
+    Mirrors one grid row in wx's ``MeasurementFileCheckSanityDialog``: either
+    the "previous" patch of a suspicious pair (``has_delta`` ``False``, since
+    it is shown for context only) or the flagged patch itself.
+    """
+
+    sample_id: float
+    rgb: tuple[float, float, float]
+    xyz: tuple[float, float, float]
+    has_delta: bool
+    delta: dict | None
+    sRGB_delta: dict | None
+    delta_to_sRGB: dict
+
+
+@dataclass
+class SanityCheckContext:
+    """Resolved state for one sanity-check review, built by
+    :func:`resolve_sanity_check`.
+
+    ``ti3`` / ``items`` are live CGATS objects (not copies): editing/removing
+    through :func:`apply_sanity_check_result` mutates the same underlying
+    document the caller loaded, matching wx's dialog operating directly on
+    ``ti3_1.queryv1("DATA")``.
+    """
+
+    ti3: CGATS
+    items: list
+    black: tuple[float, float, float] | None
+    white: tuple[float, float, float] | None
+    rows: list[SanityCheckRow]
+
+
+def resolve_sanity_check(
+    ti3: CGATS, force: bool = False
+) -> SanityCheckContext | None:
+    """Detect suspiciously-off patches in a measured TI3.
+
+    Pure port of the detection half of ``measurement_file_check_confirm``
+    (``check_ti3`` / row de-duplication); the interactive review grid itself
+    is the caller's (Qt) responsibility -- show it only when this returns
+    non-``None``.
+
+    Args:
+        ti3: The measured TI3 (or the whole CGATS document containing it --
+            ``verify_ti1_rgb_xyz`` finds the right section either way).
+        force: Skip the ``ti3.check_sanity.auto`` gate (used by the
+            standalone "check measurement file" tool, not currently ported).
+
+    Returns:
+        ``None`` if the check is disabled (and not forced) or nothing looks
+        suspicious -- the caller should proceed without showing a dialog.
+        Otherwise the resolved :class:`SanityCheckContext` to show.
+    """
+    if not getcfg("ti3.check_sanity.auto") and not force:
+        return None
+    ti3_1 = verify_ti1_rgb_xyz(ti3)
+    suspicious = check_ti3(ti3_1)
+    if not suspicious:
+        return None
+
+    data = ti3_1.queryv1("DATA")
+    black_item = data.queryi1({"RGB_R": 0, "RGB_G": 0, "RGB_B": 0})
+    black = (
+        (black_item["XYZ_X"], black_item["XYZ_Y"], black_item["XYZ_Z"])
+        if black_item
+        else None
+    )
+    white_item = data.queryi1({"RGB_R": 100, "RGB_G": 100, "RGB_B": 100})
+    white = (
+        (white_item["XYZ_X"], white_item["XYZ_Y"], white_item["XYZ_Z"])
+        if white_item
+        else None
+    )
+
+    items: list = []
+    rows: list[SanityCheckRow] = []
+    for prev, item, delta, sRGB_delta, prev_delta_to_sRGB, delta_to_sRGB in suspicious:
+        for cur, cur_delta, cur_sRGB_delta, cur_delta_to_sRGB in (
+            (prev, None, None, prev_delta_to_sRGB),
+            (item, delta, sRGB_delta, delta_to_sRGB),
+        ):
+            if not cur or cur in items:
+                continue
+            items.append(cur)
+            rows.append(
+                SanityCheckRow(
+                    sample_id=cur.SAMPLE_ID,
+                    rgb=(cur["RGB_R"], cur["RGB_G"], cur["RGB_B"]),
+                    xyz=(cur["XYZ_X"], cur["XYZ_Y"], cur["XYZ_Z"]),
+                    has_delta=cur_delta is not None,
+                    delta=cur_delta,
+                    sRGB_delta=cur_sRGB_delta,
+                    delta_to_sRGB=cur_delta_to_sRGB,
+                )
+            )
+    return SanityCheckContext(ti3=ti3_1, items=items, black=black, white=white, rows=rows)
+
+
+def recompute_sanity_row(
+    ctx: SanityCheckContext,
+    row_index: int,
+    rgb: tuple[float, float, float],
+    xyz: tuple[float, float, float],
+) -> tuple[dict | None, dict | None, dict]:
+    """Recompute one row's delta values after an in-place RGB/XYZ edit.
+
+    Pure port of ``MeasurementFileCheckSanityDialog.cell_change_handler``'s
+    recompute. Faithfully reproduces one of its quirks: when ``row_index``
+    has a "previous" row, that previous row's *original* (not any
+    since-edited) RGB/XYZ is used, matching wx re-reading
+    ``dlg.suspicious_items[event.Row - 1]`` rather than tracking prior edits.
+
+    Args:
+        ctx: The context :func:`resolve_sanity_check` returned.
+        row_index: The edited row's index into ``ctx.rows`` / ``ctx.items``.
+        rgb: The row's new (edited) RGB values, 0-100.
+        xyz: The row's new (edited) XYZ values, 0-100.
+
+    Returns:
+        ``(delta, sRGB_delta, delta_to_sRGB)`` for the edited row, in the same
+        shape as :class:`SanityCheckRow`'s fields.
+    """
+    sRGBLab, Lab, delta_to_sRGB, _criteria1, _debuginfo = check_ti3_criteria1(
+        rgb, xyz, ctx.black, ctx.white, print_debuginfo=True
+    )
+    if ctx.rows[row_index].has_delta:
+        prev_item = ctx.items[row_index - 1]
+        prev_rgb = (prev_item["RGB_R"], prev_item["RGB_G"], prev_item["RGB_B"])
+        prev_xyz = (prev_item["XYZ_X"], prev_item["XYZ_Y"], prev_item["XYZ_Z"])
+        prev_sRGBLab, prev_Lab, _prev_delta_to_sRGB, _c1, _d = check_ti3_criteria1(
+            prev_rgb, prev_xyz, ctx.black, ctx.white, print_debuginfo=False
+        )
+        delta, sRGB_delta, _criteria2 = check_ti3_criteria2(
+            prev_Lab, Lab, prev_sRGBLab, sRGBLab, prev_rgb, rgb
+        )
+    else:
+        delta, sRGB_delta = None, None
+    return delta, sRGB_delta, delta_to_sRGB
+
+
+def apply_sanity_check_result(
+    ctx: SanityCheckContext,
+    removed_row_indexes: list[int],
+    mods: dict[int, dict[str, float]],
+) -> list:
+    """Apply the review grid's edits to the underlying measured TI3.
+
+    Pure port of ``measurement_file_check_confirm``'s result-consumption tail:
+    removes unchecked rows (via ``CGATS.remove``, which reindexes correctly)
+    and writes back any edited RGB/XYZ cells for the rows that remain.
+
+    Args:
+        ctx: The context :func:`resolve_sanity_check` returned.
+        removed_row_indexes: Indexes (into ``ctx.rows`` / ``ctx.items``) of
+            rows the user unchecked for removal.
+        mods: Row index -> ``{field: value}`` for edited-but-kept rows
+            (fields are ``RGB_R`` / ``RGB_G`` / ``RGB_B`` / ``XYZ_X`` /
+            ``XYZ_Y`` / ``XYZ_Z``).
+
+    Returns:
+        The removed CGATS items, in ascending original-row order (feeds
+        :func:`resync_report_ti3_removals` for the measurement-report path).
+    """
+    data = ctx.ti3.queryv1("DATA")
+    removed = []
+    for index in sorted(removed_row_indexes, reverse=True):
+        removed.insert(0, data.remove(ctx.items[index]))
+    for index, fields in mods.items():
+        if index in removed_row_indexes:
+            continue
+        item = ctx.items[index]
+        for field, value in fields.items():
+            item[field] = value
+    return removed
+
+
+def resync_report_ti3_removals(
+    ti3_ref: CGATS, sim_ti3: CGATS | None, removed_items: list, offset: int
+) -> None:
+    """Drop the reference/simulation patches matching sanity-removed items.
+
+    Pure port of ``measurement_report_consumer``'s ``isinstance(result,
+    tuple)`` branch: patches the sanity-check dialog dropped from the
+    *measured* TI3 must also be dropped from the reference (and simulation)
+    TI3s the report compares against, keyed by the same white-patch
+    ``offset`` used elsewhere in :func:`finalize_measurement_report`.
+
+    Args:
+        ti3_ref: The reference TI3 (mutated in place).
+        sim_ti3: The simulation TI3, if any (mutated in place).
+        removed_items: The CGATS items :func:`apply_sanity_check_result`
+            removed from the measured TI3.
+        offset: The measured-vs-reference patch-count offset already computed
+            by the caller (accounts for an extra devlink white patch).
+    """
+    for item in reversed(removed_items):
+        key = item.key - offset
+        ti3_ref.DATA.pop(key)
+        if sim_ti3:
+            sim_ti3.DATA.pop(key)
+
+
 def finalize_measurement_report(
     *,
     worker: Worker,
@@ -531,16 +886,20 @@ def finalize_measurement_report(
     observers: dict,
     version_string: str,
     pack_js: bool = True,
+    self_check_report: bool = False,
+    removed_items: list | None = None,
 ) -> None:
     """Process a completed measurement and write the HTML report.
 
     Ports ``measurement_report_consumer``'s body from just after the
-    (dropped, see module docstring) sanity-check dialog through
-    ``report.create`` / launching the finished file. The caller is expected to
-    have already handled the ``Exception`` / falsy-result branches of the
-    worker run (matching how ``MainWindow._on_measurement_finished`` handles
-    those before calling into ``profile_finish.py``) -- this function assumes
-    the measurement succeeded.
+    sanity-check dialog (now handled by the caller via
+    :func:`resolve_sanity_check` / :func:`apply_sanity_check_result` -- see
+    module docstring) through ``report.create`` / launching the finished
+    file. The caller is expected to have already handled the ``Exception`` /
+    falsy-result branches of the worker run (matching how
+    ``MainWindow._on_measurement_finished`` handles those before calling into
+    ``profile_finish.py``) -- this function assumes the measurement (or
+    :func:`perform_self_check_lookup`) succeeded.
 
     Args:
         worker: The worker the measurement ran on (used for ``wrapup`` and
@@ -568,6 +927,13 @@ def finalize_measurement_report(
             / ``self._observers``).
         version_string: ``VERSION_STRING``, embedded in the report.
         pack_js: ``report.pack_js``.
+        self_check_report: Whether this is a self-check report (see
+            :func:`perform_self_check_lookup`) -- swaps in the profile's own
+            device/description for the display/instrument/CCMX placeholders
+            since no instrument was actually involved.
+        removed_items: CGATS items :func:`apply_sanity_check_result` removed
+            from the measured TI3 (if any), so the reference/simulation TI3s
+            can be resynced via :func:`resync_report_ti3_removals`.
 
     Raises:
         Exception: Any CGATS / I/O error encountered while processing the
@@ -624,6 +990,11 @@ def finalize_measurement_report(
                 ti3_measured.DATA[i][label] *= scale
     else:
         white_measured = ti3_measured.queryi(_WHITE_RGB)
+        offset = max(len(white_measured) - len(white_ref), 0)
+
+    if removed_items:
+        resync_report_ti3_removals(ti3_ref, sim_ti3, removed_items, offset)
+        white_ref = ti3_ref.queryi(_WHITE_RGB)
         offset = max(len(white_measured) - len(white_ref), 0)
 
     planckian = False
@@ -757,48 +1128,55 @@ def finalize_measurement_report(
                 for j, color in enumerate(labels_lab):
                     data.DATA[i][color] = lab[j]
 
-    instrument = f"{instrument_name} — {measurement_mode_name}"
-    observer = get_cfg_option_from_args(
-        "observer", "-Q", getattr(worker, "options_dispread", [])
-    )
-    if observer != DEFAULTS["observer"]:
-        instrument += " — " + observers.get(observer, observer)
+    if self_check_report:
+        instrument = "N/A"
+        ccmx = "N/A"
+    else:
+        instrument = f"{instrument_name} — {measurement_mode_name}"
+        observer = get_cfg_option_from_args(
+            "observer", "-Q", getattr(worker, "options_dispread", [])
+        )
+        if observer != DEFAULTS["observer"]:
+            instrument += " — " + observers.get(observer, observer)
 
-    ccmx = "None"
-    reference_observer = None
-    if worker.instrument_can_use_ccxx():
-        ccmx = getcfg("colorimeter_correction_matrix_file").split(":", 1)
-        if len(ccmx) > 1 and ccmx[1]:
-            ccmxpath = ccmx[1]
-            ccmx = os.path.basename(ccmx[1])
-            try:
-                cgats = CGATS(ccmxpath)
-            except (OSError, CGATSError):
-                pass
-            else:
-                filename, ext = os.path.splitext(ccmx)
-                desc = cgats.get_descriptor()
-                desc = lang.getstr(
-                    ext[1:] + "." + filename, default=desc.decode("utf-8")
-                )
-                argyll_compatible_path = make_argyll_compatible_path(desc)
-                if re.sub(r"[\\/:;*?\"<>|]+", "_", argyll_compatible_path) != filename:
-                    ccmx = "{} &amp;lt;{}&amp;gt;".format(
-                        desc, ellipsis_(ccmx, 31, "m")
+        ccmx = "None"
+        reference_observer = None
+        if worker.instrument_can_use_ccxx():
+            ccmx = getcfg("colorimeter_correction_matrix_file").split(":", 1)
+            if len(ccmx) > 1 and ccmx[1]:
+                ccmxpath = ccmx[1]
+                ccmx = os.path.basename(ccmx[1])
+                try:
+                    cgats = CGATS(ccmxpath)
+                except (OSError, CGATSError):
+                    pass
+                else:
+                    filename, ext = os.path.splitext(ccmx)
+                    desc = cgats.get_descriptor()
+                    desc = lang.getstr(
+                        ext[1:] + "." + filename, default=desc.decode("utf-8")
                     )
-                if cgats.get(0, cgats).type == "CCMX":
-                    reference_observer = cgats.queryv1("REFERENCE_OBSERVER")
+                    argyll_compatible_path = make_argyll_compatible_path(desc)
                     if (
-                        reference_observer
-                        and reference_observer != DEFAULTS["observer"]
+                        re.sub(r"[\\/:;*?\"<>|]+", "_", argyll_compatible_path)
+                        != filename
                     ):
-                        reference_observer = observers.get(
-                            reference_observer, reference_observer
+                        ccmx = "{} &amp;lt;{}&amp;gt;".format(
+                            desc, ellipsis_(ccmx, 31, "m")
                         )
-                        if reference_observer.lower() not in ccmx.lower():
-                            ccmx += " — " + reference_observer
-        else:
-            ccmx = "None"
+                    if cgats.get(0, cgats).type == "CCMX":
+                        reference_observer = cgats.queryv1("REFERENCE_OBSERVER")
+                        if (
+                            reference_observer
+                            and reference_observer != DEFAULTS["observer"]
+                        ):
+                            reference_observer = observers.get(
+                                reference_observer, reference_observer
+                            )
+                            if reference_observer.lower() not in ccmx.lower():
+                                ccmx += " — " + reference_observer
+            else:
+                ccmx = "None"
 
     if not sim_profile and use_sim and use_sim_as_output:
         sim_profile = profile
@@ -809,9 +1187,18 @@ def finalize_measurement_report(
         getcfg("measurement_report.trc_output_offset"),
     )
 
+    if self_check_report:
+        display = oprof.getDeviceModelDescription() or "N/A"
+        if oprof is not profile:
+            display += f" (Profile: {oprof.getDescription()})"
+        report_type = "Self Check"
+    else:
+        display = display_name
+        report_type = "Measurement"
+
     placeholders2data = {
         "${PLANCKIAN}": 'checked="checked"' if planckian else "",
-        "${DISPLAY}": display_name,
+        "${DISPLAY}": display,
         "${INSTRUMENT}": instrument,
         "${CORRECTION_MATRIX}": ccmx,
         "${BLACKPOINT}": "{:f} {:f} {:f}".format(
@@ -849,7 +1236,7 @@ def finalize_measurement_report(
         "${CAL_RGBLEVELS}": repr(cal_rgblevels),
         "${GRAYSCALE}": repr(gray) if gray else "null",
         "${REPORT_VERSION}": version_string,
-        "${REPORT_TYPE}": "Measurement",
+        "${REPORT_TYPE}": report_type,
     }
 
     report.create(save_path, placeholders2data, pack_js)

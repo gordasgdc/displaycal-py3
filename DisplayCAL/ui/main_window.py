@@ -150,7 +150,7 @@ from DisplayCAL import measurement_report as measurement_report_pipeline
 from DisplayCAL import localization as lang
 from DisplayCAL import profile_name as profile_name_mod
 from DisplayCAL.argyll import check_set_argyll_bin, make_argyll_compatible_path
-from DisplayCAL.cgats import CGATSError
+from DisplayCAL.cgats import CGATS, CGATSError
 from DisplayCAL.colorimeter_correction import ColorimeterCorrectionCatalog
 from DisplayCAL.config import (
     DEFAULTS,
@@ -193,6 +193,7 @@ from DisplayCAL.ui.measurement_flow import (
     run_measureframe_subprocess,
 )
 from DisplayCAL.ui.measurement_report import ReportWindow
+from DisplayCAL.ui.measurement_sanity_dialog import MeasurementSanityDialog
 from DisplayCAL.ui.profile_install_window import InstallProfileWindow
 from DisplayCAL.ui.progress_dialog import ProgressDialog
 from DisplayCAL.ui.tools.profile_info import ProfileInfoWindow
@@ -731,6 +732,13 @@ class MainWindow(BaseWindow):
         )
         self._pending_report_save_path: str | None = None
         self._pending_report_ti1_path: str | None = None
+        #: Whether the pending report run is a self-check (Alt+Measure) --
+        #: set by :meth:`_on_report_measure_requested`, read by
+        #: :meth:`_on_report_measurement_finished`.
+        self._pending_report_self_check: bool = False
+        #: The profile :meth:`_offer_profile_hires_b2a` is regenerating B2A
+        #: tables for, consumed by :meth:`_on_profile_hires_b2a_finished`.
+        self._pending_hires_b2a_profile: ICCProfile | None = None
         self._gamap_window: GamapWindow | None = None
         #: 3D LUT input-colorspace combo: description -> profile path,
         #: mirroring wx's ``MainFrame.input_profiles`` (populated once from
@@ -4064,18 +4072,26 @@ class MainWindow(BaseWindow):
             f" {lang.getstr('display.primary')}", ""
         )
 
-    def _on_report_measure_requested(self) -> None:
+    def _on_report_measure_requested(self, self_check_report: bool = False) -> None:
         """Handle the report window's Measure button.
 
-        Qt port of ``MainFrame.measurement_report_handler`` (minus the
-        self-check-report branch, see :mod:`DisplayCAL.measurement_report`'s
-        module docstring): resolves the chart/profile/simulation setup via
-        :func:`~DisplayCAL.measurement_report.resolve_report_context`, asks
-        where to save the report, confirms overwrite, then stages the run
-        through the same measurement-presentation engine
-        :meth:`begin_measurement` uses for the calibrate/profile buttons
-        (generalized here as :meth:`_begin_report_measurement` since the
-        report flow isn't one of the :class:`MeasurementAction` cases).
+        Qt port of ``MainFrame.measurement_report_handler``: resolves the
+        chart/profile/simulation setup via
+        :func:`~DisplayCAL.measurement_report.resolve_report_context`, refuses
+        to proceed (offering to regenerate instead) if the resolved profile's
+        B2A table is low-resolution, asks where to save the report, confirms
+        overwrite, then either looks the chart up directly through the
+        display profile (``self_check_report``, held Alt while clicking
+        Measure) or stages a real measurement through the same
+        measurement-presentation engine :meth:`begin_measurement` uses for the
+        calibrate/profile buttons (generalized here as
+        :meth:`_begin_report_measurement` since the report flow isn't one of
+        the :class:`MeasurementAction` cases).
+
+        Args:
+            self_check_report: ``True`` when Alt was held at click time (see
+                :class:`~DisplayCAL.ui.measurement_report.ReportWindow`'s
+                ``measure_requested`` signal).
         """
         if not check_set_argyll_bin():
             self._report_measurement_done()
@@ -4086,6 +4102,11 @@ class MainWindow(BaseWindow):
             )
         except measurement_report_pipeline.ReportSetupError as exception:
             QMessageBox.critical(self, APPNAME, str(exception))
+            self._report_measurement_done()
+            return
+
+        if measurement_report_pipeline.profile_b2a_is_lowres(context.profile):
+            self._offer_profile_hires_b2a(context.profile)
             self._report_measurement_done()
             return
 
@@ -4124,7 +4145,168 @@ class MainWindow(BaseWindow):
 
         self._pending_report_context = context
         self._pending_report_save_path = save_path
-        self._begin_report_measurement()
+        self._pending_report_self_check = self_check_report and bool(context.oprof)
+        if self._pending_report_self_check:
+            self._run_report_self_check()
+        else:
+            self._begin_report_measurement()
+
+    def _offer_profile_hires_b2a(self, profile: ICCProfile) -> None:
+        """Offer to regenerate a profile's low-resolution B2A tables.
+
+        Qt port of ``check_profile_b2a_hires``: the profile is never allowed
+        to proceed to the report (or, via :meth:`_on_profile_build_finished`,
+        the install offer) with a sub-17-step Argyll-generated B2A table --
+        this only offers to fix that up as an async side effect via
+        ``worker.update_profile_B2A``; the caller always aborts its own flow
+        regardless of the user's answer here.
+
+        Args:
+            profile: The profile whose B2A tables are low-resolution.
+        """
+        answer = QMessageBox.question(
+            self,
+            APPNAME,
+            lang.getstr("profile.b2a.lowres.warning"),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if answer != QMessageBox.Yes:
+            return
+        self._pending_hires_b2a_profile = profile
+        controller = self._ensure_run_controller()
+        controller.run(
+            self.worker.update_profile_B2A,
+            self._on_profile_hires_b2a_finished,
+            wargs=(profile,),
+            wkwargs={"clutres": getcfg("profile.b2a.hires.size")},
+            progress_msg=lang.getstr("profile.b2a.hires"),
+            pauseable=False,
+        )
+
+    def _on_profile_hires_b2a_finished(self, result: object) -> None:
+        """Save the regenerated profile and offer to install it.
+
+        Qt port of ``profile_hires_b2a_consumer`` (minus the "let the user
+        re-pick an arbitrary profile" dialog, since this Qt port only reaches
+        here from the measurement-report flow's already-resolved profile).
+
+        Args:
+            result: ``True``/a truthy value on success, ``False`` when the
+                run did not complete, or an ``Exception`` on failure.
+        """
+        profile = self._pending_hires_b2a_profile
+        if isinstance(result, Exception):
+            QMessageBox.critical(self, APPNAME, str(result))
+            return
+        if not result:
+            QMessageBox.information(
+                self, APPNAME, lang.getstr("error.profile.file_not_created")
+            )
+            return
+        profile_save_path = profile.filename
+        if not profile_save_path or not os.path.isfile(profile_save_path):
+            default_dir, default_file = os.path.split(profile_save_path or "")
+            path, _filter = QFileDialog.getSaveFileName(
+                self,
+                lang.getstr("save_as"),
+                os.path.join(default_dir, default_file),
+                f"{lang.getstr('filetype.icc')} (*.icc *.icm)",
+            )
+            if not path:
+                return
+            filename, ext = os.path.splitext(path)
+            if ext.lower() not in (".icc", ".icm"):
+                path += PROFILE_EXT
+            profile.setDescription(os.path.basename(filename))
+            profile_save_path = path
+        if not waccess(profile_save_path, os.W_OK):
+            QMessageBox.critical(
+                self,
+                APPNAME,
+                lang.getstr("error.access_denied.write", profile_save_path),
+            )
+            return
+        profile.calculate_id()
+        profile.write(profile_save_path)
+        if self._install_profile_window is None:
+            self._install_profile_window = InstallProfileWindow()
+        self._install_profile_window.load_profile(profile_save_path)
+        self._install_profile_window.show()
+        self._install_profile_window.raise_()
+        self._install_profile_window.activateWindow()
+
+    def _check_measurement_sanity(
+        self, ti3: CGATS, force: bool = False
+    ) -> tuple[bool, list]:
+        """Review/apply suspicious-patch edits before a TI3 is used further.
+
+        Qt port of ``measurement_file_check_confirm``: shows
+        :class:`~DisplayCAL.ui.measurement_sanity_dialog.MeasurementSanityDialog`
+        only when :func:`~DisplayCAL.measurement_report.resolve_sanity_check`
+        finds something suspicious, applies the user's edits/removals, and
+        writes the (possibly modified) TI3 back to disk.
+
+        Args:
+            ti3: The measured TI3 (or the whole CGATS document containing it).
+            force: Skip the ``ti3.check_sanity.auto`` gate (not currently
+                reachable from this Qt port; matches wx's parameter for
+                parity with a future "check measurement file..." tool).
+
+        Returns:
+            ``(proceed, removed_items)``: ``proceed`` is ``False`` only if
+            the user cancelled the review dialog. ``removed_items`` lists the
+            CGATS items removed (empty when nothing was removed or no review
+            was needed).
+        """
+        sanity_ctx = measurement_report_pipeline.resolve_sanity_check(ti3, force=force)
+        if sanity_ctx is None:
+            return True, []
+        title = (
+            os.path.basename(ti3.filename)
+            if ti3.filename
+            else lang.getstr("measurement_file.check_sanity")
+        )
+        dialog = MeasurementSanityDialog(self, title, sanity_ctx, force=force)
+        if dialog.exec() != QDialog.Accepted:
+            return False, []
+        removed_items = measurement_report_pipeline.apply_sanity_check_result(
+            sanity_ctx, dialog.removed_row_indexes(), dialog.mods()
+        )
+        if ti3.modified and ti3.filename and os.path.exists(ti3.filename) and not force:
+            try:
+                ti3.write()
+            except OSError as exception:
+                QMessageBox.critical(self, APPNAME, str(exception))
+                return False, []
+        return True, removed_items
+
+    def _run_report_self_check(self) -> None:
+        """Look the chart up through the display profile instead of measuring.
+
+        Qt port of ``measurement_report_handler``'s ``self_check_report and
+        oprof`` branch: no instrument is involved, so this runs synchronously
+        (no progress dialog / worker thread) via
+        :func:`~DisplayCAL.measurement_report.perform_self_check_lookup`, then
+        feeds the result into :meth:`_on_report_measurement_finished` exactly
+        like a real measurement would.
+        """
+        context = self._pending_report_context
+        try:
+            ti3_path, oprof = measurement_report_pipeline.perform_self_check_lookup(
+                self.worker,
+                context.ti1,
+                context.oprof,
+                context.devlink,
+                self._pending_report_save_path,
+            )
+        except Exception as exception:
+            QMessageBox.critical(self, APPNAME, str(exception))
+            self._report_measurement_done()
+            return
+        context.oprof = oprof
+        self._pending_report_ti1_path = f"{os.path.splitext(ti3_path)[0]}.ti1"
+        self._on_report_measurement_finished(True)
 
     def _begin_report_measurement(self) -> None:
         """Stage the report measurement and present the measurement area.
@@ -4188,11 +4370,10 @@ class MainWindow(BaseWindow):
     def _on_report_measurement_finished(self, result: object) -> None:
         """Process a completed report measurement and write the HTML report.
 
-        Qt port of ``MainFrame.measurement_report_consumer`` (minus the
-        dropped sanity-check dialog, see :mod:`DisplayCAL.measurement_report`'s
-        module docstring): the numeric TI3 processing and
-        ``placeholders2data`` assembly live in
-        :func:`~DisplayCAL.measurement_report.finalize_measurement_report`.
+        Qt port of ``MainFrame.measurement_report_consumer``: the sanity-check
+        review (see :meth:`_check_measurement_sanity`) runs first, then the
+        numeric TI3 processing and ``placeholders2data`` assembly, which live
+        in :func:`~DisplayCAL.measurement_report.finalize_measurement_report`.
 
         Args:
             result (object): ``True`` on success, ``False`` / ``None`` when
@@ -4210,6 +4391,16 @@ class MainWindow(BaseWindow):
             return
         context = self._pending_report_context
         ti3_path = os.path.splitext(self._pending_report_ti1_path)[0] + ".ti3"
+        try:
+            ti3_measured = CGATS(ti3_path)[0]
+        except (OSError, CGATSError) as exception:
+            QMessageBox.critical(self, APPNAME, str(exception))
+            self.worker.wrapup(exception)
+            return
+        proceed, removed_items = self._check_measurement_sanity(ti3_measured)
+        if not proceed:
+            self.worker.wrapup(False)
+            return
         try:
             measurement_report_pipeline.finalize_measurement_report(
                 worker=self.worker,
@@ -4234,6 +4425,8 @@ class MainWindow(BaseWindow):
                 observers=self._observers,
                 version_string=VERSION_STRING,
                 pack_js=bool(getcfg("report.pack_js")),
+                self_check_report=self._pending_report_self_check,
+                removed_items=removed_items,
             )
         except Exception as exception:
             QMessageBox.critical(self, APPNAME, str(exception))
@@ -5374,14 +5567,22 @@ class MainWindow(BaseWindow):
     def _build_profile_from_measurement(self) -> None:
         """Run the ``colprof`` stage to build a profile from the measurement.
 
-        Qt port of ``check_copy_ti3`` + ``start_profile_worker``: copies the
-        working TI3 into the profile save location, then runs
-        ``worker.create_profile`` through the same :class:`WorkerRunController`
-        used for the measurement itself. Drops the measurement-file sanity-check
-        confirmation dialog (``measurement_file_check_confirm``) that gates the
-        wx path's TI3 copy -- always proceeds, matching that dialog's "confirm"
-        branch.
+        Qt port of ``check_copy_ti3`` + ``start_profile_worker``: reviews the
+        just-measured working TI3 for suspicious patches (see
+        :meth:`_check_measurement_sanity`), copies it into the profile save
+        location, then runs ``worker.create_profile`` through the same
+        :class:`WorkerRunController` used for the measurement itself.
         """
+        ti3_path = measurement_report_pipeline.resolve_working_ti3_path(self.worker)
+        if ti3_path:
+            try:
+                ti3 = CGATS(ti3_path)
+            except (OSError, CGATSError) as exception:
+                QMessageBox.critical(self, APPNAME, str(exception))
+                return
+            proceed, _removed_items = self._check_measurement_sanity(ti3)
+            if not proceed:
+                return
         result = self.worker.wrapup(copy=True, remove=False, ext_filter=[".ti3"])
         if isinstance(result, Exception):
             QMessageBox.critical(self, APPNAME, str(result))

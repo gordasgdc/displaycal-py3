@@ -8,6 +8,7 @@ See ``DisplayCAL/ui/MAINFRAME_PORT_PLAN.md`` (Stage 3).
 
 import os
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -936,8 +937,12 @@ def _fake_report_context(**overrides):
         "ti1": object(),
         "ti3_ref": object(),
         "gray": None,
-        "profile": object(),
-        "oprof": object(),
+        # A bare ``object()`` has no ``.tags``, which
+        # ``measurement_report.profile_b2a_is_lowres()`` reads unconditionally
+        # -- an empty tags dict short-circuits it to ``False`` without a real
+        # ICCProfile.
+        "profile": SimpleNamespace(tags={}, creator=b"XXXX"),
+        "oprof": SimpleNamespace(tags={}, creator=b"XXXX"),
         "sim_profile": None,
         "devlink": None,
         "sim_ti3": None,
@@ -1211,11 +1216,30 @@ def test_report_measurement_finished_incomplete_wraps_up_silently(
     assert wrapup_calls == [(False,)]
 
 
-def test_report_measurement_finished_success_calls_finalize(window, monkeypatch):
+def _stage_real_ti3(tmp_path, data_path, name="work"):
+    """Copy a real (zero-suspicious-patches) fixture TI3 into ``tmp_path``.
+
+    ``_on_report_measurement_finished`` now loads the measured TI3 for real
+    (to run the sanity-check review, see :meth:`MainWindow
+    ._check_measurement_sanity`) before calling
+    ``finalize_measurement_report``, so tests need an actual file at the
+    derived path rather than a nonexistent placeholder. ``sample/0_16.ti3``
+    is confirmed clean under ``check_ti3`` (see
+    ``tests/test_ui_measurement_sanity_dialog.py``), so the sanity check is a
+    silent no-op even if ``ti3.check_sanity.auto`` were enabled.
+    """
+    ti3_path = tmp_path / f"{name}.ti3"
+    ti3_path.write_bytes((data_path / "sample" / "0_16.ti3").read_bytes())
+    return str(tmp_path / f"{name}.ti1"), str(ti3_path)
+
+
+def test_report_measurement_finished_success_calls_finalize(
+    window, monkeypatch, tmp_path, data_path
+):
     context = _fake_report_context()
     window._pending_report_context = context
     window._pending_report_save_path = "/tmp/report.html"
-    window._pending_report_ti1_path = "/tmp/work.ti1"
+    window._pending_report_ti1_path, ti3_path = _stage_real_ti3(tmp_path, data_path)
     calls = {}
     monkeypatch.setattr(
         mw.measurement_report_pipeline,
@@ -1225,18 +1249,22 @@ def test_report_measurement_finished_success_calls_finalize(window, monkeypatch)
 
     window._on_report_measurement_finished(True)
 
-    assert calls["ti3_path"] == "/tmp/work.ti3"
+    assert calls["ti3_path"] == ti3_path
     assert calls["profile"] is context.profile
     assert calls["save_path"] == "/tmp/report.html"
     assert calls["instrument_name"] == window.comport_ctrl.currentText()
     assert calls["observers"] is window._observers
+    assert calls["removed_items"] == []
+    assert calls["self_check_report"] is False
 
 
-def test_report_measurement_finished_finalize_error_shows_dialog(window, monkeypatch):
+def test_report_measurement_finished_finalize_error_shows_dialog(
+    window, monkeypatch, tmp_path, data_path
+):
     context = _fake_report_context()
     window._pending_report_context = context
     window._pending_report_save_path = "/tmp/report.html"
-    window._pending_report_ti1_path = "/tmp/work.ti1"
+    window._pending_report_ti1_path, _ti3_path = _stage_real_ti3(tmp_path, data_path)
     monkeypatch.setattr(
         mw.measurement_report_pipeline,
         "finalize_measurement_report",

@@ -12,14 +12,20 @@ Qt-free :mod:`DisplayCAL.measurement_report` module and are shared with the
 still-shipping wx path.
 
 Two pieces of the wx frame are deliberately *not* reproduced here and are
-surfaced as Qt signals for the not-yet-ported Qt main window to wire up later,
-matching the deferral :class:`DisplayCAL.ui.measure_frame.MeasureFrame` made for
-its Measure button:
+surfaced as Qt signals for the Qt main window to wire up, matching the
+deferral :class:`DisplayCAL.ui.measure_frame.MeasureFrame` made for its
+Measure button:
 
 * :attr:`ReportWindow.measure_requested` — the actual measurement run
   (``setup_measurement`` / ``measurement_report`` / the big
-  ``measurement_report_consumer`` ``placeholders2data`` assembly) stays in the
-  MainFrame for now; standalone the button just emits this signal.
+  ``measurement_report_consumer`` ``placeholders2data`` assembly) lives in
+  ``MainWindow``; standalone the button just emits this signal. Its bool
+  argument mirrors wx's ``wx.GetKeyState(wx.WXK_ALT)`` read in
+  ``measurement_report_handler``: ``True`` when Alt is held at click time,
+  requesting a "self-check report" (look the chart up through the display
+  profile's own tables instead of measuring) rather than a real measurement.
+  The button's label swaps to ``self_check_report`` while Alt is held, same as
+  wx's ``MainFrame.check_keydown`` polling timer.
 * :attr:`ReportWindow.edit_chart_requested` — opening the test-chart editor on
   the parent window; standalone it is a no-op.
 
@@ -40,6 +46,7 @@ from typing import TYPE_CHECKING
 from qtpy.QtCore import Qt, Signal
 from qtpy.QtGui import QIcon
 from qtpy.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QCheckBox,
     QComboBox,
@@ -229,7 +236,9 @@ class ReportWindow(BaseWindow):
 
     #: Emitted when the Measure button is pressed. The Qt main window connects
     #: this to its measurement flow; standalone it just re-enables the button.
-    measure_requested = Signal()
+    #: The argument is ``True`` when Alt was held at click time (self-check
+    #: report), matching wx's ``wx.GetKeyState(wx.WXK_ALT)`` read.
+    measure_requested = Signal(bool)
 
     #: Emitted when the test-chart-editor button is pressed. The Qt main window
     #: opens its test-chart editor; standalone it is a no-op.
@@ -327,12 +336,22 @@ class ReportWindow(BaseWindow):
         button_row.addStretch(1)
         self.measurement_report_btn = QPushButton(lang.getstr("measure"))
         self.measurement_report_btn.setDefault(True)
-        self.measurement_report_btn.clicked.connect(self.measure_requested.emit)
+        self.measurement_report_btn.clicked.connect(self._measure_btn_clicked)
         button_row.addWidget(self.measurement_report_btn)
         root.addLayout(button_row)
 
         root.addWidget(self._build_info_panel(), 1)
         self.setCentralWidget(central)
+
+    def _measure_btn_clicked(self) -> None:
+        """Emit :attr:`measure_requested`, reporting whether Alt is held.
+
+        Qt equivalent of wx's ``wx.GetKeyState(wx.WXK_ALT)`` read in
+        ``measurement_report_handler`` -- holding Alt while clicking requests
+        a self-check report instead of a real measurement.
+        """
+        self_check_report = bool(QApplication.keyboardModifiers() & Qt.AltModifier)
+        self.measure_requested.emit(self_check_report)
 
     def _add_row(self, left: QWidget | None, right: QWidget) -> None:
         """Add a label/control pair to the settings grid.

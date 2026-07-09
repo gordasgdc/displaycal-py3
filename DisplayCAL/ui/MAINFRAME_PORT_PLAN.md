@@ -1333,13 +1333,85 @@ the report flow isn't a `MeasurementAction`). 28 new tests in
 fixtures against a minimal `FakeWorker`, no Argyll/display needed) and 17 in
 `tests/test_ui_main_window.py`.
 
-Deliberately not reproduced (documented in `measurement_report.py`'s module
-docstring): the self-check report (holding Alt while clicking Measure looks up
-the chart through the display profile's own B2A table instead of measuring --
-the button doesn't even capture the modifier yet), `check_profile_b2a_hires`'s
-low-res-B2A refusal + "regenerate hires tables?" offer (always proceeds with the
-profile as-is now), and `measurement_file_check_confirm`'s interactive
-suspicious-patch review grid (always proceeds with the measured data unmodified).
+**Measurement report sub-slice iv — self-check report, low-res-B2A offer,
+sanity-check review grid — DONE (2026-07-09).** Closed all three deferrals
+left open above (maintainer's choice, "measurement report edge cases", over
+the elevated-scope profile install and the madVR/Prisma 3D LUT API install
+destinations).
+
+- **Self-check report** (hold Alt while clicking Measure): `ReportWindow
+  .measure_requested` (`ui/measurement_report.py`) now carries a bool --
+  `_measure_btn_clicked` reads `QApplication.keyboardModifiers() &
+  Qt.AltModifier` at click time, the Qt equivalent of wx's
+  `wx.GetKeyState(wx.WXK_ALT)` read in `measurement_report_handler` (the
+  button-label swap wx's `MainFrame.check_keydown` timer does lives on a
+  different widget in this port -- the main window's own always-visible
+  `measurement_report_btn`, which here only opens the settings window rather
+  than triggering measurement directly -- so it has no faithful 1:1 target and
+  was left unported). New `DisplayCAL/measurement_report.py::
+  perform_self_check_lookup` ports the `self_check_report and oprof` branch:
+  writes `oprof` (baking in its calibration curve via a real `applycal` run
+  first if the device link expects one applied, reusing the already-toolkit-
+  neutral `_applycal_bug_workaround`), looks the chart up through it directly
+  (`chart_lookup(..., pcs="x", intent="a", white_patches=0)`, no instrument
+  involved) and stages the result as a TI3 exactly like a real measurement's
+  output. `MainWindow._run_report_self_check` runs it synchronously (no
+  progress dialog -- it's local computation, no subprocess/instrument
+  round-trip) and feeds the result into the same
+  `_on_report_measurement_finished` a real measurement uses.
+  `finalize_measurement_report` gained a `self_check_report` parameter
+  swapping in the profile's own device/description for the
+  display/instrument/CCMX placeholders (`report_type="Self Check"`,
+  `instrument="N/A"`, `ccmx="N/A"`), matching `measurement_report_consumer`'s
+  own branch.
+- **`check_profile_b2a_hires`'s low-res-B2A offer**: new pure predicate
+  `profile_b2a_is_lowres()` (B2A0 present, `LUT16Type`, `clut_grid_steps <
+  17`, Argyll-created). `MainWindow._offer_profile_hires_b2a` gates both
+  `_on_report_measure_requested` (right after `resolve_report_context`, same
+  point wx's `check_profile_b2a_hires` call sits) -- the report is always
+  refused when flagged, offering the regenerate-and-save side effect
+  independently via `worker.update_profile_B2A` /
+  `_on_profile_hires_b2a_finished` (a port of `profile_hires_b2a_consumer`:
+  save-path picker if the profile has no file yet, then install-offer via the
+  already-ported `InstallProfileWindow`). Not reproduced: the standalone
+  "Tools > Advanced" menu entry that lets the wx dialog re-pick an arbitrary
+  profile (`profile_hires_b2a_handler`'s own entry point) -- the Tools menu
+  itself isn't ported, so this Qt port only reaches the regenerate offer from
+  the measurement-report flow's already-resolved profile.
+- **`measurement_file_check_confirm`'s suspicious-patch review grid**: new
+  `DisplayCAL/ui/measurement_sanity_dialog.py::MeasurementSanityDialog`, a
+  `QTableWidget`-based port of wx's `MeasurementFileCheckSanityDialog`
+  (checkbox column, editable R/G/B and X/Y/Z cells with live sRGB/measured
+  colour swatches, per-cell bold-red marking for out-of-tolerance deltas,
+  select-all/deselect-all toggle, invert-selection). All the delta-E math
+  stays toolkit-neutral: `measurement_report.py` gained
+  `resolve_sanity_check()` (the `check_ti3`-driven detection + row/dedup
+  logic), `recompute_sanity_row()` (the live-edit recompute via
+  `check_ti3_criteria1`/`2`, faithfully reproducing a wx quirk where a row's
+  recompute reads its *original* "previous row" values, not any of that row's
+  own since-edited ones), `apply_sanity_check_result()` (removal via
+  `CGATS.remove()` + mods application) and `resync_report_ti3_removals()` (the
+  reference/simulation-TI3 patch-count resync the measurement-report path
+  needs when items are dropped). New `MainWindow._check_measurement_sanity`
+  wires the dialog into both call sites wx gates through this same helper:
+  `_build_profile_from_measurement` (new `resolve_working_ti3_path()` finds
+  the just-measured working TI3 the way `check_copy_ti3`'s no-explicit-TI3
+  branch does) and `_on_report_measurement_finished` (loads `ti3_measured`
+  before `finalize_measurement_report`, which re-loads the same -- now
+  possibly user-edited-and-rewritten -- file from disk, so no `ti3_measured`
+  parameter needed on that function; only `removed_items` was added for the
+  resync). `force=True` (the standalone "check measurement file..." tool's
+  parameter, not currently reachable from this Qt port) is threaded through
+  for parity but always `False` from both integration points today.
+
+Not reproduced (documented in the relevant module docstrings): the standalone
+"Tools > Advanced > Check measurement file..." tool and its
+"check automatically" menu toggle (the Tools menu isn't ported at all yet);
+the Space-key checkbox shortcut in the review grid (Qt's default item
+delegate already supports mouse-toggling a checkable cell). 52 new/updated
+tests in `tests/test_measurement_report.py`, 10 in the new
+`tests/test_ui_measurement_sanity_dialog.py`, 2 in `tests/test_ui_measurement_
+report.py`.
 
 **Colorimeter-correction sub-slice i — CCXX metadata injection — DONE.**
 `DisplayCAL/colorimeter_correction.py` (another plain, Qt-free `DisplayCAL`

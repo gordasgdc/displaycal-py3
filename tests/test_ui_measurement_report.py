@@ -163,3 +163,27 @@ class TestSignals:
         window.edit_chart_requested.connect(lambda: received.append(True))
         window.chart_btn.click()
         assert received == [True]
+
+    def test_measure_button_reports_alt_modifier_as_self_check(self, window, monkeypatch):
+        from qtpy.QtCore import Qt
+        from qtpy.QtWidgets import QApplication
+
+        received = []
+        window.measure_requested.connect(received.append)
+        monkeypatch.setattr(
+            QApplication, "keyboardModifiers", staticmethod(lambda: Qt.AltModifier)
+        )
+        window._measure_btn_clicked()
+        assert received == [True]
+
+    def test_measure_button_without_alt_is_not_self_check(self, window, monkeypatch):
+        from qtpy.QtCore import Qt
+        from qtpy.QtWidgets import QApplication
+
+        received = []
+        window.measure_requested.connect(received.append)
+        monkeypatch.setattr(
+            QApplication, "keyboardModifiers", staticmethod(lambda: Qt.NoModifier)
+        )
+        window._measure_btn_clicked()
+        assert received == [False]
