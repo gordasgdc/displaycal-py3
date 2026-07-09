@@ -241,6 +241,43 @@ class TestImportController:
         assert seen_asroot == [True]
         assert isinstance(worker.password_prompt, ccio.PasswordPromptAdapter)
 
+    def test_asroot_choice_threads_through_auto_download_fallback(
+        self, qapp, worker, monkeypatch
+    ):
+        # Regression test for issue #810: the auto-download-fallback loop in
+        # _do_import() once hardcoded asroot=False in its detect_import_kind()
+        # call instead of threading dialog.asroot through, unlike the first
+        # (direct-path) call site covered by the test above. Uses "auto" mode
+        # with discover_auto_import_paths() mocked empty so the direct-path
+        # loop never calls detect_import_kind(), isolating the fallback loop.
+        def _fake_exec(self):
+            self._install_systemwide.setChecked(True)
+            self._choose_auto()
+            return ccio.QDialog.Accepted
+
+        monkeypatch.setattr(ccio._ImportOptionsDialog, "exec_", _fake_exec)
+        monkeypatch.setattr(
+            ccio.ccxx_helpers, "discover_auto_import_paths", lambda *a, **k: {}
+        )
+        monkeypatch.setattr(
+            ccio.Worker, "download", lambda self, *a, **k: "/tmp/i1d3_download"
+        )
+        seen_asroot = []
+
+        def fake_detect(worker_, result, i1d3, i1d3ccss, spyd4, spyd4en, icd, oeminst, path, asroot):
+            seen_asroot.append(asroot)
+            return True, True, spyd4, icd
+
+        monkeypatch.setattr(ccio.ccxx_helpers, "detect_import_kind", fake_detect)
+        monkeypatch.setattr(ccio.QMessageBox, "information", lambda *a, **k: None)
+        monkeypatch.setattr(ccio.QMessageBox, "critical", lambda *a, **k: None)
+        controller = ccio.ImportController(worker, None)
+        finished = []
+        controller.finished.connect(lambda: finished.append(True))
+        controller.run()
+        assert _spin_until(qapp, lambda: finished)
+        assert seen_asroot == [True]
+
 
 class TestUploadController:
     def test_non_argyll_originator_is_rejected(
