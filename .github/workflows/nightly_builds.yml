@@ -423,6 +423,9 @@ jobs:
             --depends "python3 (>= 3.9)" \
             --depends "python3-pip" \
             --depends "python3-venv" \
+            --depends "pkg-config" \
+            --depends "libdbus-1-dev" \
+            --depends "libdbus-glib-1-dev" \
             --after-install /tmp/postinstall.sh \
             --before-remove /tmp/preremove.sh \
             -C /tmp/displaycal-staging \
@@ -449,6 +452,9 @@ jobs:
             --category "Applications/Multimedia" \
             --depends "python3 >= 3.9" \
             --depends "python3-pip" \
+            --depends "pkgconfig" \
+            --depends "dbus-devel" \
+            --depends "dbus-glib-devel" \
             --after-install /tmp/postinstall.sh \
             --before-remove /tmp/preremove.sh \
             -C /tmp/displaycal-staging \
