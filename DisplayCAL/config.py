@@ -2400,6 +2400,9 @@ def get_total_patches(
         if (multi_bcc_steps is None and getcfg("argyll.version") >= "1.6")
         else multi_bcc_steps
     )
+    if multi_bcc_steps is None:
+        # Argyll < 1.6 has no multi-BCC-step support.
+        multi_bcc_steps = 0
     fullspread_patches = (
         getcfg("tc_fullspread_patches")
         if fullspread_patches is None

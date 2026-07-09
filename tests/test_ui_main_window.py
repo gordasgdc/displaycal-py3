@@ -655,13 +655,95 @@ def test_gamap_btn_shows_notice(window, monkeypatch):
     assert calls == [True]
 
 
-def test_create_testchart_btn_shows_notice(window, monkeypatch):
+def test_create_testchart_btn_handler_opens_window(window):
+    window._create_testchart_btn_handler()
+    try:
+        assert window._testchart_editor_window is not None
+    finally:
+        window._testchart_editor_window.close()
+
+
+def test_open_testchart_editor_reuses_window_instance(window):
+    window._open_testchart_editor()
+    try:
+        first = window._testchart_editor_window
+        window._open_testchart_editor()
+        assert window._testchart_editor_window is first
+    finally:
+        window._testchart_editor_window.close()
+
+
+def test_ccxx_import_action_handler_refreshes_after_finish(window, monkeypatch):
+    from DisplayCAL.ui import colorimeter_correction_io as ccio
+
+    def fake_run(self):
+        self.finished.emit()
+
+    monkeypatch.setattr(ccio.ImportController, "run", fake_run)
+    calls = []
+    monkeypatch.setattr(
+        window,
+        "update_colorimeter_correction_matrix_ctrl_items",
+        lambda *a, **k: calls.append((a, k)),
+    )
+    window._ccxx_import_action_handler()
+    assert calls
+    assert window._ccxx_import_controller is None
+
+
+def test_ccxx_upload_action_handler_clears_controller_after_finish(
+    window, monkeypatch
+):
+    from DisplayCAL.ui import colorimeter_correction_io as ccio
+
+    def fake_run(self, path=None):
+        self.finished.emit()
+
+    monkeypatch.setattr(ccio.UploadController, "run", fake_run)
+    window._ccxx_upload_action_handler()
+    assert window._ccxx_upload_controller is None
+
+
+def test_measurement_report_btn_handler_opens_window(window):
+    window.measurement_report_btn_handler()
+    try:
+        assert window._report_window is not None
+    finally:
+        window._report_window.close()
+
+
+def test_measurement_report_btn_handler_reuses_window_instance(window):
+    window.measurement_report_btn_handler()
+    try:
+        first = window._report_window
+        window.measurement_report_btn_handler()
+        assert window._report_window is first
+    finally:
+        window._report_window.close()
+
+
+def test_report_window_edit_chart_requested_opens_testchart_editor(window):
+    window.measurement_report_btn_handler()
+    try:
+        window._report_window.edit_chart_requested.emit()
+        assert window._testchart_editor_window is not None
+    finally:
+        window._report_window.close()
+        if window._testchart_editor_window is not None:
+            window._testchart_editor_window.close()
+
+
+def test_report_window_measure_requested_shows_notice(window, monkeypatch):
     calls = []
     monkeypatch.setattr(
         mw.QMessageBox, "information", staticmethod(lambda *a, **k: calls.append(True))
     )
-    window._create_testchart_btn_handler()
-    assert calls == [True]
+    window.measurement_report_btn_handler()
+    try:
+        window._report_window.measure_requested.emit()
+        assert calls == [True]
+    finally:
+        window._report_window.close()
 
 
 def test_testchart_btn_handler_cancelled_is_noop(window, monkeypatch):

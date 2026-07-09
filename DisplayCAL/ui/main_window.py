@@ -29,24 +29,31 @@ Deferred to later slices (Pile 2 / Stage 5): the worker-driven Argyll execution
 behind :attr:`MainWindow.measurement_requested` (the progress dialog and
 interactive display-adjustment window), the pattern-generator setup dialogs
 (Prisma / madTPG / Resolve), the pre-flight confirmation / overwrite dialogs, the
-visual-editor / ambient-measure buttons, the gamap options window and testchart
-editor themselves (their launch buttons exist and show a not-yet-available
-notice; see :mod:`DisplayCAL.profile_name`'s module docstring), the
-black-point-rate advanced control, actually creating a 3D LUT
-(``lut3d_create_btn`` isn't wired into the button bar yet; see
-:mod:`DisplayCAL.lut3d_settings`'s module docstring), and (by extension) the
-``show_advanced_options`` gating of the whitepoint colour-temperature-locus row
-(Calibration tab), the only row of its kind left ungated since the 3D LUT tab's
-own ``show_advanced_options``-gated rows are wired as of
-:meth:`MainWindow._apply_lut3d_visibility`. ``show_advanced_options`` itself is
-wired (an Options-menu checkbox gating every other row it controls that this
-port does have, including the profile-type row's gamap button and the
-testchart-patch-sequence row), see
+visual-editor / ambient-measure buttons, the gamap options window itself
+(``GamapFrame`` isn't ported at all yet, so :meth:`MainWindow._gamap_btn_handler`
+still shows a not-yet-available notice), the black-point-rate advanced control,
+actually creating a 3D LUT (``lut3d_create_btn`` isn't wired into the button bar
+yet; see :mod:`DisplayCAL.lut3d_settings`'s module docstring), and generating an
+actual measurement report (the settings window opens via
+:meth:`MainWindow.measurement_report_btn_handler`, reusing the already-ported
+:mod:`DisplayCAL.ui.tools.testchart_editor` for its "edit chart" button, but its
+own Measure button still shows a not-yet-available notice — see
+:mod:`DisplayCAL.ui.measurement_report`'s module docstring for what remains).
+Also deferred, by extension: the ``show_advanced_options`` gating of the
+whitepoint colour-temperature-locus row (Calibration tab), the only row of its
+kind left ungated since the 3D LUT tab's own ``show_advanced_options``-gated
+rows are wired as of :meth:`MainWindow._apply_lut3d_visibility`.
+``show_advanced_options`` itself is wired (an Options-menu checkbox gating every
+other row it controls that this port does have, including the profile-type
+row's gamap button and the testchart-patch-sequence row), see
 :meth:`MainWindow._update_advanced_options_visibility`. Profile-name token
 expansion and the testchart chooser / patch-count / estimated-measurement-time
 controls are wired via the toolkit-neutral :mod:`DisplayCAL.profile_name`
 helpers, and the 3D LUT tab's TRC/HDR/content-colorspace/gamut-mapping/encoding
-controls via :mod:`DisplayCAL.lut3d_settings`.
+controls via :mod:`DisplayCAL.lut3d_settings`. The Tools menu carries the
+colorimeter-correction import/upload actions
+(:mod:`DisplayCAL.ui.colorimeter_correction_io`'s ``ImportController`` /
+``UploadController``); the rest of wx's larger ``menu.tools`` isn't reproduced.
 
 The window is opt-in behind ``DISPLAYCAL_UI=qt`` / ``--qt`` (wired in
 :mod:`DisplayCAL.main`), so it never displaces the still-shipping wx main window.
@@ -125,7 +132,11 @@ from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import get_theme_pixmap, get_themed_pixmap
 from DisplayCAL.ui.theme import is_dark
 from DisplayCAL.ui.base_window import BaseWindow
-from DisplayCAL.ui.colorimeter_correction_io import WebCheckController
+from DisplayCAL.ui.colorimeter_correction_io import (
+    ImportController,
+    UploadController,
+    WebCheckController,
+)
 from DisplayCAL.ui.colorimeter_correction_window import CreateCorrectionWindow
 from DisplayCAL.ui.display_adjustment_window import DisplayAdjustmentWindow
 from DisplayCAL.ui.measure_frame import MeasureFrame
@@ -137,9 +148,11 @@ from DisplayCAL.ui.measurement_flow import (
     observer_items,
     run_measureframe_subprocess,
 )
+from DisplayCAL.ui.measurement_report import ReportWindow
 from DisplayCAL.ui.profile_install_window import InstallProfileWindow
 from DisplayCAL.ui.progress_dialog import ProgressDialog
 from DisplayCAL.ui.tools.profile_info import ProfileInfoWindow
+from DisplayCAL.ui.tools.testchart_editor import TestchartEditorWindow
 from DisplayCAL.ui.worker_runner import AdjustmentController, WorkerRunController
 from DisplayCAL.util_decimal import stripzeros
 from DisplayCAL.util_dict import dict_sort
@@ -580,6 +593,8 @@ class MainWindow(BaseWindow):
         self._ccmx_catalog = ColorimeterCorrectionCatalog()
         self._ccxx_web_controller: WebCheckController | None = None
         self._ccxx_create_window: CreateCorrectionWindow | None = None
+        self._ccxx_import_controller: ImportController | None = None
+        self._ccxx_upload_controller: UploadController | None = None
         #: Recent calibrations/profiles (index 0 is always "", the "new
         #: settings" choice) and bundled presets, mirroring wx's
         #: ``MainFrame.recent_cals`` / ``.presets``.
@@ -594,6 +609,8 @@ class MainWindow(BaseWindow):
         #: always triggers an initial population).
         self._testchart_paths: list[str] = []
         self._current_testchart_path: str | None = None
+        self._testchart_editor_window: TestchartEditorWindow | None = None
+        self._report_window: ReportWindow | None = None
         #: 3D LUT input-colorspace combo: description -> profile path,
         #: mirroring wx's ``MainFrame.input_profiles`` (populated once from
         #: the bundled reference profiles, see ``_lut3d_init_input_profiles``).
@@ -602,6 +619,7 @@ class MainWindow(BaseWindow):
         self._build_ui()
         self.init_menubar()
         self._build_options_menu()
+        self._build_tools_menu()
         self.setup_language()
         # Run the committed Argyll measurement when a run is requested.
         self.measurement_requested.connect(self._on_measurement_requested)
@@ -710,6 +728,53 @@ class MainWindow(BaseWindow):
         self.show_advanced_options_action.toggled.connect(
             self._show_advanced_options_toggled
         )
+
+    def _build_tools_menu(self) -> None:
+        """Add a Tools menu with the colorimeter-correction import/upload actions.
+
+        Toolkit-neutral scope note: wx's ``menu.tools`` is a large menu (display
+        detection, video-card-gamma-table reset, instrument-driver install,
+        reports, advanced debug tools, ...); only the colorimeter-correction
+        import/upload entries are reproduced here. The other three entries of
+        wx's ``colorimeter_correction_matrix_file`` submenu are already reachable
+        elsewhere on this window: "choose" is the CCMX/CCSS combo on the
+        Display & Instrument tab, "web check" is
+        :meth:`colorimeter_correction_web_btn_handler` (same tab), and "create"
+        is :meth:`colorimeter_correction_create_btn_handler` (same tab).
+        """
+        tools_menu = self.menuBar().addMenu(f"&{lang.getstr('menu.tools')}")
+        ccxx_menu = tools_menu.addMenu(
+            lang.getstr("colorimeter_correction_matrix_file")
+        )
+        import_action = ccxx_menu.addAction(
+            lang.getstr("colorimeter_correction.import")
+        )
+        import_action.triggered.connect(self._ccxx_import_action_handler)
+        upload_action = ccxx_menu.addAction(
+            lang.getstr("colorimeter_correction.upload")
+        )
+        upload_action.triggered.connect(self._ccxx_upload_action_handler)
+
+    def _ccxx_import_action_handler(self) -> None:
+        """Auto-discover and import colorimeter corrections from disk."""
+        controller = ImportController(self.worker, self)
+        controller.finished.connect(self._on_ccxx_import_finished)
+        self._ccxx_import_controller = controller
+        controller.run()
+
+    def _on_ccxx_import_finished(self) -> None:
+        self._ccxx_import_controller = None
+        self.update_colorimeter_correction_matrix_ctrl_items(force=True)
+
+    def _ccxx_upload_action_handler(self) -> None:
+        """Upload a CCMX/CCSS correction file to the online database."""
+        controller = UploadController(self.worker, self)
+        controller.finished.connect(self._on_ccxx_upload_finished)
+        self._ccxx_upload_controller = controller
+        controller.run()
+
+    def _on_ccxx_upload_finished(self) -> None:
+        self._ccxx_upload_controller = None
 
     def _show_advanced_options_toggled(self, checked: bool) -> None:
         """Persist the ``show_advanced_options`` flag and refresh gated rows."""
@@ -2075,10 +2140,13 @@ class MainWindow(BaseWindow):
         )
         self.profile_btn = QPushButton(lang.getstr("button.profile"))
         self.profile_btn.clicked.connect(self.profile_btn_handler)
+        self.measurement_report_btn = QPushButton(lang.getstr("measurement_report"))
+        self.measurement_report_btn.clicked.connect(self.measurement_report_btn_handler)
         for button in (
             self.calibrate_btn,
             self.calibrate_and_profile_btn,
             self.profile_btn,
+            self.measurement_report_btn,
         ):
             button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
             row.addWidget(button)
@@ -3729,16 +3797,63 @@ class MainWindow(BaseWindow):
         )
 
     def _create_testchart_btn_handler(self) -> None:
-        """Open the testchart editor.
+        """Open the testchart editor."""
+        self._open_testchart_editor()
 
-        Not yet ported: wx's ``TestchartEditor`` is a separate tool window,
-        out of scope for this Qt port slice.
+    def _open_testchart_editor(self) -> None:
+        """Show the testchart editor, (re)loading the configured testchart.
+
+        Mirrors wx's ``create_testchart_btn_handler``: reuses a single window
+        instance across calls, only reloading when the configured
+        ``testchart.file`` differs from what the editor currently holds (or on
+        first open).
         """
+        path = getcfg("testchart.file")
+        window = self._testchart_editor_window
+        first_open = window is None
+        if first_open:
+            window = TestchartEditorWindow()
+            self._testchart_editor_window = window
+        if path != "auto" and (
+            first_open or window.ti1 is None or window.ti1.filename != path
+        ):
+            window.load_file(path)
+        window.show()
+        window.raise_()
+        window.activateWindow()
+
+    def measurement_report_btn_handler(self) -> None:
+        """Open the measurement-report settings window.
+
+        Mirrors wx's ``self.reportframe`` singleton: reuses a single window
+        instance, raising it if already open. Not yet ported: actually
+        generating a report (``MainFrame.measurement_report_handler`` /
+        ``measurement_report_consumer``'s chart/profile resolution and
+        ``placeholders2data`` assembly, see
+        :mod:`DisplayCAL.ui.measurement_report`'s module docstring) — the
+        window's Measure button surfaces that as a not-yet-available notice.
+        Its "edit chart" button already opens the real, ported testchart
+        editor via :meth:`_open_testchart_editor`.
+        """
+        window = self._report_window
+        if window is None:
+            window = ReportWindow(self)
+            window.measure_requested.connect(self._on_report_measure_requested)
+            window.edit_chart_requested.connect(self._open_testchart_editor)
+            self._report_window = window
+        window.show()
+        window.raise_()
+        window.activateWindow()
+
+    def _on_report_measure_requested(self) -> None:
+        """Handle the report window's Measure button (not yet ported)."""
         QMessageBox.information(
             self,
-            lang.getstr("testchart.edit"),
-            "The testchart editor isn't available in this Qt build yet.",
+            lang.getstr("measurement_report"),
+            "Creating a measurement report isn't available in this Qt build yet.",
         )
+        if self._report_window is not None:
+            self._report_window.measurement_report_btn.setEnabled(True)
 
     def _testchart_ctrl_changed(self, index: int) -> None:
         """Load the newly selected testchart."""
