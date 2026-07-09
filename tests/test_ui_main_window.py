@@ -618,7 +618,11 @@ def test_calibration_controls_reflect_config(qapp, stub_worker):
 # --- Profiling tab wiring --------------------------------------------------
 
 
-def test_profile_type_persists(window):
+def test_profile_type_persists(window, monkeypatch):
+    # A real combo click can pop the CCXX-testchart-recommendation dialog
+    # (see the tests further below) -- stub it so this test only exercises
+    # the persistence itself.
+    monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.Ok)
     window.profile_type_ctrl.setCurrentIndex(2)  # LabLUT
     assert getcfg("profile.type") == "l"
 
@@ -650,14 +654,16 @@ def test_profile_type_ctrl_translates_labels(window):
     )
 
 
-def test_profile_type_ctrl_enables_gamap_only_for_lut_types(window):
+def test_profile_type_ctrl_enables_gamap_only_for_lut_types(window, monkeypatch):
+    monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.Ok)
     window.profile_type_ctrl.setCurrentIndex(2)  # LabLUT ("l", a LUT type)
     assert window.gamap_btn.isEnabled()
     window.profile_type_ctrl.setCurrentIndex(4)  # 1xCurve+MTX ("S", not LUT)
     assert not window.gamap_btn.isEnabled()
 
 
-def test_profile_type_ctrl_locks_quality_for_gamma_types(window):
+def test_profile_type_ctrl_locks_quality_for_gamma_types(window, monkeypatch):
+    monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.Ok)
     window.profile_type_ctrl.setCurrentIndex(5)  # 3xGamma+MTX ("g")
     assert not window.profile_quality_ctrl.isEnabled()
     assert getcfg("profile.quality") == "h"
@@ -665,13 +671,114 @@ def test_profile_type_ctrl_locks_quality_for_gamma_types(window):
     assert window.profile_quality_ctrl.isEnabled()
 
 
-def test_profile_type_ctrl_nudges_bpc_default(window):
+def test_profile_type_ctrl_nudges_bpc_default(window, monkeypatch):
+    monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.Ok)
     setcfg("profile.type", "s")  # shaper+matrix, not yet a LUT type
     window.black_point_compensation_cb.setChecked(False)
     window.profile_type_ctrl.setCurrentIndex(1)  # XYZLUT ("x", a LUT type)
     assert getcfg("profile.black_point_compensation") == 0
     window.profile_type_ctrl.setCurrentIndex(4)  # 1xCurve+MTX ("S")
     assert getcfg("profile.black_point_compensation") == 1
+
+
+def test_profile_type_ctrl_resets_testchart_on_type_change(window, monkeypatch):
+    # Entering the LUT category from outside it is a "proftype_changed"
+    # transition (see ``_profile_type_ctrl_changed``'s ``curve_or_gamma``
+    # logic), so it should force the testchart back to its "auto" default.
+    monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.Ok)
+    setcfg("profile.type", "S")
+    window._set_testchart(window._testchart_paths[1])
+    assert getcfg("testchart.file") != "auto"
+    window.profile_type_ctrl.setCurrentIndex(2)  # LabLUT ("l", a LUT type)
+    assert getcfg("testchart.file") == "auto"
+
+
+def test_profile_type_ctrl_resets_testchart_within_same_category_too(
+    window, monkeypatch
+):
+    # wx's ``set_default_testchart`` runs unconditionally on every profile-
+    # type-handler call (only the separate CCXX-recommendation dialog is
+    # gated on ``force``/a real event) -- a custom testchart is reset even
+    # for a same-category "s" -> "S" change. ``force`` (True only on an
+    # actual category change) has no observable effect here: it only
+    # protects a testchart whose basename is already one of the bundled
+    # default names, and every ``TESTCHART_DEFAULTS`` entry resolves to
+    # "auto" today, which short-circuits before ``force`` is ever consulted.
+    monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.Ok)
+    setcfg("profile.type", "s")
+    window._set_testchart(window._testchart_paths[1])
+    assert getcfg("testchart.file") != "auto"
+    window.profile_type_ctrl.setCurrentIndex(4)  # 1xCurve+MTX ("S"), same category
+    assert getcfg("testchart.file") == "auto"
+
+
+def test_profile_type_ctrl_offers_testchart_recommendation(window, monkeypatch):
+    setcfg("profile.type", "S")
+    # ``_apply_default_testchart`` (always run first) resets the testchart to
+    # "auto" and recomputes the patch count from ``testchart.auto_optimize``
+    # before the recommendation check ever runs, so the low patch count has
+    # to be set up via this key, not the label directly.
+    setcfg("testchart.auto_optimize", 1)  # patches=34, well under any recommendation
+    questions = []
+    monkeypatch.setattr(
+        mw.QMessageBox,
+        "question",
+        lambda *a, **k: questions.append(a) or mw.QMessageBox.Ok,
+    )
+
+    window.profile_type_ctrl.setCurrentIndex(2)  # LabLUT ("l"), user click
+
+    assert questions
+    assert getcfg("testchart.file") == "auto"
+    assert getcfg("testchart.auto_optimize") > 1
+
+
+def test_profile_type_ctrl_declines_testchart_recommendation(window, monkeypatch):
+    setcfg("profile.type", "S")
+    setcfg("testchart.auto_optimize", 1)
+    monkeypatch.setattr(
+        mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.Cancel
+    )
+
+    window.profile_type_ctrl.setCurrentIndex(2)  # LabLUT ("l"), user click
+
+    assert getcfg("testchart.auto_optimize") == 1
+
+
+def test_profile_type_ctrl_no_recommendation_dialog_for_ccxx_testchart(
+    window, monkeypatch
+):
+    setcfg("profile.type", "S")
+    setcfg("testchart.auto_optimize", 1)
+    monkeypatch.setattr(mw.config, "is_ccxx_testchart", lambda *a, **k: True)
+    questions = []
+    monkeypatch.setattr(
+        mw.QMessageBox, "question", lambda *a, **k: questions.append(a) or mw.QMessageBox.Ok
+    )
+
+    window.profile_type_ctrl.setCurrentIndex(2)  # LabLUT ("l"), user click
+
+    assert questions == []
+
+
+def test_profile_type_ctrl_internal_reentry_skips_recommendation_dialog(
+    window, monkeypatch
+):
+    # ``_apply_testchart_patches_amount``'s own profile-type nudge re-enters
+    # ``_profile_type_ctrl_changed`` synthetically (wx's ``event=None`` path)
+    # -- it must never pop the recommendation dialog, only wx's real combo
+    # click does.
+    setcfg("3dlut.create", 0)
+    setcfg("profile.type", "S")
+    questions = []
+    monkeypatch.setattr(
+        mw.QMessageBox, "question", lambda *a, **k: questions.append(a) or mw.QMessageBox.Ok
+    )
+
+    window.testchart_patches_amount_ctrl.setValue(10)  # nudges profile.type to "X"
+
+    assert getcfg("profile.type") == "X"
+    assert questions == []
 
 
 # --- lut3d_check_bpc warning -------------------------------------------------
@@ -3592,6 +3699,31 @@ def test_display_instrument_tab_has_both_info_panel_texts(window):
     assert any(
         "Disable any and all dynamic picture settings" in text for text in labels
     )
+
+
+def test_display_tech_info_show_btn_has_label(window):
+    lang.init()
+    assert (
+        window.display_tech_info_show_btn.text()
+        == "Show information about common display technologies"
+    )
+
+
+def test_display_tech_info_show_btn_opens_tooltip_window(window):
+    lang.init()
+    assert getattr(window, "_display_tech_info_window", None) is None
+    window._display_tech_info_show_btn_handler()
+    assert window._display_tech_info_window is not None
+    assert window._display_tech_info_window.isVisible()
+    assert window._display_tech_info_window.windowTitle() == "Display technology"
+
+
+def test_display_tech_info_show_btn_reuses_window_instance(window):
+    lang.init()
+    window._display_tech_info_show_btn_handler()
+    first = window._display_tech_info_window
+    window._display_tech_info_show_btn_handler()
+    assert window._display_tech_info_window is first
 
 
 # --- show_advanced_options --------------------------------------------------

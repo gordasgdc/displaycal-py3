@@ -196,6 +196,7 @@ from DisplayCAL.ui.measurement_report import ReportWindow
 from DisplayCAL.ui.measurement_sanity_dialog import MeasurementSanityDialog
 from DisplayCAL.ui.profile_install_window import InstallProfileWindow
 from DisplayCAL.ui.progress_dialog import ProgressDialog
+from DisplayCAL.ui.tooltip_window import TooltipWindow
 from DisplayCAL.ui.tools.profile_info import ProfileInfoWindow
 from DisplayCAL.ui.tools.testchart_editor import TestchartEditorWindow
 from DisplayCAL.ui.worker_runner import AdjustmentController, WorkerRunController
@@ -672,6 +673,12 @@ class MainWindow(BaseWindow):
         self.flow = MeasurementFlow()
         #: Guards config-writing handlers while controls are repopulated.
         self._updating = False
+        #: Set right before an internal (non-user) ``profile_type_ctrl``
+        #: change, so :meth:`_profile_type_ctrl_changed` can skip the
+        #: CCXX-testchart-recommendation dialog for it -- mirrors wx passing
+        #: ``event=None`` to ``profile_type_ctrl_handler`` from
+        #: ``testchart_patches_amount_ctrl_handler``.
+        self._profile_type_change_is_synthetic = False
         self._position_restored = False
         self._tab_buttons: dict[str, QToolButton] = {}
         self._panels: dict[str, QWidget] = {}
@@ -1249,13 +1256,18 @@ class MainWindow(BaseWindow):
             for paragraph in paragraphs
         )
 
-    def _build_info_panel(self, *rows: tuple[str, str]) -> QWidget:
+    def _build_info_panel(
+        self, *rows: tuple[str, str], extra: QWidget | None = None
+    ) -> QWidget:
         """Build a wx ``*_settings_info_panel`` equivalent.
 
         Each row is an ``(icon_name, label_key)`` pair, rendered as a
         32x32 themed icon beside word-wrapped rich text, matching wx's
         white-background info panels (dialog-information/clock icon plus
         a ``StaticFancyText``) shown at the bottom of each settings tab.
+        ``extra``, if given, is appended below the rows indented to align
+        under the text column (matching wx appending extra controls, e.g.
+        ``display_tech_info_show_btn``, straight to the panel's sizer).
         """
         panel = QWidget()
         # wx's info panels don't set an explicit background either (they
@@ -1286,6 +1298,12 @@ class MainWindow(BaseWindow):
         # each tab's call site) into a trailing spacer row instead.
         grid.setRowStretch(len(rows), 1)
         outer.addLayout(grid)
+        if extra is not None:
+            extra_row = QHBoxLayout()
+            extra_row.setContentsMargins(32 + 12, 0, 0, 0)
+            extra_row.addWidget(extra)
+            extra_row.addStretch(1)
+            outer.addLayout(extra_row)
         return panel
 
     def _build_display_instrument_tab(self) -> QWidget:
@@ -1553,14 +1571,53 @@ class MainWindow(BaseWindow):
         ccmx_row.addWidget(self.colorimeter_correction_create_btn)
         outer.addLayout(ccmx_row)
 
+        self.display_tech_info_show_btn = QToolButton()
+        self.display_tech_info_show_btn.setAutoRaise(True)
+        self.display_tech_info_show_btn.setToolButtonStyle(
+            Qt.ToolButtonTextBesideIcon
+        )
+        display_tech_pixmap = self._pixmap(16, "info")
+        if not display_tech_pixmap.isNull():
+            self.display_tech_info_show_btn.setIcon(display_tech_pixmap)
+        self.display_tech_info_show_btn.setText(
+            lang.getstr("info.display_tech.show")
+        )
+        self.display_tech_info_show_btn.clicked.connect(
+            self._display_tech_info_show_btn_handler
+        )
+
         outer.addWidget(
             self._build_info_panel(
                 ("clock", "info.display_instrument.warmup"),
                 ("dialog-information", "info.display_instrument"),
+                extra=self.display_tech_info_show_btn,
             ),
             1,
         )
         return panel
+
+    def _display_tech_info_show_btn_handler(self) -> None:
+        """Show (or raise) the display-technology info popup."""
+        if getattr(self, "_display_tech_info_window", None) is None:
+            self._display_tech_info_window = TooltipWindow(
+                self,
+                lang.getstr("display.tech"),
+                self._info_text_html("info.display_tech"),
+                bitmap=self._pixmap(32, "dialog-information"),
+                links=[
+                    (
+                        lang.getstr(
+                            "info.display_tech.linklabel.displayspecifications.com"
+                        ),
+                        "https://www.displayspecifications.com/",
+                    ),
+                    (
+                        lang.getstr("info.display_tech.linklabel.everymac.com"),
+                        "https://everymac.com/",
+                    ),
+                ],
+            )
+        self._display_tech_info_window.show_and_raise()
 
     def _build_calibration_tab(self) -> QWidget:
         """Build the Calibration settings panel."""
@@ -3952,13 +4009,16 @@ class MainWindow(BaseWindow):
 
         Enables :attr:`gamap_btn` only for LUT profile types, nudges black
         point compensation to the type's usual default the first time a type
-        category is entered, and locks profile quality to "high" for the
-        two gamma-only types (Argyll only supports one quality level for
-        those). Not reproduced: ``set_default_testchart``'s testchart reset
-        on type-change (documented in ``profile_name.py``'s deferred list)
-        and the testchart-recommendation confirm dialog
+        category is entered, locks profile quality to "high" for the two
+        gamma-only types (Argyll only supports one quality level for those),
+        resets the testchart to the new type's default
+        (``set_default_testchart``), and -- only for a genuine user click,
+        not the internal re-entry from :meth:`_apply_testchart_patches_amount`
+        -- offers the CCXX-testchart-recommendation confirm dialog
         (``check_testchart_patches_amount``).
         """
+        is_user_event = not self._profile_type_change_is_synthetic
+        self._profile_type_change_is_synthetic = False
         if self._updating or index < 0:
             return
         _combo, values = self._value_combos["profile.type"]
@@ -3983,10 +4043,81 @@ class MainWindow(BaseWindow):
         if gamma_only:
             self.profile_quality_ctrl.setValue(3)
 
+        # wx's ``proftype_changed``: true when entering the LUT category or
+        # the shaper/gamma category from outside it (not on same-category or
+        # quality-only changes).
+        curve_or_gamma = _CURVE_MATRIX_PROFILE_TYPES + _GAMMA_ONLY_PROFILE_TYPES
+        proftype_changed = (
+            new_type in _GAMUT_MAPPABLE_PROFILE_TYPES
+            and old_type not in _GAMUT_MAPPABLE_PROFILE_TYPES
+        ) or (new_type in curve_or_gamma and old_type not in curve_or_gamma)
+
         if new_type != old_type:
             self._mark_profile_settings_changed()
         setcfg("profile.type", new_type)
+        self._apply_default_testchart(force=proftype_changed)
         self.update_profile_name()
+        if is_user_event:
+            self._check_testchart_patches_amount()
+
+    def _apply_default_testchart(self, force: bool) -> None:
+        """Reset the testchart to the current profile type's default.
+
+        Port of ``MainFrame.set_default_testchart``: applies
+        :func:`profile_name.resolve_default_testchart`'s decision. Not
+        reproduced: the missing-``.ti1`` alert dialog (silently logged
+        instead, matching how unreachable this branch is in practice --
+        every ``TESTCHART_DEFAULTS`` entry currently resolves to ``"auto"``).
+        """
+        resolution = profile_name_mod.resolve_default_testchart(
+            getcfg("testchart.file"),
+            getcfg("profile.type"),
+            slider_to_profile_quality(self.profile_quality_ctrl.value()),
+            force=force,
+        )
+        if resolution.corrected_file:
+            setcfg("testchart.file", resolution.corrected_file)
+        if resolution.missing_ti1:
+            print(lang.getstr("error.testchart.missing", resolution.missing_ti1))
+        elif resolution.testchart_path:
+            self._set_testchart(resolution.testchart_path)
+
+    def _check_testchart_patches_amount(self) -> None:
+        """Offer to bump the patch count if the selected testchart is thin.
+
+        Port of ``MainFrame.check_testchart_patches_amount``: the confirm
+        dialog and ``profile_quality_ctrl`` enable/disable bracketing it stay
+        here; the recommended-count math is
+        :func:`profile_name.testchart_recommendation_auto_optimize`.
+        """
+        auto = profile_name_mod.testchart_recommendation_auto_optimize(
+            getcfg("profile.type"),
+            slider_to_profile_quality(self.profile_quality_ctrl.value()),
+            int(self.testchart_patches_amount.text() or 0),
+            config.is_ccxx_testchart(),
+        )
+        if auto is None:
+            return
+        self.profile_quality_ctrl.setEnabled(False)
+        try:
+            accepted = (
+                QMessageBox.question(
+                    self,
+                    APPNAME,
+                    lang.getstr("profile.testchart_recommendation"),
+                    QMessageBox.Ok | QMessageBox.Cancel,
+                )
+                == QMessageBox.Ok
+            )
+        finally:
+            self.profile_quality_ctrl.setEnabled(
+                not getcfg("profile.update")
+                and getcfg("profile.type") not in _GAMMA_ONLY_PROFILE_TYPES
+            )
+        if not accepted:
+            return
+        setcfg("testchart.auto_optimize", auto)
+        self._set_testchart("auto")
 
     # -- Testchart handlers -------------------------------------------------
 
@@ -4584,9 +4715,12 @@ class MainWindow(BaseWindow):
     ) -> None:
         """Recompute the patch count and (on user changes) nudge profile type.
 
-        Port of ``testchart_patches_amount_ctrl_handler``'s non-dialog body
-        (the CCXX-testchart-recommendation confirm dialog is a documented
-        deferral, see ``profile_name.py``).
+        Port of ``testchart_patches_amount_ctrl_handler``'s non-dialog body.
+        wx re-enters ``profile_type_ctrl_handler(None)`` here (``event=None``),
+        which still resets the default testchart but skips the CCXX
+        recommendation dialog; ``_profile_type_change_is_synthetic`` gets
+        ``_profile_type_ctrl_changed`` the same treatment for both ways this
+        can reach it below.
         """
         if from_user_event:
             old_type = getcfg("profile.type")
@@ -4596,6 +4730,7 @@ class MainWindow(BaseWindow):
             if suggested and suggested != old_type:
                 _combo, values = self._value_combos["profile.type"]
                 index = values.index(suggested)
+                self._profile_type_change_is_synthetic = True
                 if self.profile_type_ctrl.currentIndex() == index:
                     # The combo already displays the suggested type (config
                     # was changed directly, bypassing the combo) -- Qt won't

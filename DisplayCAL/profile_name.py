@@ -10,11 +10,16 @@ and the estimated-measurement-time computation
 this touches a GUI toolkit, so both the still-shipping wx path and the Qt
 Profiling tab (:mod:`DisplayCAL.ui.main_window`) can share it.
 
+Also holds the pure path-resolution/gating halves of
+``MainFrame.set_default_testchart`` (:func:`resolve_default_testchart`) and
+``MainFrame.check_testchart_patches_amount``
+(:func:`testchart_recommendation_auto_optimize`) -- both leave the actual
+confirm dialog / ``set_testchart`` application to the caller.
+
 Deliberately not reproduced here (documented, not silently dropped): the
-CCXX-testchart-recommendation confirm dialog (``check_testchart_patches_amount``)
-and the legacy testchart-editor-refresh side effects of ``set_testchart`` --
-both are dialog/tool-window shaped, not pure data, and the testchart editor
-itself (``TestchartEditor``) isn't ported to Qt yet.
+legacy testchart-editor-refresh side effects of ``set_testchart`` -- that's
+tool-window shaped, not pure data, and the testchart editor itself
+(``TestchartEditor``) isn't ported to Qt yet.
 """
 
 from __future__ import annotations
@@ -28,11 +33,11 @@ from io import BytesIO
 from time import gmtime, strftime
 from zlib import crc32
 
-from DisplayCAL import config
+from DisplayCAL import colormath, config
 from DisplayCAL import localization as lang
 from DisplayCAL.argyll_cgats import ti3_to_ti1, verify_ti1_rgb_xyz
 from DisplayCAL.cgats import CGATS
-from DisplayCAL.config import DEFAULTS, get_data_path, getcfg
+from DisplayCAL.config import DEFAULTS, RES_FILES, get_data_path, getcfg
 from DisplayCAL.icc_profile import ICCProfile
 from DisplayCAL.util_list import natsort
 from DisplayCAL.util_os import listdir_re
@@ -122,7 +127,7 @@ class ProfileType(str, Enum):
     GAMMA_MATRIX = ("g", "profile.type.gamma_matrix", "3xGamma+MTX")
     SINGLE_GAMMA_MATRIX = ("G", "profile.type.single_gamma_matrix", "1xGamma+MTX")
 
-    def __new__(cls, value: str, label_key: str, short_label: str) -> "ProfileType":
+    def __new__(cls, value: str, label_key: str, short_label: str) -> ProfileType:
         obj = str.__new__(cls, value)
         obj._value_ = value
         obj.label_key = label_key
@@ -135,7 +140,7 @@ class ProfileType(str, Enum):
         return self.value
 
     @classmethod
-    def from_config_value(cls, value: object) -> "ProfileType | None":
+    def from_config_value(cls, value: object) -> ProfileType | None:
         """Return the member for ``value``, or ``None`` if it isn't one."""
         try:
             return cls(value)
@@ -191,7 +196,7 @@ def expand_profile_name(template: str, ctx: ProfileNameContext) -> str:
     if "%dn" in profile_name:
         profile_name = profile_name.replace("%dn", ctx.display or "\0")
 
-    output = "\0" if ctx.is_virtual_display else "#{}".format(ctx.display_number)
+    output = "\0" if ctx.is_virtual_display else f"#{ctx.display_number}"
     profile_name = profile_name.replace("%out", output or "\0")
 
     if "%in" in profile_name:
@@ -476,6 +481,128 @@ def get_testchart_names(path: str | None = None) -> tuple[list[str], list[str]]:
         chart_name = "auto_optimized" if parts[-1] == "auto" else parts[-1]
         names.append(lang.getstr(chart_name))
     return names, testcharts
+
+
+@dataclass(frozen=True)
+class DistributedTestcharts:
+    """Bundled ``.ti1`` testcharts shipped alongside the application."""
+
+    paths: list[str]
+    names: list[str]  # basenames, parallel to ``paths``
+
+
+def discover_distributed_testcharts() -> DistributedTestcharts:
+    """Port of ``MainFrame.__init__``'s ``RES_FILES`` ``.ti1`` scan."""
+    paths: list[str] = []
+    names: list[str] = []
+    for filename in RES_FILES:
+        path = get_data_path(os.path.sep.join(filename.split("/")))
+        ext = os.path.splitext(filename)[1]
+        if path and os.path.isfile(path) and ext.lower() == ".ti1":
+            paths.append(path)
+            names.append(os.path.basename(path))
+    return DistributedTestcharts(paths, names)
+
+
+def default_testchart_names() -> list[str]:
+    """Port of the ``default_testchart_names`` list built from ``TESTCHART_DEFAULTS``."""  # noqa: E501
+    names: list[str] = []
+    for testcharts in config.TESTCHART_DEFAULTS.values():
+        for chart in testcharts.values():
+            if chart not in names:
+                names.append(chart)
+    return names
+
+
+@dataclass(frozen=True)
+class DefaultTestchartResolution:
+    """What :func:`resolve_default_testchart` decided to do.
+
+    Mirrors ``MainFrame.set_default_testchart``'s three outcomes, split so
+    the Qt caller can apply each independently: ``corrected_file``, if set,
+    should be persisted to ``testchart.file`` first (a basename-only path
+    was resolved to its bundled location); ``testchart_path``, if set, is
+    the value to load via the caller's own ``set_testchart`` equivalent;
+    ``missing_ti1``, if set, is the basename of a default ``.ti1`` that
+    couldn't be found on disk (the caller decides how to alert).
+    """
+
+    corrected_file: str | None
+    testchart_path: str | None
+    missing_ti1: str | None
+
+
+def resolve_default_testchart(
+    current_path: str,
+    profile_type: str,
+    profile_quality: str,
+    force: bool = False,
+    dist: DistributedTestcharts | None = None,
+) -> DefaultTestchartResolution:
+    """Port of ``MainFrame.set_default_testchart``'s pure path-resolution half.
+
+    Deliberately excludes the missing-``.ti1`` ``InfoDialog`` and actually
+    applying the result -- see :class:`DefaultTestchartResolution`.
+    """
+    if dist is None:
+        dist = discover_distributed_testcharts()
+    names = default_testchart_names()
+    path = current_path
+    if path == "auto":
+        return DefaultTestchartResolution(None, "auto", None)
+    corrected = None
+    basename = os.path.basename(path)
+    if basename in dist.names:
+        path = dist.paths[dist.names.index(basename)]
+        corrected = path
+    already_default = lang.getstr(os.path.basename(path)) in ("", *names)
+    if not force and already_default and os.path.isfile(path):
+        return DefaultTestchartResolution(corrected, None, None)
+    if not force and already_default:
+        ti1 = os.path.basename(path)
+    else:
+        type_defaults = config.TESTCHART_DEFAULTS.get(profile_type, {None: "auto"})
+        ti1 = type_defaults.get(profile_quality, type_defaults[None])
+    if ti1 == "auto":
+        return DefaultTestchartResolution(corrected, "auto", None)
+    resolved = get_data_path(os.path.join("ti1", ti1))
+    if not resolved or not os.path.isfile(resolved):
+        return DefaultTestchartResolution(corrected, None, ti1)
+    return DefaultTestchartResolution(corrected, resolved, None)
+
+
+#: Recommended minimum patch count per ``profile_type (+ profile_quality)``.
+#: Port of ``check_testchart_patches_amount``'s ``recommended`` dict -- lower
+#: quality actually needs a *higher* patch count, higher quality can get away
+#: with fewer. The ``+quality`` keys (``"lh"``/``"xh"``/``"Xh"``) happen to
+#: carry the same value as their base type, kept only for fidelity with wx.
+_RECOMMENDED_TESTCHART_PATCHES = {
+    "G": 6, "g": 6, "l": 125, "lh": 125, "S": 12, "s": 12,
+    "X": 73, "Xh": 73, "x": 73, "xh": 73,
+}
+
+
+def testchart_recommendation_auto_optimize(
+    profile_type: str, profile_quality: str, current_patches: int, is_ccxx: bool
+) -> int | None:
+    """Return the ``testchart.auto_optimize`` value to suggest, or ``None``.
+
+    Port of ``check_testchart_patches_amount``'s gating and suggested-value
+    math; the confirm dialog itself (and the ``profile_quality_ctrl``
+    enable/disable bracketing it) stays with the caller.
+    """
+    if is_ccxx:
+        return None
+    fallback = _RECOMMENDED_TESTCHART_PATCHES[profile_type]
+    recommended = _RECOMMENDED_TESTCHART_PATCHES.get(
+        profile_type + profile_quality, fallback
+    )
+    if recommended <= current_patches:
+        return None
+    return max(
+        config.VALID_VALUES["testchart.auto_optimize"][1],
+        round(colormath.cbrt(recommended)),
+    )
 
 
 def testchart_patches_amount_for_auto(auto: int) -> int:

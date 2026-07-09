@@ -173,6 +173,110 @@ class TestGetTestchartNames:
         assert any(path.endswith("ccxx.ti1") for path in paths)
 
 
+class TestDiscoverDistributedTestcharts:
+    def test_returns_bundled_ti1_paths_and_names(self):
+        dist = pn.discover_distributed_testcharts()
+        assert "d3-e4-s2-g28-m0-b0-f0.ti1" in dist.names
+        assert len(dist.paths) == len(dist.names)
+        assert all(os.path.isfile(path) for path in dist.paths)
+
+    def test_names_are_parallel_basenames_of_paths(self):
+        dist = pn.discover_distributed_testcharts()
+        assert dist.names == [os.path.basename(path) for path in dist.paths]
+
+
+class TestDefaultTestchartNames:
+    def test_only_contains_auto_today(self):
+        # Every ``TESTCHART_DEFAULTS`` entry currently resolves to "auto" --
+        # this is the fact ``resolve_default_testchart`` below relies on to
+        # explain why a custom testchart always gets reset regardless of
+        # ``force``.
+        assert pn.default_testchart_names() == ["auto"]
+
+
+class TestResolveDefaultTestchart:
+    def test_auto_path_stays_auto(self):
+        result = pn.resolve_default_testchart("auto", "l", "h", force=False)
+        assert result == pn.DefaultTestchartResolution(None, "auto", None)
+
+    def test_custom_testchart_resets_to_auto_regardless_of_force(self):
+        # Not a bug: with every ``TESTCHART_DEFAULTS`` entry being "auto", a
+        # testchart whose basename isn't a recognized default name always
+        # falls through to the type-default branch, independent of ``force``.
+        empty_dist = pn.DistributedTestcharts([], [])
+        for force in (False, True):
+            result = pn.resolve_default_testchart(
+                "/some/dir/custom.ti1", "l", "h", force=force, dist=empty_dist
+            )
+            assert result.testchart_path == "auto"
+
+    def test_dist_testchart_basename_gets_corrected_to_full_path(self):
+        dist = pn.discover_distributed_testcharts()
+        basename = dist.names[0]
+        result = pn.resolve_default_testchart(basename, "l", "h", dist=dist)
+        assert result.corrected_file == dist.paths[0]
+
+    def test_already_default_and_present_short_circuits_unless_forced(
+        self, monkeypatch, tmp_path
+    ):
+        existing = tmp_path / "custom.ti1"
+        existing.write_text("dummy")
+        monkeypatch.setattr(pn, "default_testchart_names", lambda: ["custom.ti1"])
+        empty_dist = pn.DistributedTestcharts([], [])
+
+        left_alone = pn.resolve_default_testchart(
+            str(existing), "l", "h", force=False, dist=empty_dist
+        )
+        assert left_alone == pn.DefaultTestchartResolution(None, None, None)
+
+        forced = pn.resolve_default_testchart(
+            str(existing), "l", "h", force=True, dist=empty_dist
+        )
+        assert forced.testchart_path == "auto"
+
+    def test_resolves_a_real_non_auto_default(self, monkeypatch):
+        # ``TESTCHART_DEFAULTS`` never actually has a non-"auto" entry today,
+        # but the resolution machinery still supports one -- exercise it
+        # directly so that branch isn't only reachable via a monkeypatch of
+        # unrelated production config.
+        monkeypatch.setattr(
+            pn.config,
+            "TESTCHART_DEFAULTS",
+            {"l": {None: "d3-e4-s2-g28-m0-b0-f0.ti1"}},
+        )
+        empty_dist = pn.DistributedTestcharts([], [])
+        result = pn.resolve_default_testchart(
+            "/some/dir/custom.ti1", "l", "h", force=True, dist=empty_dist
+        )
+        assert result.missing_ti1 is None
+        assert result.testchart_path is not None
+        assert result.testchart_path.endswith("d3-e4-s2-g28-m0-b0-f0.ti1")
+
+    def test_reports_missing_ti1_instead_of_raising(self, monkeypatch):
+        monkeypatch.setattr(
+            pn.config, "TESTCHART_DEFAULTS", {"l": {None: "does_not_exist.ti1"}}
+        )
+        empty_dist = pn.DistributedTestcharts([], [])
+        result = pn.resolve_default_testchart(
+            "/some/dir/custom.ti1", "l", "h", force=True, dist=empty_dist
+        )
+        assert result.missing_ti1 == "does_not_exist.ti1"
+        assert result.testchart_path is None
+
+
+class TestTestchartRecommendationAutoOptimize:
+    def test_none_when_patches_meet_recommendation(self):
+        assert pn.testchart_recommendation_auto_optimize("l", "h", 200, False) is None
+
+    def test_none_for_ccxx_testchart(self):
+        assert pn.testchart_recommendation_auto_optimize("l", "h", 1, True) is None
+
+    def test_suggests_higher_auto_optimize_when_patches_low(self):
+        suggested = pn.testchart_recommendation_auto_optimize("l", "h", 1, False)
+        assert suggested is not None
+        assert suggested >= config.VALID_VALUES["testchart.auto_optimize"][1]
+
+
 class TestTestchartPatchesAmountForAuto:
     @pytest.mark.parametrize(
         "auto,expected", [(1, 34), (2, 79), (3, 115), (4, 175)]

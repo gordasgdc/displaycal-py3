@@ -1629,6 +1629,79 @@ already had `Worker.install_profile()` mocked at that layer; the
 trigger a real network download through the unrelated auto-checked
 importers).
 
+**`display_tech_info_show_btn` / `TooltipWindow` — DONE (2026-07-09).** Picked
+as the first item of a "small polish bundle" (maintainer's choice, over the
+madVR/Prisma 3D LUT API install, the standalone Tools menu, and standalone
+tool-window ports). Closes the Session 6 deferral: the Display & Instrument
+tab's info panel was missing the "Show information about common display
+technologies" button entirely.
+
+New `DisplayCAL/ui/tooltip_window.py::TooltipWindow(QDialog)` is a
+deliberately narrower Qt port of wx's reusable `TooltipWindow`
+(`wx_windows.py`): icon + word-wrapped rich text (reusing
+`MainWindow._info_text_html`'s markup translation) plus optional flat "link"
+buttons that open a URL via `QDesktopServices.openUrl` -- only the
+single-column, non-scrolled shape `display_tech_info_show_btn` actually needs,
+not wx's generic multi-column/scrolled/header-row constructor options.
+`MainWindow._build_info_panel()` gained an optional `extra: QWidget` param
+(appended below the icon/text rows, indented to align under the text column)
+so the button can live inside the existing Display & Instrument info panel
+like wx's version does, rather than becoming a new sibling widget.
+`_display_tech_info_show_btn_handler()` lazily builds and caches a single
+`_display_tech_info_window` instance and calls its `show_and_raise()`,
+mirroring wx's `hasattr(self, "display_tech_info_tooltip_window")` cache
+check. 3 new tests in `tests/test_ui_main_window.py` (277 total). Verified
+visually via rendered `QWidget.grab()` screenshots of both the button's tab
+placement and the popup's content/links.
+
+**Profiling tab: `set_default_testchart` reset + CCXX-testchart-recommendation
+dialog — DONE (2026-07-10).** Second item of the "small polish bundle"
+(maintainer's choice). Closes the Session 9 deferral documented in
+`profile_name.py`'s module docstring.
+
+`profile_name.py` gains the pure pieces: `discover_distributed_testcharts()`
++ `default_testchart_names()` (port of the two `RES_FILES`/`TESTCHART_DEFAULTS`
+scans `MainFrame.__init__` does once at startup), `resolve_default_testchart()`
+(port of `MainFrame.set_default_testchart`'s path-resolution half, returning a
+`DefaultTestchartResolution` the caller applies instead of driving an
+`InfoDialog` itself), and `testchart_recommendation_auto_optimize()` (port of
+`check_testchart_patches_amount`'s recommended-patch-count gating and
+suggested-``auto_optimize`` math). `main_window.py`'s
+`_profile_type_ctrl_changed` now calls new `_apply_default_testchart()` (always,
+mirroring wx calling `set_default_testchart` unconditionally) and, only for a
+genuine combo click, new `_check_testchart_patches_amount()` (a `QMessageBox
+.question` confirm, matching wx's `ConfirmDialog`). Distinguishing a real click
+from the internal re-entry `_apply_testchart_patches_amount` already made
+(wx calls `profile_type_ctrl_handler(None)` for this) needed a new
+`_profile_type_change_is_synthetic` flag, set right before that method's own
+`setCurrentIndex`/direct-call re-entry into `_profile_type_ctrl_changed`, since
+both paths reach the same Qt signal-connected handler indistinguishably
+otherwise.
+
+**Real (if surprising) wx behavior found while porting, not a bug:** because
+every `TESTCHART_DEFAULTS` entry resolves to `"auto"` today (no profile type
+has a quality-specific override), `set_default_testchart` resets *any*
+non-bundled testchart selection back to `"auto"` on **every** profile-type
+handler call, regardless of `force`/category-change -- `force` only protects a
+testchart already named one of the bundled defaults, and `"auto"` itself
+short-circuits before `force` is ever consulted, so it has no currently
+observable effect. Ported faithfully rather than "fixed," and documented
+directly in the regression tests that exercise it
+(`test_profile_type_ctrl_resets_testchart_within_same_category_too`).
+
+Not reproduced: the missing-`.ti1` `InfoDialog` (only reachable if a future
+`TESTCHART_DEFAULTS` entry stops being `"auto"`; falls back to a `print()` for
+now, matching the "not alert-worthy for a currently-dead branch" judgment call
+made elsewhere in this port). 12 new tests in `tests/test_profile_name.py`
+(58 total) exercise `resolve_default_testchart`/`testchart_recommendation_
+auto_optimize` directly, including the non-"auto" branch via a
+`TESTCHART_DEFAULTS` monkeypatch (dead in production today, still verified
+correct). 6 new tests in `tests/test_ui_main_window.py` (280 total,
+confirmed green under `-n auto`, ~70s) plus 4 pre-existing profile-type-combo
+tests updated to stub `QMessageBox.question` -- a real combo click can now
+pop the recommendation dialog, which would otherwise hang headless (see
+[[qt-test-modal-hang-gotcha]]).
+
 ### Stage 6 — StartupFrame — **DONE**
 
 Port `StartupFrame` (the splash screen + background display/instrument
