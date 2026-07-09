@@ -4555,6 +4555,48 @@ class MainWindow(BaseWindow):
             silent=True,
         )
 
+    def _load_cal(self, cal: str | None = None, silent: bool = True) -> bool | Exception:
+        """Load a calibration onto the video card gamma table.
+
+        Qt port of ``MainFrame.load_cal``, minus the curve-viewer preview
+        refresh (``lut_viewer_load_lut``, no Qt equivalent yet) and the
+        success/failure ``InfoDialog`` pair -- same silent-background pattern
+        as :meth:`_reset_video_lut`. Mirrors wx's ``calibration.autoload``
+        gate: when that config is off and no explicit ``cal`` is given, wx
+        skips the actual video-LUT load entirely (it only exists to refresh
+        the curve-viewer preview) and reports success regardless.
+
+        Args:
+            cal: Path to the ``.cal``/ICC profile to load; defaults to
+                ``calibration.file``.
+            silent: Passed through to ``worker.exec_cmd``.
+
+        Returns:
+            ``True`` on success (including the no-op autoload-off case),
+            ``False`` if there was nothing to load, or an ``Exception`` on
+            failure.
+        """
+        load_vcgt = bool(getcfg("calibration.autoload") or cal)
+        if not cal:
+            cal = getcfg("calibration.file", False)
+        if not cal or not check_set_argyll_bin():
+            return False
+        if not load_vcgt:
+            return True
+        cmd, args = self.worker.prepare_dispwin(cal, None, False)
+        if isinstance(cmd, Exception):
+            return cmd
+        if cmd is None:
+            return False
+        return self.worker.exec_cmd(
+            cmd,
+            args,
+            capture_output=True,
+            low_contrast=False,
+            skip_scripts=True,
+            silent=silent,
+        )
+
     def begin_measurement(
         self, action: MeasurementAction, *, wrapup: bool = True
     ) -> None:
@@ -4778,7 +4820,9 @@ class MainWindow(BaseWindow):
             pauseable=False,
         )
 
-    def _on_profile_build_finished(self, result: object) -> None:
+    def _on_profile_build_finished(
+        self, result: object, success_msg: str = ""
+    ) -> None:
         """Report the outcome of the ``colprof`` run and offer to install it.
 
         Ports the validation branches of ``profile_finish`` via
@@ -4792,6 +4836,12 @@ class MainWindow(BaseWindow):
             result (object): The built profile's path on success, ``False`` /
                 ``None`` when the run did not complete, or an ``Exception`` on
                 failure.
+            success_msg (str): Heading for the completion message. Defaults to
+                ``lang.getstr("profiling.complete")`` (the plain ``colprof``
+                completion); :meth:`_on_calibration_finished` passes
+                ``"calibration.complete"`` for the fast-matrix-shaper/
+                ``profile.update`` auto-profile chain, matching wx's two
+                ``profile_finish`` call sites.
         """
         if isinstance(result, Exception):
             QMessageBox.critical(self, APPNAME, str(result))
@@ -4814,7 +4864,7 @@ class MainWindow(BaseWindow):
         if profile_finish.sync_calibration_file_config(profile_path):
             self.update_calibration_file_ctrl()
         self.worker.log(f"{APPNAME}: Profile created: {profile_path}")
-        message = lang.getstr("profiling.complete")
+        message = success_msg or lang.getstr("profiling.complete")
         extra = profile_finish.format_completion_extra(built.profile)
         if extra:
             message = f"{message}\n\n{extra}"
@@ -4892,14 +4942,19 @@ class MainWindow(BaseWindow):
     ) -> None:
         """Report a calibration outcome, chaining the profile run if requested.
 
-        Ports the error / incomplete branches of ``just_calibrate_finish``. For a
-        ``calibrate & profile`` run the characterization measurement (and, on its
-        success, the ``colprof`` build) is started; this is
-        ``calibrate_and_profile_finish``'s unconditional chain, not
-        ``just_calibrate_finish``'s ``profile.update``-gated one. Not reproduced
-        for a calibrate-only run: ``update_calibration_file_ctrl()``, the
-        ``profile.update``/fast-matrix-shaper auto quick-profile chain, and the
-        TRC-branch ``load_cal`` + completion dialog.
+        Ports ``just_calibrate_finish``. For a ``calibrate & profile`` run the
+        characterization measurement (and, on its success, the ``colprof``
+        build) is started; this is ``calibrate_and_profile_finish``'s
+        unconditional chain, not ``just_calibrate_finish``'s
+        ``profile.update``-gated one. For a calibrate-only run:
+        :meth:`update_calibration_file_ctrl` always refreshes the combo, then
+        either the fast-matrix-shaper/``profile.update`` profile (already
+        built by ``dispcal`` itself, see :meth:`calibrate_btn_handler`) is
+        validated and offered for install via :meth:`_on_profile_build_finished`,
+        or -- the plain calibrate case -- the new calibration is loaded onto
+        the video card gamma table (:meth:`_load_cal`) and a completion notice
+        is shown. Not reproduced: the ``log.autoshow`` info-log-window toggle
+        (no Qt equivalent yet).
 
         Args:
             action (MeasurementAction): The calibration workflow that finished.
@@ -4919,6 +4974,18 @@ class MainWindow(BaseWindow):
         self.worker.log(f"{APPNAME}: Calibration complete")
         if action is MeasurementAction.CALIBRATE_AND_PROFILE:
             self._run_profile_measurement()
+            return
+        self.update_calibration_file_ctrl()
+        if getcfg("profile.update") or self.worker.dispcal_create_fast_matrix_shaper:
+            self._on_profile_build_finished(
+                profile_finish.resolve_profile_path(),
+                success_msg=lang.getstr("calibration.complete"),
+            )
+        elif getcfg("trc"):
+            self._load_cal(silent=True)
+            QMessageBox.information(
+                self, APPNAME, lang.getstr("calibration.complete")
+            )
 
     # -- calibration/profile-file header bar --------------------------------
 

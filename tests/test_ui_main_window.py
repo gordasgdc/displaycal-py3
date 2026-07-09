@@ -1861,6 +1861,149 @@ def test_calibration_finished_incomplete_shows_notice(window, monkeypatch):
     assert lang.getstr("calibration.incomplete") in infos[0][2]
 
 
+def test_calibrate_only_finished_always_refreshes_calibration_file_ctrl(
+    window, monkeypatch
+):
+    # "" is the valid falsy value for "trc" (0 is out of its numeric range and
+    # would just bounce back to the 2.2 default via validate_value_type).
+    setcfg("profile.update", 0)
+    setcfg("trc", "")
+    window.worker.dispcal_create_fast_matrix_shaper = False
+    updated = []
+    monkeypatch.setattr(
+        window, "update_calibration_file_ctrl", lambda: updated.append(True)
+    )
+
+    window._on_calibration_finished(mw.MeasurementAction.CALIBRATE, True)
+
+    assert updated == [True]
+
+
+def test_calibrate_only_profile_update_chains_profile_build_finished(
+    window, monkeypatch
+):
+    setcfg("profile.update", 1)
+    window.worker.dispcal_create_fast_matrix_shaper = False
+    monkeypatch.setattr(window, "update_calibration_file_ctrl", lambda: None)
+    monkeypatch.setattr(
+        mw.profile_finish, "resolve_profile_path", lambda: "/tmp/quick.icc"
+    )
+    calls = []
+    monkeypatch.setattr(
+        window,
+        "_on_profile_build_finished",
+        lambda result, success_msg="": calls.append((result, success_msg)),
+    )
+
+    window._on_calibration_finished(mw.MeasurementAction.CALIBRATE, True)
+
+    assert calls == [("/tmp/quick.icc", lang.getstr("calibration.complete"))]
+
+
+def test_calibrate_only_fast_matrix_shaper_chains_profile_build_finished(
+    window, monkeypatch
+):
+    setcfg("profile.update", 0)
+    window.worker.dispcal_create_fast_matrix_shaper = True
+    monkeypatch.setattr(window, "update_calibration_file_ctrl", lambda: None)
+    monkeypatch.setattr(
+        mw.profile_finish, "resolve_profile_path", lambda: "/tmp/quick.icc"
+    )
+    calls = []
+    monkeypatch.setattr(
+        window,
+        "_on_profile_build_finished",
+        lambda result, success_msg="": calls.append((result, success_msg)),
+    )
+
+    window._on_calibration_finished(mw.MeasurementAction.CALIBRATE, True)
+
+    assert calls == [("/tmp/quick.icc", lang.getstr("calibration.complete"))]
+
+
+def test_calibrate_only_trc_loads_cal_and_shows_completion(window, monkeypatch):
+    setcfg("profile.update", 0)
+    setcfg("trc", 2.2)
+    window.worker.dispcal_create_fast_matrix_shaper = False
+    monkeypatch.setattr(window, "update_calibration_file_ctrl", lambda: None)
+    load_calls = []
+    monkeypatch.setattr(
+        window, "_load_cal", lambda **kwargs: load_calls.append(kwargs)
+    )
+    infos = []
+    monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: infos.append(a))
+
+    window._on_calibration_finished(mw.MeasurementAction.CALIBRATE, True)
+
+    assert load_calls == [{"silent": True}]
+    assert infos
+    assert lang.getstr("calibration.complete") in infos[0][2]
+
+
+def test_calibrate_only_neither_profile_update_nor_trc_shows_no_dialog(
+    window, monkeypatch
+):
+    setcfg("profile.update", 0)
+    setcfg("trc", "")
+    window.worker.dispcal_create_fast_matrix_shaper = False
+    monkeypatch.setattr(window, "update_calibration_file_ctrl", lambda: None)
+    infos = []
+    monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: infos.append(a))
+
+    window._on_calibration_finished(mw.MeasurementAction.CALIBRATE, True)
+
+    assert infos == []
+
+
+def test_load_cal_no_file_returns_false(window, monkeypatch):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    setcfg("calibration.file", None)
+
+    assert window._load_cal() is False
+
+
+def test_load_cal_autoload_off_is_a_noop(window, monkeypatch, tmp_path):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    cal_path = tmp_path / "some.cal"
+    cal_path.write_text("")
+    setcfg("calibration.file", str(cal_path))
+    setcfg("calibration.autoload", 0)
+    called = []
+    monkeypatch.setattr(
+        window.worker, "prepare_dispwin", lambda *a, **k: called.append(True)
+    )
+
+    assert window._load_cal() is True
+    assert called == []
+
+
+def test_load_cal_autoload_on_runs_dispwin(window, monkeypatch, tmp_path):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    cal_path = tmp_path / "some.cal"
+    cal_path.write_text("")
+    setcfg("calibration.file", str(cal_path))
+    setcfg("calibration.autoload", 1)
+    prepare_calls = []
+    monkeypatch.setattr(
+        window.worker,
+        "prepare_dispwin",
+        lambda cal, profile_path, install: prepare_calls.append(
+            (cal, profile_path, install)
+        )
+        or ("dispwin", ["-v"]),
+    )
+    exec_calls = []
+    monkeypatch.setattr(
+        window.worker,
+        "exec_cmd",
+        lambda *a, **k: exec_calls.append((a, k)) or True,
+    )
+
+    assert window._load_cal(silent=True) is True
+    assert prepare_calls == [(str(cal_path), None, False)]
+    assert exec_calls[0][1]["silent"] is True
+
+
 def test_measurement_finished_exception_shows_error(window, monkeypatch):
     errors = []
     monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
