@@ -28,10 +28,14 @@ the pure marshalling helpers at module scope.
 Deferred to later slices (Pile 2 / Stage 5): the worker-driven Argyll execution
 behind :attr:`MainWindow.measurement_requested` (the progress dialog and
 interactive display-adjustment window), the pattern-generator setup dialogs
-(Prisma / madTPG / Resolve), the visual-editor / ambient-measure buttons, the
-black-point-rate advanced control, and actually creating a 3D LUT (``lut3d_create_btn``
-isn't wired into the button bar yet; see :mod:`DisplayCAL.lut3d_settings`'s module
-docstring). The measurement-report settings window
+(Prisma / madTPG / Resolve), the visual-editor / ambient-measure buttons, and
+the black-point-rate advanced control. Actually creating a 3D LUT
+(:meth:`MainWindow.lut3d_create_btn_handler`, hidden behind the calibrate/
+profile buttons whenever the 3D LUT tab is active with manual creation) now
+runs ``worker.create_3dlut`` through the same
+:class:`~DisplayCAL.ui.worker_runner.WorkerRunController` the other action
+buttons use; see :mod:`DisplayCAL.lut3d_settings`'s module docstring for what
+isn't reproduced there. The measurement-report settings window
 (:meth:`MainWindow.measurement_report_btn_handler`) reuses the already-ported
 :mod:`DisplayCAL.ui.tools.testchart_editor` for its "edit chart" button, and its
 Measure button now runs the full chart/profile resolution, worker-driven
@@ -2246,12 +2250,15 @@ class MainWindow(BaseWindow):
         )
         self.profile_btn = QPushButton(lang.getstr("button.profile"))
         self.profile_btn.clicked.connect(self.profile_btn_handler)
+        self.lut3d_create_btn = QPushButton(lang.getstr("3dlut.create"))
+        self.lut3d_create_btn.clicked.connect(self.lut3d_create_btn_handler)
         self.measurement_report_btn = QPushButton(lang.getstr("measurement_report"))
         self.measurement_report_btn.clicked.connect(self.measurement_report_btn_handler)
         for button in (
             self.calibrate_btn,
             self.calibrate_and_profile_btn,
             self.profile_btn,
+            self.lut3d_create_btn,
             self.measurement_report_btn,
         ):
             button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
@@ -2325,15 +2332,17 @@ class MainWindow(BaseWindow):
         self._update_action_buttons()
 
     def _update_action_buttons(self) -> None:
-        """Show exactly one calibrate/profile action button, per wx.
+        """Show exactly one calibrate/profile/3D-LUT-create action button, per wx.
 
         Mirrors the relevant part of ``MainFrame.update_main_controls``: wx
         shows "Calibrate & Profile" by default, falling back to "Calibrate
         only" or "Profile only" depending on the interactive-adjustment /
         TRC / "update existing calibration" state, never more than one at
-        once. (The Qt port doesn't have the 3D LUT "Create" button or the
-        Measurement Report tab yet, so those parts of wx's condition are
-        omitted here.)
+        once, and hides all three whenever the 3D LUT tab is active with
+        manual creation (``lut3d_create_btn`` shown instead; wx also excludes
+        these whenever its Measurement Report *tab* is active, but this Qt
+        port's measurement-report button lives outside any tab, so that part
+        of the condition doesn't apply here).
         """
         update_cal = self.calibration_update_cb.isChecked()
         update_profile = update_cal and config.is_profile()
@@ -2341,9 +2350,20 @@ class MainWindow(BaseWindow):
             self.interactive_adjustment_cb.isChecked()
             or self.trc_ctrl.currentIndex() > 0
         )
-        calibrate_and_profile_show = enable_cal and not update_profile
-        calibrate_show = enable_cal and not calibrate_and_profile_show
-        profile_show = not calibrate_and_profile_show and not update_cal
+        lut3d_create_show = self.stack.currentWidget() is self._panels.get(
+            "lut3d"
+        ) and not getcfg("3dlut.create")
+        calibrate_and_profile_show = (
+            not lut3d_create_show and enable_cal and not update_profile
+        )
+        calibrate_show = (
+            not lut3d_create_show and enable_cal and not calibrate_and_profile_show
+        )
+        profile_show = (
+            not lut3d_create_show
+            and not calibrate_and_profile_show
+            and not update_cal
+        )
 
         has_devices = bool(self.worker.displays) and bool(self.worker.instruments)
         not_ccxx = not config.is_ccxx_testchart()
@@ -2356,6 +2376,10 @@ class MainWindow(BaseWindow):
         )
         self.profile_btn.setVisible(profile_show)
         self.profile_btn.setEnabled(profile_show and has_devices)
+        self.lut3d_create_btn.setVisible(lut3d_create_show)
+        self.lut3d_create_btn.setEnabled(
+            config.is_profile() and getcfg("calibration.file", False) not in self.presets
+        )
 
     def update_displays(self) -> None:
         """Populate the display selector from ``worker.displays``."""
@@ -4507,6 +4531,7 @@ class MainWindow(BaseWindow):
         button = self._tab_buttons[key]
         if not button.isChecked():
             button.setChecked(True)
+        self._update_action_buttons()
 
     # -- measurement actions (Stage 4) ------------------------------------
 
@@ -4611,6 +4636,146 @@ class MainWindow(BaseWindow):
             return
         self._pending_apply_calibration = apply_calibration
         self.begin_measurement(MeasurementAction.PROFILE)
+
+    def lut3d_create_btn_handler(self) -> None:
+        """Build a 3D LUT from the 3D LUT tab's current settings.
+
+        Qt port of the ``MainFrame``-embedded half of
+        ``LUT3DMixin.lut3d_create_handler`` (``not isinstance(self,
+        LUT3DFrame)``): the input profile comes straight from
+        ``3dlut.input.profile`` and the output profile is the current
+        calibration/profile selection (:func:`config.get_current_profile`) --
+        this port has no abstract-profile picker or standalone input/output
+        combos like the standalone 3D LUT maker (:mod:`DisplayCAL.ui.tools.lut3d`)
+        does. wx never shows a save dialog for this button (only the standalone
+        maker does): the path comes from ``Worker.lut3d_get_filename`` and any
+        existing file at that path is confirmed via the same overwrite dialog
+        the other action buttons use. Runs ``worker.create_3dlut`` through the
+        shared :class:`~DisplayCAL.ui.worker_runner.WorkerRunController`. Not
+        reproduced (see :mod:`DisplayCAL.lut3d_settings`'s module docstring):
+        wx's success path chaining into ``profile_finish`` to offer installing
+        the created 3D LUT -- this port's completion is silent on success
+        (matching the standalone maker's own behavior), reporting only errors.
+        """
+        if not check_set_argyll_bin():
+            return
+        profile_in_path = getcfg("3dlut.input.profile")
+        if not profile_in_path or not os.path.isfile(profile_in_path):
+            QMessageBox.critical(
+                self,
+                APPNAME,
+                lang.getstr("error.profile.file_missing", profile_in_path),
+            )
+            return
+        try:
+            profile_in = ICCProfile(profile_in_path)
+        except (OSError, ICCProfileInvalidError):
+            QMessageBox.critical(
+                self,
+                APPNAME,
+                lang.getstr("profile.invalid") + "\n" + profile_in_path,
+            )
+            return
+        profile_out = config.get_current_profile()
+        if not profile_out:
+            QMessageBox.critical(
+                self,
+                APPNAME,
+                lang.getstr("profile.invalid")
+                + "\n"
+                + str(getcfg("calibration.file", False)),
+            )
+            return
+        if profile_in.is_same(profile_out, force_calculation=True) and QMessageBox.question(
+            self,
+            APPNAME,
+            lang.getstr("error.source_dest_same"),
+            QMessageBox.Ok | QMessageBox.Cancel,
+        ) != QMessageBox.Ok:
+            return
+
+        path = self.worker.lut3d_get_filename()
+        if not waccess(path, os.W_OK):
+            QMessageBox.critical(
+                self, APPNAME, lang.getstr("error.access_denied.write", path)
+            )
+            return
+        if os.path.isfile(path) and QMessageBox.warning(
+            self,
+            APPNAME,
+            lang.getstr("dialog.confirm_overwrite", path),
+            QMessageBox.Ok | QMessageBox.Cancel,
+            QMessageBox.Cancel,
+        ) != QMessageBox.Ok:
+            return
+
+        apply_cal = bool(
+            isinstance(profile_out.tags.get("vcgt"), VideoCardGammaType)
+            and getcfg("3dlut.output.profile.apply_cal")
+        )
+        colors_xy = {
+            f"3dlut.content.colorspace.{color}.{coord}": getcfg(
+                f"3dlut.content.colorspace.{color}.{coord}"
+            )
+            for color in ("white", "red", "green", "blue")
+            for coord in "xy"
+        }
+        kwargs = {
+            "apply_cal": apply_cal,
+            "intent": getcfg("3dlut.rendering_intent"),
+            "file_format": getcfg("3dlut.format"),
+            "size": getcfg("3dlut.size"),
+            "input_bits": getcfg("3dlut.bitdepth.input"),
+            "output_bits": getcfg("3dlut.bitdepth.output"),
+            "input_encoding": getcfg("3dlut.encoding.input"),
+            "output_encoding": getcfg("3dlut.encoding.output"),
+            "trc_gamma": lut3d_settings.resolve_create_trc_gamma(
+                apply_trc=bool(getcfg("3dlut.apply_trc")),
+                trc=getcfg("3dlut.trc"),
+                trc_gamma=getcfg("3dlut.trc_gamma"),
+            ),
+            "trc_gamma_type": getcfg("3dlut.trc_gamma_type"),
+            "trc_output_offset": getcfg("3dlut.trc_output_offset"),
+            "apply_black_offset": getcfg("3dlut.apply_black_offset"),
+            "use_b2a": getcfg("3dlut.gamap.use_b2a"),
+            "white_cdm2": getcfg("3dlut.hdr_peak_luminance"),
+            "minmll": getcfg("3dlut.hdr_minmll"),
+            "maxmll": getcfg("3dlut.hdr_maxmll"),
+            "use_alternate_master_white_clip": getcfg("3dlut.hdr_maxmll_alt_clip"),
+            "hdr_sat": getcfg("3dlut.hdr_sat"),
+            "hdr_hue": getcfg("3dlut.hdr_hue"),
+            "ambient_cdm2": getcfg("3dlut.hdr_ambient_luminance"),
+            "content_rgb_space": lut3d_settings.content_rgb_space_for_creation(
+                colors_xy
+            ),
+            "hdr_display": getcfg("3dlut.hdr_display"),
+            "XYZwp": lut3d_settings.resolve_creation_whitepoint(
+                getcfg("3dlut.whitepoint.x", False),
+                getcfg("3dlut.whitepoint.y", False),
+            ),
+        }
+        controller = self._ensure_run_controller()
+        controller.run(
+            self.worker.create_3dlut,
+            self._on_lut3d_create_finished,
+            wargs=(ICCProfile(profile_in.filename), path, None, profile_out),
+            wkwargs=kwargs,
+            progress_msg=lang.getstr("3dlut.create"),
+            pauseable=False,
+        )
+
+    def _on_lut3d_create_finished(self, result: object) -> None:
+        """Report the outcome of ``create_3dlut`` on the GUI thread.
+
+        Qt port of ``LUT3DMixin.lut3d_create_consumer``'s error branch (its
+        success branch, chaining into ``profile_finish`` to offer installing
+        the 3D LUT, isn't reproduced -- see :meth:`lut3d_create_btn_handler`).
+        Mirrors the standalone 3D LUT maker's own ``_on_create_done``, which
+        is likewise silent on success since the file is simply on disk.
+        """
+        self.worker.wrapup(False)
+        if isinstance(result, Exception):
+            QMessageBox.critical(self, APPNAME, str(result))
 
     def _check_overwrite(self, ext: str = "", filename: str | None = None) -> bool:
         """Qt port of ``MainFrame.check_overwrite``.

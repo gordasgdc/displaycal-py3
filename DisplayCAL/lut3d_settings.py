@@ -8,15 +8,21 @@ actually exercises: the mixin's ``isinstance(self, LUT3DFrame)`` branches are
 always False here and ``hasattr(self, "lut3d_create_cb")`` is always True, so
 those branches are baked in rather than reproduced as branches.
 
-Not reproduced (worker-driven Argyll execution, tracked as separately-deferred
-scope, see ``DisplayCAL/ui/main_window.py``'s module docstring): actually
-creating a 3D LUT (``lut3d_create_handler``), the black-point-compensation and
-relative-colorimetric-rendering-intent confirmation dialogs that gate it, and
-``XYZbpout`` (the last measured/loaded profile's output black point) which
-wx factors into ``lut3d_show_trc_controls``'s black-output-offset row
-visibility; this port treats it as always ``[0, 0, 0]`` (its value before any
-profile has been measured), so that row's visibility reduces to just
-``3dlut.create``.
+Also includes :func:`resolve_create_trc_gamma` and
+:func:`content_rgb_space_for_creation`, the two branches of
+``LUT3DMixin.lut3d_create_producer`` with actual logic worth sharing between
+the embedded tab and the standalone 3D LUT maker's own (independently
+written) ``create_3dlut``; the rest of that method is a flat, untestable
+config-to-kwarg mapping and is built inline by each caller.
+
+Not reproduced: ``XYZbpout`` (the last measured/loaded profile's output black
+point) which wx factors into ``lut3d_show_trc_controls``'s black-output-offset
+row visibility; this port treats it as always ``[0, 0, 0]`` (its value before
+any profile has been measured), so that row's visibility reduces to just
+``3dlut.create``; and ``MainFrame.lut3d_check_bpc``'s warning (offering to
+turn off profile black-point compensation when both it and ``3dlut.create``
+are enabled together), which wx shows from the BPC checkbox's own handler, not
+from 3D LUT creation itself.
 """
 
 from __future__ import annotations
@@ -393,3 +399,62 @@ def lut3d_bitdepth_controls_visible(file_format: str) -> tuple[bool, bool]:
     Mirrors ``LUT3DMixin.lut3d_show_bitdepth_controls``.
     """
     return file_format == "3dl", file_format in ("3dl", "png")
+
+
+def resolve_create_trc_gamma(
+    *,
+    apply_trc: bool,
+    trc: str,
+    trc_gamma: float,
+    has_trc_apply_toggle: bool = False,
+) -> float | str | None:
+    """Return the ``trc_gamma`` kwarg for ``Worker.create_3dlut``.
+
+    Mirrors ``LUT3DMixin.lut3d_create_producer``'s ``trc_gamma`` branch,
+    gated on ``getcfg("3dlut.apply_trc") or not hasattr(self,
+    "lut3d_trc_apply_none_ctrl")``. The embedded ``MainFrame`` tab has no such
+    toggle (``has_trc_apply_toggle=False``), so wx always applies the
+    configured TRC there; the standalone 3D LUT maker has the toggle and
+    additionally honors ``3dlut.apply_trc``.
+    """
+    if apply_trc or not has_trc_apply_toggle:
+        if trc.startswith("smpte2084") or trc == "hlg":
+            return trc
+        return trc_gamma
+    return None
+
+
+def content_rgb_space_for_creation(colors_xy: dict[str, float]):
+    """Build the ``content_rgb_space`` kwarg for ``Worker.create_3dlut``.
+
+    Mirrors the ``content_rgb_space`` construction shared by
+    ``LUT3DMixin.lut3d_create_producer`` and the standalone 3D LUT maker's own
+    ``create_3dlut``. ``colors_xy`` uses the same
+    ``3dlut.content.colorspace.<color>.<coord>`` keys as
+    :func:`content_colorspace_xy`.
+    """
+    space = [1.0, [], [], [], []]
+    for i, color in enumerate(("white", "red", "green", "blue")):
+        for coord in "xy":
+            space[i + 1].append(colors_xy[f"3dlut.content.colorspace.{color}.{coord}"])
+        space[i + 1].append(1.0)
+    space[1] = colormath.xyY2XYZ(*space[1])
+    return colormath.get_rgb_space(space)
+
+
+def resolve_creation_whitepoint(
+    x: float | None, y: float | None
+) -> tuple[float, float, float] | None:
+    """Return the ``XYZwp`` kwarg for ``Worker.create_3dlut``.
+
+    Mirrors ``LUT3DMixin.lut3d_create_producer``'s ``XYZwp`` branch, only
+    taken outside the standalone 3D LUT maker (this port's only caller).
+    ``x``/``y`` are ``getcfg("3dlut.whitepoint.x"/"y", False)`` (``False``
+    fallback, so an unset value comes back falsy rather than the class
+    default); this Qt port never sets either key (no ambient/visual
+    whitepoint-measurement flow yet), so this currently always returns
+    ``None``, but stays ready for when one lands.
+    """
+    if not x or not y:
+        return None
+    return colormath.xyY2XYZ(x, y)

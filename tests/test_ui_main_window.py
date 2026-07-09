@@ -54,6 +54,14 @@ def srgb_profile_path():
 
 
 @pytest.fixture
+def lut3d_input_profile_path():
+    """Path to a second, distinct bundled real ``mntr``/``RGB`` profile."""
+    return os.path.join(
+        os.path.dirname(__file__), "data", "icc", "vcgt_cm_test_blueish_yellowish.icc"
+    )
+
+
+@pytest.fixture
 def stub_worker(monkeypatch):
     """Stub worker enumeration so no Argyll / hardware is needed."""
 
@@ -2493,6 +2501,247 @@ def test_profile_build_finished_success_declines_install(
     window._on_profile_build_finished(srgb_profile_path)
 
     assert installed == []
+
+
+# --- 3D LUT creation ---------------------------------------------------------
+
+
+def test_lut3d_create_btn_handler_missing_argyll_bin_aborts(window, monkeypatch):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: False)
+    ran = []
+    monkeypatch.setattr(mw.WorkerRunController, "run", lambda *a, **k: ran.append(True))
+
+    window.lut3d_create_btn_handler()
+
+    assert ran == []
+
+
+def test_lut3d_create_btn_handler_missing_input_profile_shows_error(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    setcfg("3dlut.input.profile", "/no/such/profile.icc")
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    ran = []
+    monkeypatch.setattr(mw.WorkerRunController, "run", lambda *a, **k: ran.append(True))
+
+    window.lut3d_create_btn_handler()
+
+    assert errors
+    assert ran == []
+
+
+def test_lut3d_create_btn_handler_invalid_input_profile_shows_error(
+    window, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    bogus = tmp_path / "bogus.icc"
+    bogus.write_bytes(b"not a profile")
+    setcfg("3dlut.input.profile", str(bogus))
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    ran = []
+    monkeypatch.setattr(mw.WorkerRunController, "run", lambda *a, **k: ran.append(True))
+
+    window.lut3d_create_btn_handler()
+
+    assert errors
+    assert str(bogus) in errors[0][2]
+    assert ran == []
+
+
+def test_lut3d_create_btn_handler_no_current_profile_shows_error(
+    window, monkeypatch, lut3d_input_profile_path
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    setcfg("3dlut.input.profile", lut3d_input_profile_path)
+    setcfg("calibration.file", None)
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    ran = []
+    monkeypatch.setattr(mw.WorkerRunController, "run", lambda *a, **k: ran.append(True))
+
+    window.lut3d_create_btn_handler()
+
+    assert errors
+    assert ran == []
+
+
+def test_lut3d_create_btn_handler_same_profile_cancel_aborts(
+    window, monkeypatch, srgb_profile_path
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    setcfg("3dlut.input.profile", srgb_profile_path)
+    setcfg("calibration.file", srgb_profile_path)
+    monkeypatch.setattr(
+        mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.Cancel
+    )
+    ran = []
+    monkeypatch.setattr(mw.WorkerRunController, "run", lambda *a, **k: ran.append(True))
+
+    window.lut3d_create_btn_handler()
+
+    assert ran == []
+
+
+def test_lut3d_create_btn_handler_write_access_denied_shows_error(
+    window, monkeypatch, srgb_profile_path, lut3d_input_profile_path
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    setcfg("3dlut.input.profile", lut3d_input_profile_path)
+    setcfg("calibration.file", srgb_profile_path)
+    monkeypatch.setattr(mw, "waccess", lambda *a, **k: False)
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    ran = []
+    monkeypatch.setattr(mw.WorkerRunController, "run", lambda *a, **k: ran.append(True))
+
+    window.lut3d_create_btn_handler()
+
+    assert errors
+    assert ran == []
+
+
+def test_lut3d_create_btn_handler_overwrite_declined_aborts(
+    window, monkeypatch, srgb_profile_path, lut3d_input_profile_path
+):
+    # ``waccess`` and the overwrite check's ``os.path.isfile`` are both
+    # mocked so the handler never touches the real filesystem (a real
+    # ``waccess`` write-probe next to the checked-in test fixtures is both
+    # unnecessary for this test and, via ``tempfile.TemporaryFile``, prone to
+    # hanging in some sandboxed environments).
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    setcfg("3dlut.input.profile", lut3d_input_profile_path)
+    setcfg("calibration.file", srgb_profile_path)
+    monkeypatch.setattr(mw, "waccess", lambda *a, **k: True)
+    monkeypatch.setattr(os.path, "isfile", lambda p: True)
+    monkeypatch.setattr(
+        mw.QMessageBox, "warning", lambda *a, **k: mw.QMessageBox.Cancel
+    )
+    ran = []
+    monkeypatch.setattr(mw.WorkerRunController, "run", lambda *a, **k: ran.append(True))
+
+    window.lut3d_create_btn_handler()
+
+    assert ran == []
+
+
+def test_lut3d_create_btn_handler_runs_create_3dlut_through_controller(
+    window, monkeypatch, srgb_profile_path, lut3d_input_profile_path
+):
+    # See the overwrite-declined test above for why ``waccess`` is mocked.
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    setcfg("3dlut.input.profile", lut3d_input_profile_path)
+    setcfg("calibration.file", srgb_profile_path)
+    monkeypatch.setattr(mw, "waccess", lambda *a, **k: True)
+    calls = {}
+
+    def fake_run(_ctrl, producer, consumer=None, **kwargs):
+        calls["producer"] = producer
+        calls["consumer"] = consumer
+        calls["wargs"] = kwargs.get("wargs")
+        calls["wkwargs"] = kwargs.get("wkwargs")
+        calls["pauseable"] = kwargs.get("pauseable")
+
+    monkeypatch.setattr(mw.WorkerRunController, "run", fake_run)
+
+    window.lut3d_create_btn_handler()
+
+    assert calls["producer"] == window.worker.create_3dlut
+    assert calls["consumer"] == window._on_lut3d_create_finished
+    profile_in_arg, path_arg, profile_abst_arg, profile_out_arg = calls["wargs"]
+    assert profile_in_arg.filename == lut3d_input_profile_path
+    assert profile_abst_arg is None
+    assert profile_out_arg.filename == srgb_profile_path
+    assert path_arg
+    assert calls["wkwargs"]["file_format"] == getcfg("3dlut.format")
+    assert calls["wkwargs"]["intent"] == getcfg("3dlut.rendering_intent")
+    assert calls["pauseable"] is False
+
+
+def test_lut3d_create_btn_handler_always_applies_trc_for_embedded_tab(
+    window, monkeypatch, srgb_profile_path, lut3d_input_profile_path
+):
+    """The embedded tab has no ``lut3d_trc_apply_none_ctrl``, so wx applies
+    the configured TRC regardless of ``3dlut.apply_trc`` (unlike the
+    standalone 3D LUT maker)."""
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    setcfg("3dlut.input.profile", lut3d_input_profile_path)
+    setcfg("calibration.file", srgb_profile_path)
+    setcfg("3dlut.apply_trc", 0)
+    setcfg("3dlut.trc", "gamma2.2")
+    setcfg("3dlut.trc_gamma", 2.4)
+    monkeypatch.setattr(mw, "waccess", lambda *a, **k: True)
+    calls = {}
+    monkeypatch.setattr(
+        mw.WorkerRunController,
+        "run",
+        lambda _ctrl, producer, consumer=None, **k: calls.update(
+            {"wkwargs": k.get("wkwargs")}
+        ),
+    )
+
+    window.lut3d_create_btn_handler()
+
+    assert calls["wkwargs"]["trc_gamma"] == 2.4
+
+
+def test_on_lut3d_create_finished_exception_shows_error(window, monkeypatch):
+    monkeypatch.setattr(window.worker, "wrapup", lambda *a, **k: None)
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+
+    window._on_lut3d_create_finished(RuntimeError("collink failed"))
+
+    assert errors
+    assert "collink failed" in errors[0][2]
+
+
+def test_on_lut3d_create_finished_success_is_silent(window, monkeypatch):
+    monkeypatch.setattr(window.worker, "wrapup", lambda *a, **k: None)
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+
+    window._on_lut3d_create_finished(True)
+
+    assert errors == []
+
+
+def test_update_action_buttons_shows_lut3d_create_btn_when_manual(window):
+    setcfg("3dlut.create", 0)
+    window._select_tab("lut3d")
+
+    assert window.lut3d_create_btn.isHidden() is False
+    assert window.calibrate_btn.isHidden() is True
+    assert window.calibrate_and_profile_btn.isHidden() is True
+    assert window.profile_btn.isHidden() is True
+
+
+def test_update_action_buttons_hides_lut3d_create_btn_when_auto_create(window):
+    setcfg("3dlut.create", 1)
+    window._select_tab("lut3d")
+
+    assert window.lut3d_create_btn.isHidden() is True
+
+
+def test_update_action_buttons_hides_lut3d_create_btn_on_other_tabs(window):
+    setcfg("3dlut.create", 0)
+    window._select_tab("calibration")
+
+    assert window.lut3d_create_btn.isHidden() is True
+
+
+def test_lut3d_create_btn_enabled_only_for_real_non_preset_profile(
+    window, srgb_profile_path
+):
+    setcfg("calibration.file", srgb_profile_path)
+    window._select_tab("lut3d")
+    assert window.lut3d_create_btn.isEnabled()
+
+    setcfg("calibration.file", None)
+    window._update_action_buttons()
+    assert not window.lut3d_create_btn.isEnabled()
 
 
 # --- calibration/profile-file header bar -----------------------------------
