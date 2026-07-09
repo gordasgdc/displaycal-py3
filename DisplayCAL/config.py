@@ -2081,7 +2081,7 @@ def getcfg(
     if (
         value
         and isinstance(value, str)
-        and name.endswith("file")
+        and name.endswith(".file")
         and name != "colorimeter_correction_matrix_file"
         and (name != "testchart.file" or value != "auto")
         and (not os.path.isabs(value) or not os.path.exists(value))

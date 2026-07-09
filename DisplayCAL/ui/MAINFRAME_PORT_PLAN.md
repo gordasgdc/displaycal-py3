@@ -1159,6 +1159,39 @@ separate, independently-scoped page, not this settings tab's row visibility.
 (both directions), the advanced-options/whitepoint-mode visibility gate, and
 config-to-control repopulation.
 
+**Fixed a latent shared `config.getcfg()` bug found while chasing an
+unrelated pre-existing test failure** (`test_lut3d_create_btn_handler_missing
+_input_profile_shows_error`, order-dependent under `pytest -n auto`, not
+caused by the whitepoint-locus change above): `getcfg`'s path-correction
+branch (`DisplayCAL/config.py`) gated on `name.endswith("file")`, intended to
+catch keys like `calibration.file` / `testchart.file`, but the substring
+`"file"` is also the last four letters of `"profile"` -- so it silently
+caught every `"...profile"`-suffixed key too (`3dlut.input.profile`,
+`3dlut.abstract.profile`, `3dlut.output.profile`,
+`measurement_report.output_profile`, `measurement_report.devlink_profile`,
+`measurement_report.simulation_profile`, `gamap_profile`,
+`tc_precond_profile`). Whenever one of those was set to a path that doesn't
+currently exist on disk, `getcfg` silently substituted the key's bundled
+default instead of returning the stored (invalid) path -- so any "is this
+profile missing?" check built on `getcfg` (in both the wx and Qt UIs, since
+`config.py` is shared) could never actually observe a missing profile.
+Narrowed the check to `name.endswith(".file")` (a real dot-delimited "file"
+word), which still matches the two intended keys and no longer matches any
+`"...profile"` key. Fixed at the source, so the still-shipping wx path gets
+the fix too. 9 new regression tests in `tests/test_config.py` (parametrized
+over all 8 affected keys plus a `calibration.file` control case proving the
+intended behaviour is unchanged).
+
+**Also fixed a pytest-xdist-only test-isolation flake** in
+`tests/test_ui_main_window.py`'s `window` fixture: the four `*_has_info
+_panel_text` tests bake `lang.getstr()` output into `QLabel`s at `MainWindow`
+construction time, but called `lang.init()` from the test body, after
+construction -- too late if this was the first `MainWindow` built in a given
+`pytest-xdist` worker process (harmless in the normal single-process run,
+where dozens of earlier tests already populate `lang.LDICT` first). Moved
+`lang.init()` into the `window` fixture itself, ahead of construction, so
+translations are always loaded regardless of worker/test order.
+
 ### Stage 5+ — Reporting, colorimeter corrections, install/share
 
 The remaining large features, each its own slice: measurement report

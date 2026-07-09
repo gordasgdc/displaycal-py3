@@ -162,6 +162,12 @@ def test_profile_types_cover_config_valid_values():
 @pytest.fixture
 def window(qapp, stub_worker):
     """Construct a MainWindow against the stubbed worker."""
+    # Info-panel text (and other lang.getstr() calls) is baked into widgets
+    # at construction time below, so translations must already be loaded --
+    # under pytest-xdist this may be the first MainWindow built in this
+    # worker process, and lang.init() elsewhere (e.g. in a test body, after
+    # construction) is too late to affect already-built widgets.
+    lang.init()
     win = mw.MainWindow()
     yield win
     win.close()
