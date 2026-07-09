@@ -602,11 +602,13 @@ Not reproduced (documented in `lut3d_settings.py`'s module docstring): the
 `XYZbpout` (last measured/loaded profile's black point) factor in the
 black-output-offset row's visibility, treated as always `[0, 0, 0]` (its value
 before any profile has been measured) so that visibility reduces to just
-`3dlut.create`; and, as already covered by the "worker-driven Argyll
-execution" deferral, actually creating a 3D LUT (`lut3d_create_handler`) plus
-the black-point-compensation and relative-colorimetric-rendering-intent
-confirmation dialogs that gate it (`lut3d_create_btn` isn't wired into the
-button bar at all yet). 50 new tests in `tests/test_lut3d_settings.py` for the
+`3dlut.create`. Actually creating a 3D LUT (`lut3d_create_handler`,
+`lut3d_create_btn` wasn't wired into the button bar at all yet) was left to
+the "worker-driven Argyll execution" deferral -- closed in a later session,
+see Stage 5's "3D LUT creation" entry below (which also corrects this
+paragraph's original claim that black-point-compensation / relative-
+colorimetric-rendering-intent confirmation dialogs gate creation itself; they
+don't). 50 new tests in `tests/test_lut3d_settings.py` for the
 pure module, plus 21 new regression tests in `tests/test_ui_main_window.py`
 (163 total, up from 142). Verified visually via offscreen `QWidget.grab()`
 screenshots (SMPTE 2084 roll-off with a preset colorspace, and again with a
@@ -1059,11 +1061,70 @@ always true here). `MainWindow._fast_matrix_shaper_choice()` builds the 3-button
 does, so a "create fast matrix shaper" / "update profile" choice now actually
 reaches `worker.prepare_dispcal`'s `-o` flag (dispcal itself builds the profile
 file during calibration; verified this doesn't require a separate `colprof`
-step). Not extended: `_on_calibration_finished`'s existing gap for a
-calibrate-only run (no `update_calibration_file_ctrl()` / install-offer chain
-when the run finishes with `profile.update` or `dispcal_create_fast_matrix_shaper`
-set) predates this session and stays open -- the profile file lands on disk
-correctly either way, only the completion UI chain is unported.
+step). The completion-chain gap noted here in an earlier draft (calibrate-only
+runs not refreshing the calibration-file control or offering an install) was
+closed in the next session, below.
+
+**Calibrate-only completion chain — DONE (2026-07-09).** Closed the deferral
+noted above: `_on_calibration_finished` now ports the rest of
+`just_calibrate_finish` for a calibrate-only run. `update_calibration_file_ctrl()`
+always refreshes first, then either the fast-matrix-shaper/`profile.update`
+profile (already built by `dispcal` itself, per the previous session) is
+validated and offered for install via `_on_profile_build_finished` (which
+gained an optional `success_msg` so this path can say "calibration.complete"
+instead of the colprof path's "profiling.complete", matching wx's two
+`profile_finish` call sites), or -- the plain-calibrate case, `elif
+getcfg("trc")` -- the new calibration is loaded onto the video card gamma
+table via a new `_load_cal()` (a port of `MainFrame.load_cal`, minus the
+curve-viewer refresh, same silent pattern as `_reset_video_lut`) plus a
+completion notice. 8 new tests in `tests/test_ui_main_window.py` (214 total).
+
+**3D LUT creation (manual `lut3d_create_btn`) — DONE (2026-07-09).** Picked
+from the "Remaining gaps" list (maintainer's choice, over measurement-report
+edge cases and header-bar/tab-parity deferrals). Closes the "actually creating
+a 3D LUT" item tracked since Session 10 above (and corrects that entry's
+inaccurate claim of black-point-compensation / relative-colorimetric-
+rendering-intent confirmation dialogs gating creation -- those
+(`MainFrame.lut3d_check_bpc`, and the never-called
+`check_3dlut_relcol_rendering_intent`) actually gate the BPC checkbox and
+`3dlut.rendering_intent` combo's own handlers, not `lut3d_create_handler`).
+
+`lut3d_settings.py` gains `resolve_create_trc_gamma()`,
+`content_rgb_space_for_creation()` and `resolve_creation_whitepoint()`,
+factoring out the two branches of `LUT3DMixin.lut3d_create_producer` with
+real logic worth sharing/testing between the embedded tab and the standalone
+3D LUT maker's own (independently written) `create_3dlut`; the rest of that
+method is a flat, untestable config-to-kwarg mapping built inline by each
+caller. `MainWindow.lut3d_create_btn_handler()` is the `MainFrame`-embedded
+half of `LUT3DMixin.lut3d_create_handler` (`not isinstance(self,
+LUT3DFrame)`): the input profile comes from `3dlut.input.profile` and the
+output profile is the current calibration/profile selection
+(`config.get_current_profile()`) -- this port has no abstract-profile picker
+or standalone input/output combos like the standalone maker does. wx never
+shows a save dialog for this button (only the standalone maker does): the
+path comes from `Worker.lut3d_get_filename()`, with the same overwrite
+confirmation the other action buttons use. Runs `worker.create_3dlut`
+through the existing `WorkerRunController`. `_update_action_buttons()` now
+hides the calibrate/profile buttons and shows `lut3d_create_btn` whenever the
+3D LUT tab is active with manual creation (`not getcfg("3dlut.create")`),
+mirroring `MainFrame.update_main_controls`.
+
+**Dropped / deferred:** wx's success path chaining into `profile_finish` to
+offer installing the created 3D LUT (a separate, larger feature covering
+madVR/Prisma API install, ReShade folder detection, and the "copy to
+location" flow) -- this port's completion is silent on success (matching the
+standalone 3D LUT maker's own `_on_create_done`), reporting only errors. Also
+not reproduced: the auto-chain creating a 3D LUT automatically after
+profiling (`3dlut.create` when checked just hides the manual button today,
+it doesn't yet trigger creation itself), and `MainFrame.lut3d_check_bpc`'s
+warning offering to turn off profile black-point compensation when both it
+and `3dlut.create` are enabled together. 16 new tests in
+`tests/test_ui_main_window.py`; also caught and fixed a real test hazard in
+passing (not a product bug): two new tests initially let a real
+`Worker.lut3d_get_filename`-computed path reach `waccess`'s unmocked
+filesystem probe, which via `tempfile.TemporaryFile` hung indefinitely in
+this sandboxed environment and, once, left a stray `.cube` file next to the
+checked-in test fixtures -- fixed by mocking `waccess` in those tests.
 
 ### Stage 5+ — Reporting, colorimeter corrections, install/share
 
