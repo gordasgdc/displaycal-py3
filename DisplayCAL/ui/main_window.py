@@ -29,13 +29,17 @@ Deferred to later slices (Pile 2 / Stage 5): the worker-driven Argyll execution
 behind :attr:`MainWindow.measurement_requested` (the progress dialog and
 interactive display-adjustment window), the pattern-generator setup dialogs
 (Prisma / madTPG / Resolve), the visual-editor / ambient-measure buttons, the
-black-point-rate advanced control, actually creating a 3D LUT (``lut3d_create_btn``
+black-point-rate advanced control, and actually creating a 3D LUT (``lut3d_create_btn``
 isn't wired into the button bar yet; see :mod:`DisplayCAL.lut3d_settings`'s module
-docstring), and generating an actual measurement report (the settings window opens
-via :meth:`MainWindow.measurement_report_btn_handler`, reusing the already-ported
-:mod:`DisplayCAL.ui.tools.testchart_editor` for its "edit chart" button, but its
-own Measure button still shows a not-yet-available notice — see
-:mod:`DisplayCAL.ui.measurement_report`'s module docstring for what remains).
+docstring). The measurement-report settings window
+(:meth:`MainWindow.measurement_report_btn_handler`) reuses the already-ported
+:mod:`DisplayCAL.ui.tools.testchart_editor` for its "edit chart" button, and its
+Measure button now runs the full chart/profile resolution, worker-driven
+measurement and HTML report generation via
+:mod:`DisplayCAL.measurement_report` (:meth:`MainWindow._on_report_measure_requested`
+onward) — not reproduced there: the self-check report (Alt+Measure), the
+low-res-B2A regenerate-tables offer, and the measurement-file sanity-check
+review dialog, see that module's docstring.
 The pre-flight confirmation / overwrite dialogs (:meth:`MainWindow._check_overwrite`
 / :meth:`MainWindow._check_show_macos_bugs_warning` / :meth:`MainWindow
 ._current_cal_choice` / :meth:`MainWindow._fast_matrix_shaper_choice`, backed by
@@ -127,6 +131,7 @@ from DisplayCAL import (
     preflight_checks,
     profile_finish,
 )
+from DisplayCAL import measurement_report as measurement_report_pipeline
 from DisplayCAL import localization as lang
 from DisplayCAL import profile_name as profile_name_mod
 from DisplayCAL.argyll import check_set_argyll_bin, make_argyll_compatible_path
@@ -149,6 +154,7 @@ from DisplayCAL.icc_profile import (
     VideoCardGammaType,
 )
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.meta import VERSION_STRING
 from DisplayCAL.options import TEST
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import get_theme_pixmap, get_themed_pixmap
@@ -179,7 +185,7 @@ from DisplayCAL.ui.tools.testchart_editor import TestchartEditorWindow
 from DisplayCAL.ui.worker_runner import AdjustmentController, WorkerRunController
 from DisplayCAL.util_decimal import stripzeros
 from DisplayCAL.util_dict import dict_sort
-from DisplayCAL.util_os import get_program_file
+from DisplayCAL.util_os import get_program_file, waccess
 from DisplayCAL.worker import (
     Worker,
     check_file_isfile,
@@ -700,6 +706,16 @@ class MainWindow(BaseWindow):
         self._current_testchart_path: str | None = None
         self._testchart_editor_window: TestchartEditorWindow | None = None
         self._report_window: ReportWindow | None = None
+        #: Staged by :meth:`_on_report_measure_requested`, consumed by
+        #: :meth:`_run_report_measurement` / :meth:`_on_report_measurement_finished`
+        #: (the report flow doesn't fit :class:`MeasurementAction`, so it can't
+        #: thread this through the pending-function args like ``begin_measurement``
+        #: does).
+        self._pending_report_context: measurement_report_pipeline.ReportContext | None = (
+            None
+        )
+        self._pending_report_save_path: str | None = None
+        self._pending_report_ti1_path: str | None = None
         self._gamap_window: GamapWindow | None = None
         #: 3D LUT input-colorspace combo: description -> profile path,
         #: mirroring wx's ``MainFrame.input_profiles`` (populated once from
@@ -3959,14 +3975,9 @@ class MainWindow(BaseWindow):
         """Open the measurement-report settings window.
 
         Mirrors wx's ``self.reportframe`` singleton: reuses a single window
-        instance, raising it if already open. Not yet ported: actually
-        generating a report (``MainFrame.measurement_report_handler`` /
-        ``measurement_report_consumer``'s chart/profile resolution and
-        ``placeholders2data`` assembly, see
-        :mod:`DisplayCAL.ui.measurement_report`'s module docstring) — the
-        window's Measure button surfaces that as a not-yet-available notice.
-        Its "edit chart" button already opens the real, ported testchart
-        editor via :meth:`_open_testchart_editor`.
+        instance, raising it if already open. Its "edit chart" button opens
+        the real, ported testchart editor via :meth:`_open_testchart_editor`;
+        its Measure button runs :meth:`_on_report_measure_requested`.
         """
         window = self._report_window
         if window is None:
@@ -3978,15 +3989,190 @@ class MainWindow(BaseWindow):
         window.raise_()
         window.activateWindow()
 
-    def _on_report_measure_requested(self) -> None:
-        """Handle the report window's Measure button (not yet ported)."""
-        QMessageBox.information(
-            self,
-            lang.getstr("measurement_report"),
-            "Creating a measurement report isn't available in this Qt build yet.",
-        )
+    def _report_measurement_done(self) -> None:
+        """Re-enable the report window's Measure button after a cancel/error."""
         if self._report_window is not None:
             self._report_window.measurement_report_btn.setEnabled(True)
+
+    def _report_display_name(self) -> str:
+        """The current display's label, stripped of the primary-display suffix."""
+        return self.display_ctrl.currentText().replace(
+            f" {lang.getstr('display.primary')}", ""
+        )
+
+    def _on_report_measure_requested(self) -> None:
+        """Handle the report window's Measure button.
+
+        Qt port of ``MainFrame.measurement_report_handler`` (minus the
+        self-check-report branch, see :mod:`DisplayCAL.measurement_report`'s
+        module docstring): resolves the chart/profile/simulation setup via
+        :func:`~DisplayCAL.measurement_report.resolve_report_context`, asks
+        where to save the report, confirms overwrite, then stages the run
+        through the same measurement-presentation engine
+        :meth:`begin_measurement` uses for the calibrate/profile buttons
+        (generalized here as :meth:`_begin_report_measurement` since the
+        report flow isn't one of the :class:`MeasurementAction` cases).
+        """
+        if not check_set_argyll_bin():
+            self._report_measurement_done()
+            return
+        try:
+            context = measurement_report_pipeline.resolve_report_context(
+                self.worker, VERSION_STRING, self._report_display_name()
+            )
+        except measurement_report_pipeline.ReportSetupError as exception:
+            QMessageBox.critical(self, APPNAME, str(exception))
+            self._report_measurement_done()
+            return
+
+        default_dir, _default_file = get_verified_path(
+            None, os.path.join(getcfg("profile.save_path"), context.default_file)
+        )
+        path, _selected_filter = QFileDialog.getSaveFileName(
+            self,
+            lang.getstr("save_as"),
+            os.path.join(default_dir, context.default_file),
+            f"{lang.getstr('filetype.html')} (*.html *.htm)",
+        )
+        if not path:
+            self._report_measurement_done()
+            return
+        path = make_argyll_compatible_path(path)
+        if not waccess(path, os.W_OK):
+            QMessageBox.critical(
+                self, APPNAME, lang.getstr("error.access_denied.write", path)
+            )
+            self._report_measurement_done()
+            return
+        save_path = f"{os.path.splitext(path)[0]}.html"
+        setcfg("last_filedialog_path", save_path)
+        if os.path.exists(save_path):
+            answer = QMessageBox.warning(
+                self,
+                APPNAME,
+                lang.getstr("dialog.confirm_overwrite", save_path),
+                QMessageBox.Ok | QMessageBox.Cancel,
+                QMessageBox.Cancel,
+            )
+            if answer != QMessageBox.Ok:
+                self._report_measurement_done()
+                return
+
+        self._pending_report_context = context
+        self._pending_report_save_path = save_path
+        self._begin_report_measurement()
+
+    def _begin_report_measurement(self) -> None:
+        """Stage the report measurement and present the measurement area.
+
+        Qt port of the ``setup_measurement`` call at the end of
+        ``measurement_report_handler``, generalized from
+        :meth:`begin_measurement` (which is keyed on :class:`MeasurementAction`)
+        since the report flow doesn't fit that enum.
+        """
+        writecfg()
+        plan = self.flow.plan_measurement(
+            self._drive_report_measurement,
+            use_patternwindow=getattr(self.worker, "_use_patternwindow", False),
+        )
+        if plan.mode is PresentationMode.CALL_PENDING:
+            self.call_pending_function()
+        elif plan.mode is PresentationMode.SHOW_FRAME:
+            self._present_measureframe()
+        else:
+            self._start_measureframe_subprocess()
+
+    def _drive_report_measurement(self) -> None:
+        """Restore the main window and run the staged report measurement."""
+        self._restore_after_measurement()
+        self._run_report_measurement()
+
+    def _run_report_measurement(self) -> None:
+        """Stage TI1/cal files and run ``measure_ti1``.
+
+        Qt port of ``MainFrame.measurement_report`` (the part before
+        ``worker.start``).
+        """
+        context = self._pending_report_context
+        self.worker.dispread_after_dispcal = False
+        self.worker.interactive = config.get_display_name() == "Untethered"
+        try:
+            ti1_path, cal_path = measurement_report_pipeline.stage_measurement_files(
+                self.worker,
+                self._pending_report_save_path,
+                context.ti1,
+                context.oprof,
+                context.profile,
+                context.use_sim_as_output,
+                context.devlink,
+            )
+        except Exception as exception:
+            QMessageBox.critical(self, APPNAME, str(exception))
+            self.worker.wrapup(False)
+            self._report_measurement_done()
+            return
+        self._pending_report_ti1_path = ti1_path
+        controller = self._ensure_run_controller()
+        controller.run(
+            self.worker.measure_ti1,
+            self._on_report_measurement_finished,
+            wargs=(ti1_path, cal_path, context.colormanaged),
+            progress_msg=lang.getstr("measurement_report"),
+            pauseable=True,
+        )
+
+    def _on_report_measurement_finished(self, result: object) -> None:
+        """Process a completed report measurement and write the HTML report.
+
+        Qt port of ``MainFrame.measurement_report_consumer`` (minus the
+        dropped sanity-check dialog, see :mod:`DisplayCAL.measurement_report`'s
+        module docstring): the numeric TI3 processing and
+        ``placeholders2data`` assembly live in
+        :func:`~DisplayCAL.measurement_report.finalize_measurement_report`.
+
+        Args:
+            result (object): ``True`` on success, ``False`` / ``None`` when
+                the run did not complete, or an ``Exception`` on failure.
+        """
+        self.show()
+        self.raise_()
+        self._report_measurement_done()
+        if isinstance(result, Exception):
+            QMessageBox.critical(self, APPNAME, str(result))
+            self.worker.wrapup(result)
+            return
+        if not result:
+            self.worker.wrapup(False)
+            return
+        context = self._pending_report_context
+        ti3_path = os.path.splitext(self._pending_report_ti1_path)[0] + ".ti3"
+        try:
+            measurement_report_pipeline.finalize_measurement_report(
+                worker=self.worker,
+                ti3_path=ti3_path,
+                profile=context.profile,
+                sim_profile=context.sim_profile,
+                intent=context.intent,
+                sim_intent=context.sim_intent,
+                devlink=context.devlink,
+                ti3_ref=context.ti3_ref,
+                sim_ti3=context.sim_ti3,
+                save_path=self._pending_report_save_path,
+                chart=context.chart,
+                gray=context.gray,
+                apply_trc=context.apply_trc,
+                use_sim=context.use_sim,
+                use_sim_as_output=context.use_sim_as_output,
+                oprof=context.oprof,
+                instrument_name=self.comport_ctrl.currentText(),
+                measurement_mode_name=self.measurement_mode_ctrl.currentText(),
+                display_name=self._report_display_name(),
+                observers=self._observers,
+                version_string=VERSION_STRING,
+                pack_js=bool(getcfg("report.pack_js")),
+            )
+        except Exception as exception:
+            QMessageBox.critical(self, APPNAME, str(exception))
 
     def _testchart_ctrl_changed(self, index: int) -> None:
         """Load the newly selected testchart."""

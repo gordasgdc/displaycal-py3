@@ -776,17 +776,333 @@ def test_report_window_edit_chart_requested_opens_testchart_editor(window):
             window._testchart_editor_window.close()
 
 
-def test_report_window_measure_requested_shows_notice(window, monkeypatch):
-    calls = []
-    monkeypatch.setattr(
-        mw.QMessageBox, "information", staticmethod(lambda *a, **k: calls.append(True))
-    )
+def _fake_report_context(**overrides):
+    """A minimal, valid ``ReportContext`` for the Qt-wiring tests below.
+
+    The pipeline internals (chart_lookup, ICC/CGATS parsing, ...) are covered
+    by ``tests/test_measurement_report.py``; these tests only need to verify
+    ``main_window.py`` threads a context through to the right dialogs / worker
+    calls, so the field values themselves mostly don't matter.
+    """
+    from DisplayCAL import measurement_report as mrp
+
+    fields = {
+        "chart": object(),
+        "ti1": object(),
+        "ti3_ref": object(),
+        "gray": None,
+        "profile": object(),
+        "oprof": object(),
+        "sim_profile": None,
+        "devlink": None,
+        "sim_ti3": None,
+        "intent": "r",
+        "sim_intent": None,
+        "apply_trc": False,
+        "colormanaged": False,
+        "use_sim": False,
+        "use_sim_as_output": False,
+        "report_type": "Measurement",
+        "default_file": "Measurement Report 1.0 - Test Display - now.html",
+    }
+    fields.update(overrides)
+    return mrp.ReportContext(**fields)
+
+
+@pytest.fixture
+def report_window(window):
     window.measurement_report_btn_handler()
-    try:
-        window._report_window.measure_requested.emit()
-        assert calls == [True]
-    finally:
-        window._report_window.close()
+    yield window._report_window
+    window._report_window.close()
+
+
+def test_report_measure_requested_missing_argyll_reenables_button(
+    window, report_window, monkeypatch
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: False)
+    report_window.measurement_report_btn.setEnabled(False)
+
+    window._on_report_measure_requested()
+
+    assert report_window.measurement_report_btn.isEnabled() is True
+
+
+def test_report_measure_requested_setup_error_shows_dialog(
+    window, report_window, monkeypatch
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    from DisplayCAL import measurement_report as mrp
+
+    def fake_resolve(*a, **k):
+        raise mrp.ReportSetupError("no chart")
+
+    monkeypatch.setattr(
+        mw.measurement_report_pipeline, "resolve_report_context", fake_resolve
+    )
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    report_window.measurement_report_btn.setEnabled(False)
+
+    window._on_report_measure_requested()
+
+    assert "no chart" in errors[0][2]
+    assert report_window.measurement_report_btn.isEnabled() is True
+
+
+def test_report_measure_requested_cancelled_save_dialog_is_noop(
+    window, report_window, monkeypatch
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(
+        mw.measurement_report_pipeline,
+        "resolve_report_context",
+        lambda *a, **k: _fake_report_context(),
+    )
+    monkeypatch.setattr(
+        mw.QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: ("", ""))
+    )
+    began = []
+    monkeypatch.setattr(window, "_begin_report_measurement", lambda: began.append(True))
+    report_window.measurement_report_btn.setEnabled(False)
+
+    window._on_report_measure_requested()
+
+    assert began == []
+    assert report_window.measurement_report_btn.isEnabled() is True
+
+
+def test_report_measure_requested_overwrite_declined_is_noop(
+    window, report_window, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(
+        mw.measurement_report_pipeline,
+        "resolve_report_context",
+        lambda *a, **k: _fake_report_context(),
+    )
+    existing = tmp_path / "report.html"
+    existing.write_text("existing")
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (str(existing), "")),
+    )
+    monkeypatch.setattr(mw, "waccess", lambda *a, **k: True)
+    monkeypatch.setattr(
+        mw.QMessageBox,
+        "warning",
+        staticmethod(lambda *a, **k: mw.QMessageBox.Cancel),
+    )
+    began = []
+    monkeypatch.setattr(window, "_begin_report_measurement", lambda: began.append(True))
+
+    window._on_report_measure_requested()
+
+    assert began == []
+
+
+def test_report_measure_requested_success_stages_and_begins(
+    window, report_window, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    context = _fake_report_context()
+    monkeypatch.setattr(
+        mw.measurement_report_pipeline,
+        "resolve_report_context",
+        lambda *a, **k: context,
+    )
+    target = tmp_path / "My Report.html"
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (str(target), "")),
+    )
+    monkeypatch.setattr(mw, "waccess", lambda *a, **k: True)
+    began = []
+    monkeypatch.setattr(window, "_begin_report_measurement", lambda: began.append(True))
+
+    window._on_report_measure_requested()
+
+    assert began == [True]
+    assert window._pending_report_context is context
+    assert window._pending_report_save_path == str(target)
+    assert getcfg("last_filedialog_path") == str(target)
+
+
+def test_report_measure_requested_write_access_denied_shows_error(
+    window, report_window, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(
+        mw.measurement_report_pipeline,
+        "resolve_report_context",
+        lambda *a, **k: _fake_report_context(),
+    )
+    target = tmp_path / "My Report.html"
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (str(target), "")),
+    )
+    monkeypatch.setattr(mw, "waccess", lambda *a, **k: False)
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    began = []
+    monkeypatch.setattr(window, "_begin_report_measurement", lambda: began.append(True))
+
+    window._on_report_measure_requested()
+
+    assert errors
+    assert began == []
+
+
+def test_begin_report_measurement_call_pending_runs_immediately(
+    window, monkeypatch, _no_writecfg
+):
+    _force_mode(window, monkeypatch, mf.PresentationMode.CALL_PENDING)
+    ran = []
+    monkeypatch.setattr(window, "_run_report_measurement", lambda: ran.append(True))
+    _run_pending_synchronously(window)
+
+    window._begin_report_measurement()
+
+    assert ran == [True]
+
+
+def test_begin_report_measurement_show_frame_presents_measureframe(
+    window, monkeypatch, _no_writecfg
+):
+    _force_mode(window, monkeypatch, mf.PresentationMode.SHOW_FRAME)
+    presented = []
+    monkeypatch.setattr(window, "_present_measureframe", lambda: presented.append(True))
+
+    window._begin_report_measurement()
+
+    assert presented == [True]
+
+
+def test_run_report_measurement_stage_failure_shows_error(window, monkeypatch):
+    context = _fake_report_context()
+    window._pending_report_context = context
+    window._pending_report_save_path = "/tmp/report.html"
+    monkeypatch.setattr(
+        mw.measurement_report_pipeline,
+        "stage_measurement_files",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("stage failed")),
+    )
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    wrapup_calls = []
+    monkeypatch.setattr(
+        window.worker, "wrapup", lambda *a, **k: wrapup_calls.append(a) or True
+    )
+    ran = []
+    monkeypatch.setattr(mw.WorkerRunController, "run", lambda *a, **k: ran.append(True))
+
+    window._run_report_measurement()
+
+    assert "stage failed" in errors[0][2]
+    assert wrapup_calls == [(False,)]
+    assert ran == []
+
+
+def test_run_report_measurement_success_runs_measure_ti1(window, monkeypatch):
+    context = _fake_report_context(colormanaged=True)
+    window._pending_report_context = context
+    window._pending_report_save_path = "/tmp/report.html"
+    monkeypatch.setattr(
+        mw.measurement_report_pipeline,
+        "stage_measurement_files",
+        lambda *a, **k: ("/tmp/ti1path.ti1", "/tmp/cal.cal"),
+    )
+    calls = {}
+
+    def fake_run(_ctrl, producer, consumer=None, **kwargs):
+        calls["producer"] = producer
+        calls["consumer"] = consumer
+        calls["wargs"] = kwargs.get("wargs")
+
+    monkeypatch.setattr(mw.WorkerRunController, "run", fake_run)
+
+    window._run_report_measurement()
+
+    assert calls["producer"] == window.worker.measure_ti1
+    assert calls["consumer"] == window._on_report_measurement_finished
+    assert calls["wargs"] == ("/tmp/ti1path.ti1", "/tmp/cal.cal", True)
+    assert window._pending_report_ti1_path == "/tmp/ti1path.ti1"
+    assert window.worker.dispread_after_dispcal is False
+
+
+def test_report_measurement_finished_exception_shows_error_and_wraps_up(
+    window, monkeypatch
+):
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    wrapup_calls = []
+    monkeypatch.setattr(
+        window.worker, "wrapup", lambda *a, **k: wrapup_calls.append(a) or True
+    )
+    exc = ValueError("boom")
+
+    window._on_report_measurement_finished(exc)
+
+    assert "boom" in errors[0][2]
+    assert wrapup_calls == [(exc,)]
+
+
+def test_report_measurement_finished_incomplete_wraps_up_silently(
+    window, monkeypatch
+):
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    wrapup_calls = []
+    monkeypatch.setattr(
+        window.worker, "wrapup", lambda *a, **k: wrapup_calls.append(a) or True
+    )
+
+    window._on_report_measurement_finished(False)
+
+    assert errors == []
+    assert wrapup_calls == [(False,)]
+
+
+def test_report_measurement_finished_success_calls_finalize(window, monkeypatch):
+    context = _fake_report_context()
+    window._pending_report_context = context
+    window._pending_report_save_path = "/tmp/report.html"
+    window._pending_report_ti1_path = "/tmp/work.ti1"
+    calls = {}
+    monkeypatch.setattr(
+        mw.measurement_report_pipeline,
+        "finalize_measurement_report",
+        lambda **kwargs: calls.update(kwargs),
+    )
+
+    window._on_report_measurement_finished(True)
+
+    assert calls["ti3_path"] == "/tmp/work.ti3"
+    assert calls["profile"] is context.profile
+    assert calls["save_path"] == "/tmp/report.html"
+    assert calls["instrument_name"] == window.comport_ctrl.currentText()
+    assert calls["observers"] is window._observers
+
+
+def test_report_measurement_finished_finalize_error_shows_dialog(window, monkeypatch):
+    context = _fake_report_context()
+    window._pending_report_context = context
+    window._pending_report_save_path = "/tmp/report.html"
+    window._pending_report_ti1_path = "/tmp/work.ti1"
+    monkeypatch.setattr(
+        mw.measurement_report_pipeline,
+        "finalize_measurement_report",
+        lambda **k: (_ for _ in ()).throw(RuntimeError("write failed")),
+    )
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+
+    window._on_report_measurement_finished(True)
+
+    assert "write failed" in errors[0][2]
 
 
 def test_testchart_btn_handler_cancelled_is_noop(window, monkeypatch):

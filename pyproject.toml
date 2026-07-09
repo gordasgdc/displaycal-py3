@@ -256,6 +256,11 @@ extend-ignore = [
 # producer's body (auto-discovery, per-path dispatch, OEM-package download
 # fallback).
 "DisplayCAL/ui/colorimeter_correction_io.py" = ["C901"]
+# Toolkit-neutral measurement-report pipeline: ``resolve_report_context`` and
+# ``finalize_measurement_report`` mirror the branch-heavy wx
+# ``measurement_report_handler`` / ``measurement_report_consumer`` bodies they
+# port verbatim.
+"DisplayCAL/measurement_report.py" = ["C901"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 12

@@ -1102,15 +1102,38 @@ options, the estimated-measurement-time readout, and the big
 `mr_update_main_controls` show/hide/enable orchestration. It reuses the sub-slice
 i helpers. Runnable standalone via `python -m DisplayCAL.ui.measurement_report`.
 
-**Deferred (surfaced as Qt signals, matching `MeasureFrame`):** the actual
-measurement run and the test-chart editor are `measure_requested` /
-`edit_chart_requested` signals for the not-yet-ported Qt main window to wire up.
-Still in the wx path for now: the chart / profile / sim / devlink resolution and
-BT.1886 lookup in `measurement_report_handler`, the file-save + overwrite
-dialogs, the `worker.Worker` measure run (`measurement_report`), and the big
-`placeholders2data` assembly in the consumer (it reads live CGATS / ICCProfile
-objects and pulls display / instrument / ccmx strings from widgets) plus
-`report.create` + launch. Those land when the Qt main window drives this window.
+**Measurement report sub-slice iii — actually generating the report — DONE
+(2026-07-09).** Picked from the "Remaining gaps" list (maintainer's choice, over
+3D LUT creation). Closed the sub-slice i/ii deferral: `ReportWindow.measure_requested`
+(previously a not-yet-available notice) now drives the full pipeline through
+`MainWindow._on_report_measure_requested`. Extended
+`DisplayCAL/measurement_report.py` with the rest of the toolkit-neutral core --
+`resolve_report_context` (chart load, simulation/devlink/output profile
+resolution, the BT.1886-style TRC target and its `xicclu` blackpoint lookup, the
+reference-value `chart_lookup` calls; ports `measurement_report_handler`),
+`stage_measurement_files` (temp-dir/TI1/profile/cal staging; ports
+`measurement_report`'s pre-`worker.start` half), and `finalize_measurement_report`
+(the measured-TI3 processing -- quantization, devlink white-patch rescale, Lab
+conversion, instrument/ccmx label building -- plus the `placeholders2data`
+assembly and `report.create` + `launch_file`; ports `measurement_report_consumer`).
+All three take `worker: Worker` directly (the `preflight_checks.py` precedent of
+treating `Worker` as an already-toolkit-neutral collaborator), so the only
+window-shaped code left in `main_window.py` is the save-path `QFileDialog` +
+overwrite `QMessageBox` and staging the run through the same
+`flow.plan_measurement` / `WorkerRunController` engine the calibrate/profile
+buttons use (`_begin_report_measurement` generalizes `begin_measurement` since
+the report flow isn't a `MeasurementAction`). 28 new tests in
+`tests/test_measurement_report.py` (real `.ti1`/`.ti3`/`.icc` dispread/colprof
+fixtures against a minimal `FakeWorker`, no Argyll/display needed) and 17 in
+`tests/test_ui_main_window.py`.
+
+Deliberately not reproduced (documented in `measurement_report.py`'s module
+docstring): the self-check report (holding Alt while clicking Measure looks up
+the chart through the display profile's own B2A table instead of measuring --
+the button doesn't even capture the modifier yet), `check_profile_b2a_hires`'s
+low-res-B2A refusal + "regenerate hires tables?" offer (always proceeds with the
+profile as-is now), and `measurement_file_check_confirm`'s interactive
+suspicious-patch review grid (always proceeds with the measured data unmodified).
 
 **Colorimeter-correction sub-slice i — CCXX metadata injection — DONE.**
 `DisplayCAL/colorimeter_correction.py` (another plain, Qt-free `DisplayCAL`
