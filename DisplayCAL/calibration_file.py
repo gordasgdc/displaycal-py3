@@ -13,18 +13,14 @@ toolkit, so both the still-shipping wx path and the Qt header bar
 
 Deliberately not reproduced here (documented, not silently dropped):
 
-* EDID/instrument-ID auto-matching of the profile being loaded against the
-  currently enumerated displays (``load_cal_handler``'s
-  ``display_name_indexes`` / ``edid_md5_indexes`` block), and the "d" dispcal
-  option's virtual-display auto-select (``-dweb`` / ``-dmadvr``, used by the
-  ``video_*`` pattern-generator presets) -- both are conveniences for
-  multi-display / pattern-generator setups, which are already deferred Pile-2
-  scope (see ``MAINFRAME_PORT_PLAN.md``'s "Deferred to the Qt main window").
-* The legacy pre-``ARGYLL_DISPCAL_ARGS`` ``.cal`` parsing branch (files from
-  Argyll releases old enough to predate that section) -- vanishing real-world
-  usage.
-* The ``3DLUT_*`` / ``SIMULATION_PROFILE`` HDR config-mapper block -- the 3D
-  LUT tab's HDR/encoding sub-controls are already documented deferred scope.
+* The "d" dispcal option's virtual-display auto-select (``-dweb`` /
+  ``-dmadvr``, used by the ``video_*`` pattern-generator presets) -- already
+  deferred Pile-2 pattern-generator scope (see ``MAINFRAME_PORT_PLAN.md``'s
+  "Deferred to the Qt main window").
+* The ``3DLUT_*`` / ``SIMULATION_PROFILE`` HDR config-mapper block that syncs
+  a loaded ICC profile's 3D LUT metadata onto the (already-ported) 3D LUT
+  tab's config keys -- the largest of the ``load_cal_handler`` pieces still
+  outstanding, left for a follow-up session (see ``MAINFRAME_PORT_PLAN.md``).
 * Cross-window resync (``lut3dframe``, ``reportframe``) -- those tool windows
   aren't ported to Qt.
 """
@@ -33,20 +29,34 @@ from __future__ import annotations
 
 import io
 import os
+import shutil
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 from send2trash import send2trash
 
 from DisplayCAL import localization as lang
 from DisplayCAL import main_settings
-from DisplayCAL.config import DEFAULTS, PROFILE_EXT, get_data_path, getcfg, setcfg
+from DisplayCAL.colormath import XYZ2xyY
+from DisplayCAL.config import (
+    DEFAULTS,
+    EXE_EXT,
+    PROFILE_EXT,
+    get_data_path,
+    get_display_name,
+    getcfg,
+    is_virtual_display,
+    setcfg,
+)
+from DisplayCAL.debughelpers import Error
 from DisplayCAL.icc_profile import ICCProfile, ICCProfileInvalidError, Text
+from DisplayCAL.util_decimal import stripzeros
 from DisplayCAL.util_io import TarFileProper
 from DisplayCAL.util_list import index_fallback_ignorecase, natsort
 from DisplayCAL.util_os import safe_glob
-from DisplayCAL.util_str import strtr
+from DisplayCAL.util_str import safe_str, strtr
+from DisplayCAL.worker import Worker
 
 #: Recognized calibration/profile file extensions (mirrors ``display_cal``'s
 #: module-level constants of the same name, duplicated here to avoid pulling
@@ -500,6 +510,242 @@ def apply_calibration_options(
             setter(option)
 
 
+@dataclass
+class DisplayInstrumentMatch:
+    """Result of :func:`match_display_and_instrument`.
+
+    Callers apply the found indexes via ``setcfg`` (and, in wx, the
+    ``get_set_display()`` / ``update_comports()`` UI-sync calls this
+    function deliberately doesn't reproduce -- the Qt caller's own
+    ``update_controls()`` already repopulates both selectors from config).
+    """
+
+    #: Index into ``worker.display_edid``/``display_names``, or ``None`` if
+    #: no unambiguous match was found.
+    display_index: int | None = None
+    #: Whether ``display_index`` differs from the currently selected display.
+    display_changed: bool = False
+    #: Whether the matched display is virtual/"SII REPEATER", in which case
+    #: wx re-enables the 3D LUT tab it disabled when it started loading an
+    #: ICC profile (see ``apply_icc_profile_load_defaults``).
+    reenable_3dlut_tab: bool = False
+    #: Index into ``worker.instruments``, or ``None`` if no match was found.
+    instrument_index: int | None = None
+    instrument_match: bool = False
+
+
+def match_display_and_instrument(
+    profile: ICCProfile, worker: Worker
+) -> DisplayInstrumentMatch:
+    """Match a loaded ICC profile's embedded EDID/instrument info.
+
+    Faithful port of the ``display_name_indexes`` / ``edid_md5_indexes`` /
+    instrument-matching block in ``load_cal_handler``, against the displays
+    and instruments ``worker`` last enumerated.
+    """
+    match = DisplayInstrumentMatch()
+
+    display_name = profile.getDeviceModelDescription()
+    profile_tags_meta = profile.tags.get("meta", {})
+    edid_md5 = profile_tags_meta.get("EDID_md5", {}).get("value")
+    if display_name or edid_md5:
+        display_name_indexes = []
+        edid_md5_indexes = []
+        for i, edid in enumerate(worker.display_edid):
+            if display_name in (
+                edid.get(b"monitor_name", False),
+                worker.display_names[i],
+            ):
+                display_name_indexes.append(i)
+            if edid_md5 == edid.get(b"hash", False):
+                edid_md5_indexes.append(i)
+
+        display_index = None
+        if len(display_name_indexes) == 1:
+            display_index = display_name_indexes[0]
+        elif len(edid_md5_indexes) == 1:
+            display_index = edid_md5_indexes[0]
+        # Else: several matches: can't be sure which is the right one, do
+        # nothing (matching wx).
+
+        if display_index is not None:
+            match.display_index = display_index
+            match.display_changed = get_display_name(
+                None, False
+            ) != get_display_name(display_index, False)
+            if is_virtual_display() or get_display_name() == "SII REPEATER":
+                match.reenable_3dlut_tab = True
+
+    instrument_id = profile_tags_meta.get("MEASUREMENT_device", {}).get("value")
+    if instrument_id:
+        for i, instrument in enumerate(worker.instruments):
+            if instrument.lower() == instrument_id:
+                match.instrument_index = i
+                match.instrument_match = True
+                break
+
+    return match
+
+
+def apply_icc_profile_load_defaults(path: str, is_preset: bool) -> None:
+    """Apply the config side effects ``load_cal_handler`` sets when loading an ICC profile.
+
+    Faithful port of the top of ``load_cal_handler``'s ICC-profile branch,
+    minus the EDID/instrument matching (:func:`match_display_and_instrument`,
+    called separately since it needs a ``Worker`` and returns indexes for the
+    caller to ``setcfg``/repopulate controls with).
+    """
+    setcfg("last_icc_path", path)
+    if not is_preset:
+        setcfg("3dlut.output.profile", path)
+        setcfg("measurement_report.output_profile", path)
+    # Disable 3D LUT tab when switching from madVR / Resolve; re-enabled by
+    # the caller if match_display_and_instrument() finds a virtual display.
+    setcfg("3dlut.tab.enable", 0)
+    setcfg("3dlut.tab.enable.backup", 0)
+
+
+@dataclass
+class LegacyCalResult:
+    """Result of :func:`parse_legacy_cal`."""
+
+    #: True if the file's ``DEVICE_CLASS`` isn't ``DISPLAY`` (not a display
+    #: calibration file); the caller should show an error and stop.
+    invalid: bool = False
+    #: Human-readable labels of the settings that were found and applied,
+    #: for a "settings loaded: ..." style message. Empty if the file had none
+    #: of the recognized legacy keywords.
+    settings: list[str] = field(default_factory=list)
+
+
+def parse_legacy_cal(ti3_lines: list[bytes], worker: Worker) -> LegacyCalResult:
+    """Parse a pre-``ARGYLL_DISPCAL_ARGS`` ``.cal`` file (old Argyll releases).
+
+    Faithful port of the legacy branch at the tail of ``load_cal_handler``,
+    minus the wx ``InfoDialog`` calls (the caller shows those based on
+    ``LegacyCalResult.invalid``/``.settings``). Applies recognized settings
+    via ``setcfg`` and populates ``worker.options_dispcal`` directly, exactly
+    like the wx original.
+
+    This also fixes a latent bug found while porting: the wx original
+    compared ``ti3_lines`` (``bytes``, since ``parse_calibration_file`` opens
+    non-ICC files in binary mode) against ``str`` keyword/value literals
+    (``line[0] == "DEVICE_CLASS"``, ``value == "DISPLAY"``, ...) and read
+    ``value.lower()[0]`` (an ``int`` on ``bytes``, not a one-character
+    string) -- never true/always wrong in Python 3, so this whole branch was
+    dead code, except for ``BLACK_POINT_CORRECTION`` where
+    ``stripzeros(value) >= 0`` compared a ``str`` to an ``int`` and raised
+    ``TypeError``. Fixed at the source in ``display_cal.py`` too, so the
+    still-shipping wx path gets a working (if rarely-hit) legacy-``.cal``
+    loader instead of dead/crashing code.
+    """
+    result = LegacyCalResult()
+    worker.options_dispcal = []
+    black_point_correction = False
+    for raw_line in ti3_lines:
+        line = raw_line.strip().split(b" ", 1)
+        if len(line) <= 1:
+            continue
+        key = line[0]
+        value = line[1][1:-1].decode("utf-8", "replace")  # strip quotes
+        if key == b"DEVICE_CLASS":
+            if value != "DISPLAY":
+                result.invalid = True
+                return result
+        elif key == b"DEVICE_TYPE":
+            measurement_mode = value.lower()[0:1]
+            if measurement_mode in ("c", "l"):
+                setcfg("measurement_mode", measurement_mode)
+                worker.options_dispcal.append("-y" + measurement_mode)
+        elif key == b"NATIVE_TARGET_WHITE":
+            setcfg("whitepoint.colortemp", None)
+            setcfg("whitepoint.x", None)
+            setcfg("whitepoint.y", None)
+            setcfg("3dlut.whitepoint.x", None)
+            setcfg("3dlut.whitepoint.y", None)
+            result.settings.append(lang.getstr("whitepoint"))
+        elif key == b"TARGET_WHITE_XYZ":
+            xyz = value.split()
+            try:
+                xyz = [float(component) / 100 for component in xyz]
+            except ValueError:
+                continue
+            x, y, y_lum = XYZ2xyY(xyz[0], xyz[1], xyz[2])
+            if lang.getstr("whitepoint") not in result.settings:
+                setcfg("whitepoint.colortemp", None)
+                setcfg("whitepoint.x", round(x, 4))
+                setcfg("whitepoint.y", round(y, 4))
+                setcfg("3dlut.whitepoint.x", round(x, 4))
+                setcfg("3dlut.whitepoint.y", round(y, 4))
+                worker.options_dispcal.append(
+                    "-w{},{}".format(getcfg("whitepoint.x"), getcfg("whitepoint.y"))
+                )
+                result.settings.append(lang.getstr("whitepoint"))
+            setcfg("calibration.luminance", stripzeros(round(y_lum * 100, 3)))
+            worker.options_dispcal.append(
+                "-b{}".format(getcfg("calibration.luminance"))
+            )
+            result.settings.append(lang.getstr("calibration.luminance"))
+        elif key == b"TARGET_GAMMA":
+            setcfg("trc", None)
+            if value in ("L_STAR", "REC709", "SMPTE240M", "sRGB"):
+                setcfg("trc.type", "g")
+            if value == "L_STAR":
+                setcfg("trc", "l")
+            elif value == "REC709":
+                setcfg("trc", "709")
+            elif value == "SMPTE240M":
+                setcfg("trc", "240")
+            elif value == "sRGB":
+                setcfg("trc", "s")
+            else:
+                try:
+                    gamma = stripzeros(value)
+                    if float(gamma) < 0:
+                        setcfg("trc.type", "G")
+                        gamma = abs(float(gamma))
+                    else:
+                        setcfg("trc.type", "g")
+                    setcfg("trc", gamma)
+                except ValueError:
+                    continue
+            worker.options_dispcal.append(
+                "-" + getcfg("trc.type") + str(getcfg("trc"))
+            )
+            result.settings.append(lang.getstr("trc"))
+        elif key == b"DEGREE_OF_BLACK_OUTPUT_OFFSET":
+            setcfg("calibration.black_output_offset", stripzeros(value))
+            worker.options_dispcal.append(
+                "-f{}".format(getcfg("calibration.black_output_offset"))
+            )
+            result.settings.append(lang.getstr("calibration.black_output_offset"))
+        elif key == b"BLACK_POINT_CORRECTION":
+            if float(stripzeros(value)) >= 0:
+                black_point_correction = True
+                setcfg("calibration.black_point_correction", stripzeros(value))
+                worker.options_dispcal.append(
+                    "-k{}".format(getcfg("calibration.black_point_correction"))
+                )
+            result.settings.append(lang.getstr("calibration.black_point_correction"))
+        elif key == b"TARGET_BLACK_BRIGHTNESS":
+            setcfg("calibration.black_luminance", stripzeros(value))
+            worker.options_dispcal.append(
+                "-B{}".format(getcfg("calibration.black_luminance"))
+            )
+            result.settings.append(lang.getstr("calibration.black_luminance"))
+        elif key == b"QUALITY":
+            setcfg("calibration.quality", value.lower()[0:1])
+            worker.options_dispcal.append(
+                "-q{}".format(getcfg("calibration.quality"))
+            )
+            result.settings.append(lang.getstr("calibration.quality"))
+
+    if not black_point_correction:
+        setcfg("calibration.black_point_correction.auto", 1)
+
+    return result
+
+
 def related_files_for(cal: str, dircontents: list[str]) -> dict[str, bool]:
     """Return the calibration dir entries related to ``cal``, all pre-checked.
 
@@ -645,19 +891,134 @@ def create_session_archive(
     return True
 
 
+@dataclass
+class SessionArchiveImportRequest:
+    """Bundles :func:`import_session_archive`'s arguments for one import run."""
+
+    path: str
+    basename: str
+    ext: str
+    tempdir: str
+    sevenzip: str | None = None
+
+
+def import_session_archive(
+    request: SessionArchiveImportRequest, exec_cmd: Callable[..., bool | Exception]
+) -> str | Exception:
+    """Extract a compressed session archive into ``request.tempdir``.
+
+    Faithful port of ``import_session_archive_producer``. ``exec_cmd`` runs
+    the 7-Zip extraction command line (``worker.exec_cmd`` in practice); the
+    ZIP/TAR path doesn't need it.
+
+    Returns:
+        The would-be storage path (``<profile.save_path>/<basename>/<basename><ext>``)
+        the caller should pass as ``dst_path`` to ``Worker.wrapup()`` to move
+        the extracted files there, or an ``Exception``/:class:`Error` if the
+        archive isn't a session archive or extraction failed.
+    """
+    path = request.path
+    basename = request.basename
+    ext = request.ext
+    temp = request.tempdir
+
+    if ext.lower() == ".7z":
+        if not request.sevenzip:
+            return Error(lang.getstr("file.missing", f"7z{EXE_EXT}"))
+        result = exec_cmd(
+            request.sevenzip,
+            ["e", "-y", path],
+            capture_output=True,
+            log_output=False,
+            skip_scripts=True,
+            working_dir=temp,
+        )
+        if not result or isinstance(result, Exception):
+            return result
+        found_ext = None
+        for ext_ in (".icc", ".icm", ".cal"):
+            if os.path.isfile(os.path.join(temp, f"{basename}{ext_}")):
+                found_ext = ext_
+                break
+        if not found_ext:
+            return Error(
+                lang.getstr("error.not_a_session_archive", os.path.basename(path))
+            )
+        nested = os.path.join(temp, basename)
+        if os.path.isdir(nested):
+            shutil.rmtree(nested)
+    else:
+        if path.lower().endswith((".tgz", ".tar.gz")):
+            archive = TarFileProper.open(path, "r", encoding="UTF-8")
+            getinfo = archive.getmember
+            getnames = archive.getnames
+        else:
+            archive = zipfile.ZipFile(path, "r")
+            getinfo = archive.getinfo
+            getnames = archive.namelist
+        try:
+            with archive:
+                info = None
+                for ext_ in (".icc", ".icm", ".cal"):
+                    for name in (f"{basename}/{basename}{ext_}", f"{basename}{ext_}"):
+                        if isinstance(archive, zipfile.ZipFile):
+                            names = (name, safe_str(name, "cp437"))
+                        else:
+                            names = (safe_str(name, "UTF-8"),)
+                        for name_variant in names:
+                            try:
+                                info = getinfo(name_variant)
+                            except KeyError:
+                                continue
+                            break
+                        if info:
+                            break
+                    if info:
+                        break
+                if not info:
+                    return Error(
+                        lang.getstr(
+                            "error.not_a_session_archive", os.path.basename(path)
+                        )
+                    )
+                found_ext = ext_
+                for name in getnames():
+                    if not isinstance(archive, zipfile.ZipFile):
+                        archive.extract(name, temp, False)
+                        continue
+                    outname = str(name)
+                    with open(
+                        os.path.join(temp, os.path.basename(outname)), "wb"
+                    ) as outfile:
+                        outfile.write(archive.read(name))
+        except Exception as exception:  # noqa: BLE001 (reported to caller, not logged here)
+            return exception
+    # Use the extracted file's own extension (.cal/.icc/.icm), not the
+    # archive's (.7z/.tgz/.zip) -- see the module's parent bug-fix note in
+    # ``display_cal.py``'s ``import_session_archive_producer``.
+    return os.path.join(getcfg("profile.save_path"), basename, basename + found_ext)
+
+
 __all__ = [
     "COMPRESSED_FILE_EXTENSIONS",
     "ICCPROFILE_FILE_EXTENSIONS",
     "CalibrationFileError",
     "CalibrationSelection",
+    "DisplayInstrumentMatch",
+    "LegacyCalResult",
+    "SessionArchiveImportRequest",
     "SessionArchiveRequest",
     "apply_calibration_options",
+    "apply_icc_profile_load_defaults",
     "build_recent_calibrations",
     "create_session_archive",
     "delete_related_files",
     "get_unpreseted_recent_calibrations",
+    "import_session_archive",
     "index_fallback_ignorecase",
+    "match_display_and_instrument",
     "parse_calibration_file",
+    "parse_legacy_cal",
     "related_files_for",
     "resolve_calibration_selection",
     "restore_defaults",

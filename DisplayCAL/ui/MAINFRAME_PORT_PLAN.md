@@ -2138,6 +2138,84 @@ visualization; the standalone `LUT3DFrame` tool window; wx's full Help menu
 (license, "go to website", support, bug-report — only the update-check pair
 is reproduced); and Stage 7 (retire wx), still gated on maintainer confidence.
 
+**Header-bar deferrals, part 1 (2026-07-10).** Picked up the "header-bar
+deferrals" batch flagged above (maintainer's choice). Closed 4 of its 5 items
+via `DisplayCAL/calibration_file.py` + `ui/main_window.py`; the 5th
+(`3DLUT_*`/`SIMULATION_PROFILE` config-mapper) is left for a follow-up
+session since it's the largest and most tangled with the others.
+
+- **Per-file delete-confirmation checkboxes — DONE.** New
+  `main_window.py::_DeleteConfirmationDialog(QDialog)` (a `QScrollArea` of
+  `QCheckBox` rows, mirroring `_CalChoiceDialog`'s shape) replaces the
+  plain-text-listing `QMessageBox.question` `delete_calibration_handler`
+  used; the existing `calibration_file.delete_related_files()` already
+  accepted a per-file checked dict, so no toolkit-neutral change was needed.
+- **Session-archive import via the load button — DONE.** New
+  `calibration_file.import_session_archive()` /
+  `SessionArchiveImportRequest` (a faithful port of
+  `import_session_archive_producer`, mirroring the already-ported
+  `create_session_archive()`'s 7z/tar/zip 3-way split) plus a
+  `_SessionArchiveImportThread(QThread)` in `main_window.py`
+  (`_import_session_archive()` / `_on_session_archive_import_done()`),
+  wired where `_load_calibration_file` previously showed a static
+  "not available" notice. **Fixed a latent bug found while porting** (in
+  both `display_cal.py`'s `import_session_archive_producer` and the new Qt
+  module): the producer returned `<save_path>/<basename>/<basename><ext>`
+  using the **archive's own extension** (`.7z`/`.tgz`/`.zip`) instead of the
+  extracted file's real one (`.cal`/`.icc`/`.icm`) — so the returned path
+  never actually existed after `wrapup()` moved the real file into place,
+  and `load_cal_handler(None, result)` silently treated every archive import
+  as a missing file. Fixed at the source (track the matched extension
+  instead of reusing the archive's) so the still-shipping wx path gets a
+  working import too.
+- **EDID/instrument-ID auto-matching — DONE.** New
+  `calibration_file.match_display_and_instrument()` /
+  `DisplayInstrumentMatch` (the `display_name_indexes`/`edid_md5_indexes`/
+  instrument-id matching logic, taking a `Worker` directly per the
+  `preflight_checks.py` precedent) plus `apply_icc_profile_load_defaults()`
+  (the `last_icc_path`/`3dlut.output.profile`/`3dlut.tab.enable` side effects
+  that precede it in wx, which Stage 3 had never ported at all). Unlike wx's
+  immediate `get_set_display()`/`update_comports()` calls, the Qt port just
+  `setcfg()`s the matched indexes — `_load_calibration_file`'s existing
+  trailing `update_controls()` call already repopulates both selectors from
+  config, so no extra UI-sync call is needed.
+- **Legacy pre-`ARGYLL_DISPCAL_ARGS` `.cal` parsing — DONE.** New
+  `calibration_file.parse_legacy_cal()` / `LegacyCalResult`, wired via
+  `main_window.py::_load_legacy_cal()` when a non-ICC file has no
+  `ARGYLL_DISPCAL_ARGS` section. **Fixed three more latent bytes/str bugs
+  found while porting** (in both `display_cal.py` and the new module,
+  following the `"profile.unsupported"` precedent from earlier sessions):
+  every `line[0] == "DEVICE_CLASS"`-style keyword/value comparison checked a
+  `bytes` line (`parse_calibration_file` opens non-ICC files in binary mode)
+  against a `str` literal — never true in Python 3, so this entire branch
+  was dead code; `value.lower()[0]` on a `bytes` value returned an `int` (a
+  single byte), not a one-character string, so `measurement_mode in ("c",
+  "l")` could never match either; and `BLACK_POINT_CORRECTION`'s
+  `stripzeros(value) >= 0` compared a `str` to an `int`, raising `TypeError`
+  if that keyword was ever actually present — so this branch didn't just do
+  nothing, it could crash. Also fixed the same `"CTI3" in ti3_lines` bytes/str
+  bug (already correctly `b"CTI3"` in the modern branch and the Qt port) at
+  its one call site inside this same legacy branch. Fixed at the source in
+  `display_cal.py` so the still-shipping wx path gets a working legacy-`.cal`
+  loader instead of dead/crashing code, though real-world usage of
+  pre-`ARGYLL_DISPCAL_ARGS` files remains vanishingly rare.
+
+25 new tests in `tests/test_calibration_file.py` (a new file for this
+module's pure pieces, following the `test_preflight_checks.py` precedent —
+covers `match_display_and_instrument`, `apply_icc_profile_load_defaults`,
+`import_session_archive`, `parse_legacy_cal`), plus 13 new/updated regression
+tests in `tests/test_ui_main_window.py` (424 total across both files,
+confirmed green under `-n auto`, ~100s) and the full `test_display_cal.py`
+suite (65 passed, 1 skipped) confirming the `display_cal.py` source fixes
+didn't regress the wx path.
+
+**Deferred to a follow-up session:** the `3DLUT_*`/`SIMULATION_PROFILE` HDR
+config-mapper block (~225 lines, the largest and most tangled of the five —
+its `MIN_DISPLAY_UPDATE_DELAY_MS`/`DISPLAY_SETTLE_TIME_MULT` handling directly
+consumes this session's `display_match`/`instrument_match` outputs). The Qt
+3D LUT tab it targets already exists (Session 10), so nothing further blocks
+it; it just warrants its own session given its size.
+
 ### Stage 7 — Retire wx code paths
 
 Delete the wx modules whose Qt replacements have been verified equivalent.

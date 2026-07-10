@@ -3440,6 +3440,96 @@ def test_load_calibration_file_applies_preset(window):
     assert window.install_profile_btn.isEnabled()
 
 
+def test_load_calibration_file_applies_display_instrument_match(window, monkeypatch):
+    path = _srgb_preset_path(window)
+    monkeypatch.setattr(
+        mw.calibration_file,
+        "match_display_and_instrument",
+        lambda profile, worker: mw.calibration_file.DisplayInstrumentMatch(
+            display_index=2,
+            display_changed=True,
+            reenable_3dlut_tab=True,
+            instrument_index=1,
+            instrument_match=True,
+        ),
+    )
+
+    window._load_calibration_file(path, silent=True)
+
+    assert getcfg("display.number") == 3
+    assert getcfg("comport.number") == 2
+    assert getcfg("3dlut.tab.enable") == 1
+    assert getcfg("3dlut.tab.enable.backup") == 1
+
+
+def test_load_calibration_file_no_display_match_leaves_display_number(
+    window, monkeypatch
+):
+    path = _srgb_preset_path(window)
+    setcfg("display.number", 1)
+    monkeypatch.setattr(
+        mw.calibration_file,
+        "match_display_and_instrument",
+        lambda profile, worker: mw.calibration_file.DisplayInstrumentMatch(),
+    )
+
+    window._load_calibration_file(path, silent=True)
+
+    assert getcfg("display.number") == 1
+    # Disabled unconditionally when loading an ICC profile, matching wx.
+    assert getcfg("3dlut.tab.enable") == 0
+
+
+def test_load_calibration_file_routes_legacy_cal_to_parser(
+    window, monkeypatch, tmp_path
+):
+    cal_file = tmp_path / "legacy.cal"
+    cal_file.write_bytes(b'DEVICE_CLASS "DISPLAY"\nTARGET_GAMMA "REC709"\n')
+    monkeypatch.setattr(mw, "get_options_from_cal", lambda path: ([], []))
+
+    window._load_calibration_file(str(cal_file), silent=True)
+
+    assert getcfg("calibration.file") == str(cal_file)
+    assert getcfg("trc") == "709"
+    assert getcfg("trc.type") == "g"
+
+
+def test_load_calibration_file_legacy_cal_invalid_device_class_shows_error(
+    window, monkeypatch, tmp_path
+):
+    cal_file = tmp_path / "legacy.cal"
+    cal_file.write_bytes(b'DEVICE_CLASS "PRINTER"\n')
+    setcfg("calibration.file", None)
+    before = getcfg("calibration.file", False)
+    monkeypatch.setattr(mw, "get_options_from_cal", lambda path: ([], []))
+    errors = []
+    monkeypatch.setattr(
+        mw.QMessageBox, "critical", lambda *a, **k: errors.append(a) or None
+    )
+
+    window._load_calibration_file(str(cal_file), silent=True)
+
+    assert errors
+    assert getcfg("calibration.file", False) == before
+
+
+def test_load_calibration_file_legacy_cal_no_settings_notifies(
+    window, monkeypatch, tmp_path
+):
+    cal_file = tmp_path / "legacy.cal"
+    cal_file.write_bytes(b'DEVICE_CLASS "DISPLAY"\n')
+    monkeypatch.setattr(mw, "get_options_from_cal", lambda path: ([], []))
+    infos = []
+    monkeypatch.setattr(
+        mw.QMessageBox, "information", lambda *a, **k: infos.append(a) or None
+    )
+
+    window._load_calibration_file(str(cal_file), silent=False)
+
+    assert infos
+    assert getcfg("calibration.file") == str(cal_file)
+
+
 def test_calibration_file_ctrl_handler_loads_selected_recent(window):
     path = _srgb_preset_path(window)
     idx = window.recent_cals.index(path)
@@ -3466,17 +3556,74 @@ def test_load_calibration_file_missing_path_is_noop(window):
     assert getcfg("calibration.file", False) == before
 
 
-def test_load_calibration_file_rejects_archive_extension(window, monkeypatch):
-    infos = []
+def test_load_calibration_file_delegates_archive_extension_to_import(
+    window, monkeypatch
+):
+    calls = []
     monkeypatch.setattr(
-        mw.QMessageBox, "information", lambda *a, **k: infos.append(a)
+        window, "_import_session_archive", lambda path: calls.append(path)
     )
     monkeypatch.setattr(mw.os.path, "exists", lambda _path: True)
 
     window._load_calibration_file("/tmp/session.zip")
 
-    assert infos
-    assert getcfg("calibration.file", False) != "/tmp/session.zip"
+    assert calls == ["/tmp/session.zip"]
+
+
+def test_import_session_archive_extracts_and_loads_zip(
+    window, monkeypatch, tmp_path, qapp
+):
+    import zipfile
+
+    cal_file = tmp_path / "test.cal"
+    cal_file.write_text("dummy")
+    archive_path = tmp_path / "test.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.write(cal_file, "test.cal")
+    setcfg("profile.save_path", str(tmp_path / "storage"))
+
+    loaded = []
+    monkeypatch.setattr(
+        window, "_load_calibration_file", lambda path, **k: loaded.append(path)
+    )
+
+    window._import_session_archive(str(archive_path))
+
+    deadline = time.time() + 5.0
+    while window._archive_import_thread is not None and time.time() < deadline:
+        qapp.processEvents()
+        time.sleep(0.01)
+
+    assert len(loaded) == 1
+    assert os.path.basename(loaded[0]) == "test.cal"
+    assert os.path.exists(loaded[0])
+
+
+def test_import_session_archive_rejects_non_archive_zip(
+    window, monkeypatch, tmp_path, qapp
+):
+    import zipfile
+
+    other_file = tmp_path / "notes.txt"
+    other_file.write_text("dummy")
+    archive_path = tmp_path / "test.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.write(other_file, "notes.txt")
+    setcfg("profile.save_path", str(tmp_path / "storage"))
+
+    errors = []
+    monkeypatch.setattr(
+        mw.QMessageBox, "critical", lambda *a, **k: errors.append(a) or None
+    )
+
+    window._import_session_archive(str(archive_path))
+
+    deadline = time.time() + 5.0
+    while window._archive_import_thread is not None and time.time() < deadline:
+        qapp.processEvents()
+        time.sleep(0.01)
+
+    assert errors
 
 
 def test_load_cal_btn_handler_uses_file_dialog(window, monkeypatch):
@@ -3615,17 +3762,32 @@ def test_create_session_archive_handler_runs_and_completes(
     assert getcfg("last_archive_save_path") == str(archive_path)
 
 
+class _FakeDeleteConfirmationDialog:
+    """Stand-in for ``mw._DeleteConfirmationDialog`` that skips the real modal loop."""
+
+    answer = None  # set per-test
+    checked: dict | None = None  # set per-test; None keeps every file checked
+
+    def __init__(self, related_files, parent=None):
+        self._related_files = related_files
+
+    def exec_(self):
+        return self.__class__.answer
+
+    def related_files(self):
+        if self.__class__.checked is not None:
+            return self.__class__.checked
+        return dict(self._related_files)
+
+
 def test_delete_calibration_handler_declined_keeps_file(window, monkeypatch, tmp_path):
     cal_dir = tmp_path / "session"
     cal_dir.mkdir()
     cal_file = cal_dir / "test.cal"
     cal_file.write_text("dummy")
     setcfg("calibration.file", str(cal_file))
-    monkeypatch.setattr(
-        mw.QMessageBox,
-        "question",
-        staticmethod(lambda *a, **k: mw.QMessageBox.No),
-    )
+    _FakeDeleteConfirmationDialog.answer = mw.QDialog.Rejected
+    monkeypatch.setattr(mw, "_DeleteConfirmationDialog", _FakeDeleteConfirmationDialog)
 
     window.delete_calibration_handler()
 
@@ -3641,11 +3803,9 @@ def test_delete_calibration_handler_confirmed_removes_file(
     cal_file = cal_dir / "test.cal"
     cal_file.write_text("dummy")
     setcfg("calibration.file", str(cal_file))
-    monkeypatch.setattr(
-        mw.QMessageBox,
-        "question",
-        staticmethod(lambda *a, **k: mw.QMessageBox.Yes),
-    )
+    _FakeDeleteConfirmationDialog.answer = mw.QDialog.Accepted
+    _FakeDeleteConfirmationDialog.checked = None
+    monkeypatch.setattr(mw, "_DeleteConfirmationDialog", _FakeDeleteConfirmationDialog)
 
     window.delete_calibration_handler()
 
@@ -3655,6 +3815,27 @@ def test_delete_calibration_handler_confirmed_removes_file(
     # a falsy value).
     assert getcfg("calibration.file") != str(cal_file)
     assert getcfg("settings.changed") == 1
+
+
+def test_delete_calibration_handler_unchecked_file_is_kept(window, monkeypatch, tmp_path):
+    cal_dir = tmp_path / "session"
+    cal_dir.mkdir()
+    cal_file = cal_dir / "test.cal"
+    cal_file.write_text("dummy")
+    related_file = cal_dir / "test.ccmx"
+    related_file.write_text("dummy")
+    setcfg("calibration.file", str(cal_file))
+    _FakeDeleteConfirmationDialog.answer = mw.QDialog.Accepted
+    _FakeDeleteConfirmationDialog.checked = {
+        "test.cal": True,
+        "test.ccmx": False,
+    }
+    monkeypatch.setattr(mw, "_DeleteConfirmationDialog", _FakeDeleteConfirmationDialog)
+
+    window.delete_calibration_handler()
+
+    assert not cal_file.exists()
+    assert related_file.exists()
 
 
 def test_delete_calibration_handler_no_file_is_noop(window):

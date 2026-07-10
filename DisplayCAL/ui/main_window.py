@@ -385,6 +385,31 @@ class _SessionArchiveThread(QThread):
         self.done.emit(result)
 
 
+class _SessionArchiveImportThread(QThread):
+    """Run :func:`~DisplayCAL.calibration_file.import_session_archive` off-thread.
+
+    The Qt equivalent of wx's ``worker.start(import_session_archive_consumer,
+    import_session_archive_producer, ...)`` pair.
+    """
+
+    #: Emitted with the extraction result (a storage path, or an ``Exception``).
+    done = Signal(object)
+
+    def __init__(
+        self,
+        request: calibration_file.SessionArchiveImportRequest,
+        exec_cmd: object,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._request = request
+        self._exec_cmd = exec_cmd
+
+    def run(self) -> None:  # noqa: D102 (QThread override)
+        result = calibration_file.import_session_archive(self._request, self._exec_cmd)
+        self.done.emit(result)
+
+
 #: Sentinel returned by :meth:`MainWindow._current_cal_choice` when the user
 #: cancels, distinguishable from its other possible results (``None``,
 #: ``False``, or a ``.cal`` path) -- the Qt stand-in for wx's ``wx.ID_CANCEL``.
@@ -445,6 +470,50 @@ class _CalChoiceDialog(QDialog):
 
     def reset_cal(self) -> bool:
         return bool(self._reset_cal_cb and self._reset_cal_cb.isChecked())
+
+
+class _DeleteConfirmationDialog(QDialog):
+    """Qt port of the checkbox dialog ``MainFrame.display_delete_confirmation`` builds.
+
+    Lets the user individually toggle which of the calibration's related
+    files get deleted alongside it, mirroring wx's per-file
+    ``wx.CheckBox`` list (``delete_calibration_related_handler``), all
+    pre-checked. A scroll area stands in for wx's ``ScrolledPanel`` so a long
+    file list doesn't grow the dialog unboundedly.
+    """
+
+    def __init__(self, related_files: dict[str, bool], parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(APPNAME)
+        layout = QVBoxLayout(self)
+        label = QLabel(lang.getstr("dialog.confirm_delete"))
+        label.setWordWrap(True)
+        layout.addWidget(label)
+
+        self._checks: dict[str, QCheckBox] = {}
+        if related_files:
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setMaximumHeight(320)
+            container = QWidget()
+            container_layout = QVBoxLayout(container)
+            for related_file, checked in related_files.items():
+                cb = QCheckBox(related_file)
+                cb.setChecked(checked)
+                self._checks[related_file] = cb
+                container_layout.addWidget(cb)
+            container_layout.addStretch(1)
+            scroll.setWidget(container)
+            layout.addWidget(scroll)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.button(QDialogButtonBox.Ok).setText(lang.getstr("delete"))
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def related_files(self) -> dict[str, bool]:
+        return {name: cb.isChecked() for name, cb in self._checks.items()}
 
 
 class _DonationDialog(QDialog):
@@ -7140,20 +7209,26 @@ class MainWindow(BaseWindow):
         (files with ``ARGYLL_DISPCAL_ARGS`` / ``ARGYLL_COLPROF_ARGS``
         sections, i.e. anything DisplayCAL itself wrote) via
         :mod:`DisplayCAL.calibration_file`. See that module's docstring for
-        what's deliberately not reproduced (legacy pre-args ``.cal`` files,
-        EDID-based display/instrument auto-matching, the 3D LUT HDR
-        config-mapper block).
+        what's deliberately not reproduced (the 3D LUT HDR config-mapper
+        block). Compressed session archives (``.7z``/``.zip``/``.tgz``/
+        ``.tar.gz``) are extracted first via :meth:`_import_session_archive`,
+        which recurses back into this method with the extracted file's path.
+        Loading an ICC profile also tries to auto-match its embedded
+        EDID/instrument metadata against the currently enumerated
+        displays/instruments
+        (:func:`~DisplayCAL.calibration_file.match_display_and_instrument`);
+        unlike wx's immediate ``get_set_display()``/``update_comports()``
+        calls, the match is just applied via ``setcfg`` here since
+        :meth:`update_controls` (called below regardless) already
+        repopulates both selectors from config. A ``.cal`` file with no
+        ``ARGYLL_DISPCAL_ARGS`` section (an Argyll release old enough to
+        predate it) falls back to :meth:`_load_legacy_cal`.
         """
         if not path or not os.path.exists(path):
             return
         ext = os.path.splitext(path)[-1]
         if ext.lower() in calibration_file.COMPRESSED_FILE_EXTENSIONS:
-            QMessageBox.information(
-                self,
-                self.windowTitle(),
-                "Importing session archives isn't available in this Qt "
-                "build yet.",
-            )
+            self._import_session_archive(path)
             return
 
         try:
@@ -7162,8 +7237,22 @@ class MainWindow(BaseWindow):
             QMessageBox.critical(self, self.windowTitle(), str(exception))
             return
 
-        if ext.lower() in calibration_file.ICCPROFILE_FILE_EXTENSIONS:
+        is_profile = ext.lower() in calibration_file.ICCPROFILE_FILE_EXTENSIONS
+        if is_profile:
+            calibration_file.apply_icc_profile_load_defaults(
+                path, path in self.presets
+            )
             options_dispcal, options_colprof = get_options_from_profile(profile)
+            match = calibration_file.match_display_and_instrument(
+                profile, self.worker
+            )
+            if match.display_index is not None and match.display_changed:
+                setcfg("display.number", match.display_index + 1)
+            if match.reenable_3dlut_tab:
+                setcfg("3dlut.tab.enable", 1)
+                setcfg("3dlut.tab.enable.backup", 1)
+            if match.instrument_index is not None:
+                setcfg("comport.number", match.instrument_index + 1)
         else:
             try:
                 options_dispcal, options_colprof = get_options_from_cal(path)
@@ -7176,12 +7265,15 @@ class MainWindow(BaseWindow):
                 return
 
         if not options_dispcal and not options_colprof:
-            if not silent:
-                QMessageBox.information(
-                    self,
-                    self.windowTitle(),
-                    f"{lang.getstr('no_settings')}\n{path}",
-                )
+            if is_profile:
+                if not silent:
+                    QMessageBox.information(
+                        self,
+                        self.windowTitle(),
+                        f"{lang.getstr('no_settings')}\n{path}",
+                    )
+                return
+            self._load_legacy_cal(path, ti3_lines, silent=silent)
             return
 
         calibration_file.apply_calibration_options(options_dispcal, options_colprof)
@@ -7190,9 +7282,60 @@ class MainWindow(BaseWindow):
             setcfg("testchart.file", path)
         writecfg()
         self.update_controls()
-        is_profile = ext.lower() in calibration_file.ICCPROFILE_FILE_EXTENSIONS
         if is_profile or options_dispcal:
             self._apply_vcgt(path, silent=True)
+
+    def _load_legacy_cal(
+        self, path: str, ti3_lines: list[bytes], silent: bool = False
+    ) -> None:
+        """Load a pre-``ARGYLL_DISPCAL_ARGS`` ``.cal`` file (old Argyll releases).
+
+        Faithful port of the tail of wx's ``load_cal_handler`` via
+        :func:`~DisplayCAL.calibration_file.parse_legacy_cal`; see that
+        function's docstring for the latent bytes/str bug it fixes along the
+        way. Applying the video LUT (:meth:`_apply_vcgt`) always runs on
+        success, matching wx's unconditional ``load_cal(silent=True)`` (this
+        port has no ``load_vcgt=False`` caller).
+        """
+        calibration_file.restore_defaults(
+            include=(
+                "calibration",
+                "profile.update",
+                "measure.override_min_display_update_delay_ms",
+                "measure.min_display_update_delay_ms",
+                "measure.override_display_settle_time_mult",
+                "measure.display_settle_time_mult",
+                "trc",
+                "whitepoint",
+            ),
+            exclude=(
+                "calibration.black_point_correction_choice.show",
+                "calibration.update",
+                "trc.should_use_viewcond_adjust.show_msg",
+            ),
+        )
+        legacy = calibration_file.parse_legacy_cal(ti3_lines, self.worker)
+        if legacy.invalid:
+            QMessageBox.critical(
+                self,
+                self.windowTitle(),
+                f"{lang.getstr('calibration.file.invalid')}\n{path}",
+            )
+            return
+
+        setcfg("last_cal_path", path)
+        setcfg("calibration.file", path)
+        if b"CTI3" in ti3_lines:
+            setcfg("testchart.file", path)
+        writecfg()
+        self.update_controls()
+        self._apply_vcgt(path, silent=True)
+        if not silent and not legacy.settings:
+            QMessageBox.information(
+                self,
+                self.windowTitle(),
+                f"{lang.getstr('no_settings')}\n{path}",
+            )
 
     def _apply_vcgt(self, path: str, silent: bool = True) -> None:
         """Load ``path``'s calibration curve onto the display's video LUT.
@@ -7216,6 +7359,53 @@ class MainWindow(BaseWindow):
             silent=silent,
             title=lang.getstr("calibration.load_from_cal_or_profile"),
         )
+
+    def _import_session_archive(self, path: str) -> None:
+        """Extract a compressed session archive and load the file inside it.
+
+        Faithful port of ``import_session_archive`` via
+        :mod:`DisplayCAL.calibration_file`, running the extraction on a
+        background thread behind an indeterminate progress dialog (the same
+        pattern as :meth:`create_session_archive_handler`).
+        """
+        filename, ext = os.path.splitext(path)
+        basename = os.path.basename(filename)
+        if not self._check_overwrite(filename=basename):
+            return
+        tempdir = self.worker.create_tempdir()
+        if isinstance(tempdir, Exception):
+            QMessageBox.critical(self, self.windowTitle(), str(tempdir))
+            return
+        sevenzip = get_program_file("7z", "7-zip") if ext.lower() == ".7z" else None
+        request = calibration_file.SessionArchiveImportRequest(
+            path=path, basename=basename, ext=ext, tempdir=tempdir, sevenzip=sevenzip
+        )
+        self._archive_import_progress = QProgressDialog(
+            lang.getstr("archive.import"), "", 0, 0, self
+        )
+        self._archive_import_progress.setWindowTitle(self.windowTitle())
+        self._archive_import_progress.setCancelButton(None)
+        self._archive_import_progress.show()
+        self._archive_import_thread = _SessionArchiveImportThread(
+            request, self.worker.exec_cmd, parent=self
+        )
+        self._archive_import_thread.done.connect(self._on_session_archive_import_done)
+        self._archive_import_thread.start()
+
+    def _on_session_archive_import_done(self, result: object) -> None:
+        self._archive_import_thread = None
+        if self._archive_import_progress is not None:
+            self._archive_import_progress.close()
+            self._archive_import_progress = None
+        if not result or isinstance(result, Exception):
+            message = str(result) if isinstance(result, Exception) else lang.getstr(
+                "error"
+            )
+            QMessageBox.critical(self, self.windowTitle(), message)
+            self.worker.wrapup(False)
+            return
+        self.worker.wrapup(dst_path=result)
+        self._load_calibration_file(result)
 
     def profile_info_btn_handler(self) -> None:
         """Show profile info for the currently selected calibration/profile."""
@@ -7343,10 +7533,10 @@ class MainWindow(BaseWindow):
         """Delete the current calibration/profile and its related files.
 
         Faithful port of ``delete_calibration_handler`` via
-        :mod:`DisplayCAL.calibration_file`; the confirmation dialog lists
-        related files as plain text rather than wx's individually-toggleable
-        checkbox list (all related files are always included), a UI
-        simplification.
+        :mod:`DisplayCAL.calibration_file`, including wx's
+        individually-toggleable per-file checkbox list
+        (:class:`_DeleteConfirmationDialog`, the Qt stand-in for
+        ``display_delete_confirmation``/``delete_calibration_related_handler``).
         """
         cal = getcfg("calibration.file", False)
         if not cal or not os.path.exists(cal):
@@ -7357,18 +7547,10 @@ class MainWindow(BaseWindow):
             QMessageBox.critical(self, self.windowTitle(), str(exception))
             return
         related_files = calibration_file.related_files_for(cal, dircontents)
-        message = lang.getstr("dialog.confirm_delete")
-        if related_files:
-            message += "\n\n" + "\n".join(sorted(related_files))
-        result = QMessageBox.question(
-            self,
-            self.windowTitle(),
-            message,
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        if result != QMessageBox.Yes:
+        dialog = _DeleteConfirmationDialog(related_files, self)
+        if dialog.exec_() != QDialog.Accepted:
             return
+        related_files = dialog.related_files()
         _deleted, orphaned = calibration_file.delete_related_files(cal, related_files)
         if orphaned:
             trashcan_key = {
