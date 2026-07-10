@@ -106,7 +106,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Callable
 
 from qtpy.QtCore import QSize, Qt, QThread, QTimer, Signal
-from qtpy.QtGui import QColor, QPainter, QPixmap
+from qtpy.QtGui import QAction, QColor, QPainter, QPixmap
 from qtpy.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -141,6 +141,7 @@ from DisplayCAL import (
     calibration_file,
     colorimeter_correction,
     config,
+    create_profile,
     gamap_settings,
     lut3d_settings,
     preflight_checks,
@@ -166,6 +167,7 @@ from DisplayCAL.icc_profile import (
     ICCProfile,
     ICCProfileInvalidError,
     LUT16Type,
+    TextType,
     VideoCardGammaType,
 )
 from DisplayCAL.meta import NAME as APPNAME
@@ -754,6 +756,7 @@ class MainWindow(BaseWindow):
 
         self._build_ui()
         self.init_menubar()
+        self._build_file_menu()
         self._build_options_menu()
         self._build_tools_menu()
         self.setup_language()
@@ -841,6 +844,216 @@ class MainWindow(BaseWindow):
         frame = self.frameGeometry()
         frame.moveCenter(screen.availableGeometry().center())
         self.move(frame.topLeft())
+
+    def _build_file_menu(self) -> None:
+        """Add "Create profile from measurement data..." to the shared File menu.
+
+        Qt port of the ``create_profile`` item in wx's ``menu.file``
+        (``mainmenu.xrc``); the base File menu (just "Quit") is built by
+        :meth:`~DisplayCAL.ui.base_window.BaseWindow.init_menubar`. wx's other
+        File-menu items (``calibration.load``, ``testchart.set``,
+        ``testchart.edit``, ``profile.set_save_path``,
+        ``create_profile_from_edid``, ``install_display_profile``,
+        ``profile.share``, ``profile.info``) are not reproduced here -- each
+        is a distinct, separately-scoped feature (several already reachable
+        elsewhere in this window, e.g. :meth:`install_profile_btn_handler`).
+        """
+        create_profile_action = QAction(lang.getstr("create_profile"), self)
+        create_profile_action.triggered.connect(self._create_profile_action_handler)
+        self._file_menu.insertAction(self._file_menu_end_separator, create_profile_action)
+
+    def _create_profile_action_handler(self) -> None:
+        """File menu "Create profile from measurement data..." handler.
+
+        Qt port of ``create_profile_handler`` when reached with no explicit
+        path, i.e. always, from this menu action: lets the user pick one or
+        more ``.ti3``/ICC-profile source files (Argyll's ``average`` utility
+        merges more than one into a single chart) and runs them through
+        :meth:`_run_create_profile`.
+        """
+        if not check_set_argyll_bin():
+            return
+        if self._check_show_macos_bugs_warning(cal=False) is False:
+            return
+        default_dir, default_file = get_verified_path("last_ti3_path")
+        paths, _filter = QFileDialog.getOpenFileNames(
+            self,
+            lang.getstr("create_profile"),
+            os.path.join(default_dir, default_file or ""),
+            f"{lang.getstr('filetype.icc_ti3')} (*.icc *.icm *.ti3)",
+        )
+        if not paths:
+            return
+        self._run_create_profile(paths)
+
+    def _run_create_profile(
+        self, paths: list[str], skip_ti3_check: bool = False
+    ) -> None:
+        """Build a profile from one or more measurement files.
+
+        Qt port of the bulk of ``create_profile_handler``: collects/validates
+        every source file via :mod:`DisplayCAL.create_profile`, averages more
+        than one into a single chart, resolves the dispcal/targen options and
+        display name/manufacturer the ``colprof`` run needs, then runs
+        ``worker.create_profile`` through the same
+        :class:`~DisplayCAL.ui.worker_runner.WorkerRunController` /
+        :meth:`_on_profile_build_finished` pair
+        :meth:`_build_profile_from_measurement` uses -- matching wx's own
+        reuse of a single shared ``profile_finish`` consumer for both flows.
+
+        Args:
+            paths: The source ``.ti3``/ICC-profile paths, already picked (by
+                the File-menu action's open dialog, or a single re-generated
+                temp profile from :meth:`_measurement_file_check_action_handler`).
+            skip_ti3_check: Skip the suspicious-patch sanity review. Used by
+                :meth:`_measurement_file_check_action_handler`'s regenerate
+                branch, which already ran that review itself.
+        """
+        collected: list[create_profile.CollectedMeasurement] = []
+        for path in paths:
+            if not os.path.exists(path):
+                QMessageBox.critical(self, APPNAME, lang.getstr("file.missing", path))
+                return
+            try:
+                item = create_profile.load_measurement_lines(path)
+            except create_profile.CreateProfileError as exception:
+                QMessageBox.critical(self, APPNAME, str(exception))
+                return
+            if not create_profile.has_calibration_curves(
+                item.ti3_lines
+            ) and not self._confirm_ti3_no_cal_info():
+                return
+            collected.append(item)
+        if not collected:
+            return
+
+        source_filename, source_ext = create_profile.resolve_source_naming(
+            [item.path for item in collected]
+        )
+        first_path = collected[0].path
+        is_tmp = create_profile.is_temp_path(self.worker, first_path)
+        if is_tmp:
+            default_dir, default_file = get_verified_path("last_ti3_path")
+        else:
+            default_dir, default_file = os.path.split(first_path)
+            setcfg("last_ti3_path", first_path)
+
+        save_path, _filter = QFileDialog.getSaveFileName(
+            self,
+            lang.getstr("save_as"),
+            os.path.join(default_dir, os.path.basename(source_filename) + PROFILE_EXT),
+            f"{lang.getstr('filetype.icc')} (*{PROFILE_EXT})",
+        )
+        if not save_path:
+            return
+        save_dir, save_name = os.path.split(save_path)
+        profile_save_path = os.path.join(save_dir, make_argyll_compatible_path(save_name))
+
+        if not waccess(profile_save_path, os.W_OK):
+            QMessageBox.critical(
+                self,
+                APPNAME,
+                lang.getstr("error.access_denied.write", profile_save_path),
+            )
+            return
+        _stem, ext = os.path.splitext(profile_save_path)
+        if ext.lower() not in (".icc", ".icm"):
+            profile_save_path += PROFILE_EXT
+            if os.path.exists(
+                profile_save_path
+            ) and not self._confirm_overwrite_profile(profile_save_path):
+                return
+
+        setcfg("last_cal_or_icc_path", profile_save_path)
+        setcfg("last_icc_path", profile_save_path)
+        profile_name = os.path.basename(os.path.splitext(profile_save_path)[0])
+
+        tmp_working_dir = self.worker.create_tempdir()
+        if isinstance(tmp_working_dir, Exception):
+            self.worker.wrapup(False)
+            QMessageBox.critical(self, APPNAME, str(tmp_working_dir))
+            return
+        ti3_tmp_path = os.path.join(
+            tmp_working_dir, make_argyll_compatible_path(f"{profile_name}.ti3")
+        )
+
+        source_path = first_path
+        if len(collected) > 1:
+            try:
+                create_profile.merge_measurement_files(
+                    self.worker, collected, tmp_working_dir, ti3_tmp_path
+                )
+            except create_profile.CreateProfileError as exception:
+                self.worker.wrapup(False)
+                QMessageBox.critical(self, APPNAME, str(exception))
+                return
+            source_path = ti3_tmp_path
+
+        try:
+            inputs = create_profile.resolve_profile_creation_inputs(
+                source_path, source_ext, ti3_tmp_path, collected[-1].profile, is_tmp
+            )
+        except create_profile.CreateProfileError as exception:
+            self.worker.wrapup(False)
+            QMessageBox.critical(self, APPNAME, str(exception))
+            return
+
+        self.worker.options_dispcal = inputs.options_dispcal
+        self.worker.options_targen = inputs.options_targen
+        setcfg("calibration.file.previous", None)
+
+        if not skip_ti3_check:
+            proceed, _removed = self._check_measurement_sanity(inputs.ti3)
+            if not proceed:
+                self.worker.wrapup(False)
+                return
+
+        self.worker.interactive = False
+        controller = self._ensure_run_controller()
+        controller.run(
+            self.worker.create_profile,
+            self._on_profile_build_finished,
+            wkwargs={
+                "dst_path": profile_save_path,
+                "display_name": inputs.display_name,
+                "display_manufacturer": inputs.display_manufacturer,
+                "tags": collected[-1].tags,
+            },
+            progress_msg=lang.getstr("create_profile"),
+            pauseable=False,
+        )
+
+    def _confirm_ti3_no_cal_info(self) -> bool:
+        """Confirm proceeding with a chart that has no calibration curves.
+
+        Qt port of the 2-button ``ConfirmDialog`` in ``create_profile_handler``
+        (one per collected file lacking a ``CAL`` section).
+        """
+        box = QMessageBox(self)
+        box.setWindowTitle(APPNAME)
+        box.setIcon(QMessageBox.Warning)
+        box.setText(lang.getstr("dialog.ti3_no_cal_info"))
+        ok_button = box.addButton(lang.getstr("continue"), QMessageBox.AcceptRole)
+        box.addButton(lang.getstr("cancel"), QMessageBox.RejectRole)
+        box.exec_()
+        return box.clickedButton() is ok_button
+
+    def _confirm_overwrite_profile(self, path: str) -> bool:
+        """Confirm overwriting a profile path derived after appending an extension.
+
+        Qt port of the second ``ConfirmDialog`` in ``create_profile_handler``,
+        shown only when the save dialog's own overwrite prompt couldn't have
+        caught it (the user-typed path had no ``.icc``/``.icm`` extension, so
+        :data:`~DisplayCAL.config.PROFILE_EXT` was appended afterwards).
+        """
+        box = QMessageBox(self)
+        box.setWindowTitle(APPNAME)
+        box.setIcon(QMessageBox.Warning)
+        box.setText(lang.getstr("dialog.confirm_overwrite", path))
+        ok_button = box.addButton(lang.getstr("overwrite"), QMessageBox.AcceptRole)
+        box.addButton(lang.getstr("cancel"), QMessageBox.RejectRole)
+        box.exec_()
+        return box.clickedButton() is ok_button
 
     def _build_options_menu(self) -> None:
         """Add an Options menu with the "show advanced options" toggle.
@@ -4514,12 +4727,13 @@ class MainWindow(BaseWindow):
         matching wx passing ``True`` at this one call site). A plain ``.ti3``
         file is then saved back to a user-chosen location.
 
-        Not reproduced: regenerating a profile from a checked embedded-TI3
-        chart (wx's ``profile`` branch), which needs the still-unported
-        "create profile from existing measurements" tool
-        (``create_profile_handler``, a distinct File-menu feature, not part
-        of this session's scope) -- shown as a not-yet-available notice
-        instead, matching the madVR/Prisma-install-destination precedent.
+        A checked embedded-TI3 chart instead offers to regenerate the profile
+        it came from (wx's ``profile`` branch): the updated chart is
+        re-embedded into a temp copy of the source profile, which is then run
+        through :meth:`_run_create_profile` with ``skip_ti3_check=True``
+        (matching wx's ``create_profile_handler(None, tmp_path, True)``
+        re-entry) -- the same "create profile from existing measurements"
+        pipeline the File menu's ``create_profile`` action uses.
         """
         default_dir, default_file = get_verified_path("last_ti3_path")
         path, _filter = QFileDialog.getOpenFileName(
@@ -4548,14 +4762,28 @@ class MainWindow(BaseWindow):
             return
 
         if loaded.profile is not None:
-            QMessageBox.information(
+            answer = QMessageBox.question(
                 self,
-                self.windowTitle(),
-                "Regenerating a profile from a checked embedded TI3 isn't "
-                "available in this Qt build yet (it needs the unported "
-                '"create profile from existing measurements" tool). Pick a '
-                "plain .ti3 file instead to save the checked data directly.",
+                APPNAME,
+                lang.getstr("profile.confirm_regeneration"),
+                QMessageBox.Ok | QMessageBox.Cancel,
+                QMessageBox.Ok,
             )
+            if answer != QMessageBox.Ok:
+                return
+            self.worker.wrapup(False)
+            tmp_working_dir = self.worker.create_tempdir()
+            if isinstance(tmp_working_dir, Exception):
+                QMessageBox.critical(self, APPNAME, str(tmp_working_dir))
+                return
+            tag_data = measurement_report_pipeline.build_regenerated_profile_tag_data(
+                ti3
+            )
+            loaded.profile.tags.targ = TextType(tag_data, b"targ")
+            loaded.profile.tags.DevD = loaded.profile.tags.CIED = loaded.profile.tags.targ
+            tmp_path = os.path.join(tmp_working_dir, os.path.basename(path))
+            loaded.profile.write(tmp_path)
+            self._run_create_profile([tmp_path], skip_ti3_check=True)
             return
 
         save_path, _filter = QFileDialog.getSaveFileName(

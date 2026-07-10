@@ -7,6 +7,7 @@ See ``DisplayCAL/ui/MAINFRAME_PORT_PLAN.md`` (Stage 3).
 """
 
 import os
+import shutil
 import time
 from types import SimpleNamespace
 
@@ -4056,13 +4057,26 @@ def test_measurement_file_check_action_handler_no_suspicious_shows_info(
     assert infos
 
 
-def test_measurement_file_check_action_handler_profile_shows_not_yet_available(
+class _FakeRegenProfile:
+    """Stand-in for an ICCProfile, controlling just what the regenerate
+    branch of ``_measurement_file_check_action_handler`` touches."""
+
+    def __init__(self):
+        self.tags = SimpleNamespace()
+        self.written_to = None
+
+    def write(self, path):
+        self.written_to = path
+
+
+def test_measurement_file_check_action_handler_profile_regenerate_cancelled_is_noop(
     window, monkeypatch, tmp_path
 ):
     icc_path = tmp_path / "some.icc"
     icc_path.write_bytes(b"dummy")
+    fake_profile = _FakeRegenProfile()
     loaded = mw.measurement_report_pipeline.MeasurementFileLoad(
-        ti3=_FakeTi3(modified=True), profile=object()
+        ti3=_FakeTi3(modified=True), profile=fake_profile
     )
     monkeypatch.setattr(
         mw.QFileDialog,
@@ -4075,17 +4089,56 @@ def test_measurement_file_check_action_handler_profile_shows_not_yet_available(
     monkeypatch.setattr(
         window, "_check_measurement_sanity", lambda ti3, force=False: (True, [])
     )
-    infos = []
-    monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: infos.append(a))
-    save_calls = []
     monkeypatch.setattr(
-        mw.QFileDialog,
-        "getSaveFileName",
-        staticmethod(lambda *a, **k: save_calls.append(True) or ("", "")),
+        mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.Cancel
+    )
+    run_calls = []
+    monkeypatch.setattr(
+        window, "_run_create_profile", lambda paths, **k: run_calls.append(paths)
     )
     window._measurement_file_check_action_handler()
-    assert infos
-    assert save_calls == []
+    assert run_calls == []
+    assert fake_profile.written_to is None
+
+
+def test_measurement_file_check_action_handler_profile_regenerate_confirmed_reruns_create_profile(
+    window, monkeypatch, tmp_path
+):
+    icc_path = tmp_path / "some.icc"
+    icc_path.write_bytes(b"dummy")
+    fake_profile = _FakeRegenProfile()
+    loaded = mw.measurement_report_pipeline.MeasurementFileLoad(
+        ti3=_FakeTi3(modified=True), profile=fake_profile
+    )
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *a, **k: (str(icc_path), "")),
+    )
+    monkeypatch.setattr(
+        mw.measurement_report_pipeline, "load_measurement_file", lambda path: loaded
+    )
+    monkeypatch.setattr(
+        window, "_check_measurement_sanity", lambda ti3, force=False: (True, [])
+    )
+    monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.Ok)
+    monkeypatch.setattr(
+        mw.measurement_report_pipeline,
+        "build_regenerated_profile_tag_data",
+        lambda ti3: b"text\0\0\0\0tagdata\0",
+    )
+    run_calls = []
+    monkeypatch.setattr(
+        window,
+        "_run_create_profile",
+        lambda paths, **k: run_calls.append((paths, k)),
+    )
+    window._measurement_file_check_action_handler()
+    assert fake_profile.written_to is not None
+    assert fake_profile.tags.targ is fake_profile.tags.DevD
+    assert fake_profile.tags.targ is fake_profile.tags.CIED
+    assert fake_profile.tags.targ == b"tagdata"
+    assert run_calls == [([fake_profile.written_to], {"skip_ti3_check": True})]
 
 
 def test_measurement_file_check_action_handler_saves_ti3(window, monkeypatch, tmp_path):
@@ -4185,6 +4238,352 @@ def test_measurement_file_check_auto_toggle_off_skips_confirmation(
     window.measurement_file_check_auto_action.setChecked(False)
     assert calls == []
     assert getcfg("ti3.check_sanity.auto") == 0
+
+
+# --- File menu: "create_profile" (create profile from measurement data) ----
+
+
+class _FakeConfirmMessageBox:
+    """Stand-in for ``mw.QMessageBox`` used by the 2-button confirm helpers
+    (``_confirm_ti3_no_cal_info`` / ``_confirm_overwrite_profile``)."""
+
+    Warning = 0
+    AcceptRole = 1
+    RejectRole = 2
+
+    clicked_role = None  # "ok" | "cancel", set per-test
+
+    def __init__(self, parent=None):
+        self._buttons = {}
+
+    def setWindowTitle(self, title):
+        pass
+
+    def setIcon(self, icon):
+        pass
+
+    def setText(self, text):
+        self.text = text
+
+    def addButton(self, text, role):
+        button = (text, role)
+        self._buttons[role] = button
+        return button
+
+    def exec_(self):
+        return None
+
+    def clickedButton(self):
+        role = {"ok": self.AcceptRole, "cancel": self.RejectRole}[self.clicked_role]
+        return self._buttons[role]
+
+
+def test_confirm_ti3_no_cal_info_accepted(window, monkeypatch):
+    monkeypatch.setattr(mw, "QMessageBox", _FakeConfirmMessageBox)
+    _FakeConfirmMessageBox.clicked_role = "ok"
+    assert window._confirm_ti3_no_cal_info() is True
+
+
+def test_confirm_ti3_no_cal_info_declined(window, monkeypatch):
+    monkeypatch.setattr(mw, "QMessageBox", _FakeConfirmMessageBox)
+    _FakeConfirmMessageBox.clicked_role = "cancel"
+    assert window._confirm_ti3_no_cal_info() is False
+
+
+def test_confirm_overwrite_profile_accepted(window, monkeypatch):
+    monkeypatch.setattr(mw, "QMessageBox", _FakeConfirmMessageBox)
+    _FakeConfirmMessageBox.clicked_role = "ok"
+    assert window._confirm_overwrite_profile("/x.icc") is True
+
+
+def test_confirm_overwrite_profile_declined(window, monkeypatch):
+    monkeypatch.setattr(mw, "QMessageBox", _FakeConfirmMessageBox)
+    _FakeConfirmMessageBox.clicked_role = "cancel"
+    assert window._confirm_overwrite_profile("/x.icc") is False
+
+
+def test_create_profile_action_handler_argyll_bin_missing_is_noop(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: False)
+    run_calls = []
+    monkeypatch.setattr(
+        window, "_run_create_profile", lambda *a, **k: run_calls.append(True)
+    )
+    window._create_profile_action_handler()
+    assert run_calls == []
+
+
+def test_create_profile_action_handler_macos_bugs_warning_cancels(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(
+        window, "_check_show_macos_bugs_warning", lambda *a, **k: False
+    )
+    run_calls = []
+    monkeypatch.setattr(
+        window, "_run_create_profile", lambda *a, **k: run_calls.append(True)
+    )
+    window._create_profile_action_handler()
+    assert run_calls == []
+
+
+def test_create_profile_action_handler_cancelled_open_dialog_is_noop(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(window, "_check_show_macos_bugs_warning", lambda *a, **k: None)
+    monkeypatch.setattr(
+        mw.QFileDialog, "getOpenFileNames", staticmethod(lambda *a, **k: ([], ""))
+    )
+    run_calls = []
+    monkeypatch.setattr(
+        window, "_run_create_profile", lambda *a, **k: run_calls.append(True)
+    )
+    window._create_profile_action_handler()
+    assert run_calls == []
+
+
+def test_create_profile_action_handler_runs_with_selected_paths(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(window, "_check_show_macos_bugs_warning", lambda *a, **k: None)
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getOpenFileNames",
+        staticmethod(lambda *a, **k: (["/a.ti3", "/b.ti3"], "")),
+    )
+    run_calls = []
+    monkeypatch.setattr(
+        window, "_run_create_profile", lambda paths: run_calls.append(paths)
+    )
+    window._create_profile_action_handler()
+    assert run_calls == [["/a.ti3", "/b.ti3"]]
+
+
+@pytest.fixture
+def cp_ti3_path():
+    """Path to a real ``.ti3`` with ``CAL``/``ARGYLL_DISPCAL_ARGS`` sections."""
+    return os.path.join(
+        os.path.dirname(__file__),
+        "data",
+        "icc",
+        "UP2516D #1 2022-03-20 02-08 D6500 2.2 F-S XYZLUT+MTX.ti3",
+    )
+
+
+def test_run_create_profile_missing_file_shows_error(window, monkeypatch, tmp_path):
+    missing = str(tmp_path / "nope.ti3")
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    window._run_create_profile([missing])
+    assert errors
+
+
+def test_run_create_profile_load_error_shows_error(window, monkeypatch, tmp_path):
+    bogus = tmp_path / "bogus.icc"
+    bogus.write_bytes(b"nope")
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    window._run_create_profile([str(bogus)])
+    assert errors
+
+
+def test_run_create_profile_no_cal_info_declined_aborts(window, monkeypatch, tmp_path):
+    ti3_path = tmp_path / "no_cal.ti3"
+    ti3_path.write_bytes(b"NO_CAL_HERE\n")
+    monkeypatch.setattr(window, "_confirm_ti3_no_cal_info", lambda: False)
+    save_calls = []
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: save_calls.append(True) or ("", "")),
+    )
+    window._run_create_profile([str(ti3_path)])
+    assert save_calls == []
+
+
+def test_run_create_profile_save_dialog_cancelled_is_noop(
+    window, monkeypatch, cp_ti3_path
+):
+    monkeypatch.setattr(
+        mw.QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: ("", ""))
+    )
+    controller_calls = []
+    monkeypatch.setattr(
+        window, "_ensure_run_controller", lambda: controller_calls.append(True)
+    )
+    window._run_create_profile([cp_ti3_path])
+    assert controller_calls == []
+
+
+def test_run_create_profile_write_access_denied_shows_error(
+    window, monkeypatch, cp_ti3_path, tmp_path
+):
+    save_path = str(tmp_path / "out.icc")
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (save_path, "")),
+    )
+    monkeypatch.setattr(mw, "waccess", lambda *a, **k: False)
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    window._run_create_profile([cp_ti3_path])
+    assert errors
+
+
+def test_run_create_profile_overwrite_declined_aborts(
+    window, monkeypatch, cp_ti3_path, tmp_path
+):
+    # No .icc/.icm extension typed, so PROFILE_EXT is appended after the save
+    # dialog's own overwrite prompt already ran -- the extra confirm is the
+    # only thing standing between this and silently clobbering an existing file.
+    existing_final = tmp_path / "out.icc"
+    existing_final.write_bytes(b"existing")
+    typed_path = str(tmp_path / "out")
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (typed_path, "")),
+    )
+    monkeypatch.setattr(mw, "waccess", lambda *a, **k: True)
+    monkeypatch.setattr(window, "_confirm_overwrite_profile", lambda path: False)
+    controller_calls = []
+    monkeypatch.setattr(
+        window, "_ensure_run_controller", lambda: controller_calls.append(True)
+    )
+    window._run_create_profile([cp_ti3_path])
+    assert controller_calls == []
+
+
+def test_run_create_profile_single_file_runs_controller(
+    window, monkeypatch, cp_ti3_path, tmp_path
+):
+    save_path = str(tmp_path / "out.icc")
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (save_path, "")),
+    )
+    monkeypatch.setattr(mw, "waccess", lambda *a, **k: True)
+    monkeypatch.setattr(window, "_check_measurement_sanity", lambda ti3: (True, []))
+    run_calls = []
+
+    class _FakeController:
+        def run(self, *a, **k):
+            run_calls.append((a, k))
+
+    monkeypatch.setattr(window, "_ensure_run_controller", lambda: _FakeController())
+    window._run_create_profile([cp_ti3_path])
+    assert run_calls
+    args, kwargs = run_calls[0]
+    assert args[0] == window.worker.create_profile
+    assert args[1] == window._on_profile_build_finished
+    assert kwargs["wkwargs"]["dst_path"] == save_path
+    assert kwargs["pauseable"] is False
+    assert window.worker.options_targen == ["-d3"]
+    assert window.worker.options_dispcal
+
+
+def test_run_create_profile_sanity_declined_aborts(
+    window, monkeypatch, cp_ti3_path, tmp_path
+):
+    save_path = str(tmp_path / "out.icc")
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (save_path, "")),
+    )
+    monkeypatch.setattr(mw, "waccess", lambda *a, **k: True)
+    monkeypatch.setattr(window, "_check_measurement_sanity", lambda ti3: (False, []))
+    controller_calls = []
+    monkeypatch.setattr(
+        window, "_ensure_run_controller", lambda: controller_calls.append(True)
+    )
+    window._run_create_profile([cp_ti3_path])
+    assert controller_calls == []
+
+
+def test_run_create_profile_skip_ti3_check_bypasses_sanity(
+    window, monkeypatch, cp_ti3_path, tmp_path
+):
+    save_path = str(tmp_path / "out.icc")
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (save_path, "")),
+    )
+    monkeypatch.setattr(mw, "waccess", lambda *a, **k: True)
+    sanity_calls = []
+    monkeypatch.setattr(
+        window,
+        "_check_measurement_sanity",
+        lambda ti3: sanity_calls.append(True) or (True, []),
+    )
+    run_calls = []
+
+    class _FakeController:
+        def run(self, *a, **k):
+            run_calls.append((a, k))
+
+    monkeypatch.setattr(window, "_ensure_run_controller", lambda: _FakeController())
+    window._run_create_profile([cp_ti3_path], skip_ti3_check=True)
+    assert sanity_calls == []
+    assert run_calls
+
+
+def test_run_create_profile_multi_file_merges_via_average(
+    window, monkeypatch, cp_ti3_path, tmp_path
+):
+    second_path = str(tmp_path / "second.ti3")
+    shutil.copyfile(cp_ti3_path, second_path)
+    save_path = str(tmp_path / "out.icc")
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (save_path, "")),
+    )
+    monkeypatch.setattr(mw, "waccess", lambda *a, **k: True)
+    monkeypatch.setattr(window, "_check_measurement_sanity", lambda ti3: (True, []))
+    monkeypatch.setattr(mw.create_profile, "get_argyll_util", lambda name: "average")
+
+    def fake_exec_cmd(cmd, args, **kwargs):
+        shutil.copyfile(cp_ti3_path, args[-1])
+        return True
+
+    monkeypatch.setattr(window.worker, "exec_cmd", fake_exec_cmd)
+    run_calls = []
+
+    class _FakeController:
+        def run(self, *a, **k):
+            run_calls.append((a, k))
+
+    monkeypatch.setattr(window, "_ensure_run_controller", lambda: _FakeController())
+    window._run_create_profile([cp_ti3_path, second_path])
+    assert run_calls
+
+
+def test_run_create_profile_merge_failure_shows_error(
+    window, monkeypatch, cp_ti3_path, tmp_path
+):
+    second_path = str(tmp_path / "second.ti3")
+    shutil.copyfile(cp_ti3_path, second_path)
+    save_path = str(tmp_path / "out.icc")
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (save_path, "")),
+    )
+    monkeypatch.setattr(mw, "waccess", lambda *a, **k: True)
+    monkeypatch.setattr(mw.create_profile, "get_argyll_util", lambda name: "average")
+    monkeypatch.setattr(window.worker, "exec_cmd", lambda *a, **k: None)
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    window._run_create_profile([cp_ti3_path, second_path])
+    assert errors
 
 
 # --- Tools > Advanced menu: "profile.b2a.hires" (arbitrary-profile picker) ---

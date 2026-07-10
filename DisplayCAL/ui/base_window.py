@@ -102,9 +102,15 @@ class BaseWindow(ScriptingHostMixin, QMainWindow):
     # -- menu --------------------------------------------------------------
 
     def init_menubar(self) -> None:
-        """Create a minimal File menu with a Quit action."""
-        file_menu = self.menuBar().addMenu(f"&{lang.getstr('menu.file')}")
-        quit_action = file_menu.addAction(lang.getstr("menuitem.quit"))
+        """Create a minimal File menu with a Quit action.
+
+        Subclasses that need their own File-menu items (see
+        ``MainWindow._build_file_menu``) should insert them before
+        :attr:`_file_menu_end_separator`, keeping "Quit" pinned to the bottom.
+        """
+        self._file_menu = self.menuBar().addMenu(f"&{lang.getstr('menu.file')}")
+        self._file_menu_end_separator = self._file_menu.addSeparator()
+        quit_action = self._file_menu.addAction(lang.getstr("menuitem.quit"))
         quit_action.setShortcut("Ctrl+Q")
         quit_action.triggered.connect(self.close)
 

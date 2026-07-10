@@ -1770,6 +1770,97 @@ bug had test coverage before this session (added: `TestLoadMeasurementFile`,
 `tests/test_measurement_report.py` (58 total, both files confirmed green
 under `-n auto`).
 
+**`create_profile_handler` ("Create profile from measurement data...", File
+menu), 2026-07-10.** Closes the deferral the previous session's Standalone
+Tools menu work discovered; maintainer's choice over the madVR/Prisma 3D LUT
+API install, the Stage-6 Pile-2 startup dialogs, and the header-bar
+deferrals. New toolkit-neutral `DisplayCAL/create_profile.py` ports
+`create_profile_handler`'s (`display_cal.py`) non-dialog pieces:
+`load_measurement_lines()` (per-file load, raw stripped lines rather than a
+parsed `CGATS` since the merge step below needs to re-serialize several
+charts verbatim before anything is parsed -- a deliberate near-duplicate of
+`measurement_report.load_measurement_file()`, not a refactor of it),
+`has_calibration_curves()`, `resolve_source_naming()`, `is_temp_path()`,
+`merge_measurement_files()` (writes per-file temp copies, runs Argyll's
+`average` utility, cleans up regardless of outcome), and
+`resolve_profile_creation_inputs()` (dispcal/targen option extraction +
+display name/manufacturer, mirroring the `.ti3`-source vs. profile-source
+branch). `MainWindow._build_file_menu()` adds the **first Qt File menu item**
+beyond `BaseWindow.init_menubar()`'s bare "Quit" -- `BaseWindow.init_menubar`
+now keeps an end separator (`_file_menu_end_separator`) so subclasses can
+insert items before it while "Quit" stays pinned to the bottom, shared by
+every Qt window. `MainWindow._create_profile_action_handler` (the File-menu
+click) and `MainWindow._run_create_profile(paths, skip_ti3_check=False)` (the
+shared orchestration, re-entered by the regenerate branch below) reproduce
+the rest of the wx handler: multi-select open dialog, per-file "no CAL info"
+confirm (`_confirm_ti3_no_cal_info`), save-path dialog +
+extension-normalize + conditional overwrite confirm
+(`_confirm_overwrite_profile`, only needed when the typed path had no
+`.icc`/`.icm` extension and `PROFILE_EXT` was appended afterward, bypassing
+the save dialog's own overwrite prompt), then the same
+`worker.create_profile` run through `WorkerRunController` /
+`_on_profile_build_finished` the colprof stage (sub-slice 5d) already uses --
+matching wx's own reuse of one shared `profile_finish` consumer for both
+flows.
+
+Also closed the sibling deferral in `_measurement_file_check_action_handler`
+(previous session): its ICC-profile-embedded-chart branch no longer shows a
+not-yet-available notice -- it now confirms regeneration
+(`profile.confirm_regeneration`), re-embeds the checked chart via the
+already-ported `measurement_report.build_regenerated_profile_tag_data()`,
+writes a temp copy, and re-enters `_run_create_profile([tmp_path],
+skip_ti3_check=True)`, matching wx's `create_profile_handler(None, tmp_path,
+True)` re-entry exactly.
+
+**Real latent bug found and fixed at the source, `DisplayCAL/worker.py`
+(`Worker.create_profile`):** its docstring always claimed a `str` path on
+success, but the method's actual final `return result` carried whatever
+`update_profile()` returned -- `True`, a bare boolean, never the path.
+Harmless for every wx call site (`profile_finish` receives the path
+separately via an explicit `ckwargs["profile_path"]`, only checking `result`
+for truthiness/`Exception`-ness) but a real bug for this Qt port: both
+`_build_profile_from_measurement`'s existing `controller.run(worker
+.create_profile, self._on_profile_build_finished, wkwargs={"tags": True})`
+call (sub-slice 5d) and this session's new one feed the producer's return
+value straight into `_on_profile_build_finished`'s `profile_path = result`,
+which would have received `True` and crashed loading `ICCProfile(True)`. Confirmed
+by tracing `update_profile()`'s own two return statements (`True` / an
+`Exception`, never a path) and cross-checking `_on_calibration_finished`'s
+existing (already-shipped, already-correct) direct call --
+`self._on_profile_build_finished(profile_finish.resolve_profile_path(), ...)`
+-- which only makes sense if `_on_profile_build_finished`'s first argument is
+meant to be a path. Fixed by assigning `result = dst_path` in the success
+branch, immediately before the existing `return result`. Not covered by a
+new dedicated `test_worker.py` unit test: `create_profile()` has no existing
+test coverage at all (confirmed by grep) and is deeply coupled to a real
+Argyll `colprof` subprocess run (`self.exec_cmd(cmd, ...)` mid-method,
+`ti3 = CGATS(args[-1] + ".ti3")` unconditionally reading a real file off
+disk) -- mirroring the Session 3 precedent of declining to add
+integration-depth coverage for an already-untested, deeply-Argyll-coupled
+method beyond its reach. The fix is exercised indirectly by every new Qt-side
+test that asserts `worker.create_profile` is the producer threaded into
+`_on_profile_build_finished`.
+
+45 new tests: `tests/test_create_profile.py` (23, pure module-level), 22 in
+`tests/test_ui_main_window.py` (2 replace the old "not yet available" test;
+321 total in that file), full suite (`test_ui_main_window.py`,
+`test_create_profile.py`, `test_measurement_report.py`,
+`test_ui_startup.py`, `test_worker.py`) confirmed green under `-n auto`.
+
+**Updated remaining-gaps list:** madVR/Prisma 3D LUT API install
+destinations; Stage 6's deferred Pile-2 dialogs (update-check prompt,
+instrument-setup/donation nag); the header-bar deferrals (EDID display
+matching, legacy `.cal` parsing, 3D LUT HDR config-mapper, archive import via
+load, per-file delete-confirmation checkboxes); `CCXXPlot` visualization; the
+standalone `LUT3DFrame` tool window; the rest of wx's File menu
+(`calibration.load`, `testchart.set`, `testchart.edit`,
+`profile.set_save_path`, `create_profile_from_edid`,
+`install_display_profile`, `profile.share`, `profile.info` -- several already
+reachable elsewhere in this window, e.g. `install_profile_btn_handler`); the
+rest of `menu.tools.advanced` (`synthicc.create`, `measure.testchart`,
+`specplot.run`); and Stage 7 (retire wx), still gated on maintainer
+confidence.
+
 ### Stage 6 — StartupFrame — **DONE**
 
 Port `StartupFrame` (the splash screen + background display/instrument

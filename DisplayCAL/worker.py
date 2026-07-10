@@ -12683,6 +12683,7 @@ BEGIN_DATA
         elif not isinstance(result, Exception) and result:
             setcfg("last_cal_or_icc_path", dst_path)
             setcfg("last_icc_path", dst_path)
+            result = dst_path
         return result
 
     def create_RGB_XYZ_cLUT_fwd_profile(
