@@ -4363,6 +4363,283 @@ def test_create_profile_action_handler_runs_with_selected_paths(
     assert run_calls == [["/a.ti3", "/b.ti3"]]
 
 
+def test_build_file_menu_matches_wx_xrc_order(window):
+    # mainmenu.xrc's menu.file order, minus the Ctrl+O accelerator (asserted
+    # separately) and BaseWindow's own trailing separator/Quit.
+    expected = [
+        "calibration.load",
+        "testchart.set",
+        "testchart.edit",
+        "profile.set_save_path",
+        "",  # separator
+        "create_profile",
+        "create_profile_from_edid",
+        "install_display_profile",
+        "profile.share",
+        "profile.info",
+        "",  # BaseWindow's end separator
+        "menuitem.quit",
+    ]
+    actual = [
+        lang.getstr(key) if key else "" for key in expected
+    ]
+    texts = [action.text() for action in window._file_menu.actions()]
+    assert texts == actual
+    assert window._file_menu.actions()[0].shortcut().toString() == "Ctrl+O"
+
+
+def test_select_install_profile_action_handler_cancelled_dialog_is_noop(
+    window, monkeypatch
+):
+    monkeypatch.setattr(
+        mw.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: ("", ""))
+    )
+    load_calls = []
+    monkeypatch.setattr(
+        mw, "InstallProfileWindow", lambda: SimpleNamespace(
+            load_profile=lambda p: load_calls.append(p)
+        )
+    )
+    window._select_install_profile_action_handler()
+    assert load_calls == []
+
+
+def test_select_install_profile_action_handler_loads_and_shows_window(
+    window, monkeypatch, srgb_profile_path
+):
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *a, **k: (srgb_profile_path, "")),
+    )
+    calls = SimpleNamespace(load=[], shown=False, raised=False, activated=False)
+
+    class _FakeInstallWindow:
+        def load_profile(self, path):
+            calls.load.append(path)
+
+        def show(self):
+            calls.shown = True
+
+        def raise_(self):
+            calls.raised = True
+
+        def activateWindow(self):
+            calls.activated = True
+
+    window._install_profile_window = None
+    monkeypatch.setattr(mw, "InstallProfileWindow", _FakeInstallWindow)
+    window._select_install_profile_action_handler()
+    assert calls.load == [srgb_profile_path]
+    assert calls.shown and calls.raised and calls.activated
+    assert getcfg("last_icc_path") == srgb_profile_path
+    assert getcfg("last_cal_or_icc_path") == srgb_profile_path
+
+
+def test_profile_share_action_handler_shows_disabled_notice(window, monkeypatch):
+    notices = []
+    monkeypatch.setattr(
+        mw.QMessageBox, "critical", staticmethod(lambda *a, **k: notices.append(a))
+    )
+    window._profile_share_action_handler()
+    assert len(notices) == 1
+    assert "icc.opensuse.org" in notices[0][-1]
+
+
+class _FakeMetaDict(dict):
+    def getvalue(self, key, default=None, *_args):
+        return self.get(key, default)
+
+
+class _FakeEdidProfile:
+    def __init__(self):
+        self.filename = None
+        self.write_calls = []
+        self.tags = SimpleNamespace(meta=_FakeMetaDict())
+        self.gamut_metadata_calls = []
+        self.calculate_id_called = False
+
+    def write(self, path=None):
+        self.write_calls.append(path)
+        if path:
+            self.filename = path
+
+    def set_gamut_metadata(self, volume, coverage):
+        self.gamut_metadata_calls.append((volume, coverage))
+
+    def calculate_id(self):
+        self.calculate_id_called = True
+
+
+def test_create_profile_from_edid_action_handler_cancelled_save_dialog_is_noop(
+    window, monkeypatch
+):
+    monkeypatch.setattr(
+        window.worker, "get_display_edid", lambda: {"monitor_name": "Foo",
+                                                      "product_id": 1}
+    )
+    monkeypatch.setattr(
+        mw.QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: ("", ""))
+    )
+    from_edid_calls = []
+    monkeypatch.setattr(
+        mw.ICCProfile,
+        "from_edid",
+        staticmethod(lambda edid: from_edid_calls.append(edid)),
+    )
+    window._create_profile_from_edid_action_handler()
+    assert from_edid_calls == []
+
+
+def test_create_profile_from_edid_action_handler_write_access_denied_shows_error(
+    window, monkeypatch, tmp_path
+):
+    save_path = str(tmp_path / "edid.icc")
+    monkeypatch.setattr(
+        window.worker, "get_display_edid", lambda: {"monitor_name": "Foo",
+                                                      "product_id": 1}
+    )
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (save_path, "")),
+    )
+    monkeypatch.setattr(mw, "waccess", lambda *a, **k: False)
+    errors = []
+    monkeypatch.setattr(
+        mw.QMessageBox, "critical", staticmethod(lambda *a, **k: errors.append(a))
+    )
+    from_edid_calls = []
+    monkeypatch.setattr(
+        mw.ICCProfile,
+        "from_edid",
+        staticmethod(lambda edid: from_edid_calls.append(edid)),
+    )
+    window._create_profile_from_edid_action_handler()
+    assert len(errors) == 1
+    assert from_edid_calls == []
+
+
+def test_create_profile_from_edid_action_handler_writes_and_finishes_directly(
+    window, monkeypatch, tmp_path
+):
+    save_path = str(tmp_path / "edid.icc")
+    edid = {"monitor_name": "Foo", "product_id": 1}
+    monkeypatch.setattr(window.worker, "get_display_edid", lambda: edid)
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (save_path, "")),
+    )
+    monkeypatch.setattr(mw, "waccess", lambda *a, **k: True)
+    fake_profile = _FakeEdidProfile()
+    monkeypatch.setattr(
+        mw.ICCProfile, "from_edid", staticmethod(lambda e: fake_profile)
+    )
+    setcfg("profile.create_gamut_views", 0)
+    finish_calls = []
+    monkeypatch.setattr(
+        window,
+        "_create_profile_from_edid_finish",
+        lambda result, profile: finish_calls.append((result, profile)),
+    )
+    window._create_profile_from_edid_action_handler()
+    assert fake_profile.write_calls == [save_path]
+    assert finish_calls == [(True, fake_profile)]
+
+
+def test_create_profile_from_edid_action_handler_runs_gamut_calculation(
+    window, monkeypatch, tmp_path
+):
+    save_path = str(tmp_path / "edid.icc")
+    edid = {"monitor_name": "Foo", "product_id": 1}
+    monkeypatch.setattr(window.worker, "get_display_edid", lambda: edid)
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (save_path, "")),
+    )
+    monkeypatch.setattr(mw, "waccess", lambda *a, **k: True)
+    fake_profile = _FakeEdidProfile()
+    monkeypatch.setattr(
+        mw.ICCProfile, "from_edid", staticmethod(lambda e: fake_profile)
+    )
+    setcfg("profile.create_gamut_views", 1)
+    run_calls = []
+
+    class _FakeController:
+        def run(self, *a, **k):
+            run_calls.append((a, k))
+
+    monkeypatch.setattr(window, "_ensure_run_controller", lambda: _FakeController())
+    # Only the consumer wiring is under test here (see the dedicated
+    # ``_create_profile_from_edid_finish`` tests below for its own body);
+    # stub out the downstream chain so it doesn't hit a real (blocking) modal.
+    monkeypatch.setattr(window, "_on_profile_build_finished", lambda *a, **k: None)
+    window._create_profile_from_edid_action_handler()
+    assert run_calls
+    args, kwargs = run_calls[0]
+    assert args[0] == window.worker.calculate_gamut
+    assert kwargs["wargs"] == (save_path,)
+    assert kwargs["pauseable"] is False
+    # The bound consumer closes over fake_profile.
+    args[1]((0.9, {}))
+    assert fake_profile.gamut_metadata_calls == [(0.9, {})]
+
+
+def test_create_profile_from_edid_finish_exception_shows_error(window, monkeypatch):
+    errors = []
+    monkeypatch.setattr(
+        mw.QMessageBox, "critical", staticmethod(lambda *a, **k: errors.append(a))
+    )
+    window._create_profile_from_edid_finish(RuntimeError("boom"), _FakeEdidProfile())
+    assert len(errors) == 1
+
+
+def test_create_profile_from_edid_finish_false_result_is_noop(window, monkeypatch):
+    build_calls = []
+    monkeypatch.setattr(
+        window, "_on_profile_build_finished", lambda *a, **k: build_calls.append(a)
+    )
+    window._create_profile_from_edid_finish(False, _FakeEdidProfile())
+    assert build_calls == []
+
+
+def test_create_profile_from_edid_finish_plain_success_writes_and_chains(
+    window, monkeypatch
+):
+    fake_profile = _FakeEdidProfile()
+    fake_profile.filename = "/tmp/edid.icc"
+    build_calls = []
+    monkeypatch.setattr(
+        window, "_on_profile_build_finished", lambda path: build_calls.append(path)
+    )
+    window._create_profile_from_edid_finish(True, fake_profile)
+    assert fake_profile.write_calls == [None]
+    assert fake_profile.calculate_id_called is False
+    assert build_calls == ["/tmp/edid.icc"]
+
+
+def test_create_profile_from_edid_finish_gamut_result_sets_metadata_and_id(
+    window, monkeypatch
+):
+    fake_profile = _FakeEdidProfile()
+    fake_profile.filename = "/tmp/edid.icc"
+    fake_profile.tags.meta["prefix"] = b"DATA_"
+    monkeypatch.setattr(window.worker, "get_device_id", lambda quirk=True: "DEV123")
+    build_calls = []
+    monkeypatch.setattr(
+        window, "_on_profile_build_finished", lambda path: build_calls.append(path)
+    )
+    window._create_profile_from_edid_finish((0.95, {"sRGB": 0.9}), fake_profile)
+    assert fake_profile.gamut_metadata_calls == [(0.95, {"sRGB": 0.9})]
+    assert fake_profile.tags.meta["MAPPING_device_id"] == "DEV123"
+    assert fake_profile.tags.meta["prefix"] == "DATA_,MAPPING_"
+    assert fake_profile.calculate_id_called is True
+    assert fake_profile.write_calls == [None]
+    assert build_calls == ["/tmp/edid.icc"]
+
+
 @pytest.fixture
 def cp_ti3_path():
     """Path to a real ``.ti3`` with ``CAL``/``ARGYLL_DISPCAL_ARGS`` sections."""

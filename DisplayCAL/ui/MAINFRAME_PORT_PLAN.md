@@ -1861,6 +1861,58 @@ rest of `menu.tools.advanced` (`synthicc.create`, `measure.testchart`,
 `specplot.run`); and Stage 7 (retire wx), still gated on maintainer
 confidence.
 
+**Rest of the File menu — DONE (2026-07-10).** Offered a 4-way choice (rest of
+the File menu / Stage 6 Pile-2 startup dialogs / header-bar deferrals /
+remaining `menu.tools.advanced` entries), the maintainer picked "rest of the
+File menu". `_build_file_menu` now adds every `menu.file` item from
+`mainmenu.xrc` in xrc order, ahead of `_file_menu_end_separator`:
+`calibration.load` (`Ctrl+O`), `testchart.set`, `testchart.edit`,
+`profile.set_save_path`, a separator, `create_profile`,
+`create_profile_from_edid`, `install_display_profile`, `profile.share`,
+`profile.info`. Five of these (`calibration.load` -> `load_cal_btn_handler`,
+`testchart.set` -> `_testchart_btn_handler`, `testchart.edit` ->
+`_create_testchart_btn_handler`, `profile.set_save_path` ->
+`_profile_save_path_btn_handler`, `profile.info` -> `profile_info_btn_handler`)
+just expose an already-ported header-bar/tab handler as a menu action, no new
+logic. Two are new, small handlers: `_select_install_profile_action_handler`
+(a picked-profile install via `QFileDialog` + the already-ported
+`InstallProfileWindow.load_profile`, distinct from
+`install_profile_btn_handler`'s current-profile shortcut) and
+`_create_profile_from_edid_action_handler` /
+`_create_profile_from_edid_finish` (port of wx's `create_profile_from_edid` /
+`create_profile_from_edid_finish`: builds an `ICCProfile.from_edid()` purely
+from the display's EDID, no measurement needed; when
+`profile.create_gamut_views` is set, calculates the gamut view through the
+same `WorkerRunController` the other worker-driven flows use before baking its
+result into the profile's metadata; either way hands off to the existing
+`_on_profile_build_finished` rather than reproducing wx's separate
+install-offer dialog). `profile.share` mirrors wx's own `profile_share_handler`,
+which is already unconditionally disabled (icc.opensuse.org has been down
+since #194) -- a plain notice instead of porting the large, permanently
+unreachable body below wx's early return.
+
+Hit a real instance of [[qt-test-modal-hang-gotcha]] while writing the EDID
+tests: the gamut-calculation test's fake `WorkerRunController` correctly
+avoided a real worker thread, but the consumer lambda it captured still called
+the real `_create_profile_from_edid_finish` -> real `_on_profile_build_finished`,
+which tried to `profile_finish.validate_built_profile()` a path the fake
+profile never actually wrote real bytes to -- reaching an unmocked
+`QMessageBox.critical` that blocks forever offscreen. Confirmed via
+`faulthandler.dump_traceback_later`, not just a slow run (5+ minutes wall time
+against ~2s of CPU time is the tell). Fixed by stubbing
+`_on_profile_build_finished` in that one test, since it's already covered on
+its own elsewhere. 12 new tests in `tests/test_ui_main_window.py` (333 total),
+full suite green under `-n auto` (~87s).
+
+**Updated remaining-gaps list:** madVR/Prisma 3D LUT API install destinations;
+Stage 6's deferred Pile-2 dialogs (update-check prompt, instrument-setup/
+donation nag); the header-bar deferrals (EDID display matching, legacy `.cal`
+parsing, 3D LUT HDR config-mapper, archive import via load, per-file
+delete-confirmation checkboxes); `CCXXPlot` visualization; the standalone
+`LUT3DFrame` tool window; the rest of `menu.tools.advanced` (`synthicc.create`,
+`measure.testchart`, `specplot.run`); and Stage 7 (retire wx), still gated on
+maintainer confidence.
+
 ### Stage 6 — StartupFrame — **DONE**
 
 Port `StartupFrame` (the splash screen + background display/instrument

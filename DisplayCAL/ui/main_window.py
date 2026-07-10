@@ -846,21 +846,80 @@ class MainWindow(BaseWindow):
         self.move(frame.topLeft())
 
     def _build_file_menu(self) -> None:
-        """Add "Create profile from measurement data..." to the shared File menu.
+        """Fill in the rest of the shared File menu (``mainmenu.xrc``'s ``menu.file``).
 
-        Qt port of the ``create_profile`` item in wx's ``menu.file``
-        (``mainmenu.xrc``); the base File menu (just "Quit") is built by
-        :meth:`~DisplayCAL.ui.base_window.BaseWindow.init_menubar`. wx's other
-        File-menu items (``calibration.load``, ``testchart.set``,
-        ``testchart.edit``, ``profile.set_save_path``,
+        The base File menu (just "Quit") is built by
+        :meth:`~DisplayCAL.ui.base_window.BaseWindow.init_menubar`. This adds
+        every other item in xrc order, ahead of :attr:`_file_menu_end_separator`:
+        ``calibration.load``, ``testchart.set``, ``testchart.edit``,
+        ``profile.set_save_path``, a separator, ``create_profile``,
         ``create_profile_from_edid``, ``install_display_profile``,
-        ``profile.share``, ``profile.info``) are not reproduced here -- each
-        is a distinct, separately-scoped feature (several already reachable
-        elsewhere in this window, e.g. :meth:`install_profile_btn_handler`).
+        ``profile.share``, ``profile.info``. Most of these just expose an
+        already-ported handler (the same one a header-bar/tab icon button
+        calls) as a menu action; only ``create_profile_from_edid`` and
+        ``install_display_profile`` (a picked-profile install, distinct from
+        :meth:`install_profile_btn_handler`'s current-profile shortcut) are new
+        here, plus ``profile.share``, which mirrors wx's own already-disabled
+        stub (see :meth:`_profile_share_action_handler`).
         """
+        load_cal_action = QAction(lang.getstr("calibration.load"), self)
+        load_cal_action.setShortcut("Ctrl+O")
+        load_cal_action.triggered.connect(self.load_cal_btn_handler)
+        self._file_menu.insertAction(self._file_menu_end_separator, load_cal_action)
+
+        testchart_set_action = QAction(lang.getstr("testchart.set"), self)
+        testchart_set_action.triggered.connect(self._testchart_btn_handler)
+        self._file_menu.insertAction(self._file_menu_end_separator, testchart_set_action)
+
+        testchart_edit_action = QAction(lang.getstr("testchart.edit"), self)
+        testchart_edit_action.triggered.connect(self._create_testchart_btn_handler)
+        self._file_menu.insertAction(
+            self._file_menu_end_separator, testchart_edit_action
+        )
+
+        profile_save_path_action = QAction(lang.getstr("profile.set_save_path"), self)
+        profile_save_path_action.triggered.connect(
+            self._profile_save_path_btn_handler
+        )
+        self._file_menu.insertAction(
+            self._file_menu_end_separator, profile_save_path_action
+        )
+
+        self._file_menu.insertSeparator(self._file_menu_end_separator)
+
         create_profile_action = QAction(lang.getstr("create_profile"), self)
         create_profile_action.triggered.connect(self._create_profile_action_handler)
         self._file_menu.insertAction(self._file_menu_end_separator, create_profile_action)
+
+        create_profile_from_edid_action = QAction(
+            lang.getstr("create_profile_from_edid"), self
+        )
+        create_profile_from_edid_action.triggered.connect(
+            self._create_profile_from_edid_action_handler
+        )
+        self._file_menu.insertAction(
+            self._file_menu_end_separator, create_profile_from_edid_action
+        )
+
+        install_display_profile_action = QAction(
+            lang.getstr("install_display_profile"), self
+        )
+        install_display_profile_action.triggered.connect(
+            self._select_install_profile_action_handler
+        )
+        self._file_menu.insertAction(
+            self._file_menu_end_separator, install_display_profile_action
+        )
+
+        profile_share_action = QAction(lang.getstr("profile.share"), self)
+        profile_share_action.triggered.connect(self._profile_share_action_handler)
+        self._file_menu.insertAction(
+            self._file_menu_end_separator, profile_share_action
+        )
+
+        profile_info_action = QAction(lang.getstr("profile.info"), self)
+        profile_info_action.triggered.connect(self.profile_info_btn_handler)
+        self._file_menu.insertAction(self._file_menu_end_separator, profile_info_action)
 
     def _create_profile_action_handler(self) -> None:
         """File menu "Create profile from measurement data..." handler.
@@ -1054,6 +1113,138 @@ class MainWindow(BaseWindow):
         box.addButton(lang.getstr("cancel"), QMessageBox.RejectRole)
         box.exec_()
         return box.clickedButton() is ok_button
+
+    def _create_profile_from_edid_action_handler(self) -> None:
+        """File menu "Create profile from EDID..." handler.
+
+        Qt port of ``create_profile_from_edid``: builds an ICC profile purely
+        from the current display's EDID data (no measurement), then --
+        matching wx -- optionally calculates its gamut view before handing
+        off to :meth:`_on_profile_build_finished`.
+        """
+        edid = self.worker.get_display_edid()
+        default_file = (
+            edid.get("monitor_name", edid.get("ascii", str(edid["product_id"])))
+            + PROFILE_EXT
+        )
+        default_dir = get_verified_path(
+            None, os.path.join(getcfg("profile.save_path"), default_file)
+        )[0]
+        path, _filter = QFileDialog.getSaveFileName(
+            self,
+            lang.getstr("save_as"),
+            os.path.join(default_dir, default_file),
+            f"{lang.getstr('filetype.icc')} (*{PROFILE_EXT})",
+        )
+        if not path:
+            return
+        dirname, basename = os.path.split(path)
+        profile_save_path = os.path.join(
+            dirname, make_argyll_compatible_path(basename)
+        )
+        if not waccess(profile_save_path, os.W_OK):
+            QMessageBox.critical(
+                self,
+                APPNAME,
+                lang.getstr("error.access_denied.write", profile_save_path),
+            )
+            return
+        profile = ICCProfile.from_edid(edid)
+        try:
+            profile.write(profile_save_path)
+        except Exception as exception:
+            QMessageBox.critical(self, APPNAME, str(exception))
+            return
+        if getcfg("profile.create_gamut_views"):
+            controller = self._ensure_run_controller()
+            controller.run(
+                self.worker.calculate_gamut,
+                lambda result: self._create_profile_from_edid_finish(
+                    result, profile
+                ),
+                wargs=(profile_save_path,),
+                progress_msg=lang.getstr("gamut.view.create"),
+                pauseable=False,
+            )
+        else:
+            self._create_profile_from_edid_finish(True, profile)
+
+    def _create_profile_from_edid_finish(
+        self, result: object, profile: ICCProfile
+    ) -> None:
+        """Finish creating a profile from EDID data.
+
+        Qt port of ``create_profile_from_edid_finish``: on a successful gamut
+        calculation, bakes its result plus the license/device-ID metadata into
+        the profile before the final write; then hands off to
+        :meth:`_on_profile_build_finished` like the measurement-driven paths
+        do, dropping wx's separate install-offer dialog in favour of that
+        shared one.
+        """
+        if isinstance(result, Exception):
+            QMessageBox.critical(self, APPNAME, str(result))
+            return
+        if not result:
+            return
+        if isinstance(result, tuple):
+            profile.set_gamut_metadata(result[0], result[1])
+            prefix = profile.tags.meta.getvalue("prefix", b"", None)
+            if isinstance(prefix, bytes):
+                prefix = prefix.decode("utf-8")
+            prefixes = prefix.split(",")
+            profile.tags.meta["License"] = getcfg("profile.license")
+            device_id = self.worker.get_device_id(quirk=False)
+            if device_id:
+                profile.tags.meta["MAPPING_device_id"] = device_id
+                prefixes.append("MAPPING_")
+                profile.tags.meta["prefix"] = ",".join(prefixes)
+            profile.calculate_id()
+        try:
+            profile.write()
+        except Exception as exception:
+            QMessageBox.critical(self, APPNAME, str(exception))
+            return
+        self._on_profile_build_finished(profile.filename)
+
+    def _select_install_profile_action_handler(self) -> None:
+        """File menu "Install display profile..." handler.
+
+        Qt port of ``select_install_profile_handler``: lets the user pick an
+        arbitrary ICC profile file to install, unlike
+        :meth:`install_profile_btn_handler`'s current-profile shortcut.
+        """
+        default_dir, default_file = get_verified_path("last_icc_path")
+        path, _filter = QFileDialog.getOpenFileName(
+            self,
+            lang.getstr("install_display_profile"),
+            os.path.join(default_dir, default_file or ""),
+            f"{lang.getstr('filetype.icc')} (*.icc *.icm)",
+        )
+        if not path:
+            return
+        setcfg("last_icc_path", path)
+        setcfg("last_cal_or_icc_path", path)
+        if self._install_profile_window is None:
+            self._install_profile_window = InstallProfileWindow()
+        self._install_profile_window.load_profile(path)
+        self._install_profile_window.show()
+        self._install_profile_window.raise_()
+        self._install_profile_window.activateWindow()
+
+    def _profile_share_action_handler(self) -> None:
+        """File menu "Upload profile..." handler.
+
+        wx's own ``profile_share_handler`` is already unconditionally disabled
+        (icc.opensuse.org, the profile-sharing service it used, has been down
+        since #194) -- this mirrors that same notice rather than porting the
+        large, permanently-unreachable body below it.
+        """
+        QMessageBox.critical(
+            self,
+            APPNAME,
+            "icc.opensuse.org is not working anymore\n"
+            "This functionality is temporarily disabled.",
+        )
 
     def _build_options_menu(self) -> None:
         """Add an Options menu with the "show advanced options" toggle.
