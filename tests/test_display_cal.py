@@ -535,8 +535,13 @@ def test_create_profile_handler_accepts_valid_embedded_cti3(
         ].absolute()
     )
     with check_call(InfoDialog, "ShowModal", wx.ID_OK, call_count=0):
-        with check_call(wx.FileDialog, "ShowModal", wx.ID_CANCEL, call_count=1):
-            mainframe.create_profile_handler(None, icc_path, False)
+        # check_show_macos_bugs_warning() shows this ConfirmDialog on macOS
+        # when profile.type/profile.black_point_compensation hit the BPC/S-
+        # curve bug; answer "yes" so the handler proceeds to the FileDialog
+        # instead of bailing out early on wx.ID_CANCEL.
+        with check_call(ConfirmDialog, "ShowModal", wx.ID_OK, call_count=-1):
+            with check_call(wx.FileDialog, "ShowModal", wx.ID_CANCEL, call_count=1):
+                mainframe.create_profile_handler(None, icc_path, False)
 
 
 def test_measurement_file_check_handler_regenerates_profile_without_typeerror(
