@@ -45,11 +45,12 @@ from dataclasses import dataclass
 
 from DisplayCAL import colormath
 from DisplayCAL.argyll_names import VIDEO_ENCODINGS
-from DisplayCAL.config import get_data_path
+from DisplayCAL.config import PROFILE_EXT, get_data_path
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.meta import VERSION_STRING
 from DisplayCAL.util_os import islink, readlink
 from DisplayCAL.util_str import strtr
+from DisplayCAL.worker import Worker
 
 #: 3D LUT tone curve combo rows, in UI order (``lut3d_trc_ctrl``'s ``main.xrc``
 #: population order, distinct from ``config.VALID_VALUES["3dlut.trc"]``'s
@@ -591,3 +592,85 @@ def install_via_copy(
     for src, dst in zip(src_paths, dst_paths):
         shutil.copyfile(src, dst)
     return dst_paths
+
+
+@dataclass
+class Lut3dPathInfo:
+    """Result of :func:`resolve_lut3d_path_info`."""
+
+    #: The 3D LUT's own path, mirroring wx's ``self.lut3d_path``.
+    lut3d_path: str
+    #: The devicelink-profile path derived from ``lut3d_path``.
+    devlink_profile: str
+    #: True if ``devlink_profile`` differs from the caller's current
+    #: ``measurement_report.devlink_profile`` (caller should ``setcfg`` it).
+    devlink_changed: bool
+    #: The simulation-profile path to apply, or ``None`` if unchanged /
+    #: not applicable (caller should ``setcfg`` it when not ``None``).
+    simulation_profile: str | None = None
+
+    @property
+    def mr_option_changed(self) -> bool:
+        """True if either measurement-report profile option needs updating."""
+        return self.devlink_changed or self.simulation_profile is not None
+
+
+def resolve_lut3d_path_info(
+    worker: Worker,
+    path: str | None = None,
+    *,
+    set_mr_sim_profile: bool = True,
+    current_devlink_profile: str | None,
+    current_simulation_profile: str | None,
+    tab_enabled: bool,
+    trc: str,
+    whitepoint_x: float | bool,
+    input_profile: str,
+) -> Lut3dPathInfo:
+    """Derive the 3D LUT path and its dependent measurement-report profiles.
+
+    Faithful port of ``MainFrame.lut3d_set_path`` (``display_cal.py:6544-6584``),
+    minus its trailing ``self.mr_update_controls()`` UI refresh (left to the
+    caller, which only needs to run it when :attr:`Lut3dPathInfo
+    .mr_option_changed` is true).
+
+    Args:
+        worker: The ``Worker`` used to derive filenames
+            (``Worker.lut3d_get_filename``).
+        path: Explicit base path for the 3D LUT filename, or ``None`` to use
+            ``calibration.file`` (``Worker.lut3d_get_filename``'s own default).
+        set_mr_sim_profile: Whether to also derive the measurement-report
+            simulation profile (``False`` for the profile-build call site,
+            which hasn't written the profile file yet).
+        current_devlink_profile: ``getcfg("measurement_report.devlink_profile")``.
+        current_simulation_profile: ``getcfg("measurement_report.simulation_profile")``.
+        tab_enabled: ``getcfg("3dlut.tab.enable")``.
+        trc: ``getcfg("3dlut.trc")``.
+        whitepoint_x: ``getcfg("3dlut.whitepoint.x", False)``.
+        input_profile: ``getcfg("3dlut.input.profile")``.
+
+    Returns:
+        Lut3dPathInfo: What changed, for the caller to apply via ``setcfg``.
+    """
+    lut3d_path = worker.lut3d_get_filename(path)
+    devlink_profile = os.path.splitext(lut3d_path)[0] + PROFILE_EXT
+    devlink_changed = devlink_profile != current_devlink_profile
+    simulation_profile = None
+    if (
+        set_mr_sim_profile
+        and tab_enabled
+        and (trc.startswith("smpte2084") or trc == "hlg" or whitepoint_x)
+    ):
+        # Use 3D LUT input profile, but only its filename (it lives in the
+        # same directory as the 3D LUT itself once installed).
+        cfgfn, cfgext = os.path.splitext(os.path.basename(input_profile))
+        lut3d_fn = worker.lut3d_get_filename(cfgfn, False, False)
+        candidate = os.path.join(os.path.dirname(lut3d_path), lut3d_fn + cfgext)
+        if candidate != current_simulation_profile and os.path.isfile(candidate):
+            simulation_profile = candidate
+    return Lut3dPathInfo(
+        lut3d_path=lut3d_path,
+        devlink_profile=devlink_profile,
+        devlink_changed=devlink_changed,
+        simulation_profile=simulation_profile,
+    )

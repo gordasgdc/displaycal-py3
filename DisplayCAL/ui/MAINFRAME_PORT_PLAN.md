@@ -2266,13 +2266,49 @@ wx path.
 
 The "header-bar deferrals" batch (both parts) is now fully closed.
 
-**Updated remaining-gaps list:** `Worker.lut3d_set_path()`'s devlink-profile/
-simulation-profile path derivation; madVR/Prisma 3D LUT API install
-destinations (needs the still-unported `setup_patterngenerator` connection
-dialogs); the Spyder2 firmware-enable wizard; `CCXXPlot` visualization; the
-standalone `LUT3DFrame` tool window; wx's full Help menu (license, "go to
-website", support, bug-report — only the update-check pair is reproduced);
-and Stage 7 (retire wx), still gated on maintainer confidence.
+**`lut3d_set_path()` path derivation (2026-07-10).** Closed the smallest item
+from the updated remaining-gaps list (maintainer's choice, over the wx Help
+menu / `CCXXPlot` / standalone `LUT3DFrame`). Ported `MainFrame.lut3d_set_path`
+(`display_cal.py:6544-6584`) as `lut3d_settings.resolve_lut3d_path_info` (a
+pure function taking `Worker` plus the handful of config values it reads, in
+this module's established no-`getcfg` style): derives `self.lut3d_path` via
+`Worker.lut3d_get_filename`, the `measurement_report.devlink_profile` path
+next to it, and — when `set_mr_sim_profile` and the 3D LUT tab is HDR/wide-
+gamut (`3dlut.trc` SMPTE2084/HLG or an explicit `3dlut.whitepoint.x`) — the
+`measurement_report.simulation_profile` candidate derived from
+`3dlut.input.profile`, only if that candidate file actually exists on disk.
+Returns a `Lut3dPathInfo` dataclass (`devlink_changed`, `simulation_profile`,
+`mr_option_changed`) rather than calling `setcfg`/UI directly, matching
+`resolve_creation_whitepoint`'s precedent in the same module.
+
+`MainWindow._apply_lut3d_path()` applies the result: sets `self.lut3d_path`
+(new `__init__` attribute), `setcfg`s whichever profile changed, and — in
+place of wx's `self.mr_update_controls()` (reachable there only because
+`MainFrame` multiply-inherits `ReportFrame`) — calls the already-existing
+`ReportWindow.mr_update_controls()` on `self._report_window` if that singleton
+is currently open. Wired at the three call sites `lut3d_set_path()` has in wx:
+`_build_profile_from_measurement` (profile-build stage, explicit about-to-be-
+built path via `profile_finish.resolve_profile_path()`, `set_mr_sim_profile=
+False`, matching `start_profile_worker`), `_on_profile_build_finished` (right
+after logging the built profile, before the `3dlut.create` chain check —
+`_chain_3dlut_after_profile` now reads the resulting `self.lut3d_path`
+directly instead of recomputing `worker.lut3d_get_filename()` itself), and
+`_load_calibration_file` (right after the config-mapper block, before
+`apply_lut3d_display_overrides`, matching wx's exact call order). Removed the
+now-stale "not yet ported" bullet from `calibration_file.py`'s module
+docstring. 16 new tests in `tests/test_lut3d_settings.py`, 4 in
+`tests/test_ui_main_window.py` (2 pre-existing `_chain_3dlut_after_profile`
+tests updated to set `window.lut3d_path` directly rather than mocking
+`worker.lut3d_get_filename`, matching the real call order where
+`_apply_lut3d_path` always runs first); full suite (523 tests across the three
+files) green under `-n auto`.
+
+**Updated remaining-gaps list:** madVR/Prisma 3D LUT API install destinations
+(needs the still-unported `setup_patterngenerator` connection dialogs); the
+Spyder2 firmware-enable wizard; `CCXXPlot` visualization; the standalone
+`LUT3DFrame` tool window; wx's full Help menu (license, "go to website",
+support, bug-report — only the update-check pair is reproduced); and Stage 7
+(retire wx), still gated on maintainer confidence.
 
 ### Stage 7 — Retire wx code paths
 

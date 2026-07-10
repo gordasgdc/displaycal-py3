@@ -5,9 +5,12 @@ for the 3D LUT tab embedded in ``MainFrame``. No display or QApplication is
 needed.
 """
 
+import os
+
 import pytest
 
 from DisplayCAL import lut3d_settings as l3d
+from DisplayCAL.config import PROFILE_EXT
 
 
 # -- TRC combo selection -----------------------------------------------------
@@ -544,3 +547,191 @@ def test_install_via_copy_reshade_no_existing_layout_writes_shader_only(tmp_path
     assert dst.read_bytes() == b"png data"
     assert (dst_dir / "ColorLookupTable.fx").is_file()
     assert not (dst_dir / "ReShade.fx").exists()
+
+
+# -- resolve_lut3d_path_info --------------------------------------------------
+
+
+class _FakeWorker:
+    """Mimics ``Worker.lut3d_get_filename``'s two call shapes used here."""
+
+    def __init__(self, input_profile_stem: str = "lut3d_input"):
+        self._input_profile_stem = input_profile_stem
+        self.calls: list[tuple] = []
+
+    def lut3d_get_filename(
+        self, path=None, include_input_profile=True, include_ext=True
+    ):
+        self.calls.append((path, include_input_profile, include_ext))
+        if not include_input_profile and not include_ext:
+            return self._input_profile_stem
+        return path or "/default/calibration.cube"
+
+
+def _base_kwargs(**overrides):
+    kwargs = dict(
+        set_mr_sim_profile=False,
+        current_devlink_profile=None,
+        current_simulation_profile=None,
+        tab_enabled=False,
+        trc="",
+        whitepoint_x=False,
+        input_profile="",
+    )
+    kwargs.update(overrides)
+    return kwargs
+
+
+def test_resolve_lut3d_path_info_devlink_changed(tmp_path):
+    lut3d_path = str(tmp_path / "profile.cube")
+    info = l3d.resolve_lut3d_path_info(
+        _FakeWorker(), lut3d_path, **_base_kwargs()
+    )
+    assert info.lut3d_path == lut3d_path
+    assert info.devlink_profile == os.path.splitext(lut3d_path)[0] + PROFILE_EXT
+    assert info.devlink_changed is True
+    assert info.simulation_profile is None
+    assert info.mr_option_changed is True
+
+
+def test_resolve_lut3d_path_info_devlink_unchanged(tmp_path):
+    lut3d_path = str(tmp_path / "profile.cube")
+    devlink = os.path.splitext(lut3d_path)[0] + PROFILE_EXT
+    info = l3d.resolve_lut3d_path_info(
+        _FakeWorker(),
+        lut3d_path,
+        **_base_kwargs(current_devlink_profile=devlink),
+    )
+    assert info.devlink_changed is False
+    assert info.mr_option_changed is False
+
+
+def test_resolve_lut3d_path_info_uses_default_path_when_none():
+    worker = _FakeWorker()
+    l3d.resolve_lut3d_path_info(worker, None, **_base_kwargs())
+    assert worker.calls == [(None, True, True)]
+
+
+@pytest.mark.parametrize("trc", ["smpte2084.hardclip", "smpte2084.rolloffclip", "hlg"])
+def test_resolve_lut3d_path_info_simulation_profile_applied_when_file_exists(
+    tmp_path, trc
+):
+    lut3d_path = str(tmp_path / "profile.cube")
+    candidate = tmp_path / "lut3d_input.icm"
+    candidate.write_bytes(b"icc")
+    info = l3d.resolve_lut3d_path_info(
+        _FakeWorker(),
+        lut3d_path,
+        **_base_kwargs(
+            set_mr_sim_profile=True,
+            tab_enabled=True,
+            trc=trc,
+            input_profile=str(tmp_path / "input.icm"),
+        ),
+    )
+    assert info.simulation_profile == str(candidate)
+    assert info.mr_option_changed is True
+
+
+def test_resolve_lut3d_path_info_simulation_profile_via_whitepoint_x():
+    lut3d_path = "/does/not/matter.cube"
+    info = l3d.resolve_lut3d_path_info(
+        _FakeWorker(),
+        lut3d_path,
+        **_base_kwargs(set_mr_sim_profile=True, tab_enabled=True, whitepoint_x=0.3128),
+    )
+    # No real candidate file exists at this path, so nothing is applied, but
+    # the gate itself (trc doesn't qualify, whitepoint_x does) must be reached
+    # without error.
+    assert info.simulation_profile is None
+
+
+def test_resolve_lut3d_path_info_simulation_profile_skipped_when_not_requested(
+    tmp_path,
+):
+    lut3d_path = str(tmp_path / "profile.cube")
+    (tmp_path / "lut3d_input.icm").write_bytes(b"icc")
+    info = l3d.resolve_lut3d_path_info(
+        _FakeWorker(),
+        lut3d_path,
+        **_base_kwargs(
+            set_mr_sim_profile=False,
+            tab_enabled=True,
+            trc="hlg",
+            input_profile=str(tmp_path / "input.icm"),
+        ),
+    )
+    assert info.simulation_profile is None
+
+
+def test_resolve_lut3d_path_info_simulation_profile_skipped_when_tab_disabled(
+    tmp_path,
+):
+    lut3d_path = str(tmp_path / "profile.cube")
+    (tmp_path / "lut3d_input.icm").write_bytes(b"icc")
+    info = l3d.resolve_lut3d_path_info(
+        _FakeWorker(),
+        lut3d_path,
+        **_base_kwargs(
+            set_mr_sim_profile=True,
+            tab_enabled=False,
+            trc="hlg",
+            input_profile=str(tmp_path / "input.icm"),
+        ),
+    )
+    assert info.simulation_profile is None
+
+
+def test_resolve_lut3d_path_info_simulation_profile_skipped_when_trc_not_hdr(
+    tmp_path,
+):
+    lut3d_path = str(tmp_path / "profile.cube")
+    (tmp_path / "lut3d_input.icm").write_bytes(b"icc")
+    info = l3d.resolve_lut3d_path_info(
+        _FakeWorker(),
+        lut3d_path,
+        **_base_kwargs(
+            set_mr_sim_profile=True,
+            tab_enabled=True,
+            trc="gamma2.2",
+            input_profile=str(tmp_path / "input.icm"),
+        ),
+    )
+    assert info.simulation_profile is None
+
+
+def test_resolve_lut3d_path_info_simulation_profile_skipped_when_file_missing(
+    tmp_path,
+):
+    lut3d_path = str(tmp_path / "profile.cube")
+    info = l3d.resolve_lut3d_path_info(
+        _FakeWorker(),
+        lut3d_path,
+        **_base_kwargs(
+            set_mr_sim_profile=True,
+            tab_enabled=True,
+            trc="hlg",
+            input_profile=str(tmp_path / "input.icm"),
+        ),
+    )
+    assert info.simulation_profile is None
+
+
+def test_resolve_lut3d_path_info_simulation_profile_skipped_when_unchanged(tmp_path):
+    lut3d_path = str(tmp_path / "profile.cube")
+    candidate = tmp_path / "lut3d_input.icm"
+    candidate.write_bytes(b"icc")
+    info = l3d.resolve_lut3d_path_info(
+        _FakeWorker(),
+        lut3d_path,
+        **_base_kwargs(
+            current_devlink_profile=os.path.splitext(lut3d_path)[0] + PROFILE_EXT,
+            current_simulation_profile=str(candidate),
+            set_mr_sim_profile=True,
+            tab_enabled=True,
+            trc="hlg",
+            input_profile=str(tmp_path / "input.icm"),
+        ),
+    )
+    assert info.simulation_profile is None
+    assert info.mr_option_changed is False

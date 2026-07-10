@@ -903,6 +903,9 @@ class MainWindow(BaseWindow):
         #: mirroring wx's ``MainFrame.input_profiles`` (populated once from
         #: the bundled reference profiles, see ``_lut3d_init_input_profiles``).
         self.input_profiles: dict[str, str] = {}
+        #: The 3D LUT's own path, mirroring wx's ``self.lut3d_path`` -- kept
+        #: current by :meth:`_apply_lut3d_path`.
+        self.lut3d_path: str | None = None
 
         self._build_ui()
         self.init_menubar()
@@ -6907,7 +6910,10 @@ class MainWindow(BaseWindow):
         Qt port of ``check_copy_ti3`` + ``start_profile_worker``: reviews the
         just-measured working TI3 for suspicious patches (see
         :meth:`_check_measurement_sanity`), copies it into the profile save
-        location, then runs ``worker.create_profile`` through the same
+        location, refreshes ``self.lut3d_path`` for the profile about to be
+        built (:meth:`_apply_lut3d_path`, matching ``start_profile_worker``'s
+        own ``self.lut3d_set_path(path, set_mr_sim_profile=False)`` call),
+        then runs ``worker.create_profile`` through the same
         :class:`WorkerRunController` used for the measurement itself.
         """
         ti3_path = measurement_report_pipeline.resolve_working_ti3_path(self.worker)
@@ -6924,6 +6930,9 @@ class MainWindow(BaseWindow):
         if isinstance(result, Exception):
             QMessageBox.critical(self, APPNAME, str(result))
             return
+        self._apply_lut3d_path(
+            profile_finish.resolve_profile_path(), set_mr_sim_profile=False
+        )
         controller = self._ensure_run_controller()
         controller.run(
             self.worker.create_profile,
@@ -6979,6 +6988,7 @@ class MainWindow(BaseWindow):
         if profile_finish.sync_calibration_file_config(profile_path):
             self.update_calibration_file_ctrl()
         self.worker.log(f"{APPNAME}: Profile created: {profile_path}")
+        self._apply_lut3d_path()
         if getcfg("3dlut.create"):
             self._chain_3dlut_after_profile()
             return
@@ -7000,6 +7010,38 @@ class MainWindow(BaseWindow):
         if answer == QMessageBox.Yes:
             self.install_profile_btn_handler()
 
+    def _apply_lut3d_path(
+        self, path: str | None = None, set_mr_sim_profile: bool = True
+    ) -> None:
+        """Refresh ``self.lut3d_path`` and its dependent measurement-report profiles.
+
+        Qt port of ``MainFrame.lut3d_set_path`` via
+        :func:`~DisplayCAL.lut3d_settings.resolve_lut3d_path_info`: derives
+        the 3D LUT's own path plus the devicelink/simulation profiles the
+        measurement-report tab defaults to, applying any changes via
+        ``setcfg`` and refreshing the report window if it's currently open
+        (wx's ``self.mr_update_controls()``, only reachable there since
+        ``MainFrame`` itself inherits ``ReportFrame``).
+        """
+        info = lut3d_settings.resolve_lut3d_path_info(
+            self.worker,
+            path,
+            set_mr_sim_profile=set_mr_sim_profile,
+            current_devlink_profile=getcfg("measurement_report.devlink_profile"),
+            current_simulation_profile=getcfg("measurement_report.simulation_profile"),
+            tab_enabled=bool(getcfg("3dlut.tab.enable")),
+            trc=getcfg("3dlut.trc"),
+            whitepoint_x=getcfg("3dlut.whitepoint.x", False),
+            input_profile=getcfg("3dlut.input.profile"),
+        )
+        self.lut3d_path = info.lut3d_path
+        if info.devlink_changed:
+            setcfg("measurement_report.devlink_profile", info.devlink_profile)
+        if info.simulation_profile:
+            setcfg("measurement_report.simulation_profile", info.simulation_profile)
+        if info.mr_option_changed and self._report_window is not None:
+            self._report_window.mr_update_controls()
+
     def _chain_3dlut_after_profile(self) -> None:
         """Auto-create (or offer to install) the 3D LUT after profiling.
 
@@ -7007,13 +7049,14 @@ class MainWindow(BaseWindow):
         os.path.isfile(self.lut3d_path)`` branch at the top of
         ``MainFrame.profile_finish`` (``display_cal.py:12151-12160``),
         reached from :meth:`_on_profile_build_finished` whenever
-        ``3dlut.create`` is checked. If the LUT file already exists (e.g. a
+        ``3dlut.create`` is checked, right after :meth:`_apply_lut3d_path` has
+        refreshed ``self.lut3d_path``. If the LUT file already exists (e.g. a
         prior run already built one at this exact path) this shows the
         install offer directly; otherwise it creates the LUT first via
         :meth:`lut3d_create_btn_handler`, which chains into the offer itself
         through :meth:`_on_lut3d_create_finished` once creation succeeds.
         """
-        if os.path.isfile(self.worker.lut3d_get_filename()):
+        if os.path.isfile(self.lut3d_path):
             self._offer_install_3dlut(lang.getstr("calibration_profiling.complete"))
         else:
             self.lut3d_create_btn_handler()
@@ -7220,7 +7263,11 @@ class MainWindow(BaseWindow):
         :meth:`update_controls` (called below regardless) already
         repopulates both selectors from config. A ``.cal`` file with no
         ``ARGYLL_DISPCAL_ARGS`` section (an Argyll release old enough to
-        predate it) falls back to :meth:`_load_legacy_cal`.
+        predate it) falls back to :meth:`_load_legacy_cal`. Right after the
+        config-mapper block, :meth:`_apply_lut3d_path` refreshes
+        ``self.lut3d_path`` and the measurement-report devlink/simulation
+        profile options, matching wx's ``self.lut3d_set_path()`` call at the
+        same point (``display_cal.py:19643``).
         """
         if not path or not os.path.exists(path):
             return
@@ -7296,6 +7343,7 @@ class MainWindow(BaseWindow):
             instrument_match,
             has_instrument_id,
         )
+        self._apply_lut3d_path()
         calibration_file.apply_lut3d_display_overrides(simset)
         writecfg()
         self.update_controls()

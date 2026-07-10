@@ -3272,12 +3272,73 @@ def test_prompt_3dlut_copy_destination_overwrite_declined_returns_empty(
     assert result == ""
 
 
+# --- _apply_lut3d_path (Qt port of MainFrame.lut3d_set_path) ---------------
+
+
+def test_apply_lut3d_path_sets_lut3d_path_and_devlink(window, tmp_path):
+    cal_path = tmp_path / "test.cal"
+    cal_path.write_bytes(b"")
+    setcfg("calibration.file", str(cal_path))
+    setcfg("measurement_report.devlink_profile", None)
+
+    window._apply_lut3d_path()
+
+    expected = window.worker.lut3d_get_filename()
+    assert window.lut3d_path == expected
+    assert getcfg("measurement_report.devlink_profile") == (
+        os.path.splitext(expected)[0] + config.PROFILE_EXT
+    )
+
+
+def test_apply_lut3d_path_refreshes_open_report_window_on_change(window, tmp_path):
+    cal_path = tmp_path / "test2.cal"
+    cal_path.write_bytes(b"")
+    setcfg("calibration.file", str(cal_path))
+    setcfg("measurement_report.devlink_profile", None)
+    refreshed = []
+    window._report_window = SimpleNamespace(
+        mr_update_controls=lambda: refreshed.append(True)
+    )
+
+    window._apply_lut3d_path()
+
+    assert refreshed == [True]
+
+
+def test_apply_lut3d_path_skips_refresh_when_nothing_changed(window, tmp_path):
+    cal_path = tmp_path / "test3.cal"
+    cal_path.write_bytes(b"")
+    setcfg("calibration.file", str(cal_path))
+    expected_devlink = (
+        os.path.splitext(window.worker.lut3d_get_filename())[0] + config.PROFILE_EXT
+    )
+    setcfg("measurement_report.devlink_profile", expected_devlink)
+    refreshed = []
+    window._report_window = SimpleNamespace(
+        mr_update_controls=lambda: refreshed.append(True)
+    )
+
+    window._apply_lut3d_path()
+
+    assert refreshed == []
+
+
+def test_apply_lut3d_path_wired_into_load_calibration_file(window):
+    """``_load_calibration_file`` refreshes ``lut3d_path`` before returning."""
+    path = _srgb_preset_path(window)
+    window.lut3d_path = None
+
+    window._load_calibration_file(path, silent=True)
+
+    assert window.lut3d_path is not None
+
+
 # --- 3dlut.create auto-chain after profiling --------------------------------
 
 
 def test_chain_3dlut_after_profile_creates_when_missing(window, monkeypatch, tmp_path):
     missing = tmp_path / "not_there.cube"
-    monkeypatch.setattr(window.worker, "lut3d_get_filename", lambda: str(missing))
+    window.lut3d_path = str(missing)
     created = []
     monkeypatch.setattr(
         window, "lut3d_create_btn_handler", lambda: created.append(True)
@@ -3298,7 +3359,7 @@ def test_chain_3dlut_after_profile_offers_when_lut_already_exists(
 ):
     existing = tmp_path / "already_there.cube"
     existing.write_bytes(b"lut")
-    monkeypatch.setattr(window.worker, "lut3d_get_filename", lambda: str(existing))
+    window.lut3d_path = str(existing)
     created = []
     monkeypatch.setattr(
         window, "lut3d_create_btn_handler", lambda: created.append(True)

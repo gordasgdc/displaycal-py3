@@ -17,10 +17,6 @@ Deliberately not reproduced here (documented, not silently dropped):
   ``-dmadvr``, used by the ``video_*`` pattern-generator presets) -- already
   deferred Pile-2 pattern-generator scope (see ``MAINFRAME_PORT_PLAN.md``'s
   "Deferred to the Qt main window").
-* ``Worker.lut3d_set_path()``'s side effects (devlink-profile/simulation-
-  profile path derivation tied to ``self.lut3d_path`` and a UI-refresh call)
-  -- a distinct, smaller gap from the config-mapper block below, not yet
-  ported.
 * Cross-window resync (``lut3dframe``, ``reportframe``) -- those tool windows
   aren't ported to Qt.
 """
