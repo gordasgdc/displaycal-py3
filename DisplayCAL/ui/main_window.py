@@ -90,8 +90,11 @@ black-point-compensation checkbox's enable/checked state, a port of
 and :meth:`_profile_type_ctrl_changed` — a real pre-existing gap before this
 session, since Stage 3 never wired it at all.
 
-A minimal Help menu (:meth:`MainWindow._build_help_menu`) carries the
-"check for updates" pair; :meth:`MainWindow.run_post_launch_checks` (called
+The Help menu (:meth:`MainWindow._build_help_menu`) mirrors wx's
+``menu.help`` in full: readme/license, website/support/bug-report, the
+"check for updates" pair, and an About dialog
+(:class:`DisplayCAL.ui.about_window.AboutWindow`).
+:meth:`MainWindow.run_post_launch_checks` (called
 by :mod:`DisplayCAL.ui.startup` once the window is shown) is the Qt port of
 wx's ``StartupFrame.setup_frame_finish`` tail: a silent update check
 (:mod:`DisplayCAL.ui.update_check_window`) chaining into the instrument-setup
@@ -173,6 +176,7 @@ from DisplayCAL.colorimeter_correction import ColorimeterCorrectionCatalog
 from DisplayCAL.config import (
     DEFAULTS,
     PROFILE_EXT,
+    get_data_path,
     get_verified_path,
     getcfg,
     setcfg,
@@ -187,10 +191,11 @@ from DisplayCAL.icc_profile import (
     TextType,
     VideoCardGammaType,
 )
-from DisplayCAL.meta import DOMAIN
+from DisplayCAL.meta import DEVELOPMENT_HOME_PAGE, DOMAIN
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.meta import VERSION_STRING
 from DisplayCAL.options import TEST
+from DisplayCAL.ui.about_window import AboutWindow
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import get_theme_pixmap, get_themed_pixmap
 from DisplayCAL.ui.theme import is_dark
@@ -203,6 +208,11 @@ from DisplayCAL.ui.colorimeter_correction_io import (
 from DisplayCAL.ui.colorimeter_correction_window import CreateCorrectionWindow
 from DisplayCAL.ui.display_adjustment_window import DisplayAdjustmentWindow
 from DisplayCAL.ui.gamap_window import GamapWindow
+from DisplayCAL.ui.header_banner import (
+    HEADER_BANNER_SIZE,
+    HeaderBanner,
+    header_banner_pixmap,
+)
 from DisplayCAL.ui.measure_frame import MeasureFrame
 from DisplayCAL.ui.measurement_flow import (
     MeasurementFlow,
@@ -747,43 +757,6 @@ def lut3d_encoding_items(codes: list[str]) -> list[tuple[str, str]]:
     return [(code, lang.getstr(f"3dlut.encoding.type_{code}")) for code in codes]
 
 
-class _HeaderBanner(QWidget):
-    """The header banner: gradient background, wordmark bitmap and tagline.
-
-    wx's ``BitmapBackgroundPanelText`` draws its bitmap and label directly in
-    one ``paintEvent``. A Qt equivalent built from overlapping sibling widgets
-    (an image ``QLabel`` plus a text ``QLabel`` stacked via ``QStackedLayout``)
-    turned out to be unreliable -- sibling stacking order in Qt is not simply
-    "first added wins" across widget kinds, so painting both explicitly here
-    is the direct, dependable option.
-    """
-
-    def __init__(
-        self, pixmap: QPixmap, tagline: str, inset: int, parent: QWidget | None = None
-    ) -> None:
-        super().__init__(parent)
-        self._pixmap = pixmap
-        self._tagline = tagline
-        self._inset = inset
-        # Qt only auto-enables style-sheet backgrounds for the literal
-        # QWidget class; a subclass with its own paintEvent needs this set
-        # explicitly or its "background: qlineargradient(...)" stylesheet
-        # never paints.
-        self.setAttribute(Qt.WA_StyledBackground, True)
-
-    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: D102 (Qt override)
-        super().paintEvent(event)
-        painter = QPainter(self)
-        if not self._pixmap.isNull():
-            painter.drawPixmap(0, 0, self._pixmap)
-        painter.setPen(QColor("white"))
-        rect = self.rect().adjusted(self._inset, 0, -12, -10)
-        painter.drawText(
-            rect, int(Qt.AlignLeft | Qt.AlignBottom | Qt.TextWordWrap), self._tagline
-        )
-        painter.end()
-
-
 class MainWindow(BaseWindow):
     """DisplayCAL's Qt main window (shell + all four settings tabs)."""
 
@@ -881,6 +854,7 @@ class MainWindow(BaseWindow):
         self._testchart_editor_window: TestchartEditorWindow | None = None
         self._synthicc_window: SynthICCWindow | None = None
         self._report_window: ReportWindow | None = None
+        self._about_window: AboutWindow | None = None
         #: Staged by :meth:`_on_report_measure_requested`, consumed by
         #: :meth:`_run_report_measurement` / :meth:`_on_report_measurement_finished`
         #: (the report flow doesn't fit :class:`MeasurementAction`, so it can't
@@ -1515,16 +1489,51 @@ class MainWindow(BaseWindow):
         self._ccxx_upload_controller = None
 
     def _build_help_menu(self) -> None:
-        """Add a Help menu with the "check for updates" items.
+        """Add a Help menu matching wx's ``menu.help`` (``mainmenu.xrc``).
 
-        Toolkit-neutral scope note: wx's ``menu.help`` also carries the
-        license, "go to website", support and bug-report entries
-        (``mainmenu.xrc``); only ``update_check`` (manual check) and
-        ``update_check.onstartup`` (the persisted toggle) are reproduced
-        here, since they're the pair the post-launch check
-        (:meth:`run_post_launch_checks`) needs a menu home for.
+        Order mirrors wx's actual menu (readme/license, separator, website/
+        support/bug-report, separator, the update-check pair, then About --
+        wx appends its About item last too, except on macOS where
+        ``QAction.AboutRole`` relocates it into the app menu automatically,
+        same as wx's ``SetMacAboutMenuItemId``).
         """
-        help_menu = self.menuBar().addMenu(f"&{lang.getstr('menu.help')}")
+        help_menu = self._help_menu = self.menuBar().addMenu(
+            f"&{lang.getstr('menu.help')}"
+        )
+
+        readme_path = (
+            get_data_path("README-fr.html") if lang.getcode() == "fr" else None
+        ) or get_data_path("README.html")
+        readme_action = help_menu.addAction(lang.getstr("readme"))
+        readme_action.setEnabled(isinstance(readme_path, str))
+        readme_action.triggered.connect(
+            lambda: launch_file(readme_path) if readme_path else None
+        )
+
+        license_path = get_data_path("LICENSE.txt")
+        license_enabled = isinstance(license_path, str) or os.path.isfile(
+            "/usr/share/common-licenses/GPL-3"
+        )
+        license_path = license_path or "/usr/share/common-licenses/GPL-3"
+        license_action = help_menu.addAction(lang.getstr("license"))
+        license_action.setEnabled(license_enabled)
+        license_action.triggered.connect(lambda: launch_file(license_path))
+
+        help_menu.addSeparator()
+        website_action = help_menu.addAction(lang.getstr("go_to_website"))
+        website_action.triggered.connect(
+            lambda: launch_file(f"https://{DOMAIN}/")
+        )
+        support_action = help_menu.addAction(lang.getstr("help_support"))
+        support_action.triggered.connect(
+            lambda: launch_file(f"{DEVELOPMENT_HOME_PAGE}/issues")
+        )
+        bug_report_action = help_menu.addAction(lang.getstr("bug_report"))
+        bug_report_action.triggered.connect(
+            lambda: launch_file(f"{DEVELOPMENT_HOME_PAGE}/issues")
+        )
+
+        help_menu.addSeparator()
         self.update_check_action = help_menu.addAction(lang.getstr("update_check"))
         self.update_check_action.triggered.connect(
             self._check_for_updates_action_handler
@@ -1537,6 +1546,19 @@ class MainWindow(BaseWindow):
         self.update_check_onstartup_action.toggled.connect(
             self._update_check_onstartup_toggled
         )
+
+        help_menu.addSeparator()
+        about_action = help_menu.addAction(lang.getstr("menu.about"))
+        about_action.setMenuRole(QAction.AboutRole)
+        about_action.triggered.connect(self._about_action_handler)
+
+    def _about_action_handler(self) -> None:
+        """Show the "About DisplayCAL" dialog, reusing it if already open."""
+        if self._about_window is None:
+            self._about_window = AboutWindow(self.worker, self)
+        self._about_window.show()
+        self._about_window.raise_()
+        self._about_window.activateWindow()
 
     def _update_check_onstartup_toggled(self, checked: bool) -> None:
         setcfg("update_check", int(checked))
@@ -1693,9 +1715,6 @@ class MainWindow(BaseWindow):
         )
         self._calibration_form.setRowVisible(self.observer_ctrl, show)
 
-    #: Logical size (pt) of the wx ``get_header()`` wordmark bitmap.
-    _HEADER_BANNER_SIZE = (222, 64)
-
     #: wx's ``get_header(x=80)`` tagline inset, which is also where the "D" of
     #: the "DisplayCAL" wordmark starts in ``theme/header.png``; the
     #: "Settings" bar below lines its label up with the same x so the two
@@ -1728,14 +1747,14 @@ class MainWindow(BaseWindow):
 
         # wx overlays the tagline directly on the banner bitmap (``get_header``,
         # white text near the bottom, starting at the same x as the "D" in the
-        # wordmark); ``_HeaderBanner`` paints both explicitly for the same
+        # wordmark); ``HeaderBanner`` paints both explicitly for the same
         # effect instead of layering two widgets.
-        banner = _HeaderBanner(
-            self._header_banner_pixmap(),
+        banner = HeaderBanner(
+            header_banner_pixmap(),
             lang.getstr("header"),
             self._HEADER_LOGO_INSET,
         )
-        banner.setFixedHeight(self._HEADER_BANNER_SIZE[1])
+        banner.setFixedHeight(HEADER_BANNER_SIZE[1])
         # Matches the actual gradient sampled from ``theme/header@2x.png``: it
         # reaches its final blue by the vertical midpoint and stays flat below
         # that (a plain 2-stop linear gradient over-darkens the top half).
@@ -1797,30 +1816,6 @@ class MainWindow(BaseWindow):
 
         outer.addWidget(bar)
         return container
-
-    @classmethod
-    def _header_banner_pixmap(cls) -> QPixmap:
-        """Return the ``theme/header.png`` wordmark, cropped to its banner.
-
-        wx's ``get_header()`` draws the top ``222x64`` (logical) region of
-        this artwork, which already bakes in the logo flare, the
-        "DisplayCAL" wordmark and the same blue gradient as the surrounding
-        banner. Loads the ``@2x`` asset when available so it stays crisp on
-        HiDPI displays.
-        """
-        path = config.get_data_path(
-            "theme/header@2x.png"
-        ) or config.get_data_path("theme/header.png")
-        if not path:
-            return QPixmap()
-        source = QPixmap(path)
-        if source.isNull():
-            return source
-        w, h = cls._HEADER_BANNER_SIZE
-        ratio = source.width() / w
-        cropped = source.copy(0, 0, round(w * ratio), round(h * ratio))
-        cropped.setDevicePixelRatio(ratio)
-        return cropped
 
     @staticmethod
     def _header_icon_pixmap(size: int, name: str) -> QPixmap:

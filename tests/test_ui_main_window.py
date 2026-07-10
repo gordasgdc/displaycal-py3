@@ -5960,6 +5960,80 @@ def test_help_menu_actions_present(window):
     )
 
 
+def test_help_menu_matches_wx_xrc_order(window):
+    # mainmenu.xrc's wxID_HELP order: readme, license, separator, website,
+    # support, bug-report, separator, the update-check pair, separator, About.
+    expected = [
+        "readme",
+        "license",
+        "",  # separator
+        "go_to_website",
+        "help_support",
+        "bug_report",
+        "",  # separator
+        "update_check",
+        "update_check.onstartup",
+        "",  # separator
+        "menu.about",
+    ]
+    actual = [lang.getstr(key) if key else "" for key in expected]
+    texts = [action.text() for action in window._help_menu.actions()]
+    assert texts == actual
+
+
+def test_readme_action_launches_readme_html(window, monkeypatch):
+    launched = []
+    monkeypatch.setattr(mw, "launch_file", lambda path: launched.append(path))
+    readme_action = window._help_menu.actions()[0]
+    assert readme_action.isEnabled()
+    readme_action.trigger()
+    assert len(launched) == 1
+    assert launched[0].endswith("README.html")
+
+
+def test_license_action_launches_license_file(window, monkeypatch):
+    launched = []
+    monkeypatch.setattr(mw, "launch_file", lambda path: launched.append(path))
+    license_action = window._help_menu.actions()[1]
+    assert license_action.isEnabled()
+    license_action.trigger()
+    assert launched == [mw.get_data_path("LICENSE.txt")]
+
+
+def test_website_action_launches_domain_url(window, monkeypatch):
+    launched = []
+    monkeypatch.setattr(mw, "launch_file", lambda path: launched.append(path))
+    website_action = window._help_menu.actions()[3]
+    website_action.trigger()
+    assert launched == [f"https://{mw.DOMAIN}/"]
+
+
+def test_help_support_and_bug_report_actions_launch_issues_page(window, monkeypatch):
+    launched = []
+    monkeypatch.setattr(mw, "launch_file", lambda path: launched.append(path))
+    support_action, bug_report_action = window._help_menu.actions()[4:6]
+    support_action.trigger()
+    bug_report_action.trigger()
+    assert launched == [
+        f"{mw.DEVELOPMENT_HOME_PAGE}/issues",
+        f"{mw.DEVELOPMENT_HOME_PAGE}/issues",
+    ]
+
+
+def test_about_action_handler_creates_and_shows_window(window):
+    assert window._about_window is None
+    window._about_action_handler()
+    assert window._about_window is not None
+    assert window._about_window.isVisible()
+
+
+def test_about_action_handler_reuses_existing_window(window):
+    window._about_action_handler()
+    first = window._about_window
+    window._about_action_handler()
+    assert window._about_window is first
+
+
 def test_update_check_onstartup_action_persists_toggle(window):
     window.update_check_onstartup_action.setChecked(False)
     assert getcfg("update_check") == 0

@@ -2310,6 +2310,58 @@ Spyder2 firmware-enable wizard; `CCXXPlot` visualization; the standalone
 support, bug-report — only the update-check pair is reproduced); and Stage 7
 (retire wx), still gated on maintainer confidence.
 
+**Full Help menu (2026-07-10):** closed the "wx Help menu" gap, picked by the
+maintainer over the Spyder2 firmware wizard / `CCXXPlot` / standalone
+`LUT3DFrame` when offered a choice. `MainWindow._build_help_menu` now adds
+all of `mainmenu.xrc`'s `wxID_HELP` in wx's own order: `readme` (opens
+`README-fr.html`/`README.html` via `get_data_path`, disabled if missing),
+`license` (`LICENSE.txt` or the Debian `/usr/share/common-licenses/GPL-3`
+fallback, same enable logic as wx), a separator, `go_to_website`
+(`https://{DOMAIN}/`), `help_support`/`bug_report` (both open
+`{DEVELOPMENT_HOME_PAGE}/issues` — wx's own two handlers already point at the
+same URL, not a bug introduced here), a separator, the existing
+`update_check`/`update_check.onstartup` pair, a separator, and a new "About"
+action (`QAction.AboutRole`, so macOS relocates it into the app menu the same
+way wx's `SetMacAboutMenuItemId` does).
+
+New `DisplayCAL/ui/about_window.py::AboutWindow(BaseWindow)` ports
+`aboutdialog_handler`'s content as a scrollable stack of rich-text `QLabel`s
+(each wx `HyperLinkCtrl`+`StaticText` pair collapses into one `QLabel` with
+an inline `<a href>`, since `QLabel` already renders/dispatches links
+natively): app name + version + author, ArgyllCMS version + Graeme Gill,
+the translator-credits list (`_translator_credits()`, a faithful port of
+`aboutdialog_handler`'s `lauthors` grouping/sort), the three icon-set
+credits (Apricity/Suru/GNOME), and Python + audio-backend versions. One
+deliberate toolkit-specific substitution: wx's row reports the `wxPython`
+version; this reports the actual Qt binding in use (`qtpy.API_NAME` +
+its real version, e.g. "PySide6 6.11.1") instead, since that's the toolkit
+this port actually runs on.
+
+Extracted `HeaderBanner`/`header_banner_pixmap()`/`HEADER_BANNER_SIZE` out of
+`main_window.py` into a new shared `DisplayCAL/ui/header_banner.py` (no
+behavior change to `MainWindow`'s own header bar, confirmed by the full
+`test_ui_main_window.py` suite) so the About dialog could reuse the exact
+same wordmark artwork/gradient instead of re-deriving it. Hit one real
+layout bug while screenshot-verifying: `MainWindow`'s header bar is wide
+enough that its tagline ("Display calibration and characterization powered
+by ArgyllCMS") fits on one line to the right of the wordmark, but the
+About dialog is narrow enough that it wraps to two lines and overlapped the
+wordmark artwork when reusing the bar's `64`pt banner height as-is — fixed
+by doubling the About dialog's banner height to `128`pt (matching why wx's
+own About dialog draws this same banner at `size=(320, 120)` rather than the
+header bar's `64`), keeping the tagline's `80`pt left inset (`_TAGLINE_INSET`)
+so it still starts to the right of the wordmark's own baked-in "DisplayCAL"
+text on its first line.
+
+7 new tests in `tests/test_ui_about_window.py`, 7 new in
+`tests/test_ui_main_window.py` (411 total in that file, full suite green
+under `-n auto`).
+
+**Updated remaining-gaps list:** madVR/Prisma 3D LUT API install
+destinations; the Spyder2 firmware-enable wizard; `CCXXPlot` visualization;
+the standalone `LUT3DFrame` tool window; and Stage 7 (retire wx), still
+gated on maintainer confidence. wx's Help menu is now fully ported.
+
 ### Stage 7 — Retire wx code paths
 
 Delete the wx modules whose Qt replacements have been verified equivalent.
