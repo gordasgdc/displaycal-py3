@@ -13,13 +13,12 @@ env:
   ARGYLL_VERSION: "3.5.0"
   ARGYLL_REPO: "https://github.com/eoyilmaz/argyllcms-binaries/releases/download"
   # Pinned wxPython release, available as a pre-built wheel for every
-  # supported Python version. Note: the "env" context isn't available in
-  # `jobs.<job_id>.name`, so this can't be interpolated into job names.
+  # supported Python version.
   WX_VERSION: "4.2.5"
 
 jobs:
   linux:
-    name: Linux + Python ${{ matrix.python-version }} + wxPython 4.2.5
+    name: Linux + Python ${{ matrix.python-version }}
     env:
       DISPLAY: :0
       DEBIAN_FRONTEND: noninteractive
@@ -125,7 +124,7 @@ jobs:
         retention-days: 10
 
   windows:
-    name: Windows + Python ${{ matrix.python-version }} + wxPython 4.2.5
+    name: Windows + Python ${{ matrix.python-version }}
     runs-on: windows-latest
 
     strategy:
@@ -199,7 +198,7 @@ jobs:
         retention-days: 10
 
   macos:
-    name: macOS + Python ${{ matrix.python-version }} + wxPython 4.2.5
+    name: macOS + Python ${{ matrix.python-version }}
     runs-on: macos-14
 
     strategy:
