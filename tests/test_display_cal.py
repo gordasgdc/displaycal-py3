@@ -620,3 +620,92 @@ def test_import_session_archive_producer_returns_extracted_file_extension(
 
     assert not isinstance(result, Exception)
     assert result == os.path.join(getcfg("profile.save_path"), basename, f"{basename}.cal")
+
+
+def test_load_cal_handler_proceeds_for_cal_files_with_no_profile(
+    data_files, mainframe: MainFrame, monkeypatch
+) -> None:
+    """Regression test for issue #820.
+
+    ``parse_calibration_file()`` only ever returns a non-``None`` ``profile``
+    for ``.icc``/``.icm`` paths (it stays ``None`` for ``.cal`` files, which
+    have no embedded ``ICCProfile`` at all). But ``load_cal_handler()``'s
+    early-out checked ``if profile is None or ti3_lines is None: return``,
+    so it always bailed before doing anything for every ``.cal`` file,
+    regardless of whether it parsed successfully. Only ``ti3_lines`` (the
+    actual parse-failure signal) should gate the early return.
+    """
+    monkeypatch.setattr(
+        display_cal, "check_set_argyll_bin", lambda *args, **kwargs: True
+    )
+    # load_cal_handler() bails immediately if a previous test left this set;
+    # it is unrelated to the bug under test here.
+    setcfg("settings.changed", 0)
+    path = str(
+        data_files[
+            "UP2516D #1 2022-03-20 02-08 D6500 2.2 F-S XYZLUT+MTX.cal"
+        ].absolute()
+    )
+
+    mainframe.load_cal_handler(None, path=path)
+
+    assert getcfg("last_cal_or_icc_path") == path
+
+
+def test_load_cal_handler_config_mapper_block_bytes_str_bugs(
+    data_files, tmp_path, mainframe: MainFrame, monkeypatch
+) -> None:
+    """Regression test for issue #820.
+
+    Covers all four bugs in ``load_cal_handler()``'s 3D LUT / profile-B2A
+    config-mapper block (the ``BEGIN_DATA_FORMAT``-guarded block that reads
+    ``PATCH_SEQUENCE``, ``3DLUT_GAMUT_MAPPING_MODE``, etc. from a saved
+    ``.cal``/profile file):
+
+    1. ``"BEGIN_DATA_FORMAT" in ti3_lines`` compared a ``str`` literal
+       against ``ti3_lines`` (``list[bytes]``), so the whole block, along
+       with the five smaller ``ti3_lines`` checks above it, was unreachable
+       dead code.
+    2. ``cfgvalue = 0 if cfgvalue == "G" else 1`` compared ``bytes`` against
+       a ``str`` literal, always forcing ``3dlut.gamap.use_b2a`` to ``1``.
+    3. ``cfgvalue.lower().replace("_rgb_", "_RGB_")`` called ``bytes``
+       methods with ``str`` arguments, raising ``TypeError`` for
+       ``PATCH_SEQUENCE``.
+    4. ``cfgvalue = str(cfgvalue)`` stringified the ``bytes`` repr (e.g.
+       ``"b'...'"``) instead of decoding it, corrupting every keyword
+       ``CGATS.queryv1()`` left as ``bytes``.
+
+    Builds a ``.cal`` file from a real fixture with ``PATCH_SEQUENCE`` and
+    ``3DLUT_GAMUT_MAPPING_MODE`` keywords inserted ahead of the first
+    ``BEGIN_DATA_FORMAT`` marker (mirroring how Argyll writes these), then
+    asserts both end up correctly decoded/mapped instead of at their
+    (different) config defaults.
+    """
+    monkeypatch.setattr(
+        display_cal, "check_set_argyll_bin", lambda *args, **kwargs: True
+    )
+    # load_cal_handler() bails immediately if a previous test left this set;
+    # it is unrelated to the bugs under test here.
+    setcfg("settings.changed", 0)
+    fixture_path = data_files[
+        "UP2516D #1 2022-03-20 02-08 D6500 2.2 F-S XYZLUT+MTX.cal"
+    ]
+    # splitlines() (not split(b"\n")) so this is robust to Windows checkouts
+    # where git's core.autocrlf normalizes this text fixture to CRLF,
+    # otherwise a trailing "\r" on every line would break the exact-bytes
+    # index() lookup below.
+    lines = fixture_path.read_bytes().splitlines()
+    data_format_index = lines.index(b"BEGIN_DATA_FORMAT")
+    lines[data_format_index:data_format_index] = [
+        b'PATCH_SEQUENCE "MAXIMIZE_RGB_DIFFERENCE"',
+        b'3DLUT_GAMUT_MAPPING_MODE "G"',
+    ]
+    cal_path = tmp_path / fixture_path.name
+    cal_path.write_bytes(b"\n".join(lines))
+
+    mainframe.load_cal_handler(None, path=str(cal_path))
+
+    # Defaults are "optimize_display_response_delay" / 1, so these values
+    # only end up here if the block ran and decoded/compared correctly.
+    assert getcfg("testchart.patch_sequence") == "maximize_RGB_difference"
+    assert getcfg("3dlut.gamap.use_b2a") == 0

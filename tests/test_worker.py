@@ -659,25 +659,52 @@ def test_prepare_colprof_for_271(monkeypatch, data_path):
 
 def test_prepare_dispcal_1():
     """Worker.prepare_dispcal() return value should be quoted properly."""
-    worker = Worker()
-    return_val = worker.prepare_dispcal()
-    expected_result = [
-        "-v2",
-        "-d0",
-        "-c1",
-        return_val[1][3],  # '-yl',
-        return_val[1][4],  # '-P0.5,0.5,1.0',
-        "-ql",
-        return_val[1][6],  # '-t',
-        "-g2.2",
-        "-f1.0",
-        return_val[1][9],  # '-k0.0',
-        "/var/folders/8l/xy1__ym94nn35x86xyg56xq80000gn/T/DisplayCAL-2fdjtyql/",
-    ]
-    assert return_val[0] == get_argyll_util("dispcal")
-    assert isinstance(return_val[1], list)
-    assert return_val[1][:-1] == expected_result[:-1]  # don't check the final part
-    assert tempfile.gettempdir() in return_val[1][-1]  # this should be in a temp path
+    # prepare_dispcal() builds its arg list from many getcfg() calls, which
+    # only fall back to config.DEFAULTS for options that were never set.
+    # Other tests (in this module and others) call setcfg()/writecfg() and
+    # leave options set for the rest of the pytest-xdist worker process;
+    # initcfg() alone does not clear them, it only merges whatever is on
+    # disk into the same in-memory CFG. Under xdist, which tests ran earlier
+    # on this worker is nondeterministic, so leftover options made the
+    # hardcoded expected_result below flaky (e.g. a stray
+    # "calibration.black_point_correction.auto" left truthy silently drops
+    # the "-k0.0" arg, shifting every index after it).
+    #
+    # Snapshot and clear every option currently set in config.CFG's
+    # "Default" section (the config module monkeypatches
+    # configparser.DEFAULTSECT to "Default", so that's the real section
+    # setcfg()/getcfg() read and write) so this test starts from a
+    # guaranteed config.DEFAULTS state, then restore the snapshot afterwards
+    # so we don't clobber session-scoped state other tests depend on (e.g.
+    # the setup_argyll fixture's "argyll.dir"/"argyll.version").
+    original_cfg = dict(config.CFG["Default"])
+    for name in list(config.CFG["Default"]):
+        setcfg(name, None)
+    try:
+        worker = Worker()
+        return_val = worker.prepare_dispcal()
+        expected_result = [
+            "-v2",
+            "-d0",
+            "-c1",
+            return_val[1][3],  # '-yl',
+            return_val[1][4],  # '-P0.5,0.5,1.0',
+            "-ql",
+            return_val[1][6],  # '-t',
+            "-g2.2",
+            "-f1.0",
+            return_val[1][9],  # '-k0.0',
+            "/var/folders/8l/xy1__ym94nn35x86xyg56xq80000gn/T/DisplayCAL-2fdjtyql/",
+        ]
+        assert return_val[0] == get_argyll_util("dispcal")
+        assert isinstance(return_val[1], list)
+        assert return_val[1][:-1] == expected_result[:-1]  # don't check the final part
+        assert tempfile.gettempdir() in return_val[1][-1]  # in a temp path
+    finally:
+        for name in list(config.CFG["Default"]):
+            setcfg(name, None)
+        for name, value in original_cfg.items():
+            setcfg(name, value)
 
 
 @pytest.mark.skipif(
