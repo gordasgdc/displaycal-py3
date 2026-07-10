@@ -9130,7 +9130,10 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 self,
                 msg=lang.getstr(
                     "profile.unsupported",
-                    (profile.profileClass, profile.colorSpace),
+                    (
+                        profile.profileClass.decode("utf-8"),
+                        profile.colorSpace.decode("utf-8"),
+                    ),
                 )
                 + "\n"
                 + profile_path,
@@ -9630,7 +9633,10 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 parent,
                 msg=lang.getstr(
                     "profile.unsupported",
-                    (profile.profileClass, profile.colorSpace),
+                    (
+                        profile.profileClass.decode("utf-8"),
+                        profile.colorSpace.decode("utf-8"),
+                    ),
                 )
                 + "\n"
                 + path,
@@ -17820,10 +17826,11 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         ) or ("A2B1" in profile.tags and not isinstance(profile.tags.A2B1, LUT16Type)):
             result = Error(lang.getstr("profile.required_tags_missing", "LUT16Type"))
         elif profile.connectionColorSpace not in (b"XYZ", b"Lab"):
+            connection_color_space = profile.connectionColorSpace.decode("utf-8")
             result = Error(
                 lang.getstr(
                     "profile.unsupported",
-                    (profile.connectionColorSpace, profile.connectionColorSpace),
+                    (connection_color_space, connection_color_space),
                 )
             )
         else:

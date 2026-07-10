@@ -1516,7 +1516,10 @@ class LUTFrame(BaseFrame):
                 Error(
                     lang.getstr(
                         "profile.unsupported",
-                        (profile.profileClass, unsupported_colorspace),
+                        (
+                            profile.profileClass.decode("utf-8"),
+                            unsupported_colorspace.decode("utf-8"),
+                        ),
                     )
                 )
             )

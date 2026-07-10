@@ -2972,7 +2972,10 @@ class Worker(WorkerBase):
                         + ": "
                         + lang.getstr(
                             "profile.unsupported",
-                            (lang.getstr("unknown"), profile1.colorSpace),
+                            (
+                                lang.getstr("unknown"),
+                                profile1.colorSpace.decode("utf-8"),
+                            ),
                         )
                     )
                 rgb_space[0] = 1.0  # Set gamma to 1.0 (not actually used)
@@ -4428,7 +4431,10 @@ END_DATA
                 raise NotImplementedError(
                     lang.getstr(
                         "profile.unsupported",
-                        (profile.profileClass, profile.colorSpace),
+                        (
+                            profile.profileClass.decode("utf-8"),
+                            profile.colorSpace.decode("utf-8"),
+                        ),
                     )
                 )
             if profile_in.profileClass == b"link":
@@ -8004,10 +8010,11 @@ BEGIN_DATA
         """
         # Lab cLUT is currently not implemented and should NOT be used!
         if profile.connectionColorSpace != b"XYZ":
+            connection_color_space = profile.connectionColorSpace.decode("utf-8")
             raise Error(
                 lang.getstr(
                     "profile.unsupported",
-                    (profile.connectionColorSpace, profile.connectionColorSpace),
+                    (connection_color_space, connection_color_space),
                 )
             )
 
@@ -14878,7 +14885,10 @@ BEGIN_DATA
                     Error(
                         lang.getstr(
                             "profile.unsupported",
-                            (profile.profileClass, profile.colorSpace),
+                            (
+                                profile.profileClass.decode("utf-8"),
+                                profile.colorSpace.decode("utf-8"),
+                            ),
                         )
                         + "\n"
                         + profile_path

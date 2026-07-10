@@ -2055,7 +2055,10 @@ class LUT3DFrame(BaseFrame, LUT3DMixin):
                         Error(
                             lang.getstr(
                                 "profile.unsupported",
-                                (profile.profileClass, profile.colorSpace),
+                                (
+                                    profile.profileClass.decode("utf-8"),
+                                    profile.colorSpace.decode("utf-8"),
+                                ),
                             )
                         ),
                         parent=self,
