@@ -659,6 +659,14 @@ def test_prepare_colprof_for_271(monkeypatch, data_path):
 
 def test_prepare_dispcal_1():
     """Worker.prepare_dispcal() return value should be quoted properly."""
+    # Reset to defaults: prepare_dispcal() reads its args from the global
+    # config, and other tests in this module leave keys (e.g.
+    # "display.number") mutated without restoring them. Under xdist,
+    # scheduling is nondeterministic, so which tests ran earlier on this
+    # worker (and thus which cfg values are still dirty) varies from run to
+    # run, making the hardcoded expected_result below flaky unless we start
+    # from a known-clean state.
+    initcfg()
     worker = Worker()
     return_val = worker.prepare_dispcal()
     expected_result = [
