@@ -2216,6 +2216,64 @@ consumes this session's `display_match`/`instrument_match` outputs). The Qt
 3D LUT tab it targets already exists (Session 10), so nothing further blocks
 it; it just warrants its own session given its size.
 
+**Header-bar deferrals, part 2 — the 3D LUT config-mapper block (2026-07-10).**
+Closed the last item from part 1's list. Added `apply_profile_b2a_flags_from_ti3`,
+`apply_lut3d_config_mapper` and `apply_lut3d_display_overrides` to
+`calibration_file.py`, wired into `main_window.py::_load_calibration_file`
+right after `apply_calibration_options`.
+
+**Found and fixed four real latent bugs while porting, all also fixed at the
+source in `display_cal.py`** (this block is one of the oldest, most
+lightly-exercised parts of `load_cal_handler`, matching the "recurring bug
+pattern" this codebase has in such branches):
+
+- The block's own guard, `"BEGIN_DATA_FORMAT" in ti3_lines`, compared a `str`
+  literal against `ti3_lines` (`list[bytes]`, since `parse_calibration_file`
+  opens non-ICC files in binary mode) — always `False`. **The entire
+  ~200-line config-mapper block was unreachable dead code**: no 3D LUT
+  metadata (HDR peak luminance, source profile, TRC, size, format, gamut
+  mapping mode, content colorspace, ...) was ever actually restored when
+  loading a previously-saved profile or `.cal` file, silently. The same
+  bytes/str bug was also present in the five smaller `ti3_lines` checks just
+  above it (`"CTI3"`, `USE_BLACK_POINT_COMPENSATION`, `HIRES_B2A`,
+  `SMOOTH_B2A`) — all fixed alongside it.
+- `3DLUT_GAMUT_MAPPING_MODE`'s value comparison (`cfgvalue == "G"`) compared
+  `bytes` (`CGATS.queryv1` never auto-converts a single-letter value to
+  numeric) against a `str` literal — always `False`, so
+  `3dlut.gamap.use_b2a` was always set to `1` regardless of the file's
+  actual setting.
+- `PATCH_SEQUENCE`'s `cfgvalue.lower().replace("_rgb_", "_RGB_")` called
+  `bytes.replace` with `str` arguments, raising `TypeError` — this would
+  have crashed the whole load whenever a file actually carried this keyword
+  (had the block been reachable at all).
+- The generic `cfgvalue = str(cfgvalue)` before every `setcfg` call
+  stringified the `bytes` repr (`"b'...'"`) instead of the value, for any
+  keyword `CGATS.queryv1` left as `bytes` (anything quoted/signed/
+  non-numeric — e.g. `HIRES_B2A_SIZE "-1"`, a real value found in this
+  repo's own `tests/data` fixtures). Fixed via a decode-if-bytes helper,
+  applied both in the per-keyword loop and the content-colorspace loop.
+
+Not reproduced (documented in `calibration_file.py`'s module docstring):
+`Worker.lut3d_set_path()`'s devlink-profile/simulation-profile path
+derivation (tied to `self.lut3d_path` and a UI-refresh call) — a distinct,
+smaller gap, left open. 51 new tests in `tests/test_calibration_file.py`
+(covering both real bug-fix regressions and the happy paths), 1 new
+regression test in `tests/test_ui_main_window.py` pinning the wiring/argument
+order into `_load_calibration_file` (451 total across both files, confirmed
+green under `-n auto`) plus the full `test_display_cal.py` suite (66 passed,
+1 skipped) confirming the `display_cal.py` source fixes didn't regress the
+wx path.
+
+The "header-bar deferrals" batch (both parts) is now fully closed.
+
+**Updated remaining-gaps list:** `Worker.lut3d_set_path()`'s devlink-profile/
+simulation-profile path derivation; madVR/Prisma 3D LUT API install
+destinations (needs the still-unported `setup_patterngenerator` connection
+dialogs); the Spyder2 firmware-enable wizard; `CCXXPlot` visualization; the
+standalone `LUT3DFrame` tool window; wx's full Help menu (license, "go to
+website", support, bug-report — only the update-check pair is reproduced);
+and Stage 7 (retire wx), still gated on maintainer confidence.
+
 ### Stage 7 — Retire wx code paths
 
 Delete the wx modules whose Qt replacements have been verified equivalent.

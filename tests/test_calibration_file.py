@@ -303,6 +303,322 @@ class TestParseLegacyCal:
         assert result.settings == []
 
 
+def _ti3_header(*lines: bytes) -> list[bytes]:
+    """Build a minimal ``ti3_lines`` list: some header lines + the sentinel."""
+    return [*lines, b"BEGIN_DATA_FORMAT"]
+
+
+class TestApplyProfileB2aFlagsFromTi3:
+    def test_use_black_point_compensation_yes(self):
+        setcfg("profile.black_point_compensation", 0)
+        lines = _ti3_header(b'USE_BLACK_POINT_COMPENSATION "YES"')
+
+        cf.apply_profile_b2a_flags_from_ti3(lines, is_preset=False, is_3dlut_preset=False)
+
+        assert getcfg("profile.black_point_compensation") == 1
+
+    def test_use_black_point_compensation_no_disables_on_non_preset(self):
+        setcfg("profile.black_point_compensation", 1)
+        lines = _ti3_header(b'USE_BLACK_POINT_COMPENSATION "NO"')
+
+        cf.apply_profile_b2a_flags_from_ti3(lines, is_preset=False, is_3dlut_preset=False)
+
+        assert getcfg("profile.black_point_compensation") == 0
+
+    def test_hires_b2a_yes_sets_flag(self):
+        setcfg("profile.b2a.hires", 0)
+        lines = _ti3_header(b'HIRES_B2A "YES"')
+
+        cf.apply_profile_b2a_flags_from_ti3(lines, is_preset=False, is_3dlut_preset=False)
+
+        assert getcfg("profile.b2a.hires") == 1
+
+    def test_smooth_b2a_yes_implies_hires_unless_explicitly_no(self):
+        setcfg("profile.b2a.hires", 0)
+        setcfg("profile.b2a.hires.smooth", 0)
+        lines = _ti3_header(b'SMOOTH_B2A "YES"')
+
+        cf.apply_profile_b2a_flags_from_ti3(lines, is_preset=False, is_3dlut_preset=False)
+
+        assert getcfg("profile.b2a.hires") == 1
+        assert getcfg("profile.b2a.hires.smooth") == 1
+
+    def test_smooth_b2a_yes_does_not_force_hires_when_hires_explicitly_no(self):
+        setcfg("profile.b2a.hires", 1)
+        setcfg("profile.b2a.hires.smooth", 0)
+        lines = _ti3_header(b'HIRES_B2A "NO"', b'SMOOTH_B2A "YES"')
+
+        cf.apply_profile_b2a_flags_from_ti3(lines, is_preset=False, is_3dlut_preset=False)
+
+        assert getcfg("profile.b2a.hires") == 0
+        assert getcfg("profile.b2a.hires.smooth") == 1
+
+
+class TestApplyLut3dConfigMapper:
+    def test_no_begin_data_format_is_a_noop(self):
+        simset = cf.apply_lut3d_config_mapper(
+            [b'SOME_KEYWORD "value"'],
+            "/tmp/test.cal",
+            False,
+            False,
+            False,
+            False,
+            False,
+        )
+
+        assert simset is False
+
+    def test_negative_size_value_is_decoded_not_stringified_repr(self):
+        # HIRES_B2A_SIZE "-1" fails CGATS's unsigned-number auto-conversion
+        # regex and comes back from queryv1() as bytes; a blind str(bytes)
+        # would store the literal "b'-1'" -- a latent bug fixed while
+        # porting this block (also fixed at the source in display_cal.py).
+        lines = _ti3_header(b'HIRES_B2A_SIZE "-1"')
+
+        cf.apply_lut3d_config_mapper(
+            lines, "/tmp/test.cal", False, False, False, False, False
+        )
+
+        assert getcfg("profile.b2a.hires.size") == -1
+
+    def test_gamut_mapping_mode_g_maps_to_0(self):
+        # cfgvalue comes back as bytes (b"G"); comparing it against the str
+        # "G" (the wx original's bug) is always False -- fixed to compare
+        # against b"G" so a real "G" value actually maps to 0.
+        lines = _ti3_header(b'3DLUT_GAMUT_MAPPING_MODE "G"')
+
+        cf.apply_lut3d_config_mapper(
+            lines, "/tmp/test.cal", False, False, False, False, False
+        )
+
+        assert getcfg("3dlut.gamap.use_b2a") == 0
+
+    def test_gamut_mapping_mode_other_maps_to_1(self):
+        lines = _ti3_header(b'3DLUT_GAMUT_MAPPING_MODE "g"')
+
+        cf.apply_lut3d_config_mapper(
+            lines, "/tmp/test.cal", False, False, False, False, False
+        )
+
+        assert getcfg("3dlut.gamap.use_b2a") == 1
+
+    def test_patch_sequence_is_lowercased_without_crashing(self):
+        # cfgvalue.lower().replace("_rgb_", "_RGB_") with str args on a
+        # bytes cfgvalue raised TypeError in the wx original whenever this
+        # keyword was present at all -- fixed to use bytes replace args.
+        lines = _ti3_header(b'PATCH_SEQUENCE "OPTIMIZE_DISPLAY_RESPONSE_DELAY"')
+
+        cf.apply_lut3d_config_mapper(
+            lines, "/tmp/test.cal", False, False, False, False, False
+        )
+
+        assert getcfg("testchart.patch_sequence") == "optimize_display_response_delay"
+
+    def test_patch_sequence_rgb_marker_uppercased(self):
+        # Mirrors how the writer round-trips this keyword: it upper()s the
+        # config value before writing, so a valid "..._RGB_..." enum value
+        # comes back as "..._RGB_..." (all-caps) on disk; the lower()+
+        # replace() here restores the enum's actual mixed case on read.
+        lines = _ti3_header(b'PATCH_SEQUENCE "MAXIMIZE_RGB_DIFFERENCE"')
+
+        cf.apply_lut3d_config_mapper(
+            lines, "/tmp/test.cal", False, False, False, False, False
+        )
+
+        assert getcfg("testchart.patch_sequence") == "maximize_RGB_difference"
+
+    def test_negative_gamma_sets_type_b(self):
+        lines = _ti3_header(b'3DLUT_GAMMA "-2.400000"')
+
+        cf.apply_lut3d_config_mapper(
+            lines, "/tmp/test.cal", False, False, False, False, False
+        )
+
+        assert getcfg("3dlut.trc_gamma_type") == "B"
+        assert float(getcfg("3dlut.trc_gamma")) == 2.4
+        assert getcfg("measurement_report.trc_gamma_type") == "B"
+
+    def test_positive_gamma_sets_type_b_lowercase(self):
+        lines = _ti3_header(b'3DLUT_GAMMA "2.200000"')
+
+        cf.apply_lut3d_config_mapper(
+            lines, "/tmp/test.cal", False, False, False, False, False
+        )
+
+        assert getcfg("3dlut.trc_gamma_type") == "b"
+        assert float(getcfg("3dlut.trc_gamma")) == 2.2
+
+    def test_simulation_profile_keyword_sets_simset(self):
+        lines = _ti3_header(b'SIMULATION_PROFILE "hdr.icc"')
+
+        simset = cf.apply_lut3d_config_mapper(
+            lines, "/tmp/somewhere/test.cal", False, False, False, False, False
+        )
+
+        assert simset is True
+        assert getcfg("measurement_report.simulation_profile") == os.path.join(
+            "/tmp/somewhere", "hdr.icc"
+        )
+
+    def test_relative_source_profile_resolved_against_file_dir(self):
+        lines = _ti3_header(b'3DLUT_SOURCE_PROFILE "foo.icc"')
+
+        cf.apply_lut3d_config_mapper(
+            lines, "/tmp/somewhere/test.cal", False, False, False, False, False
+        )
+
+        assert getcfg("3dlut.input.profile") == os.path.join(
+            "/tmp/somewhere", "foo.icc"
+        )
+        # Sync onto measurement report settings too (not an HDR/simset load).
+        assert getcfg("measurement_report.simulation_profile") == os.path.join(
+            "/tmp/somewhere", "foo.icc"
+        )
+        assert getcfg("measurement_report.use_simulation_profile") == 1
+
+    def test_any_3dlut_keyword_enables_3dlut_create_and_tab(self):
+        setcfg("3dlut.create", 0)
+        setcfg("3dlut.tab.enable", 0)
+        lines = _ti3_header(b'3DLUT_SIZE "33"')
+
+        cf.apply_lut3d_config_mapper(
+            lines, "/tmp/test.cal", False, False, False, False, False
+        )
+
+        assert getcfg("3dlut.create") == 1
+        assert getcfg("3dlut.tab.enable") == 1
+        assert getcfg("3dlut.tab.enable.backup") == 1
+
+    def test_content_colorspace_is_applied(self):
+        lines = _ti3_header(b'3DLUT_CONTENT_COLORSPACE_WHITE_X "0.312700"')
+
+        cf.apply_lut3d_config_mapper(
+            lines, "/tmp/test.cal", False, False, False, False, False
+        )
+
+        assert getcfg("3dlut.content.colorspace.white.x") == 0.3127
+
+    def test_trc_fallback_bt1886_when_not_set_explicitly(self):
+        setcfg("3dlut.trc_gamma_type", "B")
+        setcfg("3dlut.trc_output_offset", 0)
+        setcfg("3dlut.trc_gamma", 2.4)
+        lines = _ti3_header(b'3DLUT_SIZE "33"')
+
+        cf.apply_lut3d_config_mapper(
+            lines, "/tmp/test.cal", False, False, False, False, False
+        )
+
+        assert getcfg("3dlut.trc") == "bt1886"
+
+    def test_trc_fallback_gamma22_when_not_set_explicitly(self):
+        setcfg("3dlut.trc_gamma_type", "b")
+        setcfg("3dlut.trc_output_offset", 1)
+        setcfg("3dlut.trc_gamma", 2.2)
+        lines = _ti3_header(b'3DLUT_SIZE "33"')
+
+        cf.apply_lut3d_config_mapper(
+            lines, "/tmp/test.cal", False, False, False, False, False
+        )
+
+        assert getcfg("3dlut.trc") == "gamma2.2"
+
+    def test_trc_not_overwritten_when_keyword_present(self):
+        setcfg("3dlut.trc_gamma_type", "B")
+        setcfg("3dlut.trc_output_offset", 0)
+        setcfg("3dlut.trc_gamma", 2.4)
+        lines = _ti3_header(b'3DLUT_TRC "customgamma"')
+
+        cf.apply_lut3d_config_mapper(
+            lines, "/tmp/test.cal", False, False, False, False, False
+        )
+
+        assert getcfg("3dlut.trc") == "customgamma"
+
+    def test_display_update_delay_overridden_when_display_and_instrument_match(self):
+        setcfg("measure.override_min_display_update_delay_ms", 0)
+        setcfg("measure.override_min_display_update_delay_ms.backup", None)
+        setcfg("measure.min_display_update_delay_ms", 30)
+        lines = _ti3_header(b'MIN_DISPLAY_UPDATE_DELAY_MS "150"')
+
+        cf.apply_lut3d_config_mapper(
+            lines,
+            "/tmp/test.cal",
+            False,
+            False,
+            display_match=True,
+            instrument_match=True,
+            has_instrument_id=True,
+        )
+
+        assert getcfg("measure.override_min_display_update_delay_ms") == 1
+        assert int(getcfg("measure.min_display_update_delay_ms")) == 150
+
+    def test_display_update_delay_untouched_without_match_or_backup(self):
+        setcfg("measure.override_min_display_update_delay_ms", 0)
+        setcfg("measure.override_min_display_update_delay_ms.backup", None)
+        lines = _ti3_header(b'MIN_DISPLAY_UPDATE_DELAY_MS "150"')
+
+        cf.apply_lut3d_config_mapper(
+            lines,
+            "/tmp/test.cal",
+            False,
+            False,
+            display_match=False,
+            instrument_match=False,
+            has_instrument_id=True,
+        )
+
+        assert getcfg("measure.override_min_display_update_delay_ms") == 0
+
+
+class TestApplyLut3dDisplayOverrides:
+    def test_resolve_disables_3dlut_and_uses_devlink(self):
+        setcfg("displays", ["Resolve"])
+        setcfg("display.number", 1)
+        setcfg("3dlut.enable", 1)
+        setcfg("measurement_report.use_devlink_profile", 0)
+
+        cf.apply_lut3d_display_overrides(False)
+
+        assert getcfg("3dlut.enable") == 0
+        assert getcfg("measurement_report.use_devlink_profile") == 1
+
+    def test_prisma_enables_3dlut(self):
+        setcfg("displays", ["Prisma"])
+        setcfg("display.number", 1)
+        setcfg("3dlut.enable", 0)
+        setcfg("measurement_report.use_devlink_profile", 1)
+
+        cf.apply_lut3d_display_overrides(False)
+
+        assert getcfg("3dlut.enable") == 1
+        assert getcfg("measurement_report.use_devlink_profile") == 0
+
+    def test_madvr_hdr_simset_disables_3dlut(self):
+        setcfg("displays", ["Some Display @ 0, 0, 1920x1080"])
+        setcfg("display.number", 1)
+        setcfg("3dlut.format", "madVR")
+        setcfg("3dlut.enable", 1)
+        setcfg("measurement_report.use_devlink_profile", 0)
+
+        cf.apply_lut3d_display_overrides(True)
+
+        assert getcfg("3dlut.enable") == 0
+        assert getcfg("measurement_report.use_devlink_profile") == 1
+
+    def test_madvr_without_simset_is_untouched(self):
+        setcfg("displays", ["Some Display @ 0, 0, 1920x1080"])
+        setcfg("display.number", 1)
+        setcfg("3dlut.format", "madVR")
+        setcfg("3dlut.enable", 1)
+        setcfg("measurement_report.use_devlink_profile", 0)
+
+        cf.apply_lut3d_display_overrides(False)
+
+        assert getcfg("3dlut.enable") == 1
+        assert getcfg("measurement_report.use_devlink_profile") == 0
+
+
 class TestImportSessionArchive:
     def test_zip_extracts_and_returns_storage_path(self, tmp_path):
         cal_file = tmp_path / "test.cal"

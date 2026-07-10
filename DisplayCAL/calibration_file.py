@@ -17,10 +17,10 @@ Deliberately not reproduced here (documented, not silently dropped):
   ``-dmadvr``, used by the ``video_*`` pattern-generator presets) -- already
   deferred Pile-2 pattern-generator scope (see ``MAINFRAME_PORT_PLAN.md``'s
   "Deferred to the Qt main window").
-* The ``3DLUT_*`` / ``SIMULATION_PROFILE`` HDR config-mapper block that syncs
-  a loaded ICC profile's 3D LUT metadata onto the (already-ported) 3D LUT
-  tab's config keys -- the largest of the ``load_cal_handler`` pieces still
-  outstanding, left for a follow-up session (see ``MAINFRAME_PORT_PLAN.md``).
+* ``Worker.lut3d_set_path()``'s side effects (devlink-profile/simulation-
+  profile path derivation tied to ``self.lut3d_path`` and a UI-refresh call)
+  -- a distinct, smaller gap from the config-mapper block below, not yet
+  ported.
 * Cross-window resync (``lut3dframe``, ``reportframe``) -- those tool windows
   aren't ported to Qt.
 """
@@ -30,6 +30,7 @@ from __future__ import annotations
 import io
 import os
 import shutil
+import sys
 import zipfile
 from dataclasses import dataclass, field
 from typing import Callable
@@ -38,6 +39,7 @@ from send2trash import send2trash
 
 from DisplayCAL import localization as lang
 from DisplayCAL import main_settings
+from DisplayCAL.cgats import CGATS
 from DisplayCAL.colormath import XYZ2xyY
 from DisplayCAL.config import (
     DEFAULTS,
@@ -532,6 +534,11 @@ class DisplayInstrumentMatch:
     #: Index into ``worker.instruments``, or ``None`` if no match was found.
     instrument_index: int | None = None
     instrument_match: bool = False
+    #: Whether the profile carried an embedded instrument ID at all
+    #: (regardless of whether it matched), needed by
+    #: :func:`apply_lut3d_config_mapper`'s display-update-delay/settle-time
+    #: override gating.
+    has_instrument_id: bool = False
 
 
 def match_display_and_instrument(
@@ -577,6 +584,7 @@ def match_display_and_instrument(
                 match.reenable_3dlut_tab = True
 
     instrument_id = profile_tags_meta.get("MEASUREMENT_device", {}).get("value")
+    match.has_instrument_id = bool(instrument_id)
     if instrument_id:
         for i, instrument in enumerate(worker.instruments):
             if instrument.lower() == instrument_id:
@@ -603,6 +611,323 @@ def apply_icc_profile_load_defaults(path: str, is_preset: bool) -> None:
     # the caller if match_display_and_instrument() finds a virtual display.
     setcfg("3dlut.tab.enable", 0)
     setcfg("3dlut.tab.enable.backup", 0)
+
+
+def apply_profile_b2a_flags_from_ti3(
+    ti3_lines: list[bytes], is_preset: bool, is_3dlut_preset: bool
+) -> None:
+    """Sync BPC/hires-B2A/smooth-B2A checkboxes from a loaded TI3's flags.
+
+    Faithful port of the ``USE_BLACK_POINT_COMPENSATION``/``HIRES_B2A``/
+    ``SMOOTH_B2A`` checks at the top of ``load_cal_handler``'s post-dispatch
+    tail. Fixes a latent bug found while porting (also fixed at the source in
+    ``display_cal.py``, following the established pattern for this
+    lightly-tested part of ``load_cal_handler`` -- see the module docstring):
+    every check compared these ``str`` literals against ``ti3_lines`` (a
+    ``list[bytes]``, since :func:`parse_calibration_file` opens non-ICC files
+    in binary mode), so none of them could ever match -- this whole block was
+    dead code.
+    """
+    if b'USE_BLACK_POINT_COMPENSATION "YES"' in ti3_lines:
+        setcfg("profile.black_point_compensation", 1)
+    elif b'USE_BLACK_POINT_COMPENSATION "NO"' in ti3_lines and (
+        sys.platform != "darwin" or not is_preset or is_3dlut_preset
+    ):
+        # Only disable BPC if not OS X, or if a preset, or if a 3D LUT preset
+        setcfg("profile.black_point_compensation", 0)
+    if b'HIRES_B2A "YES"' in ti3_lines:
+        setcfg("profile.b2a.hires", 1)
+    elif b'HIRES_B2A "NO"' in ti3_lines:
+        setcfg("profile.b2a.hires", 0)
+    if b'SMOOTH_B2A "YES"' in ti3_lines:
+        if b'HIRES_B2A "NO"' not in ti3_lines:
+            setcfg("profile.b2a.hires", 1)
+        setcfg("profile.b2a.hires.smooth", 1)
+    elif b'SMOOTH_B2A "NO"' in ti3_lines:
+        if b'HIRES_B2A "YES"' not in ti3_lines:
+            setcfg("profile.b2a.hires", 0)
+        setcfg("profile.b2a.hires.smooth", 0)
+
+
+#: Header/DATA_FORMAT keyword -> config key, for the 3D LUT / measurement-
+#: report metadata a loaded ICC profile or "modern" ``.cal`` file's CGATS
+#: header (before ``BEGIN_DATA_FORMAT``) may carry. Mirrors
+#: ``load_cal_handler``'s ``config_mapper`` dict verbatim, including the
+#: legacy ``3DLUT_HDR_MAXCLL`` -> ``3dlut.hdr_maxmll`` alias.
+_LUT3D_CONFIG_MAPPER = {
+    "SMOOTH_B2A_SIZE": "profile.b2a.hires.size",
+    "HIRES_B2A_SIZE": "profile.b2a.hires.size",
+    # NOTE profile black point correction is not the same as calibration
+    # black point correction! See Worker.create_profile in worker.py
+    "BLACK_POINT_CORRECTION": "profile.black_point_correction",
+    "MIN_DISPLAY_UPDATE_DELAY_MS": "measure.min_display_update_delay_ms",
+    "DISPLAY_SETTLE_TIME_MULT": "measure.display_settle_time_mult",
+    "FFP_INSERTION_INTERVAL": "patterngenerator.ffp_insertion.interval",
+    "FFP_INSERTION_DURATION": "patterngenerator.ffp_insertion.duration",
+    "FFP_INSERTION_LEVEL": "patterngenerator.ffp_insertion.level",
+    "AUTO_OPTIMIZE": "testchart.auto_optimize",
+    "PATCH_SEQUENCE": "testchart.patch_sequence",
+    "3DLUT_SOURCE_PROFILE": "3dlut.input.profile",
+    "3DLUT_TRC": "3dlut.trc",
+    "3DLUT_HDR_PEAK_LUMINANCE": "3dlut.hdr_peak_luminance",
+    "3DLUT_HDR_SAT": "3dlut.hdr_sat",
+    "3DLUT_HDR_HUE": "3dlut.hdr_hue",
+    "3DLUT_HDR_DISPLAY": "3dlut.hdr_display",
+    # MaxCLL is no longer used, map to mastering display max light level (MaxMLL)
+    "3DLUT_HDR_MAXCLL": "3dlut.hdr_maxmll",
+    "3DLUT_HDR_MAXMLL": "3dlut.hdr_maxmll",
+    "3DLUT_HDR_MAXMLL_ALT_CLIP": "3dlut.hdr_maxmll_alt_clip",
+    "3DLUT_HDR_MINMLL": "3dlut.hdr_minmll",
+    "3DLUT_HDR_AMBIENT_LUMINANCE": "3dlut.hdr_ambient_luminance",
+    "3DLUT_GAMMA": "3dlut.trc_gamma",
+    "3DLUT_DEGREE_OF_BLACK_OUTPUT_OFFSET": "3dlut.trc_output_offset",
+    "3DLUT_INPUT_ENCODING": "3dlut.encoding.input",
+    "3DLUT_OUTPUT_ENCODING": "3dlut.encoding.output",
+    "3DLUT_GAMUT_MAPPING_MODE": "3dlut.gamap.use_b2a",
+    "3DLUT_RENDERING_INTENT": "3dlut.rendering_intent",
+    "3DLUT_FORMAT": "3dlut.format",
+    "3DLUT_SIZE": "3dlut.size",
+    "3DLUT_INPUT_BITDEPTH": "3dlut.bitdepth.input",
+    "3DLUT_OUTPUT_BITDEPTH": "3dlut.bitdepth.output",
+    "3DLUT_APPLY_CAL": "3dlut.output.profile.apply_cal",
+    "SIMULATION_PROFILE": "measurement_report.simulation_profile",
+}
+
+
+def _decode_cfgvalue(cfgvalue: bytes | int | float) -> str:
+    """Return ``cfgvalue`` as ``str``, decoding it first if it's ``bytes``.
+
+    :meth:`CGATS.queryv1` auto-converts unsigned numeric header values to
+    ``int``/``float`` but leaves quoted/signed/non-numeric ones as ``bytes``
+    -- plain ``str(cfgvalue)`` on those stringifies the ``bytes`` repr
+    (``"b'...'"``) instead of the value, corrupting the config. See
+    :func:`apply_lut3d_config_mapper`'s docstring.
+    """
+    if isinstance(cfgvalue, bytes):
+        return cfgvalue.decode("utf-8")
+    return str(cfgvalue)
+
+
+def apply_lut3d_config_mapper(
+    ti3_lines: list[bytes],
+    path: str,
+    is_preset: bool,
+    is_3dlut_preset: bool,
+    display_match: bool,
+    instrument_match: bool,
+    has_instrument_id: bool,
+) -> bool:
+    """Sync 3D LUT / measurement-report HDR metadata from a loaded TI3.
+
+    Faithful port of ``load_cal_handler``'s ``config_mapper`` block -- the
+    largest of the calibration/profile-file header bar's deferred pieces
+    (see module docstring) -- plus the content-colorspace loop and 3D LUT TRC
+    enumeration fallback that follow it in wx. Only does anything if the TI3
+    has a ``BEGIN_DATA_FORMAT`` section (present in every file DisplayCAL
+    itself writes).
+
+    Fixes three latent bugs found while porting, also fixed at the source in
+    ``display_cal.py``:
+
+    * The block's own guard, ``"BEGIN_DATA_FORMAT" in ti3_lines``, compared a
+      ``str`` literal against ``ti3_lines`` (``list[bytes]``, since
+      :func:`parse_calibration_file` opens non-ICC files in binary mode) --
+      always ``False``, so this entire ~200-line block (all 3D LUT metadata
+      loading from a saved profile/cal file) was unreachable dead code.
+    * ``3DLUT_GAMUT_MAPPING_MODE``'s value comparison (``cfgvalue == "G"``)
+      compared ``bytes`` (:meth:`CGATS.queryv1` never auto-converts a
+      single-letter value to numeric) against a ``str`` literal -- always
+      ``False``, so ``3dlut.gamap.use_b2a`` was always set to ``1``
+      regardless of the file's actual setting.
+    * ``PATCH_SEQUENCE``'s ``cfgvalue.lower().replace("_rgb_", "_RGB_")``
+      called ``bytes.replace`` with ``str`` arguments, raising ``TypeError``
+      (crashing the whole load) whenever a file actually carried this
+      keyword.
+
+    Also generalizes the plain ``cfgvalue = str(cfgvalue)`` before every
+    ``setcfg`` call into :func:`_decode_cfgvalue`: for any keyword
+    :meth:`CGATS.queryv1` left as ``bytes``, that stringified the ``bytes``
+    repr instead of the value.
+
+    Args:
+        ti3_lines: The parsed calibration file's raw lines.
+        path: The file's own path (used to resolve relative profile paths).
+        is_preset: Whether ``path`` is one of the bundled presets.
+        is_3dlut_preset: Whether ``path`` is a bundled 3D LUT preset.
+        display_match: Whether :func:`match_display_and_instrument` found a
+            display match (always ``False`` for a non-ICC ``.cal`` file).
+        instrument_match: Whether it found an instrument match.
+        has_instrument_id: Whether the profile carried an embedded
+            instrument ID at all (:attr:`DisplayInstrumentMatch.has_instrument_id`).
+
+    Returns:
+        ``simset``: ``True`` if ``SIMULATION_PROFILE`` was read from the file
+        (only set for HDR 3D LUTs) -- pass to
+        :func:`apply_lut3d_display_overrides`.
+    """
+    simset = False
+    if b"BEGIN_DATA_FORMAT" not in ti3_lines:
+        return simset
+
+    cfgend = ti3_lines.index(b"BEGIN_DATA_FORMAT")
+    cfgpart = CGATS(b"\n".join(ti3_lines[:cfgend]))
+    lut3d_trc_set = False
+
+    for keyword, cfgname in _LUT3D_CONFIG_MAPPER.items():
+        cfgvalue = cfgpart.queryv1(keyword)
+        if keyword in ("MIN_DISPLAY_UPDATE_DELAY_MS", "DISPLAY_SETTLE_TIME_MULT"):
+            backup = getcfg(f"measure.override_{keyword.lower()}.backup", False)
+            if (
+                cfgvalue is not None
+                and display_match
+                and (instrument_match or not has_instrument_id)
+            ):
+                # Only set display update delay if a matching
+                # display/instrument stored in profile meta tag or no
+                # instrument ID (i.e. a preset)
+                if backup is None:
+                    setcfg(
+                        f"measure.override_{keyword.lower()}.backup",
+                        getcfg(f"measure.override_{keyword.lower()}"),
+                    )
+                    setcfg(
+                        f"measure.{keyword.lower()}.backup",
+                        getcfg(f"measure.{keyword.lower()}"),
+                    )
+                setcfg(f"measure.override_{keyword.lower()}", 1)
+            elif backup is not None:
+                setcfg(f"measure.override_{keyword.lower()}", backup)
+                cfgvalue = getcfg(f"measure.{keyword.lower()}.backup")
+                setcfg(f"measure.override_{keyword.lower()}.backup", None)
+                setcfg(f"measure.{keyword.lower()}.backup", None)
+        elif cfgvalue is not None:
+            if keyword == "AUTO_OPTIMIZE" and cfgvalue:
+                setcfg("testchart.file", "auto")
+                if is_preset and not is_3dlut_preset and sys.platform == "darwin":
+                    # Profile type forced to matrix due to OS X bugs with
+                    # cLUT profiles. Set smallest testchart.
+                    cfgvalue = 1
+            elif keyword == "PATCH_SEQUENCE":
+                cfgvalue = cfgvalue.lower().replace(b"_rgb_", b"_RGB_")
+            elif keyword == "3DLUT_GAMMA":
+                try:
+                    cfgvalue = float(cfgvalue)
+                except (TypeError, ValueError):
+                    pass
+                else:
+                    if cfgvalue < 0:
+                        gamma_type = "B"
+                        cfgvalue = abs(cfgvalue)
+                    else:
+                        gamma_type = "b"
+                    setcfg("3dlut.trc_gamma_type", gamma_type)
+                    # Sync measurement report settings
+                    setcfg("measurement_report.trc_gamma_type", gamma_type)
+                    setcfg("measurement_report.apply_black_offset", 0)
+                    setcfg("measurement_report.apply_trc", 1)
+            elif keyword == "3DLUT_GAMUT_MAPPING_MODE":
+                cfgvalue = 0 if cfgvalue == b"G" else 1
+            elif keyword in (
+                "FFP_INSERTION_INTERVAL",
+                "FFP_INSERTION_DURATION",
+                "FFP_INSERTION_LEVEL",
+            ):
+                setcfg("patterngenerator.ffp_insertion", 1)
+            if keyword.startswith("3DLUT"):
+                setcfg("3dlut.create", 1)
+                setcfg("3dlut.tab.enable", 1)
+                setcfg("3dlut.tab.enable.backup", 1)
+        if cfgvalue is not None:
+            cfgvalue = _decode_cfgvalue(cfgvalue)
+            if cfgname.endswith("profile") and (
+                not os.path.isabs(cfgvalue) or not os.path.isfile(cfgvalue)
+            ):
+                if os.path.basename(os.path.dirname(cfgvalue)) == "ref":
+                    # Fall back to ref file if not absolute path or not found
+                    cfgvalue = (
+                        get_data_path("ref/" + os.path.basename(cfgvalue))
+                        or cfgvalue
+                    )
+                elif not os.path.dirname(cfgvalue):
+                    # Use profile dir
+                    cfgvalue = os.path.join(os.path.dirname(path), cfgvalue)
+            setcfg(cfgname, cfgvalue)
+            if keyword == "SIMULATION_PROFILE":
+                # Only HDR 3D LUTs will have this set
+                simset = True
+            # Sync measurement report settings
+            if cfgname == "3dlut.input.profile":
+                if not simset:
+                    setcfg("measurement_report.simulation_profile", cfgvalue)
+                setcfg("measurement_report.use_simulation_profile", 1)
+                setcfg("measurement_report.use_simulation_profile_as_output", 1)
+            elif cfgname in ("3dlut.trc_gamma", "3dlut.trc_output_offset"):
+                cfgname = cfgname.replace("3dlut", "measurement_report")
+                setcfg(cfgname, cfgvalue)
+            elif cfgname == "3dlut.format":
+                if cfgvalue == "madVR" and not simset:
+                    setcfg("3dlut.enable", 1)
+                if (cfgvalue == "madVR" and not simset) or cfgvalue == "eeColor":
+                    setcfg("measurement_report.use_devlink_profile", 0)
+            elif cfgname == "3dlut.trc":
+                lut3d_trc_set = True
+
+    # Content color space (currently only used for HDR)
+    for color in ("white", "red", "green", "blue"):
+        for coord in "xy":
+            keyword = f"3DLUT_CONTENT_COLORSPACE_{color.upper()}_{coord.upper()}"
+            cfgvalue = cfgpart.queryv1(keyword)
+            if cfgvalue is None:
+                continue
+            cfgvalue = _decode_cfgvalue(cfgvalue)
+            try:
+                cfgvalue = round(float(cfgvalue), 4)
+            except ValueError:
+                pass
+            setcfg(f"3dlut.content.colorspace.{color}.{coord}", cfgvalue)
+
+    # Make sure 3D LUT TRC enumeration matches parameters for older profiles
+    # not containing 3DLUT_TRC
+    if not lut3d_trc_set:
+        if (
+            getcfg("3dlut.trc_gamma_type") == "B"
+            and getcfg("3dlut.trc_output_offset") == 0
+            and getcfg("3dlut.trc_gamma") == 2.4
+        ):
+            setcfg("3dlut.trc", "bt1886")  # BT.1886
+        elif (
+            getcfg("3dlut.trc_gamma_type") == "b"
+            and getcfg("3dlut.trc_output_offset") == 1
+            and getcfg("3dlut.trc_gamma") == 2.2
+        ):
+            setcfg("3dlut.trc", "gamma2.2")  # Pure power gamma 2.2
+        else:
+            setcfg("3dlut.trc", "customgamma")  # Custom
+
+    return simset
+
+
+def apply_lut3d_display_overrides(simset: bool) -> None:
+    """Apply the Resolve/Prisma/madVR 3D-LUT-enable overrides after a file load.
+
+    Faithful port of the tail of ``load_cal_handler`` that runs right after
+    the ``config_mapper`` block (see :func:`apply_lut3d_config_mapper`):
+    forces ``3dlut.enable`` off for Resolve (uses its own devlink profile
+    instead), on for Prisma, and off again for madVR when ``simset`` (an HDR
+    3D LUT was loaded), since madVR currently has no other way to verify an
+    HDR 3D LUT.
+    """
+    if get_display_name() == "Resolve":
+        setcfg("3dlut.enable", 0)
+        setcfg("measurement_report.use_devlink_profile", 1)
+    elif get_display_name(None, True) == "Prisma":
+        setcfg("3dlut.enable", 1)
+        setcfg("measurement_report.use_devlink_profile", 0)
+    if getcfg("3dlut.format") == "madVR" and simset:
+        # Currently, it is not possible to verify HDR 3D LUTs through madVR
+        # in another way
+        setcfg("3dlut.enable", 0)
+        setcfg("measurement_report.use_devlink_profile", 1)
 
 
 @dataclass
@@ -1010,6 +1335,9 @@ __all__ = [
     "SessionArchiveRequest",
     "apply_calibration_options",
     "apply_icc_profile_load_defaults",
+    "apply_lut3d_config_mapper",
+    "apply_lut3d_display_overrides",
+    "apply_profile_b2a_flags_from_ti3",
     "build_recent_calibrations",
     "create_session_archive",
     "delete_related_files",

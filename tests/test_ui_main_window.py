@@ -3480,6 +3480,64 @@ def test_load_calibration_file_no_display_match_leaves_display_number(
     assert getcfg("3dlut.tab.enable") == 0
 
 
+def test_load_calibration_file_wires_lut3d_config_mapper(window, monkeypatch):
+    """``_load_calibration_file`` must run the 3D LUT config-mapper chain.
+
+    Regression test for the "header-bar deferrals" follow-up session that
+    wired :func:`~DisplayCAL.calibration_file.apply_profile_b2a_flags_from_ti3`/
+    :func:`~DisplayCAL.calibration_file.apply_lut3d_config_mapper`/
+    :func:`~DisplayCAL.calibration_file.apply_lut3d_display_overrides` into
+    the load flow -- spies on all three to pin down both that they run and
+    the argument order/values threaded into them (in particular that
+    ``simset``, the config-mapper's return value, is the one passed to the
+    display-overrides call).
+    """
+    path = _srgb_preset_path(window)
+    calls = {}
+
+    def fake_b2a_flags(ti3_lines, is_preset, is_3dlut_preset):
+        calls["b2a_flags"] = (is_preset, is_3dlut_preset)
+
+    def fake_config_mapper(
+        ti3_lines,
+        call_path,
+        is_preset,
+        is_3dlut_preset,
+        display_match,
+        instrument_match,
+        has_instrument_id,
+    ):
+        calls["config_mapper"] = (
+            call_path,
+            is_preset,
+            is_3dlut_preset,
+            display_match,
+            instrument_match,
+            has_instrument_id,
+        )
+        return True
+
+    def fake_display_overrides(simset):
+        calls["display_overrides"] = simset
+
+    monkeypatch.setattr(
+        mw.calibration_file, "apply_profile_b2a_flags_from_ti3", fake_b2a_flags
+    )
+    monkeypatch.setattr(
+        mw.calibration_file, "apply_lut3d_config_mapper", fake_config_mapper
+    )
+    monkeypatch.setattr(
+        mw.calibration_file, "apply_lut3d_display_overrides", fake_display_overrides
+    )
+
+    window._load_calibration_file(path, silent=True)
+
+    assert calls["b2a_flags"] == (True, False)
+    assert calls["config_mapper"][0] == path
+    assert calls["config_mapper"][1:3] == (True, False)
+    assert calls["display_overrides"] is True
+
+
 def test_load_calibration_file_routes_legacy_cal_to_parser(
     window, monkeypatch, tmp_path
 ):

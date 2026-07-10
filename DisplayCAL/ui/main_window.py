@@ -7208,14 +7208,12 @@ class MainWindow(BaseWindow):
         Faithful port of the "modern" branch of wx's ``load_cal_handler``
         (files with ``ARGYLL_DISPCAL_ARGS`` / ``ARGYLL_COLPROF_ARGS``
         sections, i.e. anything DisplayCAL itself wrote) via
-        :mod:`DisplayCAL.calibration_file`. See that module's docstring for
-        what's deliberately not reproduced (the 3D LUT HDR config-mapper
-        block). Compressed session archives (``.7z``/``.zip``/``.tgz``/
-        ``.tar.gz``) are extracted first via :meth:`_import_session_archive`,
-        which recurses back into this method with the extracted file's path.
-        Loading an ICC profile also tries to auto-match its embedded
-        EDID/instrument metadata against the currently enumerated
-        displays/instruments
+        :mod:`DisplayCAL.calibration_file`. Compressed session archives
+        (``.7z``/``.zip``/``.tgz``/``.tar.gz``) are extracted first via
+        :meth:`_import_session_archive`, which recurses back into this
+        method with the extracted file's path. Loading an ICC profile also
+        tries to auto-match its embedded EDID/instrument metadata against the
+        currently enumerated displays/instruments
         (:func:`~DisplayCAL.calibration_file.match_display_and_instrument`);
         unlike wx's immediate ``get_set_display()``/``update_comports()``
         calls, the match is just applied via ``setcfg`` here since
@@ -7237,15 +7235,21 @@ class MainWindow(BaseWindow):
             QMessageBox.critical(self, self.windowTitle(), str(exception))
             return
 
+        is_preset = path in self.presets
+        is_3dlut_preset = is_preset and os.path.basename(path).startswith("video_")
         is_profile = ext.lower() in calibration_file.ICCPROFILE_FILE_EXTENSIONS
+        display_match = False
+        instrument_match = False
+        has_instrument_id = False
         if is_profile:
-            calibration_file.apply_icc_profile_load_defaults(
-                path, path in self.presets
-            )
+            calibration_file.apply_icc_profile_load_defaults(path, is_preset)
             options_dispcal, options_colprof = get_options_from_profile(profile)
             match = calibration_file.match_display_and_instrument(
                 profile, self.worker
             )
+            display_match = match.display_index is not None
+            instrument_match = match.instrument_match
+            has_instrument_id = match.has_instrument_id
             if match.display_index is not None and match.display_changed:
                 setcfg("display.number", match.display_index + 1)
             if match.reenable_3dlut_tab:
@@ -7280,6 +7284,19 @@ class MainWindow(BaseWindow):
         setcfg("calibration.file", path)
         if b"CTI3" in ti3_lines:
             setcfg("testchart.file", path)
+        calibration_file.apply_profile_b2a_flags_from_ti3(
+            ti3_lines, is_preset, is_3dlut_preset
+        )
+        simset = calibration_file.apply_lut3d_config_mapper(
+            ti3_lines,
+            path,
+            is_preset,
+            is_3dlut_preset,
+            display_match,
+            instrument_match,
+            has_instrument_id,
+        )
+        calibration_file.apply_lut3d_display_overrides(simset)
         writecfg()
         self.update_controls()
         if is_profile or options_dispcal:
