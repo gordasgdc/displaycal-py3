@@ -659,14 +659,20 @@ def test_prepare_colprof_for_271(monkeypatch, data_path):
 
 def test_prepare_dispcal_1():
     """Worker.prepare_dispcal() return value should be quoted properly."""
-    # Reset to defaults: prepare_dispcal() reads its args from the global
-    # config, and other tests in this module leave keys (e.g.
-    # "display.number") mutated without restoring them. Under xdist,
-    # scheduling is nondeterministic, so which tests ran earlier on this
-    # worker (and thus which cfg values are still dirty) varies from run to
-    # run, making the hardcoded expected_result below flaky unless we start
-    # from a known-clean state.
-    initcfg()
+    # prepare_dispcal() builds its arg list from many getcfg() calls, which
+    # only fall back to config.DEFAULTS for options that were never set.
+    # Other tests (in this module and others) call setcfg()/writecfg() and
+    # leave options set for the rest of the pytest-xdist worker process;
+    # initcfg() alone does not clear them; it only merges whatever is on
+    # disk into the same in-memory CFG. Under xdist, which tests ran earlier
+    # on this worker is nondeterministic, so leftover options made the
+    # hardcoded expected_result below flaky (e.g. a stray
+    # "calibration.black_point_correction.auto" left truthy silently drops
+    # the "-k0.0" arg, shifting every index after it). Explicitly clear
+    # every currently-set option so this test starts from a guaranteed
+    # config.DEFAULTS state.
+    for name in list(config.CFG["Default"]):
+        setcfg(name, None)
     worker = Worker()
     return_val = worker.prepare_dispcal()
     expected_result = [
