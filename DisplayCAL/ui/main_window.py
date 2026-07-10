@@ -5052,7 +5052,10 @@ class MainWindow(BaseWindow):
                 APPNAME,
                 lang.getstr(
                     "profile.unsupported",
-                    (profile.connectionColorSpace, profile.connectionColorSpace),
+                    (
+                        profile.connectionColorSpace.decode("utf-8"),
+                        profile.connectionColorSpace.decode("utf-8"),
+                    ),
                 ),
             )
             return

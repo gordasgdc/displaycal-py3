@@ -2121,6 +2121,14 @@ click; the specific triggering test wasn't tracked down (out of scope here),
 but the message-formatting bug itself is real and unambiguous regardless of
 which test path reaches it.
 
+**Rebase onto develop carried the same bug into four Qt call sites:**
+`develop` independently fixed the same `"profile.unsupported"` formatting bug
+(issue #815) while this branch had its own fix in flight, so rebasing surfaced
+the overlap. That pass only covered the wx paths though; `ui/main_window.py`,
+`ui/measurement_report.py`, `ui/tools/synth_profile.py` and
+`ui/tools/lut3d.py` had the identical raw-bytes call sites in their Qt ports
+and were still showing the `b'...'` repr. Decoded all four to match.
+
 **Updated remaining-gaps list:** madVR/Prisma 3D LUT API install destinations
 (needs the still-unported `setup_patterngenerator` connection dialogs); the
 Spyder2 firmware-enable wizard (see above); the header-bar deferrals (EDID
