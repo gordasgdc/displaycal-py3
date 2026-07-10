@@ -36,6 +36,7 @@ import math
 import os
 import re
 from dataclasses import dataclass
+from io import BytesIO
 from time import strftime
 from typing import TYPE_CHECKING
 
@@ -860,6 +861,91 @@ def resync_report_ti3_removals(
         ti3_ref.DATA.pop(key)
         if sim_ti3:
             sim_ti3.DATA.pop(key)
+
+
+class MeasurementFileError(Exception):
+    """A file picked for the standalone "check measurement file" tool is unusable.
+
+    ``str(exception)`` is already the fully-formatted, translated message the
+    caller should show verbatim (matching the ``ReportSetupError`` precedent).
+    """
+
+
+@dataclass
+class MeasurementFileLoad:
+    """A measurement file resolved by :func:`load_measurement_file`."""
+
+    #: The loaded TI3 chart.
+    ti3: CGATS
+    #: The ICC profile the TI3 was embedded in, or ``None`` for a plain
+    #: ``.ti3`` file.
+    profile: ICCProfile | None
+
+
+def load_measurement_file(path: str) -> MeasurementFileLoad:
+    """Load a ``.ti3`` file or an ICC profile with an embedded TI3 chart.
+
+    Pure port of the file-loading half of ``measurement_file_check_handler``
+    (``display_cal.py``), used by the standalone "check measurement file"
+    tool. Fixes a latent bug found while porting: the wx code compared a
+    ``bytes`` tag slice against the ``str`` literal ``"CTI3"``, which is
+    never equal in Python 3, so the "no embedded TI3" error fired even when a
+    valid CTI3 chart was present -- also fixed at the source in
+    ``display_cal.py``.
+
+    Args:
+        path: Path to a ``.ti3`` file, or an ``.icc``/``.icm`` profile with a
+            ``CIED`` or ``targ`` tag holding an embedded CTI3 chart.
+
+    Returns:
+        The loaded :class:`MeasurementFileLoad`.
+
+    Raises:
+        MeasurementFileError: The profile could not be parsed, had no
+            embedded TI3 chart, or the ``.ti3`` file could not be opened.
+    """
+    _root, ext = os.path.splitext(path)
+    if ext.lower() != ".ti3":
+        try:
+            profile = ICCProfile(path)
+        except (OSError, ICCProfileInvalidError) as exception:
+            raise MeasurementFileError(
+                f"{lang.getstr('profile.invalid')}\n{path}"
+            ) from exception
+        ti3_data = profile.tags.get("CIED", b"") or profile.tags.get("targ", b"")
+        if ti3_data[0:4] != b"CTI3":
+            raise MeasurementFileError(
+                f"{lang.getstr('profile.no_embedded_ti3')}\n{path}"
+            )
+        ti3_source = BytesIO(ti3_data)
+    else:
+        profile = None
+        try:
+            ti3_source = open(path, "rb")  # noqa: SIM115
+        except OSError as exception:
+            raise MeasurementFileError(
+                lang.getstr("error.file.open", path)
+            ) from exception
+    return MeasurementFileLoad(ti3=CGATS(ti3_source), profile=profile)
+
+
+def build_regenerated_profile_tag_data(ti3: CGATS) -> bytes:
+    """Serialize a checked TI3 back into embeddable ``textType`` tag data.
+
+    Pure port of the ``profile.tags.targ = TextType(...)`` assignment in
+    ``measurement_file_check_handler``. Fixes a second latent bug found while
+    porting: the wx code concatenated the ``CGATS`` object itself into the
+    byte string instead of ``bytes(ti3)``, which raised ``TypeError`` any
+    time this branch actually ran -- also fixed at the source.
+
+    Args:
+        ti3: The (possibly sanity-check-edited) TI3 to embed.
+
+    Returns:
+        Raw ``textType`` tag data, ready for
+        ``DisplayCAL.icc_profile.TextType(data, "targ")``.
+    """
+    return b"text\0\0\0\0" + bytes(ti3) + b"\0"
 
 
 def finalize_measurement_report(

@@ -1702,6 +1702,74 @@ tests updated to stub `QMessageBox.question` -- a real combo click can now
 pop the recommendation dialog, which would otherwise hang headless (see
 [[qt-test-modal-hang-gotcha]]).
 
+**Standalone Tools menu (partial), 2026-07-10.** Maintainer's choice over the
+madVR/Prisma 3D LUT API install, the Stage-6 startup dialogs (update-check
+prompt / instrument-setup nag), and further header-bar/small deferrals.
+`menu.tools.advanced` (`mainmenu.xrc`) has six entries; three are ported here:
+
+- **"profile.b2a.hires" (regenerate hires B2A tables for an arbitrary
+  profile) -- DONE.** `MainWindow._profile_hires_b2a_action_handler` +
+  `_select_profile_for_hires_b2a` port `profile_hires_b2a_handler`'s
+  no-profile-argument path (the automatic low-res-detected call site remains
+  `_offer_profile_hires_b2a`, unchanged). Profile selection is a simplified
+  `select_profile`: a 3-button current/browse/cancel `QMessageBox` (only when
+  a current profile exists, matching `_fast_matrix_shaper_choice`'s
+  custom-labelled-button pattern) falling back straight to a file browse.
+  Same A2B-tag/PCS validation as wx, then reuses the existing
+  `worker.update_profile_B2A` run and `_on_profile_hires_b2a_finished`
+  save/install-offer path.
+- **"measurement_file.check_sanity" ("Check measurement file...") -- DONE for
+  a plain `.ti3`; deferred for an ICC profile's embedded chart.**
+  `MainWindow._measurement_file_check_action_handler` ports
+  `measurement_file_check_handler`'s file-picking/loading half via new
+  toolkit-neutral `measurement_report.load_measurement_file()` (raises
+  `MeasurementFileError` with the same translated messages wx shows), then
+  reuses the already-ported `_check_measurement_sanity(ti3, force=True)` --
+  the same review dialog a live measurement uses, just forced regardless of
+  the auto-check config. A `.ti3` file is saved back via a save-as dialog.
+  An ICC profile's embedded chart shows a not-yet-available notice instead of
+  wx's regenerate-and-install chain: that chain's target,
+  `create_profile_handler` ("create profile from existing measurements"), is
+  a distinct, unported File-menu feature in its own right (multi-file
+  picking/merging, its own save-path dialog, a "no CAL info" confirm) --
+  discovered while tracing this handler's `profile` branch, out of scope for
+  this session. New `measurement_report.build_regenerated_profile_tag_data()`
+  is still added (a direct, tested port of the tag-serialization step
+  `create_profile_handler` would need) so a future session porting that
+  feature doesn't have to re-derive it.
+- **"measurement_file.check_sanity.auto" ("check automatically" toggle) --
+  DONE.** `MainWindow._measurement_file_check_auto_toggled` ports
+  `measurement_file_check_auto_handler`: confirms once (a `QMessageBox`) before
+  turning the auto-check on, reverting the checkbox if declined; turning it
+  off needs no confirmation.
+
+Not reproduced: "synthicc.create" (the synthetic-ICC creator is already its
+own standalone tool, `ui/tools/synth_profile.py`, just not cross-linked from
+this menu) and "measure.testchart" / "specplot.run" (`measure_handler` /
+`specplot_handler` aren't ported).
+
+**Two real latent wx bugs found while tracing this feature, fixed at the
+source in `display_cal.py` (both also fixed in the new toolkit-neutral
+`load_measurement_file()` / `build_regenerated_profile_tag_data()`):**
+`measurement_file_check_handler` and `create_profile_handler` both compared a
+`bytes` tag slice (`profile.tags.get("CIED", "") or profile.tags.get("targ",
+""))[0:4]`, always `bytes` when the tag exists since `Text` subclasses
+`bytes`) against the `str` literal `"CTI3"` -- never equal in Python 3, so
+the "no embedded TI3" error fired for *every* ICC profile passed to either
+handler, even one with a perfectly valid embedded chart. Fixed by comparing
+against `b"CTI3"` with a `b""` fallback default. Separately,
+`measurement_file_check_handler`'s profile-regeneration branch built
+`TextType(b"text\0\0\0\0" + ti3 + b"\0", b"targ")` where `ti3` was, by that
+point in the method, the parsed `CGATS` object (reassigned earlier), not
+bytes -- concatenating `bytes + CGATS` raises `TypeError`, so this branch
+crashed 100% of the time it was ever reached. Fixed via `bytes(ti3)`. Neither
+bug had test coverage before this session (added: `TestLoadMeasurementFile`,
+`TestBuildRegeneratedProfileTagData` in `test_measurement_report.py`).
+
+21 new tests in `tests/test_ui_main_window.py` (301 total), 11 new in
+`tests/test_measurement_report.py` (58 total, both files confirmed green
+under `-n auto`).
+
 ### Stage 6 — StartupFrame — **DONE**
 
 Port `StartupFrame` (the splash screen + background display/instrument

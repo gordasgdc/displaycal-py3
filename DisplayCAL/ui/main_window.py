@@ -866,17 +866,29 @@ class MainWindow(BaseWindow):
         )
 
     def _build_tools_menu(self) -> None:
-        """Add a Tools menu with the colorimeter-correction import/upload actions.
+        """Add a Tools menu with the colorimeter-correction and Advanced actions.
 
         Toolkit-neutral scope note: wx's ``menu.tools`` is a large menu (display
         detection, video-card-gamma-table reset, instrument-driver install,
         reports, advanced debug tools, ...); only the colorimeter-correction
-        import/upload entries are reproduced here. The other three entries of
-        wx's ``colorimeter_correction_matrix_file`` submenu are already reachable
+        import/upload entries and part of the ``menu.tools.advanced`` submenu
+        are reproduced here. The other three entries of wx's
+        ``colorimeter_correction_matrix_file`` submenu are already reachable
         elsewhere on this window: "choose" is the CCMX/CCSS combo on the
         Display & Instrument tab, "web check" is
         :meth:`colorimeter_correction_web_btn_handler` (same tab), and "create"
         is :meth:`colorimeter_correction_create_btn_handler` (same tab).
+
+        Of ``menu.tools.advanced``'s six entries, three are reproduced:
+        "profile.b2a.hires" (:meth:`_profile_hires_b2a_action_handler`),
+        "measurement_file.check_sanity"
+        (:meth:`_measurement_file_check_action_handler`), and
+        "measurement_file.check_sanity.auto"
+        (:meth:`_measurement_file_check_auto_toggled`). Not reproduced:
+        "synthicc.create" (the synthetic-ICC creator is only reachable as its
+        own standalone tool, ``ui/tools/synth_profile.py``, not from this
+        menu), and "measure.testchart" / "specplot.run" (``measure_handler`` /
+        ``specplot_handler`` aren't ported).
         """
         tools_menu = self.menuBar().addMenu(f"&{lang.getstr('menu.tools')}")
         ccxx_menu = tools_menu.addMenu(
@@ -890,6 +902,27 @@ class MainWindow(BaseWindow):
             lang.getstr("colorimeter_correction.upload")
         )
         upload_action.triggered.connect(self._ccxx_upload_action_handler)
+
+        advanced_menu = tools_menu.addMenu(lang.getstr("advanced"))
+        hires_b2a_action = advanced_menu.addAction(lang.getstr("profile.b2a.hires"))
+        hires_b2a_action.triggered.connect(self._profile_hires_b2a_action_handler)
+        advanced_menu.addSeparator()
+        check_sanity_action = advanced_menu.addAction(
+            lang.getstr("measurement_file.check_sanity")
+        )
+        check_sanity_action.triggered.connect(
+            self._measurement_file_check_action_handler
+        )
+        self.measurement_file_check_auto_action = advanced_menu.addAction(
+            lang.getstr("measurement_file.check_sanity.auto")
+        )
+        self.measurement_file_check_auto_action.setCheckable(True)
+        self.measurement_file_check_auto_action.setChecked(
+            bool(getcfg("ti3.check_sanity.auto"))
+        )
+        self.measurement_file_check_auto_action.toggled.connect(
+            self._measurement_file_check_auto_toggled
+        )
 
     def _ccxx_import_action_handler(self) -> None:
         """Auto-discover and import colorimeter corrections from disk."""
@@ -4367,6 +4400,205 @@ class MainWindow(BaseWindow):
         self._install_profile_window.raise_()
         self._install_profile_window.activateWindow()
 
+    def _profile_hires_b2a_action_handler(self) -> None:
+        """Standalone "Regenerate hires B2A tables..." tool (Tools > Advanced menu).
+
+        Qt port of ``profile_hires_b2a_handler`` when reached with no profile
+        argument -- i.e. always, from this menu action; the automatic
+        low-res-detected call site (``check_profile_b2a_hires``) is
+        :meth:`_offer_profile_hires_b2a`. Lets the user pick an arbitrary
+        profile via :meth:`_select_profile_for_hires_b2a`, validates it has
+        an ``LUT16Type`` A2B table in an XYZ/Lab PCS, then regenerates its
+        B2A tables via ``worker.update_profile_B2A``, reusing
+        :meth:`_on_profile_hires_b2a_finished` for the save/install offer.
+        """
+        profile = self._select_profile_for_hires_b2a()
+        if profile is None:
+            return
+        if not ("A2B0" in profile.tags or "A2B1" in profile.tags):
+            QMessageBox.critical(
+                self,
+                APPNAME,
+                lang.getstr(
+                    "profile.required_tags_missing",
+                    f"A2B0 {lang.getstr('or')} A2B1",
+                ),
+            )
+            return
+        if ("A2B0" in profile.tags and not isinstance(profile.tags.A2B0, LUT16Type)) or (
+            "A2B1" in profile.tags and not isinstance(profile.tags.A2B1, LUT16Type)
+        ):
+            QMessageBox.critical(
+                self,
+                APPNAME,
+                lang.getstr("profile.required_tags_missing", "LUT16Type"),
+            )
+            return
+        if profile.connectionColorSpace not in (b"XYZ", b"Lab"):
+            QMessageBox.critical(
+                self,
+                APPNAME,
+                lang.getstr(
+                    "profile.unsupported",
+                    (profile.connectionColorSpace, profile.connectionColorSpace),
+                ),
+            )
+            return
+        self._pending_hires_b2a_profile = profile
+        controller = self._ensure_run_controller()
+        controller.run(
+            self.worker.update_profile_B2A,
+            self._on_profile_hires_b2a_finished,
+            wargs=(profile,),
+            wkwargs={"clutres": getcfg("profile.b2a.hires.size")},
+            progress_msg=lang.getstr("profile.b2a.hires"),
+            pauseable=False,
+        )
+
+    def _select_profile_for_hires_b2a(self) -> ICCProfile | None:
+        """Pick a profile for :meth:`_profile_hires_b2a_action_handler`.
+
+        Simplified Qt port of ``select_profile(ignore_current_profile=False)``:
+        offers the current display/output profile first (if any) via a
+        3-button choice (current / browse / cancel, matching
+        :meth:`_fast_matrix_shaper_choice`'s pattern for a custom-labelled
+        3-button ``QMessageBox``), falling back straight to a file browse
+        when there is no current profile.
+
+        Returns:
+            The selected profile, or ``None`` if the user cancelled or the
+            chosen file could not be parsed.
+        """
+        profile = config.get_current_profile(True)
+        if profile:
+            box = QMessageBox(self)
+            box.setWindowTitle(lang.getstr("profile.b2a.hires"))
+            box.setIcon(QMessageBox.Question)
+            box.setText(lang.getstr("profile.choose"))
+            current_button = box.addButton(
+                lang.getstr("profile.current"), QMessageBox.AcceptRole
+            )
+            browse_button = box.addButton(
+                lang.getstr("browse"), QMessageBox.ActionRole
+            )
+            box.addButton(lang.getstr("cancel"), QMessageBox.RejectRole)
+            box.exec_()
+            clicked = box.clickedButton()
+            if clicked is current_button:
+                return profile
+            if clicked is not browse_button:
+                return None
+        default_dir, default_file = get_verified_path("last_icc_path")
+        path, _filter = QFileDialog.getOpenFileName(
+            self,
+            lang.getstr("profile.choose"),
+            os.path.join(default_dir, default_file or ""),
+            f"{lang.getstr('filetype.icc')} (*.icc *.icm)",
+        )
+        if not path:
+            return None
+        try:
+            return ICCProfile(path)
+        except (OSError, ICCProfileInvalidError) as exception:
+            QMessageBox.critical(self, APPNAME, str(exception))
+            return None
+
+    def _measurement_file_check_action_handler(self) -> None:
+        """Standalone "Check measurement file..." tool (Tools > Advanced menu).
+
+        Qt port of ``measurement_file_check_handler``: lets the user pick an
+        arbitrary ``.ti3`` file or an ICC profile with an embedded TI3 chart
+        and runs it through the same suspicious-patch review
+        :meth:`_check_measurement_sanity` uses for a live measurement,
+        forced (``force=True``, bypassing the ``ti3.check_sanity.auto`` gate,
+        matching wx passing ``True`` at this one call site). A plain ``.ti3``
+        file is then saved back to a user-chosen location.
+
+        Not reproduced: regenerating a profile from a checked embedded-TI3
+        chart (wx's ``profile`` branch), which needs the still-unported
+        "create profile from existing measurements" tool
+        (``create_profile_handler``, a distinct File-menu feature, not part
+        of this session's scope) -- shown as a not-yet-available notice
+        instead, matching the madVR/Prisma-install-destination precedent.
+        """
+        default_dir, default_file = get_verified_path("last_ti3_path")
+        path, _filter = QFileDialog.getOpenFileName(
+            self,
+            lang.getstr("measurement_file.choose"),
+            os.path.join(default_dir, default_file or ""),
+            f"{lang.getstr('filetype.icc_ti3')} (*.icc *.icm *.ti3)",
+        )
+        if not path:
+            return
+        if not os.path.exists(path):
+            QMessageBox.critical(self, APPNAME, lang.getstr("file.missing", path))
+            return
+        try:
+            loaded = measurement_report_pipeline.load_measurement_file(path)
+        except measurement_report_pipeline.MeasurementFileError as exception:
+            QMessageBox.critical(self, APPNAME, str(exception))
+            return
+        setcfg("last_ti3_path", path)
+        ti3 = loaded.ti3
+        proceed, _removed_items = self._check_measurement_sanity(ti3, force=True)
+        if not proceed:
+            return
+        if not ti3.modified:
+            QMessageBox.information(self, APPNAME, lang.getstr("errors.none_found"))
+            return
+
+        if loaded.profile is not None:
+            QMessageBox.information(
+                self,
+                self.windowTitle(),
+                "Regenerating a profile from a checked embedded TI3 isn't "
+                "available in this Qt build yet (it needs the unported "
+                '"create profile from existing measurements" tool). Pick a '
+                "plain .ti3 file instead to save the checked data directly.",
+            )
+            return
+
+        save_path, _filter = QFileDialog.getSaveFileName(
+            self,
+            lang.getstr("save_as"),
+            os.path.join(os.path.dirname(path), os.path.basename(path)),
+            f"{lang.getstr('filetype.ti3')} (*.ti3)",
+        )
+        if not save_path:
+            return
+        if not waccess(save_path, os.W_OK):
+            QMessageBox.critical(
+                self, APPNAME, lang.getstr("error.access_denied.write", save_path)
+            )
+            return
+        try:
+            ti3.write(save_path)
+        except OSError as exception:
+            QMessageBox.critical(self, APPNAME, str(exception))
+
+    def _measurement_file_check_auto_toggled(self, checked: bool) -> None:
+        """Persist the "check automatically" toggle (Tools > Advanced menu).
+
+        Qt port of ``measurement_file_check_auto_handler``: warns once (via a
+        confirm dialog) before turning the automatic check on, since from
+        then on it silently reviews every measurement/report TI3; turning it
+        back off needs no confirmation.
+        """
+        if checked and not getcfg("ti3.check_sanity.auto"):
+            answer = QMessageBox.question(
+                self,
+                APPNAME,
+                lang.getstr("measurement_file.check_sanity.auto.warning"),
+                QMessageBox.Ok | QMessageBox.Cancel,
+                QMessageBox.Ok,
+            )
+            if answer != QMessageBox.Ok:
+                self.measurement_file_check_auto_action.blockSignals(True)
+                self.measurement_file_check_auto_action.setChecked(False)
+                self.measurement_file_check_auto_action.blockSignals(False)
+                return
+        setcfg("ti3.check_sanity.auto", int(checked))
+
     def _check_measurement_sanity(
         self, ti3: CGATS, force: bool = False
     ) -> tuple[bool, list]:
@@ -4380,9 +4612,9 @@ class MainWindow(BaseWindow):
 
         Args:
             ti3: The measured TI3 (or the whole CGATS document containing it).
-            force: Skip the ``ti3.check_sanity.auto`` gate (not currently
-                reachable from this Qt port; matches wx's parameter for
-                parity with a future "check measurement file..." tool).
+            force: Skip the ``ti3.check_sanity.auto`` gate. Used directly by
+                :meth:`_measurement_file_check_action_handler` (the
+                standalone "check measurement file" tool).
 
         Returns:
             ``(proceed, removed_items)``: ``proceed`` is ``False`` only if

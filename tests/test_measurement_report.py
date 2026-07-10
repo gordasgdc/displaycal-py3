@@ -754,3 +754,56 @@ class TestResyncReportTi3Removals:
         mr.resync_report_ti3_removals(ti3_ref, None, [self._Removed(0)], offset=0)
 
         assert len(ti3_ref.queryv1("DATA")) == before - 1
+
+
+class TestLoadMeasurementFile:
+    def test_loads_plain_ti3(self, ti3_path):
+        loaded = mr.load_measurement_file(ti3_path)
+
+        assert loaded.profile is None
+        assert isinstance(loaded.ti3, CGATS)
+        assert loaded.ti3.queryv1("DATA")
+
+    def test_loads_profile_with_embedded_ti3(self, icc_path):
+        loaded = mr.load_measurement_file(icc_path)
+
+        assert isinstance(loaded.profile, ICCProfile)
+        assert isinstance(loaded.ti3, CGATS)
+        assert loaded.ti3.queryv1("DATA")
+
+    def test_missing_embedded_ti3_raises(self, icc_path, tmp_path):
+        profile = ICCProfile(icc_path)
+        del profile.tags["CIED"]
+        del profile.tags["targ"]
+        path = str(tmp_path / "no_ti3.icc")
+        profile.write(path)
+
+        with pytest.raises(mr.MeasurementFileError) as excinfo:
+            mr.load_measurement_file(path)
+        assert path in str(excinfo.value)
+
+    def test_invalid_profile_raises(self, tmp_path):
+        path = tmp_path / "bogus.icc"
+        path.write_bytes(b"not an icc profile")
+
+        with pytest.raises(mr.MeasurementFileError):
+            mr.load_measurement_file(str(path))
+
+    def test_unreadable_ti3_raises(self, tmp_path):
+        path = tmp_path / "missing.ti3"
+
+        with pytest.raises(mr.MeasurementFileError):
+            mr.load_measurement_file(str(path))
+
+
+class TestBuildRegeneratedProfileTagData:
+    def test_round_trips_through_text_type(self, ti3_path):
+        from DisplayCAL.icc_profile import TextType
+
+        ti3 = CGATS(ti3_path, True)[0]
+
+        tag_data = mr.build_regenerated_profile_tag_data(ti3)
+        tag = TextType(tag_data, "targ")
+
+        assert bytes(tag)[0:4] == b"CTI3"
+        assert bytes(ti3) in tag_data
