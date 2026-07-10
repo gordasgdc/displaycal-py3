@@ -1904,14 +1904,74 @@ against ~2s of CPU time is the tell). Fixed by stubbing
 its own elsewhere. 12 new tests in `tests/test_ui_main_window.py` (333 total),
 full suite green under `-n auto` (~87s).
 
+**Rest of `menu.tools.advanced` — DONE (2026-07-10).** Offered a 4-way choice
+(madVR/Prisma 3D LUT API install / Stage 6 Pile-2 startup dialogs / header-bar
+deferrals / rest of the Tools menu), the maintainer picked "rest of the Tools
+menu". All six `menu.tools.advanced` entries from `mainmenu.xrc` are now
+reproduced, in xrc order: `synthicc.create` (`_synthicc_create_action_handler`,
+a cross-link that reuses the already-ported standalone
+`ui/tools/synth_profile.py` window as a singleton, same pattern as
+`_gamap_btn_handler`), `profile.b2a.hires` (already ported), `measure.testchart`
+(`_measure_testchart_action_handler`, new), `specplot.run`
+(`_specplot_action_handler`, new), and the two `measurement_file.check_sanity`
+entries (already ported).
+
+`measure.testchart` is the port of `MainFrame.measure_handler`: unlike the
+Profiling tab's "Profile" button, it runs a characterization measurement
+without building an ICC profile afterward -- used either as a plain "capture a
+TI3 for this testchart" tool, or (when the testchart is a CCXX reference/
+colorimeter chart) to gather the raw measurement a colorimeter-correction
+matrix is built from. New `measurement_report.compute_ccxx_measurement_basename()`
+is the pure-naming half of `setup_ccxx_measurement`; new
+`MainWindow._setup_ccxx_measurement()` owns the directory-picker/write-access
+half. The measurement itself is staged through a new
+`_begin_testchart_measurement()`/`_run_measure_testchart()` pair, generalized
+from `begin_measurement()` the same way `_begin_report_measurement()` is (this
+flow doesn't fit the `MeasurementAction` enum either). Finish handling
+(`_on_measure_testchart_finished`, porting `just_measure_finish`) reviews and
+copies the working TI3 via a new `_check_copy_ti3()` (a port of
+`MainFrame.check_copy_ti3`, deliberately *not* unified with
+`_build_profile_from_measurement`'s pre-existing inline equivalent -- the two
+callers tolerate a falsy, non-exception copy result differently), then either
+records the TI3 as a colorimeter-correction source
+(`_record_ccxx_measurement_paths`) or offers to open the containing folder
+(`_offer_open_measurement_folder`).
+
+Two deliberate deviations from wx, both documented at the call site: (1)
+`_setup_ccxx_measurement()`'s success/failure is honored by its caller (bails
+out on failure with an error already shown) -- wx's `measure_handler` ignores
+`setup_ccxx_measurement`'s outcome entirely and measures anyway, which would
+proceed with a stale/unset `measurement.name.expanded` after a write-access
+failure; judged worth fixing rather than faithfully reproducing. (2) wx chains
+a CCXX measurement started *from* the correction-creation dialog
+(`comport.number.backup` set) back into `create_colorimeter_correction_handler`
+with the new TI3 paths pre-filled -- not reproduced, since the Qt
+`CreateCorrectionWindow` has no matching "measure now" entry point that would
+set that backup, making the chain unreachable either way. The restore-side
+port (`_restore_measurement_mode_and_testchart`, mirroring
+`restore_measurement_mode`/`restore_testchart`) is still included, cheaply, so
+a future session wiring that entry point doesn't also have to add this half.
+
+`specplot.run` is a small, self-contained port of `MainFrame.specplot_handler`
+/ `specplot_consumer`: file picker, then Argyll `specplot` via the shared
+`WorkerRunController`.
+
+38 new tests: 3 in `tests/test_measurement_report.py`
+(`TestComputeCcxxMeasurementBasename`), 35 in `tests/test_ui_main_window.py`
+(378 total in that file). Full suite green under `-n auto` (~100s).
+
 **Updated remaining-gaps list:** madVR/Prisma 3D LUT API install destinations;
 Stage 6's deferred Pile-2 dialogs (update-check prompt, instrument-setup/
 donation nag); the header-bar deferrals (EDID display matching, legacy `.cal`
 parsing, 3D LUT HDR config-mapper, archive import via load, per-file
 delete-confirmation checkboxes); `CCXXPlot` visualization; the standalone
-`LUT3DFrame` tool window; the rest of `menu.tools.advanced` (`synthicc.create`,
-`measure.testchart`, `specplot.run`); and Stage 7 (retire wx), still gated on
-maintainer confidence.
+`LUT3DFrame` tool window; and Stage 7 (retire wx), still gated on maintainer
+confidence. `menu.tools.advanced` is now fully ported; the rest of
+`menu.tools` (display/port detection, video-card-gamma-table reset, instrument
+driver install, the `menu.tools.report` submenu, `calibration.show_lut`,
+`infoframe.toggle`, `log.autoshow`) was never in scope for this port (see
+`_build_tools_menu`'s docstring) and isn't tracked as a gap unless a
+maintainer wants it.
 
 ### Stage 6 — StartupFrame — **DONE**
 

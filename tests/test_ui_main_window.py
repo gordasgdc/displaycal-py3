@@ -5041,3 +5041,608 @@ def test_profile_hires_b2a_action_handler_runs_worker(
     args, kwargs = run_calls[0]
     assert args[0] == window.worker.update_profile_B2A
     assert kwargs["wargs"] == (profile,)
+
+
+# --- Tools > Advanced menu: "synthicc.create" -------------------------------
+
+
+def test_synthicc_create_action_handler_opens_window(window):
+    window._synthicc_create_action_handler()
+    try:
+        assert window._synthicc_window is not None
+    finally:
+        window._synthicc_window.close()
+
+
+def test_synthicc_create_action_handler_reuses_window_instance(window):
+    window._synthicc_create_action_handler()
+    try:
+        first = window._synthicc_window
+        window._synthicc_create_action_handler()
+        assert window._synthicc_window is first
+    finally:
+        window._synthicc_window.close()
+
+
+# --- Tools > Advanced menu: "specplot.run" ----------------------------------
+
+
+def test_specplot_action_handler_no_argyll_bin_is_noop(window, monkeypatch):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: False)
+    calls = []
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *a, **k: calls.append(True) or ("", "")),
+    )
+    window._specplot_action_handler()
+    assert calls == []
+
+
+def test_specplot_action_handler_cancelled_dialog_is_noop(window, monkeypatch):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(
+        mw.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: ("", ""))
+    )
+    ran = []
+    monkeypatch.setattr(mw.WorkerRunController, "run", lambda *a, **k: ran.append(True))
+    window._specplot_action_handler()
+    assert ran == []
+
+
+def test_specplot_action_handler_missing_util_shows_error(window, monkeypatch, tmp_path):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    path = str(tmp_path / "sample.sp")
+    monkeypatch.setattr(
+        mw.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (path, ""))
+    )
+    monkeypatch.setattr(mw, "get_argyll_util", lambda name: None)
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    window._specplot_action_handler()
+    assert errors
+    assert getcfg("last_specplot_path") == path
+
+
+def test_specplot_action_handler_runs_worker(window, monkeypatch, tmp_path):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    path = str(tmp_path / "sample.sp")
+    monkeypatch.setattr(
+        mw.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (path, ""))
+    )
+    monkeypatch.setattr(mw, "get_argyll_util", lambda name: "/usr/bin/specplot")
+    setcfg("extra_args.specplot", "")
+    calls = {}
+
+    def fake_run(_ctrl, producer, consumer=None, **kwargs):
+        calls["producer"] = producer
+        calls["consumer"] = consumer
+        calls["wargs"] = kwargs.get("wargs")
+        calls["wkwargs"] = kwargs.get("wkwargs")
+
+    monkeypatch.setattr(mw.WorkerRunController, "run", fake_run)
+
+    window._specplot_action_handler()
+
+    assert calls["producer"] == window.worker.exec_cmd
+    assert calls["consumer"] == window._on_specplot_finished
+    assert calls["wargs"] == ("/usr/bin/specplot", ["-v", path])
+    assert calls["wkwargs"] == {"skip_scripts": True}
+    assert window.worker.interactive is False
+
+
+def test_specplot_action_handler_appends_extra_args(window, monkeypatch, tmp_path):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    path = str(tmp_path / "sample.sp")
+    monkeypatch.setattr(
+        mw.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (path, ""))
+    )
+    monkeypatch.setattr(mw, "get_argyll_util", lambda name: "/usr/bin/specplot")
+    setcfg("extra_args.specplot", "-foo bar")
+    calls = {}
+
+    def fake_run(_ctrl, producer, consumer=None, **kwargs):
+        calls["wargs"] = kwargs.get("wargs")
+
+    monkeypatch.setattr(mw.WorkerRunController, "run", fake_run)
+
+    window._specplot_action_handler()
+
+    assert calls["wargs"] == ("/usr/bin/specplot", ["-v", "-foo", "bar", path])
+
+
+def test_on_specplot_finished_exception_shows_error_and_wraps_up(window, monkeypatch):
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    wrapup_calls = []
+    monkeypatch.setattr(
+        window.worker, "wrapup", lambda *a, **k: wrapup_calls.append(a)
+    )
+    window._on_specplot_finished(RuntimeError("specplot boom"))
+    assert errors
+    assert "specplot boom" in errors[0][2]
+    assert wrapup_calls == [(False,)]
+
+
+def test_on_specplot_finished_success_wraps_up(window, monkeypatch):
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    wrapup_calls = []
+    monkeypatch.setattr(
+        window.worker, "wrapup", lambda *a, **k: wrapup_calls.append(a)
+    )
+    window._on_specplot_finished(True)
+    assert errors == []
+    assert wrapup_calls == [(False,)]
+
+
+# --- Tools > Advanced menu: "measure.testchart" -----------------------------
+
+
+def test_setup_ccxx_measurement_non_ccxx_is_noop(window, monkeypatch):
+    monkeypatch.setattr(mw.config, "is_ccxx_testchart", lambda *a, **k: False)
+    assert window._setup_ccxx_measurement() is True
+    assert getcfg("measurement.save_path", False) in (False, None, "")
+
+
+def test_setup_ccxx_measurement_writes_measurement_config(
+    window, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(mw.config, "is_ccxx_testchart", lambda *a, **k: True)
+    setcfg("profile.save_path", str(tmp_path))
+    monkeypatch.setattr(mw, "waccess", lambda *a, **k: True)
+    monkeypatch.setattr(
+        mw.measurement_report_pipeline,
+        "compute_ccxx_measurement_basename",
+        lambda worker: "My Measurement",
+    )
+    assert window._setup_ccxx_measurement() is True
+    assert getcfg("measurement.save_path") == str(tmp_path)
+    assert getcfg("measurement.name.expanded") == "My Measurement"
+
+
+def test_setup_ccxx_measurement_prompts_for_save_path_when_unset(
+    window, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(mw.config, "is_ccxx_testchart", lambda *a, **k: True)
+    setcfg("profile.save_path", "")
+    prompted = []
+
+    def fake_prompt():
+        prompted.append(True)
+        setcfg("profile.save_path", str(tmp_path))
+
+    monkeypatch.setattr(window, "_profile_save_path_btn_handler", fake_prompt)
+    monkeypatch.setattr(mw, "waccess", lambda *a, **k: True)
+    monkeypatch.setattr(
+        mw.measurement_report_pipeline,
+        "compute_ccxx_measurement_basename",
+        lambda worker: "basename",
+    )
+    assert window._setup_ccxx_measurement() is True
+    assert prompted == [True]
+
+
+def test_setup_ccxx_measurement_save_path_still_empty_after_prompt(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw.config, "is_ccxx_testchart", lambda *a, **k: True)
+    setcfg("profile.save_path", "")
+    monkeypatch.setattr(window, "_profile_save_path_btn_handler", lambda: None)
+    assert window._setup_ccxx_measurement() is False
+
+
+def test_setup_ccxx_measurement_write_access_denied_shows_error(
+    window, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(mw.config, "is_ccxx_testchart", lambda *a, **k: True)
+    setcfg("profile.save_path", str(tmp_path))
+    monkeypatch.setattr(mw, "waccess", lambda *a, **k: False)
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    assert window._setup_ccxx_measurement() is False
+    assert errors
+
+
+def test_measure_testchart_action_handler_ccxx_setup_failure_is_noop(
+    window, monkeypatch
+):
+    monkeypatch.setattr(window, "_setup_ccxx_measurement", lambda: False)
+    restored = []
+    monkeypatch.setattr(
+        window, "_restore_measurement_mode_and_testchart", lambda: restored.append(True)
+    )
+    began = []
+    monkeypatch.setattr(
+        window, "_begin_testchart_measurement", lambda: began.append(True)
+    )
+    window._measure_testchart_action_handler()
+    assert began == []
+    assert restored == [True]
+
+
+def test_measure_testchart_action_handler_no_argyll_bin_restores(
+    window, monkeypatch
+):
+    monkeypatch.setattr(window, "_setup_ccxx_measurement", lambda: True)
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: False)
+    restored = []
+    monkeypatch.setattr(
+        window, "_restore_measurement_mode_and_testchart", lambda: restored.append(True)
+    )
+    began = []
+    monkeypatch.setattr(
+        window, "_begin_testchart_measurement", lambda: began.append(True)
+    )
+    window._measure_testchart_action_handler()
+    assert began == []
+    assert restored == [True]
+
+
+def test_measure_testchart_action_handler_overwrite_declined_restores(
+    window, monkeypatch
+):
+    monkeypatch.setattr(window, "_setup_ccxx_measurement", lambda: True)
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(window, "_check_overwrite", lambda *a, **k: False)
+    restored = []
+    monkeypatch.setattr(
+        window, "_restore_measurement_mode_and_testchart", lambda: restored.append(True)
+    )
+    began = []
+    monkeypatch.setattr(
+        window, "_begin_testchart_measurement", lambda: began.append(True)
+    )
+    window._measure_testchart_action_handler()
+    assert began == []
+    assert restored == [True]
+
+
+def test_measure_testchart_action_handler_ccxx_uses_linear_cal(
+    window, monkeypatch
+):
+    monkeypatch.setattr(window, "_setup_ccxx_measurement", lambda: True)
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(window, "_check_overwrite", lambda *a, **k: True)
+    monkeypatch.setattr(mw.config, "is_ccxx_testchart", lambda *a, **k: True)
+    monkeypatch.setattr(mw.config, "get_data_path", lambda name: f"/data/{name}")
+    began = []
+    monkeypatch.setattr(
+        window, "_begin_testchart_measurement", lambda: began.append(True)
+    )
+    window._measure_testchart_action_handler()
+    assert began == [True]
+    assert window._pending_apply_calibration == "/data/linear.cal"
+
+
+def test_measure_testchart_action_handler_cal_choice_cancelled_restores(
+    window, monkeypatch
+):
+    monkeypatch.setattr(window, "_setup_ccxx_measurement", lambda: True)
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(window, "_check_overwrite", lambda *a, **k: True)
+    monkeypatch.setattr(mw.config, "is_ccxx_testchart", lambda *a, **k: False)
+    monkeypatch.setattr(
+        window, "_current_cal_choice", lambda *a, **k: mw.CAL_CHOICE_CANCELLED
+    )
+    restored = []
+    monkeypatch.setattr(
+        window, "_restore_measurement_mode_and_testchart", lambda: restored.append(True)
+    )
+    began = []
+    monkeypatch.setattr(
+        window, "_begin_testchart_measurement", lambda: began.append(True)
+    )
+    window._measure_testchart_action_handler()
+    assert began == []
+    assert restored == [True]
+
+
+def test_measure_testchart_action_handler_stages_cal_choice(window, monkeypatch):
+    monkeypatch.setattr(window, "_setup_ccxx_measurement", lambda: True)
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    monkeypatch.setattr(window, "_check_overwrite", lambda *a, **k: True)
+    monkeypatch.setattr(mw.config, "is_ccxx_testchart", lambda *a, **k: False)
+    monkeypatch.setattr(window, "_current_cal_choice", lambda *a, **k: "/path/to.cal")
+    began = []
+    monkeypatch.setattr(
+        window, "_begin_testchart_measurement", lambda: began.append(True)
+    )
+    window._measure_testchart_action_handler()
+    assert began == [True]
+    assert window._pending_apply_calibration == "/path/to.cal"
+
+
+def test_begin_testchart_measurement_call_pending_runs_immediately(
+    window, monkeypatch, _no_writecfg
+):
+    _force_mode(window, monkeypatch, mf.PresentationMode.CALL_PENDING)
+    ran = []
+    monkeypatch.setattr(window, "_run_measure_testchart", lambda: ran.append(True))
+    _run_pending_synchronously(window)
+
+    window._begin_testchart_measurement()
+
+    assert ran == [True]
+
+
+def test_begin_testchart_measurement_show_frame_presents_measureframe(
+    window, monkeypatch, _no_writecfg
+):
+    _force_mode(window, monkeypatch, mf.PresentationMode.SHOW_FRAME)
+    presented = []
+    monkeypatch.setattr(window, "_present_measureframe", lambda: presented.append(True))
+
+    window._begin_testchart_measurement()
+
+    assert presented == [True]
+
+
+def test_run_measure_testchart_runs_worker(window, monkeypatch):
+    monkeypatch.setattr(mw.config, "get_display_name", lambda *a, **k: "DELL U2413")
+    window._pending_apply_calibration = "/path/to.cal"
+    calls = {}
+
+    def fake_run(_ctrl, producer, consumer=None, **kwargs):
+        calls["producer"] = producer
+        calls["consumer"] = consumer
+        calls["wkwargs"] = kwargs.get("wkwargs")
+
+    monkeypatch.setattr(mw.WorkerRunController, "run", fake_run)
+
+    window._run_measure_testchart()
+
+    assert calls["producer"] == window.worker.measure
+    assert calls["consumer"] == window._on_measure_testchart_finished
+    assert calls["wkwargs"] == {"apply_calibration": "/path/to.cal"}
+    assert window.worker.dispread_after_dispcal is False
+    # Reset to the wx default so a later real run isn't left CANCELLED.
+    assert window._pending_apply_calibration is True
+
+
+def test_check_copy_ti3_no_working_ti3_runs_wrapup(window, monkeypatch):
+    monkeypatch.setattr(
+        mw.measurement_report_pipeline, "resolve_working_ti3_path", lambda w: None
+    )
+    monkeypatch.setattr(window.worker, "wrapup", lambda **kwargs: True)
+    assert window._check_copy_ti3() is True
+
+
+def test_check_copy_ti3_load_failure_returns_exception(window, monkeypatch, tmp_path):
+    ti3_path = str(tmp_path / "missing.ti3")
+    monkeypatch.setattr(
+        mw.measurement_report_pipeline,
+        "resolve_working_ti3_path",
+        lambda w: ti3_path,
+    )
+    result = window._check_copy_ti3()
+    assert isinstance(result, Exception)
+
+
+def test_check_copy_ti3_sanity_cancelled_skips_wrapup(window, monkeypatch, tmp_path):
+    ti3_path = str(tmp_path / "working.ti3")
+    (tmp_path / "working.ti3").write_text("dummy")
+    monkeypatch.setattr(
+        mw.measurement_report_pipeline,
+        "resolve_working_ti3_path",
+        lambda w: ti3_path,
+    )
+    monkeypatch.setattr(mw, "CGATS", lambda path: SimpleNamespace(filename=path))
+    monkeypatch.setattr(
+        window, "_check_measurement_sanity", lambda ti3, force=False: (False, [])
+    )
+    ran = []
+    monkeypatch.setattr(
+        window.worker, "wrapup", lambda **kwargs: ran.append(True) or True
+    )
+    assert window._check_copy_ti3() is False
+    assert ran == []
+
+
+def test_check_copy_ti3_sanity_proceeds_runs_wrapup(window, monkeypatch, tmp_path):
+    ti3_path = str(tmp_path / "working.ti3")
+    (tmp_path / "working.ti3").write_text("dummy")
+    monkeypatch.setattr(
+        mw.measurement_report_pipeline,
+        "resolve_working_ti3_path",
+        lambda w: ti3_path,
+    )
+    monkeypatch.setattr(mw, "CGATS", lambda path: SimpleNamespace(filename=path))
+    monkeypatch.setattr(
+        window, "_check_measurement_sanity", lambda ti3, force=False: (True, [])
+    )
+    monkeypatch.setattr(window.worker, "wrapup", lambda **kwargs: True)
+    assert window._check_copy_ti3() is True
+
+
+def test_measure_testchart_finished_exception_shows_error(window, monkeypatch):
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    monkeypatch.setattr(window.worker, "wrapup", lambda **kwargs: None)
+    restored = []
+    monkeypatch.setattr(
+        window, "_restore_measurement_mode_and_testchart", lambda: restored.append(True)
+    )
+    window._on_measure_testchart_finished(RuntimeError("measure boom"))
+    assert errors
+    assert "measure boom" in errors[0][2]
+    assert restored == [True]
+
+
+def test_measure_testchart_finished_falsy_result_is_silent(window, monkeypatch):
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    monkeypatch.setattr(window.worker, "wrapup", lambda **kwargs: None)
+    opened = []
+    monkeypatch.setattr(
+        window, "_offer_open_measurement_folder", lambda: opened.append(True)
+    )
+    restored = []
+    monkeypatch.setattr(
+        window, "_restore_measurement_mode_and_testchart", lambda: restored.append(True)
+    )
+    window._on_measure_testchart_finished(False)
+    assert errors == []
+    assert opened == []
+    assert restored == [True]
+
+
+def test_measure_testchart_finished_success_non_ccxx_offers_folder(
+    window, monkeypatch
+):
+    monkeypatch.setattr(window, "_check_copy_ti3", lambda: True)
+    monkeypatch.setattr(window.worker, "wrapup", lambda **kwargs: None)
+    monkeypatch.setattr(mw.config, "is_ccxx_testchart", lambda *a, **k: False)
+    opened = []
+    monkeypatch.setattr(
+        window, "_offer_open_measurement_folder", lambda: opened.append(True)
+    )
+    window._on_measure_testchart_finished(True)
+    assert opened == [True]
+
+
+def test_measure_testchart_finished_success_ccxx_records_paths(window, monkeypatch):
+    monkeypatch.setattr(window, "_check_copy_ti3", lambda: True)
+    monkeypatch.setattr(window.worker, "wrapup", lambda **kwargs: None)
+    monkeypatch.setattr(mw.config, "is_ccxx_testchart", lambda *a, **k: True)
+    recorded = []
+    monkeypatch.setattr(
+        window, "_record_ccxx_measurement_paths", lambda: recorded.append(True)
+    )
+    window._on_measure_testchart_finished(True)
+    assert recorded == [True]
+
+
+def test_record_ccxx_measurement_paths_spectral(window, monkeypatch, tmp_path):
+    setcfg("measurement.save_path", str(tmp_path))
+    setcfg("measurement.name.expanded", "meas")
+    ti3_path = os.path.join(str(tmp_path), "meas", "meas.ti3")
+
+    class _FakeCGATS:
+        def __init__(self, path):
+            self.filename = path
+
+        def queryv1(self, key):
+            return b"YES" if key == "INSTRUMENT_TYPE_SPECTRAL" else None
+
+    monkeypatch.setattr(mw, "CGATS", _FakeCGATS)
+    window._record_ccxx_measurement_paths()
+    assert getcfg("last_reference_ti3_path") == ti3_path
+
+
+def test_record_ccxx_measurement_paths_colorimeter(window, monkeypatch, tmp_path):
+    setcfg("measurement.save_path", str(tmp_path))
+    setcfg("measurement.name.expanded", "meas")
+    ti3_path = os.path.join(str(tmp_path), "meas", "meas.ti3")
+
+    class _FakeCGATS:
+        def __init__(self, path):
+            self.filename = path
+
+        def queryv1(self, key):
+            return None
+
+    monkeypatch.setattr(mw, "CGATS", _FakeCGATS)
+    window._record_ccxx_measurement_paths()
+    assert getcfg("last_colorimeter_ti3_path") == ti3_path
+
+
+def test_record_ccxx_measurement_paths_load_failure_shows_error(window, monkeypatch):
+    setcfg("measurement.save_path", "/nonexistent")
+    setcfg("measurement.name.expanded", "meas")
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    window._record_ccxx_measurement_paths()
+    assert errors
+
+
+def test_offer_open_measurement_folder_yes_launches(window, monkeypatch):
+    monkeypatch.setattr(mw.config, "is_ccxx_testchart", lambda *a, **k: False)
+    setcfg("profile.save_path", "/some/path")
+    setcfg("profile.name.expanded", "name")
+    monkeypatch.setattr(
+        mw.QMessageBox,
+        "question",
+        lambda *a, **k: mw.QMessageBox.Yes,
+    )
+    launched = []
+    monkeypatch.setattr(mw, "launch_file", lambda path: launched.append(path))
+    window._offer_open_measurement_folder()
+    assert launched == [os.path.join("/some/path", "name")]
+
+
+def test_offer_open_measurement_folder_no_skips_launch(window, monkeypatch):
+    monkeypatch.setattr(mw.config, "is_ccxx_testchart", lambda *a, **k: False)
+    setcfg("profile.save_path", "/some/path")
+    setcfg("profile.name.expanded", "name")
+    monkeypatch.setattr(
+        mw.QMessageBox,
+        "question",
+        lambda *a, **k: mw.QMessageBox.No,
+    )
+    launched = []
+    monkeypatch.setattr(mw, "launch_file", lambda path: launched.append(path))
+    window._offer_open_measurement_folder()
+    assert launched == []
+
+
+def test_restore_measurement_mode_and_testchart_noop_without_backups(
+    window, monkeypatch
+):
+    setcfg("measurement_mode.backup", None)
+    setcfg("observer.backup", None)
+    setcfg("testchart.file.backup", None)
+    calls = []
+    monkeypatch.setattr(window, "update_comports", lambda: calls.append("comports"))
+    monkeypatch.setattr(
+        window, "update_measurement_mode_ctrl", lambda: calls.append("mode")
+    )
+    monkeypatch.setattr(window, "_set_testchart", lambda path=None: calls.append(path))
+    window._restore_measurement_mode_and_testchart()
+    assert calls == []
+
+
+def test_restore_measurement_mode_and_testchart_restores_mode_and_comport(
+    window, monkeypatch
+):
+    setcfg("measurement_mode.backup", "p")
+    setcfg("comport.number.backup", 3)
+    calls = []
+    monkeypatch.setattr(window, "update_comports", lambda: calls.append("comports"))
+    window._restore_measurement_mode_and_testchart()
+    assert getcfg("measurement_mode") == "p"
+    assert getcfg("measurement_mode.backup", False) in (False, None, "")
+    assert getcfg("comport.number") == 3
+    assert calls == ["comports"]
+
+
+def test_restore_measurement_mode_and_testchart_restores_mode_without_comport(
+    window, monkeypatch
+):
+    setcfg("measurement_mode.backup", "l")
+    setcfg("comport.number.backup", None)
+    calls = []
+    monkeypatch.setattr(
+        window, "update_measurement_mode_ctrl", lambda: calls.append("mode")
+    )
+    window._restore_measurement_mode_and_testchart()
+    assert getcfg("measurement_mode") == "l"
+    assert calls == ["mode"]
+
+
+def test_restore_measurement_mode_and_testchart_restores_observer(window):
+    setcfg("observer.backup", "1964_10")
+    window._restore_measurement_mode_and_testchart()
+    assert getcfg("observer") == "1964_10"
+    assert getcfg("observer.backup", False) in (False, None, "")
+
+
+def test_restore_measurement_mode_and_testchart_restores_testchart(
+    window, monkeypatch
+):
+    setcfg("testchart.file.backup", "/path/to.ti1")
+    calls = []
+    monkeypatch.setattr(window, "_set_testchart", lambda path=None: calls.append(path))
+    window._restore_measurement_mode_and_testchart()
+    assert calls == ["/path/to.ti1"]
+    assert getcfg("testchart.file.backup", False) in (False, None, "")

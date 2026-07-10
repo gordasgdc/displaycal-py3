@@ -70,6 +70,12 @@ class FakeWorker:
     def instrument_can_use_ccxx(self):
         return False
 
+    def get_instrument_name(self):
+        return "i1Pro 2"
+
+    def get_display_name(self, *args, **kwargs):
+        return "DELL U2410"
+
 
 class TestDefaultReportFilename:
     def test_basic(self):
@@ -498,6 +504,31 @@ class TestResolveWorkingTi3Path:
         (tmp_path / "My Profile.ti3").write_bytes(b"stub")
         worker = FakeWorker(tempdir=str(tmp_path))
         assert mr.resolve_working_ti3_path(worker) == str(tmp_path / "My Profile.ti3")
+
+
+class TestComputeCcxxMeasurementBasename:
+    def test_1931_2_observer_omits_observer_label(self):
+        setcfg("observer", "1931_2")
+        basename = mr.compute_ccxx_measurement_basename(FakeWorker())
+        assert basename.startswith("i1Pro 2 & DELL U2410 ")
+        assert "observer" not in basename.lower()
+
+    def test_other_observer_includes_observer_label(self):
+        setcfg("observer", "1964_10")
+        basename = mr.compute_ccxx_measurement_basename(FakeWorker())
+        assert basename.startswith("i1Pro 2 (")
+        assert "& DELL U2410 " in basename
+
+    def test_result_is_filename_safe(self):
+        setcfg("observer", "1931_2")
+
+        class _SlashyWorker(FakeWorker):
+            def get_display_name(self, *args, **kwargs):
+                return "Weird/Display:Name"
+
+        basename = mr.compute_ccxx_measurement_basename(_SlashyWorker())
+        assert "/" not in basename
+        assert ":" not in basename
 
 
 class TestPerformSelfCheckLookup:

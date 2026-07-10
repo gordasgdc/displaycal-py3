@@ -65,7 +65,7 @@ from DisplayCAL.icc_profile import (
 )
 from DisplayCAL.util_decimal import float2dec
 from DisplayCAL.util_os import launch_file
-from DisplayCAL.util_str import ellipsis_
+from DisplayCAL.util_str import ellipsis_, make_filename_safe
 from DisplayCAL.worker import (
     _applycal_bug_workaround,
     check_ti3,
@@ -655,6 +655,38 @@ def resolve_working_ti3_path(worker: Worker) -> str | None:
     name = getcfg("profile.name.expanded")
     path = os.path.join(tempdir, f"{make_argyll_compatible_path(name)}.ti3")
     return path if os.path.isfile(path) else None
+
+
+def compute_ccxx_measurement_basename(worker: Worker) -> str:
+    """Derive the save basename for a CCXX-testchart measurement.
+
+    Pure port of the naming half of ``MainFrame.setup_ccxx_measurement``: the
+    directory-picking and write-access-check half stays with the Qt caller,
+    which owns the dialogs. Called once ``config.is_ccxx_testchart()`` and
+    ``profile.save_path`` are already resolved.
+
+    Args:
+        worker: Used for the instrument/display name pieces of the basename.
+
+    Returns:
+        A filesystem-safe basename (no extension) combining instrument,
+        observer, display name, and a timestamp.
+    """
+    if getcfg("observer") == "1931_2":
+        basename = "{} & {} {}".format(
+            worker.get_instrument_name(),
+            worker.get_display_name(True, True),
+            strftime("%Y-%m-%d %H-%M-%S"),
+        )
+    else:
+        basename = "{} ({} {}) & {} {}".format(
+            worker.get_instrument_name(),
+            lang.getstr(f"observer.{getcfg('observer')}"),
+            lang.getstr("observer"),
+            worker.get_display_name(True, True),
+            strftime("%Y-%m-%d %H-%M-%S"),
+        )
+    return make_filename_safe(basename)
 
 
 @dataclass

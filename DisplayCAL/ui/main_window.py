@@ -150,7 +150,11 @@ from DisplayCAL import (
 from DisplayCAL import measurement_report as measurement_report_pipeline
 from DisplayCAL import localization as lang
 from DisplayCAL import profile_name as profile_name_mod
-from DisplayCAL.argyll import check_set_argyll_bin, make_argyll_compatible_path
+from DisplayCAL.argyll import (
+    check_set_argyll_bin,
+    get_argyll_util,
+    make_argyll_compatible_path,
+)
 from DisplayCAL.cgats import CGATS, CGATSError
 from DisplayCAL.colorimeter_correction import ColorimeterCorrectionCatalog
 from DisplayCAL.config import (
@@ -200,16 +204,18 @@ from DisplayCAL.ui.profile_install_window import InstallProfileWindow
 from DisplayCAL.ui.progress_dialog import ProgressDialog
 from DisplayCAL.ui.tooltip_window import TooltipWindow
 from DisplayCAL.ui.tools.profile_info import ProfileInfoWindow
+from DisplayCAL.ui.tools.synth_profile import SynthICCWindow
 from DisplayCAL.ui.tools.testchart_editor import TestchartEditorWindow
 from DisplayCAL.ui.worker_runner import AdjustmentController, WorkerRunController
 from DisplayCAL.util_decimal import stripzeros
 from DisplayCAL.util_dict import dict_sort
-from DisplayCAL.util_os import get_program_file, waccess
+from DisplayCAL.util_os import get_program_file, launch_file, waccess
 from DisplayCAL.worker import (
     Worker,
     check_file_isfile,
     get_options_from_cal,
     get_options_from_profile,
+    parse_argument_string,
 )
 
 if TYPE_CHECKING:
@@ -730,6 +736,7 @@ class MainWindow(BaseWindow):
         self._testchart_paths: list[str] = []
         self._current_testchart_path: str | None = None
         self._testchart_editor_window: TestchartEditorWindow | None = None
+        self._synthicc_window: SynthICCWindow | None = None
         self._report_window: ReportWindow | None = None
         #: Staged by :meth:`_on_report_measure_requested`, consumed by
         #: :meth:`_run_report_measurement` / :meth:`_on_report_measurement_finished`
@@ -1283,16 +1290,16 @@ class MainWindow(BaseWindow):
         :meth:`colorimeter_correction_web_btn_handler` (same tab), and "create"
         is :meth:`colorimeter_correction_create_btn_handler` (same tab).
 
-        Of ``menu.tools.advanced``'s six entries, three are reproduced:
-        "profile.b2a.hires" (:meth:`_profile_hires_b2a_action_handler`),
-        "measurement_file.check_sanity"
+        All six entries of ``menu.tools.advanced`` are now reproduced:
+        "synthicc.create" (:meth:`_synthicc_create_action_handler`, a
+        cross-link to the already-ported standalone tool,
+        ``ui/tools/synth_profile.py``), "profile.b2a.hires"
+        (:meth:`_profile_hires_b2a_action_handler`), "measure.testchart"
+        (:meth:`_measure_testchart_action_handler`), "specplot.run"
+        (:meth:`_specplot_action_handler`), "measurement_file.check_sanity"
         (:meth:`_measurement_file_check_action_handler`), and
         "measurement_file.check_sanity.auto"
-        (:meth:`_measurement_file_check_auto_toggled`). Not reproduced:
-        "synthicc.create" (the synthetic-ICC creator is only reachable as its
-        own standalone tool, ``ui/tools/synth_profile.py``, not from this
-        menu), and "measure.testchart" / "specplot.run" (``measure_handler`` /
-        ``specplot_handler`` aren't ported).
+        (:meth:`_measurement_file_check_auto_toggled`).
         """
         tools_menu = self.menuBar().addMenu(f"&{lang.getstr('menu.tools')}")
         ccxx_menu = tools_menu.addMenu(
@@ -1308,9 +1315,20 @@ class MainWindow(BaseWindow):
         upload_action.triggered.connect(self._ccxx_upload_action_handler)
 
         advanced_menu = tools_menu.addMenu(lang.getstr("advanced"))
+        synthicc_action = advanced_menu.addAction(lang.getstr("synthicc.create"))
+        synthicc_action.triggered.connect(self._synthicc_create_action_handler)
+        advanced_menu.addSeparator()
         hires_b2a_action = advanced_menu.addAction(lang.getstr("profile.b2a.hires"))
         hires_b2a_action.triggered.connect(self._profile_hires_b2a_action_handler)
         advanced_menu.addSeparator()
+        measure_testchart_action = advanced_menu.addAction(
+            lang.getstr("measure.testchart")
+        )
+        measure_testchart_action.triggered.connect(
+            self._measure_testchart_action_handler
+        )
+        specplot_action = advanced_menu.addAction(lang.getstr("specplot.run"))
+        specplot_action.triggered.connect(self._specplot_action_handler)
         check_sanity_action = advanced_menu.addAction(
             lang.getstr("measurement_file.check_sanity")
         )
@@ -4804,6 +4822,21 @@ class MainWindow(BaseWindow):
         self._install_profile_window.raise_()
         self._install_profile_window.activateWindow()
 
+    def _synthicc_create_action_handler(self) -> None:
+        """Open the synthetic ICC creator (Tools > Advanced menu).
+
+        Qt port of ``synthicc_create_handler``: reuses a single
+        :class:`~DisplayCAL.ui.tools.synth_profile.SynthICCWindow` instance
+        across opens, matching wx's ``self.synthiccframe`` singleton.
+        """
+        window = self._synthicc_window
+        if window is None:
+            window = SynthICCWindow()
+            self._synthicc_window = window
+        window.show()
+        window.raise_()
+        window.activateWindow()
+
     def _profile_hires_b2a_action_handler(self) -> None:
         """Standalone "Regenerate hires B2A tables..." tool (Tools > Advanced menu).
 
@@ -4906,6 +4939,277 @@ class MainWindow(BaseWindow):
         except (OSError, ICCProfileInvalidError) as exception:
             QMessageBox.critical(self, APPNAME, str(exception))
             return None
+
+    def _specplot_action_handler(self) -> None:
+        """Run Argyll ``specplot`` on a user-picked file (Tools > Advanced menu).
+
+        Qt port of ``MainFrame.specplot_handler``.
+        """
+        if not check_set_argyll_bin():
+            return
+        default_dir, default_file = get_verified_path("last_specplot_path")
+        path, _filter = QFileDialog.getOpenFileName(
+            self,
+            lang.getstr("specplot.choose"),
+            os.path.join(default_dir, default_file or ""),
+            f"{lang.getstr('filetype.any')} (*.*)",
+        )
+        if not path:
+            return
+        setcfg("last_specplot_path", path)
+        cmd = get_argyll_util("specplot")
+        if not cmd:
+            QMessageBox.critical(
+                self, APPNAME, lang.getstr("argyll.util.not_found", "specplot")
+            )
+            return
+        args = ["-v"]
+        if getcfg("extra_args.specplot").strip():
+            args += parse_argument_string(getcfg("extra_args.specplot"))
+        args.append(path)
+        self.worker.interactive = False
+        controller = self._ensure_run_controller()
+        controller.run(
+            self.worker.exec_cmd,
+            self._on_specplot_finished,
+            wargs=(cmd, args),
+            wkwargs={"skip_scripts": True},
+            progress_msg=lang.getstr("specplot.run"),
+            pauseable=False,
+        )
+
+    def _on_specplot_finished(self, result: object) -> None:
+        """Qt port of ``MainFrame.specplot_consumer``."""
+        if isinstance(result, Exception):
+            QMessageBox.critical(self, APPNAME, str(result))
+        self.worker.wrapup(False)
+        self.show()
+
+    def _measure_testchart_action_handler(self) -> None:
+        """Standalone "Measure testchart..." tool (Tools > Advanced menu).
+
+        Qt port of ``MainFrame.measure_handler``: runs a characterization
+        measurement pass without building a profile afterward, unlike the
+        Profiling tab's "Profile" button (:meth:`profile_btn_handler`, which
+        chains into :meth:`_build_profile_from_measurement`'s ``colprof``
+        stage). Used either as a plain "capture a TI3 for this testchart"
+        tool, or -- when the configured testchart is a CCXX reference/
+        colorimeter chart -- to gather the raw measurement a colorimeter-
+        correction matrix is built from.
+
+        Not reproduced: wx chains a successful CCXX measurement started
+        *from* the correction-creation dialog (``comport.number.backup`` is
+        set) back into ``create_colorimeter_correction_handler`` with the
+        new TI3 paths pre-filled. The Qt ``CreateCorrectionWindow`` doesn't
+        have a matching "measure now" entry point that would set that
+        backup, so the chain is unreachable here too --
+        :meth:`_restore_measurement_mode_and_testchart` is still ported
+        (a cheap no-op today) so a future session wiring that entry point
+        doesn't also have to add this half.
+        """
+        if not self._setup_ccxx_measurement():
+            self._restore_measurement_mode_and_testchart()
+            return
+        if not check_set_argyll_bin() or not self._check_overwrite(".ti3"):
+            self._restore_measurement_mode_and_testchart()
+            return
+        if config.is_ccxx_testchart():
+            apply_calibration = config.get_data_path("linear.cal")
+        else:
+            apply_calibration = self._current_cal_choice()
+        if apply_calibration is CAL_CHOICE_CANCELLED:
+            self._restore_measurement_mode_and_testchart()
+            return
+        self._pending_apply_calibration = apply_calibration
+        self._begin_testchart_measurement()
+
+    def _setup_ccxx_measurement(self) -> bool:
+        """Qt port of ``MainFrame.setup_ccxx_measurement``.
+
+        A no-op (returns ``True``) unless the configured testchart is a CCXX
+        reference/colorimeter chart. Ensures ``profile.save_path`` is set
+        (prompting via :meth:`_profile_save_path_btn_handler` if empty) and
+        is writable, then stages ``measurement.save_path`` /
+        ``measurement.name.expanded`` for the upcoming measurement.
+
+        Unlike wx (which ignores this method's implicit success/failure and
+        proceeds to measure regardless), :meth:`_measure_testchart_action_handler`
+        bails out when this returns ``False`` -- proceeding with a stale or
+        unset ``measurement.name.expanded`` would only fail later in a more
+        confusing way.
+
+        Returns:
+            ``False`` if the save-path picker was cancelled or the resolved
+            path isn't writable (an error dialog is shown in that case);
+            ``True`` otherwise (including the non-CCXX no-op case).
+        """
+        if not config.is_ccxx_testchart():
+            return True
+        path = getcfg("profile.save_path")
+        if not path:
+            self._profile_save_path_btn_handler()
+            path = getcfg("profile.save_path")
+        if not path:
+            return False
+        if not waccess(path, os.W_OK):
+            QMessageBox.critical(
+                self, APPNAME, lang.getstr("error.access_denied.write", path)
+            )
+            return False
+        setcfg("measurement.save_path", path)
+        setcfg(
+            "measurement.name.expanded",
+            measurement_report_pipeline.compute_ccxx_measurement_basename(
+                self.worker
+            ),
+        )
+        return True
+
+    def _begin_testchart_measurement(self) -> None:
+        """Stage the standalone testchart measurement and present the measure area.
+
+        Qt port of the ``setup_measurement(self.just_measure, ...)`` call at
+        the end of ``measure_handler``, generalized from
+        :meth:`begin_measurement` (which is keyed on :class:`MeasurementAction`)
+        the same way :meth:`_begin_report_measurement` is.
+        """
+        writecfg()
+        plan = self.flow.plan_measurement(
+            self._drive_testchart_measurement,
+            use_patternwindow=getattr(self.worker, "_use_patternwindow", False),
+        )
+        if plan.mode is PresentationMode.CALL_PENDING:
+            self.call_pending_function()
+        elif plan.mode is PresentationMode.SHOW_FRAME:
+            self._present_measureframe()
+        else:
+            self._start_measureframe_subprocess()
+
+    def _drive_testchart_measurement(self) -> None:
+        """Restore the main window and run the staged testchart measurement."""
+        self._restore_after_measurement()
+        self._run_measure_testchart()
+
+    def _run_measure_testchart(self) -> None:
+        """Qt port of ``MainFrame.just_measure`` (the non-auto-measure path)."""
+        self.worker.dispread_after_dispcal = False
+        self.worker.interactive = config.get_display_name() == "Untethered"
+        setcfg("calibration.file.previous", None)
+        apply_calibration = self._pending_apply_calibration
+        self._pending_apply_calibration = True
+        controller = self._ensure_run_controller()
+        controller.run(
+            self.worker.measure,
+            self._on_measure_testchart_finished,
+            wkwargs={"apply_calibration": apply_calibration},
+            progress_msg=lang.getstr("measuring.characterization"),
+            pauseable=True,
+        )
+
+    def _on_measure_testchart_finished(self, result: object) -> None:
+        """Qt port of ``MainFrame.just_measure_finish``.
+
+        Unlike :meth:`_on_measurement_finished` (the "Profile" button's
+        finish handler), this never builds an ICC profile: it just reviews
+        and copies the measured TI3, then either records it as a
+        colorimeter-correction source (CCXX testchart) or offers to open the
+        containing folder.
+        """
+        if not isinstance(result, Exception) and result:
+            result = self._check_copy_ti3()
+        self.worker.wrapup(copy=False, remove=True)
+        self.show()
+        self.raise_()
+        if isinstance(result, Exception):
+            QMessageBox.critical(self, APPNAME, str(result))
+        elif result and config.is_ccxx_testchart():
+            self._record_ccxx_measurement_paths()
+        elif result:
+            self._offer_open_measurement_folder()
+        self._restore_measurement_mode_and_testchart()
+
+    def _check_copy_ti3(self) -> bool | Exception:
+        """Qt port of ``MainFrame.check_copy_ti3``: review then copy the TI3.
+
+        Used by :meth:`_on_measure_testchart_finished`. Deliberately not
+        (yet) unified with :meth:`_build_profile_from_measurement`'s inline
+        equivalent, which tolerates a falsy (non-exception) copy result
+        differently -- that method still proceeds to the ``colprof`` stage
+        either way, while this method's caller does not.
+        """
+        ti3_path = measurement_report_pipeline.resolve_working_ti3_path(self.worker)
+        if ti3_path:
+            try:
+                ti3 = CGATS(ti3_path)
+            except (OSError, CGATSError) as exception:
+                return exception
+            proceed, _removed_items = self._check_measurement_sanity(ti3)
+            if not proceed:
+                return False
+        return self.worker.wrapup(copy=True, remove=False, ext_filter=[".ti3"])
+
+    def _record_ccxx_measurement_paths(self) -> None:
+        """Record the just-measured CCXX TI3 for correction-matrix creation.
+
+        Qt port of the ``is_ccxx_testchart()`` branch of
+        ``just_measure_finish`` (minus the ``comport.number.backup`` chain,
+        see :meth:`_measure_testchart_action_handler`'s docstring).
+        """
+        ti3_path = os.path.join(
+            getcfg("measurement.save_path"),
+            getcfg("measurement.name.expanded"),
+            getcfg("measurement.name.expanded") + ".ti3",
+        )
+        try:
+            cgats = CGATS(ti3_path)
+        except (OSError, CGATSError) as exception:
+            QMessageBox.critical(self, APPNAME, str(exception))
+            return
+        if cgats.queryv1("INSTRUMENT_TYPE_SPECTRAL") == b"YES":
+            setcfg("last_reference_ti3_path", cgats.filename)
+        else:
+            setcfg("last_colorimeter_ti3_path", cgats.filename)
+
+    def _offer_open_measurement_folder(self) -> None:
+        """Qt port of ``MainFrame.just_measure_show_result``."""
+        path = os.path.join(
+            getcfg("profile.save_path"),
+            getcfg("profile.name.expanded"),
+            getcfg("profile.name.expanded") + ".ti3",
+        )
+        answer = QMessageBox.question(
+            self,
+            APPNAME,
+            lang.getstr("measurements.complete"),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if answer == QMessageBox.Yes:
+            launch_file(os.path.dirname(path))
+
+    def _restore_measurement_mode_and_testchart(self) -> None:
+        """Qt port of ``MainFrame.restore_measurement_mode`` + ``restore_testchart``.
+
+        Currently a no-op in practice: the backup keys these restore
+        (``measurement_mode.backup`` etc.) are only ever set by the
+        correction-creation dialog's "measure now" flow, which isn't wired
+        up in this port yet (see :meth:`_measure_testchart_action_handler`).
+        """
+        if getcfg("measurement_mode.backup", False):
+            setcfg("measurement_mode", getcfg("measurement_mode.backup"))
+            setcfg("measurement_mode.backup", None)
+            if getcfg("comport.number.backup", False):
+                setcfg("comport.number", getcfg("comport.number.backup"))
+                setcfg("comport.number.backup", None)
+                self.update_comports()
+            else:
+                self.update_measurement_mode_ctrl()
+        if getcfg("observer.backup", False):
+            setcfg("observer", getcfg("observer.backup"))
+            setcfg("observer.backup", None)
+        if getcfg("testchart.file.backup", False):
+            self._set_testchart(getcfg("testchart.file.backup"))
+            setcfg("testchart.file.backup", None)
 
     def _measurement_file_check_action_handler(self) -> None:
         """Standalone "Check measurement file..." tool (Tools > Advanced menu).
