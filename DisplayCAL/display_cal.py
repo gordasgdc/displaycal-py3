@@ -10401,9 +10401,9 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         # Determine if we should use planckian locus for assumed target wp
         # Detection will only work for profiles created by DisplayCAL
         planckian = False
-        if (profile.tags.get("CIED", "") or profile.tags.get("targ", ""))[
+        if (profile.tags.get("CIED", b"") or profile.tags.get("targ", b""))[
             0:4
-        ] == "CTI3":
+        ] == b"CTI3":
             options_dispcal = get_options_from_profile(profile)[0]
             for option in options_dispcal:
                 if option.startswith("T"):
@@ -14786,10 +14786,10 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                             instrument = "EDID"
                         else:
                             targ = profile.tags.get(
-                                "CIED", profile.tags.get("targ", "")
+                                "CIED", profile.tags.get("targ", b"")
                             )
                             instrument = None
-                            if targ[0:4] == "CTI3":
+                            if targ[0:4] == b"CTI3":
                                 targ = CGATS(targ)
                                 instrument = targ.queryv1("TARGET_INSTRUMENT")
                             if not instrument:
@@ -17289,15 +17289,17 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     Error(lang.getstr("profile.invalid") + "\n" + path), self
                 )
                 return
-            if (profile.tags.get("CIED", "") or profile.tags.get("targ", ""))[
+            if (profile.tags.get("CIED", b"") or profile.tags.get("targ", b""))[
                 0:4
-            ] != "CTI3":
+            ] != b"CTI3":
                 show_result_dialog(
                     Error(lang.getstr("profile.no_embedded_ti3") + "\n" + path),
                     self,
                 )
                 return
-            ti3 = BytesIO(profile.tags.get("CIED", "") or profile.tags.get("targ", ""))
+            ti3 = BytesIO(
+                profile.tags.get("CIED", b"") or profile.tags.get("targ", b"")
+            )
         else:
             profile = None
             try:
@@ -17330,7 +17332,9 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 if isinstance(tmp_working_dir, Exception):
                     show_result_dialog(tmp_working_dir, self)
                     return
-                profile.tags.targ = TextType(b"text\0\0\0\0" + ti3 + b"\0", b"targ")
+                profile.tags.targ = TextType(
+                    b"text\0\0\0\0" + bytes(ti3) + b"\0", b"targ"
+                )
                 profile.tags.DevD = profile.tags.CIED = profile.tags.targ
                 tmp_path = os.path.join(tmp_working_dir, os.path.basename(path))
                 profile.write(tmp_path)
@@ -17957,9 +17961,9 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                         bitmap=get_icon(32, "dialog-error"),
                     )
                     return
-                if (profile.tags.get("CIED", "") or profile.tags.get("targ", ""))[
+                if (profile.tags.get("CIED", b"") or profile.tags.get("targ", b""))[
                     0:4
-                ] != "CTI3":
+                ] != b"CTI3":
                     InfoDialog(
                         self,
                         msg=f"{lang.getstr('profile.no_embedded_ti3')}\n{path_}",
@@ -17968,7 +17972,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     )
                     return
                 with BytesIO(
-                    profile.tags.get("CIED", "") or profile.tags.get("targ", "")
+                    profile.tags.get("CIED", b"") or profile.tags.get("targ", b"")
                 ) as ti3:
                     ti3_lines = [line.strip() for line in ti3]
                 # Preserve custom tags
