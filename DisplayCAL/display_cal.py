@@ -19871,7 +19871,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             return
 
         profile, ti3_lines = self.parse_calibration_file(path)
-        if profile is None or ti3_lines is None:
+        if ti3_lines is None:
             return
         setcfg("last_cal_or_icc_path", path)
         update_ccmx_items = True
@@ -20245,31 +20245,31 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                             locals()[local_var_name] = return_value
 
             setcfg("calibration.file", path)
-            if "CTI3" in ti3_lines:
+            if b"CTI3" in ti3_lines:
                 debug_print("[D] load_cal_handler testchart.file:", path)
                 setcfg("testchart.file", path)
-            if 'USE_BLACK_POINT_COMPENSATION "YES"' in ti3_lines:
+            if b'USE_BLACK_POINT_COMPENSATION "YES"' in ti3_lines:
                 setcfg("profile.black_point_compensation", 1)
-            elif 'USE_BLACK_POINT_COMPENSATION "NO"' in ti3_lines and (
+            elif b'USE_BLACK_POINT_COMPENSATION "NO"' in ti3_lines and (
                 sys.platform != "darwin" or not is_preset or is_3dlut_preset
             ):
                 # Only disable BPC if not OS X, or if a preset,
                 # or if a 3D LUT preset
                 setcfg("profile.black_point_compensation", 0)
-            if 'HIRES_B2A "YES"' in ti3_lines:
+            if b'HIRES_B2A "YES"' in ti3_lines:
                 setcfg("profile.b2a.hires", 1)
-            elif 'HIRES_B2A "NO"' in ti3_lines:
+            elif b'HIRES_B2A "NO"' in ti3_lines:
                 setcfg("profile.b2a.hires", 0)
-            if 'SMOOTH_B2A "YES"' in ti3_lines:
-                if 'HIRES_B2A "NO"' not in ti3_lines:
+            if b'SMOOTH_B2A "YES"' in ti3_lines:
+                if b'HIRES_B2A "NO"' not in ti3_lines:
                     setcfg("profile.b2a.hires", 1)
                 setcfg("profile.b2a.hires.smooth", 1)
-            elif 'SMOOTH_B2A "NO"' in ti3_lines:
-                if 'HIRES_B2A "YES"' not in ti3_lines:
+            elif b'SMOOTH_B2A "NO"' in ti3_lines:
+                if b'HIRES_B2A "YES"' not in ti3_lines:
                     setcfg("profile.b2a.hires", 0)
                 setcfg("profile.b2a.hires.smooth", 0)
             simset = False  # Only HDR 3D LUTs will have this set
-            if "BEGIN_DATA_FORMAT" in ti3_lines:
+            if b"BEGIN_DATA_FORMAT" in ti3_lines:
                 cfgend = ti3_lines.index(b"BEGIN_DATA_FORMAT")
                 cfgpart = CGATS(b"\n".join(ti3_lines[:cfgend]))
                 lut3d_trc_set = False
@@ -20364,7 +20364,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                                 # smallest testchart.
                                 cfgvalue = 1
                         elif keyword == "PATCH_SEQUENCE":
-                            cfgvalue = cfgvalue.lower().replace("_rgb_", "_RGB_")
+                            cfgvalue = cfgvalue.lower().replace(b"_rgb_", b"_RGB_")
                         elif keyword == "3DLUT_GAMMA":
                             try:
                                 cfgvalue = float(cfgvalue)
@@ -20382,7 +20382,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                                 setcfg("measurement_report.apply_black_offset", 0)
                                 setcfg("measurement_report.apply_trc", 1)
                         elif keyword == "3DLUT_GAMUT_MAPPING_MODE":
-                            cfgvalue = 0 if cfgvalue == "G" else 1
+                            cfgvalue = 0 if cfgvalue == b"G" else 1
                         elif keyword in (
                             "FFP_INSERTION_INTERVAL",
                             "FFP_INSERTION_DURATION",
@@ -20394,7 +20394,11 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                             setcfg("3dlut.tab.enable", 1)
                             setcfg("3dlut.tab.enable.backup", 1)
                     if cfgvalue is not None:
-                        cfgvalue = str(cfgvalue)
+                        cfgvalue = (
+                            cfgvalue.decode("utf-8")
+                            if isinstance(cfgvalue, bytes)
+                            else str(cfgvalue)
+                        )
                         if cfgname.endswith("profile") and (
                             not os.path.isabs(cfgvalue) or not os.path.isfile(cfgvalue)
                         ):
@@ -20448,7 +20452,11 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                         cfgvalue = cfgpart.queryv1(keyword)
                         if cfgvalue is None:
                             continue
-                        cfgvalue = str(cfgvalue)
+                        cfgvalue = (
+                            cfgvalue.decode("utf-8")
+                            if isinstance(cfgvalue, bytes)
+                            else str(cfgvalue)
+                        )
                         with contextlib.suppress(ValueError):
                             cfgvalue = round(float(cfgvalue), 4)
                         setcfg(
