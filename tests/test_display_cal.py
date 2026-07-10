@@ -3,6 +3,7 @@ import json
 import os
 import platform
 import sys
+import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock
 from zlib import crc32
@@ -595,3 +596,27 @@ def test_measurement_file_check_handler_regenerates_profile_without_typeerror(
     assert create_profile_calls[0].endswith(
         os.path.basename(icc_path)
     )
+
+
+def test_import_session_archive_producer_returns_extracted_file_extension(
+    tmp_path, mainframe: MainFrame
+) -> None:
+    """Regression test for issue #817.
+
+    ``import_session_archive_producer()`` used to return a path built from
+    the archive's own extension (``.zip``/``.7z``/``.tgz``) instead of the
+    extension of the file actually extracted from it (``.cal``/``.icc``/
+    ``.icm``), so ``load_cal_handler()`` was handed a path to a file that
+    never existed on disk and silently treated the import as missing.
+    """
+    basename = "test"
+    archive_path = tmp_path / f"{basename}.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr(f"{basename}/{basename}.cal", b"dummy calibration data")
+
+    result = mainframe.import_session_archive_producer(
+        str(archive_path), basename, ".zip"
+    )
+
+    assert not isinstance(result, Exception)
+    assert result == os.path.join(getcfg("profile.save_path"), basename, f"{basename}.cal")

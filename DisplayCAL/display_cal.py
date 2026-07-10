@@ -16592,12 +16592,12 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             if not result or isinstance(result, Exception):
                 return result
             # Check if a session archive
-            is_session_archive = False
+            found_ext = None
             for ext_ in (".icc", ".icm", ".cal"):
                 if os.path.isfile(os.path.join(temp, f"{basename}{ext_}")):
-                    is_session_archive = True
+                    found_ext = ext_
                     break
-            if not is_session_archive:
+            if not found_ext:
                 # Doesn't seem to be a session archive
                 return Error(
                     lang.getstr("error.not_a_session_archive", os.path.basename(path))
@@ -16652,6 +16652,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                                 "error.not_a_session_archive", os.path.basename(path)
                             )
                         )
+                    found_ext = ext_
                     # Extract from archive (flat hierarchy, not using dirnames)
                     for name in getnames():
                         if not isinstance(archive, zipfile.ZipFile):
@@ -16670,7 +16671,15 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             except Exception as exception:
                 print(traceback.format_exc())
                 return exception
-        return os.path.join(getcfg("profile.save_path"), basename, basename + ext)
+        # NOTE: use the extracted file's own extension (.cal/.icc/.icm), not
+        # the archive's (.7z/.tgz/.zip) -- the latter was a latent bug: the
+        # returned path would point at a nonexistent "<basename>.zip" inside
+        # the storage folder (the extracted+moved file is really
+        # "<basename>.cal"/etc.), so ``load_cal_handler`` silently treated the
+        # import as if the calibration had gone missing.
+        return os.path.join(
+            getcfg("profile.save_path"), basename, basename + found_ext
+        )
 
     def import_session_archive_consumer(
         self, result: str | Exception, basename: str
@@ -20565,11 +20574,21 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
 
         self.worker.options_dispcal = []
         settings = []
+        # NOTE: ``ti3_lines`` are ``bytes`` (``parse_calibration_file`` opens
+        # non-ICC files in binary mode), so every keyword comparison below
+        # must use ``bytes`` literals, and every value must be decoded before
+        # being handed to ``str``-only helpers like ``stripzeros``. This
+        # branch previously compared ``bytes`` keys/values against ``str``
+        # literals (never true in Python 3) and read ``value.lower()[0]``
+        # (an ``int`` on ``bytes``, not a one-character string) -- both
+        # latent bugs that made this whole legacy-``.cal``-file path dead
+        # code (or, for ``BLACK_POINT_CORRECTION``, a ``TypeError`` crash via
+        # ``stripzeros(value) >= 0`` comparing a ``str`` to an ``int``).
         for line in ti3_lines:
             line = line.strip().split(b" ", 1)
             if len(line) > 1:
-                value = line[1][1:-1]  # strip quotes
-                if line[0] == "DEVICE_CLASS":
+                value = line[1][1:-1].decode("utf-8", "replace")  # strip quotes
+                if line[0] == b"DEVICE_CLASS":
                     if value != "DISPLAY":
                         InfoDialog(
                             self,
@@ -20578,19 +20597,19 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                             bitmap=get_icon(32, "dialog-error"),
                         )
                         return
-                elif line[0] == "DEVICE_TYPE":
-                    measurement_mode = value.lower()[0]
+                elif line[0] == b"DEVICE_TYPE":
+                    measurement_mode = value.lower()[0:1]
                     if measurement_mode in ("c", "l"):
                         setcfg("measurement_mode", measurement_mode)
                         self.worker.options_dispcal.append("-y" + measurement_mode)
-                elif line[0] == "NATIVE_TARGET_WHITE":
+                elif line[0] == b"NATIVE_TARGET_WHITE":
                     setcfg("whitepoint.colortemp", None)
                     setcfg("whitepoint.x", None)
                     setcfg("whitepoint.y", None)
                     setcfg("3dlut.whitepoint.x", None)
                     setcfg("3dlut.whitepoint.y", None)
                     settings.append(lang.getstr("whitepoint"))
-                elif line[0] == "TARGET_WHITE_XYZ":
+                elif line[0] == b"TARGET_WHITE_XYZ":
                     XYZ = value.split()  # noqa: N806
                     i = 0
                     try:
@@ -20619,7 +20638,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                         "-b{}".format(getcfg("calibration.luminance"))
                     )
                     settings.append(lang.getstr("calibration.luminance"))
-                elif line[0] == "TARGET_GAMMA":
+                elif line[0] == b"TARGET_GAMMA":
                     setcfg("trc", None)
                     if value in ("L_STAR", "REC709", "SMPTE240M", "sRGB"):
                         setcfg("trc.type", "g")
@@ -20633,41 +20652,41 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                         setcfg("trc", "s")
                     else:
                         try:
-                            value = stripzeros(value)
-                            if float(value) < 0:
+                            gamma = stripzeros(value)
+                            if float(gamma) < 0:
                                 setcfg("trc.type", "G")
-                                value = abs(value)
+                                gamma = abs(float(gamma))
                             else:
                                 setcfg("trc.type", "g")
-                            setcfg("trc", value)
+                            setcfg("trc", gamma)
                         except ValueError:
                             continue
                     self.worker.options_dispcal.append(
                         "-" + getcfg("trc.type") + str(getcfg("trc"))
                     )
                     settings.append(lang.getstr("trc"))
-                elif line[0] == "DEGREE_OF_BLACK_OUTPUT_OFFSET":
+                elif line[0] == b"DEGREE_OF_BLACK_OUTPUT_OFFSET":
                     setcfg("calibration.black_output_offset", stripzeros(value))
                     self.worker.options_dispcal.append(
                         "-f{}".format(getcfg("calibration.black_output_offset"))
                     )
                     settings.append(lang.getstr("calibration.black_output_offset"))
-                elif line[0] == "BLACK_POINT_CORRECTION":
-                    if stripzeros(value) >= 0:
+                elif line[0] == b"BLACK_POINT_CORRECTION":
+                    if float(stripzeros(value)) >= 0:
                         black_point_correction = True
                         setcfg("calibration.black_point_correction", stripzeros(value))
                         self.worker.options_dispcal.append(
                             "-k{}".format(getcfg("calibration.black_point_correction"))
                         )
                     settings.append(lang.getstr("calibration.black_point_correction"))
-                elif line[0] == "TARGET_BLACK_BRIGHTNESS":
+                elif line[0] == b"TARGET_BLACK_BRIGHTNESS":
                     setcfg("calibration.black_luminance", stripzeros(value))
                     self.worker.options_dispcal.append(
                         "-B{}".format(getcfg("calibration.black_luminance"))
                     )
                     settings.append(lang.getstr("calibration.black_luminance"))
-                elif line[0] == "QUALITY":
-                    setcfg("calibration.quality", value.lower()[0])
+                elif line[0] == b"QUALITY":
+                    setcfg("calibration.quality", value.lower()[0:1])
                     self.worker.options_dispcal.append(
                         "-q{}".format(getcfg("calibration.quality"))
                     )
@@ -20677,7 +20696,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
 
         setcfg("calibration.file", path)
         self.update_controls(update_profile_name=update_profile_name)
-        if "CTI3" in ti3_lines:
+        if b"CTI3" in ti3_lines:
             debug_print("[D] load_cal_handler testchart.file:", path)
             setcfg("testchart.file", path)
         writecfg()
