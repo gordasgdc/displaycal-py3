@@ -5646,3 +5646,225 @@ def test_restore_measurement_mode_and_testchart_restores_testchart(
     window._restore_measurement_mode_and_testchart()
     assert calls == ["/path/to.ti1"]
     assert getcfg("testchart.file.backup", False) in (False, None, "")
+
+
+# --- Help menu / post-launch update-check + instrument-setup/donation nag ----
+
+
+def test_help_menu_actions_present(window):
+    assert window.update_check_action is not None
+    assert window.update_check_onstartup_action is not None
+    assert window.update_check_onstartup_action.isCheckable()
+    assert window.update_check_onstartup_action.isChecked() == bool(
+        getcfg("update_check")
+    )
+
+
+def test_update_check_onstartup_action_persists_toggle(window):
+    window.update_check_onstartup_action.setChecked(False)
+    assert getcfg("update_check") == 0
+    window.update_check_onstartup_action.setChecked(True)
+    assert getcfg("update_check") == 1
+
+
+def test_check_for_updates_action_handler_runs_non_silent_check(window, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        window, "_run_update_check", lambda silent: calls.append(silent)
+    )
+    window._check_for_updates_action_handler()
+    assert calls == [False]
+
+
+def test_run_update_check_wires_controller_and_clears_on_finish(window, monkeypatch):
+    from DisplayCAL.ui import update_check_window as ucw
+
+    def fake_run(self, silent=False):
+        self.finished.emit(False)
+
+    monkeypatch.setattr(ucw.UpdateCheckController, "run", fake_run)
+    monkeypatch.setattr(
+        window, "_run_instrument_setup_and_donation_check", lambda: None
+    )
+    window._run_update_check(silent=True)
+    assert window._update_check_controller is None
+
+
+def test_run_post_launch_checks_runs_update_check_when_enabled(window, monkeypatch):
+    setcfg("update_check", 1)
+    calls = []
+    monkeypatch.setattr(
+        window, "_run_update_check", lambda silent: calls.append(silent)
+    )
+    window.run_post_launch_checks()
+    assert calls == [True]
+
+
+def test_run_post_launch_checks_skips_to_instrument_setup_when_disabled(
+    window, monkeypatch
+):
+    setcfg("update_check", 0)
+    calls = []
+    monkeypatch.setattr(
+        window,
+        "_run_instrument_setup_and_donation_check",
+        lambda: calls.append(True),
+    )
+    window.run_post_launch_checks()
+    assert calls == [True]
+
+
+def test_on_update_check_finished_chains_when_silent_and_not_found(
+    window, monkeypatch
+):
+    calls = []
+    monkeypatch.setattr(
+        window,
+        "_run_instrument_setup_and_donation_check",
+        lambda: calls.append(True),
+    )
+    window._on_update_check_finished(found=False, silent=True)
+    assert calls == [True]
+
+
+def test_on_update_check_finished_does_not_chain_when_update_found(
+    window, monkeypatch
+):
+    monkeypatch.setattr(
+        window,
+        "_run_instrument_setup_and_donation_check",
+        lambda: pytest.fail("should not chain"),
+    )
+    window._on_update_check_finished(found=True, silent=True)
+
+
+def test_on_update_check_finished_does_not_chain_when_not_silent(window, monkeypatch):
+    monkeypatch.setattr(
+        window,
+        "_run_instrument_setup_and_donation_check",
+        lambda: pytest.fail("should not chain"),
+    )
+    window._on_update_check_finished(found=False, silent=False)
+
+
+def test_instrument_setup_spyder2_needed_shows_notice_then_donation_check(
+    window, monkeypatch
+):
+    from DisplayCAL import instrument_setup as isetup
+
+    monkeypatch.setattr(
+        isetup,
+        "resolve_instrument_setup_needs",
+        lambda *a, **k: isetup.InstrumentSetupNeeds(
+            needs_spyder2_enable=True, needs_correction_import=False
+        ),
+    )
+    infos = []
+    monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: infos.append(a))
+    donation_calls = []
+    monkeypatch.setattr(
+        window, "_show_donation_message_if_needed", lambda: donation_calls.append(True)
+    )
+    window._run_instrument_setup_and_donation_check()
+    assert infos
+    assert donation_calls == [True]
+
+
+def test_instrument_setup_import_needed_runs_import_controller(window, monkeypatch):
+    from DisplayCAL import instrument_setup as isetup
+    from DisplayCAL.ui import colorimeter_correction_io as ccio
+
+    monkeypatch.setattr(
+        isetup,
+        "resolve_instrument_setup_needs",
+        lambda *a, **k: isetup.InstrumentSetupNeeds(
+            needs_spyder2_enable=False, needs_correction_import=True
+        ),
+    )
+
+    def fake_run(self):
+        self.finished.emit()
+
+    monkeypatch.setattr(ccio.ImportController, "run", fake_run)
+    refresh_calls = []
+    monkeypatch.setattr(
+        window,
+        "update_colorimeter_correction_matrix_ctrl_items",
+        lambda *a, **k: refresh_calls.append((a, k)),
+    )
+    donation_calls = []
+    monkeypatch.setattr(
+        window, "_show_donation_message_if_needed", lambda: donation_calls.append(True)
+    )
+    window._run_instrument_setup_and_donation_check()
+    assert refresh_calls
+    assert donation_calls == [True]
+    assert window._instrument_setup_import_controller is None
+
+
+def test_instrument_setup_nothing_needed_goes_straight_to_donation_check(
+    window, monkeypatch
+):
+    from DisplayCAL import instrument_setup as isetup
+
+    monkeypatch.setattr(
+        isetup,
+        "resolve_instrument_setup_needs",
+        lambda *a, **k: isetup.InstrumentSetupNeeds(
+            needs_spyder2_enable=False, needs_correction_import=False
+        ),
+    )
+    donation_calls = []
+    monkeypatch.setattr(
+        window, "_show_donation_message_if_needed", lambda: donation_calls.append(True)
+    )
+    window._run_instrument_setup_and_donation_check()
+    assert donation_calls == [True]
+
+
+def test_show_donation_message_if_needed_shows_dialog_when_flagged(
+    window, monkeypatch
+):
+    from DisplayCAL import instrument_setup as isetup
+
+    monkeypatch.setattr(isetup, "should_show_donation_message", lambda: True)
+    shown = []
+    monkeypatch.setattr(mw._DonationDialog, "exec_", lambda self: shown.append(True))
+    window._show_donation_message_if_needed()
+    assert shown == [True]
+
+
+def test_show_donation_message_if_needed_skips_dialog_when_not_flagged(
+    window, monkeypatch
+):
+    from DisplayCAL import instrument_setup as isetup
+
+    monkeypatch.setattr(isetup, "should_show_donation_message", lambda: False)
+    monkeypatch.setattr(
+        mw._DonationDialog, "exec_", lambda self: pytest.fail("should not show")
+    )
+    window._show_donation_message_if_needed()
+
+
+class TestDonationDialog:
+    def test_accept_launches_donate_url_and_clears_flag(self, window, monkeypatch):
+        setcfg("show_donation_message", 1)
+        launched = []
+        monkeypatch.setattr(mw, "launch_file", lambda url: launched.append(url))
+        dialog = mw._DonationDialog(window)
+        dialog.accept()
+        assert launched and launched[0].endswith("/#donate")
+        assert getcfg("show_donation_message") == 0
+
+    def test_reject_without_checkbox_keeps_flag_set(self, window):
+        setcfg("show_donation_message", 1)
+        dialog = mw._DonationDialog(window)
+        dialog.reject()
+        assert getcfg("show_donation_message") == 1
+
+    def test_reject_with_do_not_show_again_clears_flag(self, window):
+        setcfg("show_donation_message", 1)
+        dialog = mw._DonationDialog(window)
+        dialog._do_not_show_again_cb.setChecked(True)
+        dialog.reject()
+        assert getcfg("show_donation_message") == 0

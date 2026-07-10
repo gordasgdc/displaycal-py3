@@ -21,9 +21,13 @@ and reapplying the base bitmap's alpha channel / blurring after each zoom
 frame (Qt's ``QImage`` keeps alpha through scaling natively; the blur radius
 in the wx version was sub-pixel anyway).
 
-**Deferred to later integration** (Pile 2 dialogs not yet ported): the
-update-check prompt and the instrument-setup/donation nag that wx runs after
-the main window appears.
+Once :class:`~DisplayCAL.ui.main_window.MainWindow` is shown, :func:`main`
+calls its :meth:`~DisplayCAL.ui.main_window.MainWindow.run_post_launch_checks`
+(deferred one event-loop turn via ``QTimer.singleShot(0, ...)``, mirroring
+wx's ``wx.CallAfter`` in ``StartupFrame.setup_frame_finish`` so the window
+gains focus first) -- the update-check prompt and the instrument-setup/
+donation nag now run from there; see that method's docstring for what isn't
+reproduced (the Spyder2 firmware-enable wizard).
 """
 
 from __future__ import annotations
@@ -421,6 +425,7 @@ def main() -> int:
         window.listen()
         app.process_argv()
         controller.splash.finish(window)
+        QTimer.singleShot(0, window.run_post_launch_checks)
 
     controller = StartupController(_on_ready)
     app.top_window = controller.splash

@@ -2033,10 +2033,102 @@ needed): the desktop-screenshot-behind-a-shaped-window trick (`grab_image`,
 its macOS `screencapture` / Wayland `gnome-screenshot`/`spectacle` paths and
 gamma correction), and reapplying the base bitmap's alpha channel / blurring
 each zoom frame (`QImage` keeps alpha through scaling natively in Qt; the wx
-blur radius was sub-pixel anyway, so dropping it is invisible). **Deferred**
-(Pile 2 dialogs not yet ported): the update-check prompt and the
-instrument-setup/donation nag that wx runs right after the main window
-appears.
+blur radius was sub-pixel anyway, so dropping it is invisible).
+
+**Post-launch dialogs (update-check prompt, instrument-setup/donation nag) —
+DONE (2026-07-10).** Closed the deferral noted above (maintainer's choice,
+over the header-bar deferrals / standalone `LUT3DFrame` tool window /
+`CCXXPlot` visualization / madVR-Prisma 3D LUT API install). Ports the tail of
+wx's `StartupFrame.setup_frame_finish`: once the main window is shown, either
+a silent update check or the instrument-setup/donation-nag check runs,
+depending on the persisted `update_check` setting.
+
+New toolkit-neutral `DisplayCAL/update_check.py` (covered by
+`tests/test_update_check.py`, 22 tests, no display) is a **fresh copy** of the
+non-dialog pieces of `display_cal.py`'s `is_new_update` / `app_update_check` /
+`app_update_confirm` chain, not an extraction-and-delegate like the rest of
+this plan's toolkit-neutral modules: `display_cal.py` imports `wx` at module
+scope (so it can never be imported from the pure-Qt process, unlike
+`worker.py`/`argyll.py`/`config.py`), and its `is_new_update` /
+`get_download_url` already have dedicated tests that monkeypatch
+`display_cal.requests` / `display_cal.sys.platform` /
+`display_cal.platform.machine` directly on that module's namespace — a
+delegating wrapper would silently break them. `check_app_update()` /
+`check_argyll_update()` call the same GitHub / ArgyllCMS-binaries APIs as the
+wx originals and return a plain `UpdateCheckResult` (version strings,
+changelog HTML, resolved download URL) instead of driving a dialog. New
+toolkit-neutral `DisplayCAL/instrument_setup.py` (covered by
+`tests/test_instrument_setup.py`, 12 tests, no display) ports the detection
+half of `MainFrame.check_instrument_setup` (`resolve_instrument_setup_needs`,
+against `Worker.instruments` and the already-ported
+`ColorimeterCorrectionCatalog.instruments` in place of wx's
+`MainFrame.ccmx_instruments`) and the config-mutating gate of `check_donation`
+(`should_show_donation_message`, dropping the snapshot-build branch since it's
+never reached from the Qt path).
+
+`DisplayCAL/ui/update_check_window.py` (`UpdateCheckController`, covered by
+`tests/test_ui_update_check_window.py`, 9 tests, headless offscreen) checks
+both the DisplayCAL and ArgyllCMS release channels off the GUI thread in one
+background call, then shows an `_UpdateAvailableDialog` (changelog
+`QTextBrowser`, the "check on startup" checkbox, a single "Download"/"Go to
+website" button that opens the resolved URL via `launch_file` rather than
+reproducing wx's in-app auto-download-and-run flow) for whichever channel has
+a newer version — both, if both do — or, for a manual/non-silent check, a
+plain "up to date" `QMessageBox` when neither does. `MainWindow` gained a
+minimal Help menu (`_build_help_menu`: just the `update_check` /
+`update_check.onstartup` pair, not wx's license/support/bug-report entries)
+and `run_post_launch_checks()` (called by `ui/startup.py`'s `main()` one event
+loop turn after `window.show()`, via `QTimer.singleShot(0, ...)` mirroring
+wx's `wx.CallAfter`): silent update check first when `update_check` is set,
+chaining into `_run_instrument_setup_and_donation_check()` when it finds
+nothing (mirroring wx's `app_update_check` → `check_instrument_setup` chain),
+otherwise straight to the instrument-setup/donation check. That method reuses
+the already-ported `ImportController` (`colorimeter_correction_io.py`) for
+the colorimeter-correction-import branch — a real, working import flow, not a
+notice — and `_DonationDialog` (a new private `QDialog` on `main_window.py`,
+alongside `_CalChoiceDialog`) for the donation nag itself, a faithful port of
+`display_cal.donation_message`.
+
+**Dropped / deferred versus wx** (documented in the relevant module
+docstrings): the Spyder2 "enable" wizard
+(`MainFrame.enable_spyder2_handler`, which patches OEM firmware through the
+discontinued `spyd2en` Argyll utility for a colorimeter out of production
+since 2009) — detected (`InstrumentSetupNeeds.needs_spyder2_enable`) but
+shown as a not-yet-available notice instead of a wizard, then falls straight
+through to the donation check like a cancelled wx wizard would; the
+snapshot/beta release channel (never reached by any reachable wx call site
+either); the ZeroInstall packaging path (already hard-coded off in wx); wx's
+self-chained "check the other channel after declining" behaviour (this
+controller already checks both channels in one pass, so there's nothing to
+chain); and the in-app auto-download-and-run-the-installer flow (a large,
+separate feature — the dialog opens the resolved URL in the system browser
+instead).
+
+**Fixed a real, unrelated latent bug found while running the full test suite
+for this session:** `install_profile_handler` (`display_cal.py`) showed a
+real (unmocked) `InfoDialog` mid-suite reading "Unsupported profile type
+(b'mntr') and/or colorspace (b'RGB')" — nine call sites across
+`display_cal.py`, `worker.py`, `profile_install.py`, `wx_lut_viewer.py`,
+`wx_lut_3d_frame.py`, `wx_synth_icc_frame.py`, `wx_report_frame.py` and
+`wx_profile_info.py` built the `"profile.unsupported"` message from raw
+`ICCProfile.profileClass`/`.colorSpace`/`.connectionColorSpace` `bytes`
+without decoding them first, so `%s`-formatting rendered Python's `bytes`
+repr (`b'mntr'`) instead of `mntr`. All nine now `.decode("utf-8")` before
+formatting. Unrelated to this session's Qt work, but the wx full-suite run
+(no offscreen/virtual-display sandboxing on macOS the way the Qt tests get
+via `QT_QPA_PLATFORM=offscreen`) surfaced it as a real dialog requiring a
+click; the specific triggering test wasn't tracked down (out of scope here),
+but the message-formatting bug itself is real and unambiguous regardless of
+which test path reaches it.
+
+**Updated remaining-gaps list:** madVR/Prisma 3D LUT API install destinations
+(needs the still-unported `setup_patterngenerator` connection dialogs); the
+Spyder2 firmware-enable wizard (see above); the header-bar deferrals (EDID
+display matching, legacy `.cal` parsing, 3D LUT HDR config-mapper, archive
+import via load, per-file delete-confirmation checkboxes); `CCXXPlot`
+visualization; the standalone `LUT3DFrame` tool window; wx's full Help menu
+(license, "go to website", support, bug-report — only the update-check pair
+is reproduced); and Stage 7 (retire wx), still gated on maintainer confidence.
 
 ### Stage 7 — Retire wx code paths
 

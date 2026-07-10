@@ -90,6 +90,18 @@ black-point-compensation checkbox's enable/checked state, a port of
 and :meth:`_profile_type_ctrl_changed` — a real pre-existing gap before this
 session, since Stage 3 never wired it at all.
 
+A minimal Help menu (:meth:`MainWindow._build_help_menu`) carries the
+"check for updates" pair; :meth:`MainWindow.run_post_launch_checks` (called
+by :mod:`DisplayCAL.ui.startup` once the window is shown) is the Qt port of
+wx's ``StartupFrame.setup_frame_finish`` tail: a silent update check
+(:mod:`DisplayCAL.ui.update_check_window`) chaining into the instrument-setup
+/ donation-nag check (:mod:`DisplayCAL.instrument_setup`) when nothing needs
+updating. The colorimeter-correction import prompt reuses the same
+``ImportController`` the Tools menu does; the Spyder2 firmware-enable wizard
+is not reproduced (a not-yet-available notice instead, matching the
+madVR/Prisma-install precedent), see :mod:`DisplayCAL.instrument_setup`'s
+module docstring.
+
 The window is opt-in behind ``DISPLAYCAL_UI=qt`` / ``--qt`` (wired in
 :mod:`DisplayCAL.main`), so it never displaces the still-shipping wx main window.
 """
@@ -143,6 +155,7 @@ from DisplayCAL import (
     config,
     create_profile,
     gamap_settings,
+    instrument_setup,
     lut3d_settings,
     preflight_checks,
     profile_finish,
@@ -174,6 +187,7 @@ from DisplayCAL.icc_profile import (
     TextType,
     VideoCardGammaType,
 )
+from DisplayCAL.meta import DOMAIN
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.meta import VERSION_STRING
 from DisplayCAL.options import TEST
@@ -206,6 +220,7 @@ from DisplayCAL.ui.tooltip_window import TooltipWindow
 from DisplayCAL.ui.tools.profile_info import ProfileInfoWindow
 from DisplayCAL.ui.tools.synth_profile import SynthICCWindow
 from DisplayCAL.ui.tools.testchart_editor import TestchartEditorWindow
+from DisplayCAL.ui.update_check_window import UpdateCheckController
 from DisplayCAL.ui.worker_runner import AdjustmentController, WorkerRunController
 from DisplayCAL.util_decimal import stripzeros
 from DisplayCAL.util_dict import dict_sort
@@ -430,6 +445,59 @@ class _CalChoiceDialog(QDialog):
 
     def reset_cal(self) -> bool:
         return bool(self._reset_cal_cb and self._reset_cal_cb.isChecked())
+
+
+class _DonationDialog(QDialog):
+    """Qt port of ``display_cal.donation_message``.
+
+    Shown by :meth:`MainWindow._show_donation_message_if_needed` once no
+    instrument setup is pending, mirroring wx's post-``check_instrument_setup``
+    call to ``check_donation`` -> ``donation_message``. Accepting opens the
+    donation page and permanently clears ``show_donation_message``;
+    declining persists the "do not show again" checkbox instead.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(lang.getstr("welcome"))
+        layout = QVBoxLayout(self)
+
+        header = QLabel(lang.getstr("donation_header"), self)
+        font = header.font()
+        font.setPointSize(font.pointSize() + 4)
+        header.setFont(font)
+        layout.addWidget(header)
+
+        message = QLabel(lang.getstr("donation_message"), self)
+        message.setWordWrap(True)
+        layout.addWidget(message)
+
+        self._do_not_show_again_cb = QCheckBox(
+            lang.getstr("dialog.do_not_show_again"), self
+        )
+        layout.addWidget(self._do_not_show_again_cb)
+
+        buttons = QDialogButtonBox(self)
+        contribute_button = buttons.addButton(
+            lang.getstr("contribute"), QDialogButtonBox.AcceptRole
+        )
+        contribute_button.setDefault(True)
+        buttons.addButton(lang.getstr("not_now"), QDialogButtonBox.RejectRole)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def accept(self) -> None:  # noqa: D102 (Qt override)
+        launch_file(f"https://{DOMAIN}/#donate")
+        setcfg("show_donation_message", 0)
+        super().accept()
+
+    def reject(self) -> None:  # noqa: D102 (Qt override)
+        setcfg(
+            "show_donation_message",
+            int(not self._do_not_show_again_cb.isChecked()),
+        )
+        super().reject()
 
 
 def _as_float(value: object) -> float | None:
@@ -721,6 +789,12 @@ class MainWindow(BaseWindow):
         self._ccxx_create_window: CreateCorrectionWindow | None = None
         self._ccxx_import_controller: ImportController | None = None
         self._ccxx_upload_controller: UploadController | None = None
+        self._update_check_controller: UpdateCheckController | None = None
+        #: The colorimeter-correction import run from the post-launch
+        #: instrument-setup check (distinct from :attr:`_ccxx_import_controller`,
+        #: the Tools-menu-triggered one, so their ``finished`` handlers can stay
+        #: independent -- this one chains into the donation-message check).
+        self._instrument_setup_import_controller: ImportController | None = None
         #: Recent calibrations/profiles (index 0 is always "", the "new
         #: settings" choice) and bundled presets, mirroring wx's
         #: ``MainFrame.recent_cals`` / ``.presets``.
@@ -766,6 +840,7 @@ class MainWindow(BaseWindow):
         self._build_file_menu()
         self._build_options_menu()
         self._build_tools_menu()
+        self._build_help_menu()
         self.setup_language()
         # Run the committed Argyll measurement when a run is requested.
         self.measurement_requested.connect(self._on_measurement_requested)
@@ -1366,6 +1441,106 @@ class MainWindow(BaseWindow):
 
     def _on_ccxx_upload_finished(self) -> None:
         self._ccxx_upload_controller = None
+
+    def _build_help_menu(self) -> None:
+        """Add a Help menu with the "check for updates" items.
+
+        Toolkit-neutral scope note: wx's ``menu.help`` also carries the
+        license, "go to website", support and bug-report entries
+        (``mainmenu.xrc``); only ``update_check`` (manual check) and
+        ``update_check.onstartup`` (the persisted toggle) are reproduced
+        here, since they're the pair the post-launch check
+        (:meth:`run_post_launch_checks`) needs a menu home for.
+        """
+        help_menu = self.menuBar().addMenu(f"&{lang.getstr('menu.help')}")
+        self.update_check_action = help_menu.addAction(lang.getstr("update_check"))
+        self.update_check_action.triggered.connect(
+            self._check_for_updates_action_handler
+        )
+        self.update_check_onstartup_action = help_menu.addAction(
+            lang.getstr("update_check.onstartup")
+        )
+        self.update_check_onstartup_action.setCheckable(True)
+        self.update_check_onstartup_action.setChecked(bool(getcfg("update_check")))
+        self.update_check_onstartup_action.toggled.connect(
+            self._update_check_onstartup_toggled
+        )
+
+    def _update_check_onstartup_toggled(self, checked: bool) -> None:
+        setcfg("update_check", int(checked))
+
+    def _check_for_updates_action_handler(self) -> None:
+        """Manually check for DisplayCAL/ArgyllCMS updates (Help menu)."""
+        self._run_update_check(silent=False)
+
+    def _run_update_check(self, silent: bool) -> None:
+        controller = UpdateCheckController(self.worker, self)
+        controller.finished.connect(
+            lambda found: self._on_update_check_finished(found, silent)
+        )
+        self._update_check_controller = controller
+        controller.run(silent=silent)
+
+    def _on_update_check_finished(self, found: bool, silent: bool) -> None:
+        self._update_check_controller = None
+        self.update_check_onstartup_action.setChecked(bool(getcfg("update_check")))
+        if silent and not found:
+            self._run_instrument_setup_and_donation_check()
+
+    def run_post_launch_checks(self) -> None:
+        """Silently check for updates, then instrument setup / donation nag.
+
+        Qt port of the tail of wx's ``StartupFrame.setup_frame_finish``: once
+        the main window is shown, either kick off a silent update check
+        (chaining into the instrument-setup / donation check when it finds
+        nothing) or go straight to the instrument-setup / donation check,
+        depending on the persisted ``update_check`` setting. Called by
+        :mod:`DisplayCAL.ui.startup` once :class:`MainWindow` is shown; not
+        called by this module's own standalone ``main()`` so that manually
+        exercising the window during development doesn't nag about updates.
+        """
+        if getcfg("update_check"):
+            self._run_update_check(silent=True)
+        else:
+            self._run_instrument_setup_and_donation_check()
+
+    def _run_instrument_setup_and_donation_check(self) -> None:
+        """Qt port of ``MainFrame.check_instrument_setup``'s dispatch.
+
+        Not reproduced: the Spyder2 "enable" wizard (see
+        :mod:`DisplayCAL.instrument_setup`'s module docstring) -- shown as a
+        not-yet-available notice, then falls straight through to the
+        donation check like a cancelled wx wizard would.
+        """
+        needs = instrument_setup.resolve_instrument_setup_needs(
+            self.worker, self._ccmx_catalog.instruments.values()
+        )
+        if needs.needs_spyder2_enable:
+            QMessageBox.information(
+                self,
+                self.windowTitle(),
+                "Enabling this Spyder2 colorimeter isn't available in this "
+                "Qt build yet. Use Tools > Colorimeter correction > Import "
+                "to import a correction manually instead.",
+            )
+            self._show_donation_message_if_needed()
+            return
+        if needs.needs_correction_import:
+            controller = ImportController(self.worker, self)
+            controller.finished.connect(self._on_instrument_setup_import_finished)
+            self._instrument_setup_import_controller = controller
+            controller.run()
+            return
+        self._show_donation_message_if_needed()
+
+    def _on_instrument_setup_import_finished(self) -> None:
+        self._instrument_setup_import_controller = None
+        self.update_colorimeter_correction_matrix_ctrl_items(force=True)
+        self._show_donation_message_if_needed()
+
+    def _show_donation_message_if_needed(self) -> None:
+        if instrument_setup.should_show_donation_message():
+            _DonationDialog(self).exec_()
 
     def _show_advanced_options_toggled(self, checked: bool) -> None:
         """Persist the ``show_advanced_options`` flag and refresh gated rows."""
