@@ -690,7 +690,11 @@ def test_load_cal_handler_config_mapper_block_bytes_str_bugs(
     fixture_path = data_files[
         "UP2516D #1 2022-03-20 02-08 D6500 2.2 F-S XYZLUT+MTX.cal"
     ]
-    lines = fixture_path.read_bytes().split(b"\n")
+    # splitlines() (not split(b"\n")) so this is robust to Windows checkouts
+    # where git's core.autocrlf normalizes this text fixture to CRLF,
+    # otherwise a trailing "\r" on every line would break the exact-bytes
+    # index() lookup below.
+    lines = fixture_path.read_bytes().splitlines()
     data_format_index = lines.index(b"BEGIN_DATA_FORMAT")
     lines[data_format_index:data_format_index] = [
         b'PATCH_SEQUENCE "MAXIMIZE_RGB_DIFFERENCE"',
