@@ -12,10 +12,13 @@ on:
 env:
   ARGYLL_VERSION: "3.5.0"
   ARGYLL_REPO: "https://github.com/eoyilmaz/argyllcms-binaries/releases/download"
+  # Pinned wxPython release, available as a pre-built wheel for every
+  # supported Python version.
+  WX_VERSION: "4.2.5"
 
 jobs:
   linux:
-    name: Linux + Python ${{ matrix.python-version }} + wxPython ${{ matrix.wx-version }}
+    name: Linux + Python ${{ matrix.python-version }}
     env:
       DISPLAY: :0
       DEBIAN_FRONTEND: noninteractive
@@ -24,74 +27,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # tedious but easier... As we do not have all wxPython version for
-          # all other Python versions, and more so the wxPython package name
-          # changes from "wxPython" to "wxpython" for 4.2.3 and up...
-
-          # Python 3.10
-          - python-version: "3.10"
-            wx-version: "4.2.2"
-            wx_name: "wxPython"
-          - python-version: "3.10"
-            wx-version: "4.2.3"
-            wx_name: "wxpython"
-          - python-version: "3.10"
-            wx-version: "4.2.4"
-            wx_name: "wxpython"
-          - python-version: "3.10"
-            wx-version: "4.2.5"
-            wx_name: "wxpython"
-
-          # Python 3.11
-          - python-version: "3.11"
-            wx-version: "4.2.2"
-            wx_name: "wxPython"
-          - python-version: "3.11"
-            wx-version: "4.2.3"
-            wx_name: "wxpython"
-          - python-version: "3.11"
-            wx-version: "4.2.4"
-            wx_name: "wxpython"
-          - python-version: "3.11"
-            wx-version: "4.2.5"
-            wx_name: "wxpython"
-
-          # Python 3.12
-          - python-version: "3.12"
-            wx-version: "4.2.2"
-            wx_name: "wxPython"
-          - python-version: "3.12"
-            wx-version: "4.2.3"
-            wx_name: "wxpython"
-          - python-version: "3.12"
-            wx-version: "4.2.4"
-            wx_name: "wxpython"
-          - python-version: "3.12"
-            wx-version: "4.2.5"
-            wx_name: "wxpython"
-
-          # Python 3.13
-          - python-version: "3.13"
-            wx-version: "4.2.2"
-            wx_name: "wxPython"
-          - python-version: "3.13"
-            wx-version: "4.2.3"
-            wx_name: "wxpython"
-          - python-version: "3.13"
-            wx-version: "4.2.4"
-            wx_name: "wxpython"
-          - python-version: "3.13"
-            wx-version: "4.2.5"
-            wx_name: "wxpython"
-
-          # Python 3.14
-          - python-version: "3.14"
-            wx-version: "4.2.4"
-            wx_name: "wxpython"
-          - python-version: "3.14"
-            wx-version: "4.2.5"
-            wx_name: "wxpython"
+        python-version:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
 
     steps:
     - uses: actions/checkout@v5
@@ -151,12 +92,11 @@ jobs:
     - name: Install wheel helper
       run: uv pip install --system wheel
 
-    - name: Install wxPython ${{ matrix.wx-version }}
+    - name: Install wxPython ${{ env.WX_VERSION }}
       run: |
         py_version="${{ matrix.python-version }}"
         py_version="${py_version//./}"
-        wx_name="${{ matrix.wx_name}}"
-        uv pip install --system "https://extras.wxpython.org/wxPython4/extras/linux/gtk3/ubuntu-22.04/${wx_name}-${{ matrix.wx-version }}-cp${py_version}-cp${py_version}-linux_x86_64.whl"
+        uv pip install --system "https://extras.wxpython.org/wxPython4/extras/linux/gtk3/ubuntu-22.04/wxpython-${{ env.WX_VERSION }}-cp${py_version}-cp${py_version}-linux_x86_64.whl"
 
     - name: Install Python dependencies
       run: |
@@ -179,12 +119,12 @@ jobs:
     - name: Archive code coverage results
       uses: actions/upload-artifact@v6
       with:
-        name: code-coverage-report-${{ matrix.python-version }}-${{ matrix.wx-version }}-linux
+        name: code-coverage-report-${{ matrix.python-version }}-${{ env.WX_VERSION }}-linux
         path: htmlcov
         retention-days: 10
 
   windows:
-    name: Windows + Python ${{ matrix.python-version }} + wxPython ${{ matrix.wx-version }}
+    name: Windows + Python ${{ matrix.python-version }}
     runs-on: windows-latest
 
     strategy:
@@ -193,11 +133,6 @@ jobs:
         python-version:
           - "3.10"
           - "3.11"
-        wx-version:
-          - "4.2.2"
-          - "4.2.3"
-          - "4.2.4"
-          - "4.2.5"
 
     steps:
     - uses: actions/checkout@v5
@@ -229,9 +164,9 @@ jobs:
         $ScriptsPath = python -c "import sysconfig,os; print(sysconfig.get_path('scripts'))"
         Add-Content $env:GITHUB_PATH $ScriptsPath
 
-    - name: Install wxPython ${{ matrix.wx-version }}
+    - name: Install wxPython ${{ env.WX_VERSION }}
       run: |
-        uv pip install --system wxPython==${{ matrix.wx-version }}
+        uv pip install --system wxPython==${{ env.WX_VERSION }}
 
     - name: Install Python dependencies
       run: |
@@ -258,35 +193,22 @@ jobs:
     - name: Archive code coverage results
       uses: actions/upload-artifact@v6
       with:
-        name: code-coverage-report-${{ matrix.python-version }}-${{ matrix.wx-version }}-windows
+        name: code-coverage-report-${{ matrix.python-version }}-${{ env.WX_VERSION }}-windows
         path: htmlcov
         retention-days: 10
 
   macos:
-    name: macOS + Python ${{ matrix.python-version }} + wxPython ${{ matrix.wx-version }}
+    name: macOS + Python ${{ matrix.python-version }}
     runs-on: macos-14
 
     strategy:
       fail-fast: false
       matrix:
-        # for now we just care about the Python version.
-        # After the workflow stabilizes we introduce different wxPython versions
-        # too...
         python-version:
           - "3.11"
           - "3.12"
           - "3.13"
           - "3.14"
-        wx-version:
-          - "4.2.2"
-          - "4.2.3"
-          - "4.2.4"
-          - "4.2.5"
-        exclude:
-          - wx-version: "4.2.2"
-            python-version: "3.14"
-          - wx-version: "4.2.3"
-            python-version: "3.14"
 
     steps:
     - uses: actions/checkout@v5
@@ -315,9 +237,9 @@ jobs:
     - name: Install wheel helper
       run: uv pip install --system wheel
 
-    - name: Install wxPython ${{ matrix.wx-version }}
+    - name: Install wxPython ${{ env.WX_VERSION }}
       run: |
-        uv pip install --system wxPython==${{ matrix.wx-version }}
+        uv pip install --system wxPython==${{ env.WX_VERSION }}
 
     - name: Install Python dependencies
       run: |
@@ -339,6 +261,6 @@ jobs:
     - name: Archive code coverage results
       uses: actions/upload-artifact@v6
       with:
-        name: code-coverage-report-${{ matrix.python-version }}-${{ matrix.wx-version }}-macos
+        name: code-coverage-report-${{ matrix.python-version }}-${{ env.WX_VERSION }}-macos
         path: htmlcov
         retention-days: 10
