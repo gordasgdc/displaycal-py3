@@ -37,10 +37,11 @@ from DisplayCAL.display_cal import (
     StartupFrame,
     webbrowser_open,
 )
+from DisplayCAL.icc_profile import ICCProfile
 from DisplayCAL.util_str import universal_newlines
 from DisplayCAL.util_list import intlist
 from DisplayCAL.worker import Worker, check_ti3
-from DisplayCAL.wx_windows import ConfirmDialog, BaseInteractiveDialog
+from DisplayCAL.wx_windows import ConfirmDialog, BaseInteractiveDialog, InfoDialog
 
 
 @pytest.fixture(scope="session", name="app", autouse=True)
@@ -513,3 +514,84 @@ def test_create_profile_name_crc32_without_edid(
     monkeypatch.setattr(mainframe.worker, "get_display_edid", lambda: {})
     mainframe.profile_name_textctrl.SetValue("name-%crc32-suffix")
     assert mainframe.create_profile_name() == "name-suffix"
+
+
+def test_create_profile_handler_accepts_valid_embedded_cti3(
+    data_files, mainframe: MainFrame
+) -> None:
+    """Regression test for issue #811: bytes-vs-str "CTI3" comparison bug.
+
+    ``(profile.tags.get("CIED", "") or profile.tags.get("targ", ""))[0:4] !=
+    "CTI3"`` compared the ``bytes`` slice of an embedded ``Text`` tag against
+    the ``str`` literal ``"CTI3"``, which is never equal in Python 3, so the
+    "no embedded ti3" error fired for every ICC profile regardless of its
+    actual content. Uses a real profile with a valid embedded CTI3 chart and
+    asserts the ``profile.no_embedded_ti3`` ``InfoDialog`` is never shown.
+    """
+    icc_path = str(
+        data_files[
+            "UP2516D #1 2022-03-20 02-08 D6500 2.2 F-S XYZLUT+MTX.icc"
+        ].absolute()
+    )
+    with check_call(InfoDialog, "ShowModal", wx.ID_OK, call_count=0):
+        with check_call(wx.FileDialog, "ShowModal", wx.ID_CANCEL, call_count=1):
+            mainframe.create_profile_handler(None, icc_path, False)
+
+
+def test_measurement_file_check_handler_regenerates_profile_without_typeerror(
+    data_files, mainframe: MainFrame, monkeypatch
+) -> None:
+    """Regression test for issue #811.
+
+    Covers two bugs in ``measurement_file_check_handler()``'s profile
+    regeneration branch:
+
+    1. The bytes-vs-str "CTI3" comparison (same bug as
+       ``test_create_profile_handler_accepts_valid_embedded_cti3`` above, but
+       at this method's own call site): asserted via the
+       ``profile.no_embedded_ti3`` ``InfoDialog`` never being shown.
+    2. ``profile.tags.targ = TextType(b"text\\0\\0\\0\\0" + ti3 + b"\\0", ...)``
+       concatenated ``bytes`` with a ``CGATS`` instance (``ti3`` is reassigned
+       to ``CGATS(ti3)`` earlier in the method), raising ``TypeError`` on
+       every profile regeneration. Fixed by using ``bytes(ti3)``.
+    """
+    icc_path = str(
+        data_files[
+            "UP2516D #1 2022-03-20 02-08 D6500 2.2 F-S XYZLUT+MTX.icc"
+        ].absolute()
+    )
+
+    def _fake_confirm(self, ti3=None, force=False, parent=None):
+        # Skip the sanity-check dialog itself (covered elsewhere); pretend
+        # the user removed a suspicious patch so the regeneration branch runs.
+        ti3.modified = True
+        return True
+
+    # wx.FileDialog is DisplayCAL.wx_fixes.FileDialog, whose GetPath()/etc.
+    # are proxied to an inner ``self.filedialog`` via __getattr__ rather than
+    # being real class attributes, so stub GetPath as an instance attribute
+    # (which __getattr__ never intercepts) right after construction.
+    original_filedialog_init = wx.FileDialog.__init__
+
+    def _fake_filedialog_init(self, *args, **kwargs):
+        original_filedialog_init(self, *args, **kwargs)
+        self.GetPath = lambda: icc_path
+
+    monkeypatch.setattr(wx.FileDialog, "__init__", _fake_filedialog_init)
+    monkeypatch.setattr(wx.FileDialog, "ShowModal", lambda self: wx.ID_OK)
+    monkeypatch.setattr(
+        MainFrame, "measurement_file_check_confirm", _fake_confirm
+    )
+    monkeypatch.setattr(ConfirmDialog, "ShowModal", lambda self: wx.ID_OK)
+    create_profile_calls = []
+    monkeypatch.setattr(
+        MainFrame,
+        "create_profile_handler",
+        lambda self, event, path, skip_ti3_check: create_profile_calls.append(path),
+    )
+    with check_call(InfoDialog, "ShowModal", wx.ID_OK, call_count=0):
+        mainframe.measurement_file_check_handler(None)
+    assert len(create_profile_calls) == 1
+    assert create_profile_calls[0].endswith(
+        os.path.basename(icc_path)
+    )
