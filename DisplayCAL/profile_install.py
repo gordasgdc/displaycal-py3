@@ -29,7 +29,10 @@ class ProfileUnsupportedError(Exception):
         self.profile_class = profile_class
         self.color_space = color_space
         super().__init__(
-            lang.getstr("profile.unsupported", (profile_class, color_space))
+            lang.getstr(
+                "profile.unsupported",
+                (profile_class.decode("utf-8"), color_space.decode("utf-8")),
+            )
         )
 
 
