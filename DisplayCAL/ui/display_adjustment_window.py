@@ -32,7 +32,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from qtpy.QtCore import Qt, Signal
-from qtpy.QtGui import QIcon, QPixmap
+from qtpy.QtGui import QIcon, QPainter, QPixmap
 from qtpy.QtWidgets import (
     QButtonGroup,
     QGridLayout,
@@ -118,6 +118,54 @@ _LUM_ICONS = {
 def _pixmap_icon(size: int, name: str) -> QIcon:
     """Return a themed pixmap wrapped as a ``QIcon`` (possibly empty)."""
     return QIcon(get_theme_pixmap(size, name))
+
+
+def _tab_state_pixmap(name: str) -> QPixmap:
+    """Load one of the page-selector's droplet-shaped tab-state PNGs.
+
+    ``theme/tab_selected.png`` / ``theme/tab_hilite.png`` live directly under
+    ``theme/`` (not ``theme/icons/<size>x<size>/``), so this bypasses
+    :func:`~DisplayCAL.ui.assets.get_theme_pixmap`.
+    """
+    path = get_data_path(f"theme/{name}.png")
+    return QPixmap(path) if path else QPixmap()
+
+
+class _SelectorButton(QToolButton):
+    """A page-selector button with wx's droplet-shaped checked/hover
+    background instead of Qt's native checked-button chrome.
+
+    Port of ``DisplayAdjustmentImageContainer.OnPaint``, which draws the
+    ``tab_selected`` state image behind the currently-selected tab's icon,
+    and ``tab_hilite`` behind a hovered one.
+    """
+
+    _selected_pixmap: QPixmap | None = None
+    _hilite_pixmap: QPixmap | None = None
+
+    def __init__(self) -> None:
+        super().__init__()
+        if _SelectorButton._selected_pixmap is None:
+            _SelectorButton._selected_pixmap = _tab_state_pixmap("tab_selected")
+            _SelectorButton._hilite_pixmap = _tab_state_pixmap("tab_hilite")
+        if not self._selected_pixmap.isNull():
+            self.setFixedSize(self._selected_pixmap.size())
+        self.setStyleSheet(
+            "QToolButton, QToolButton:checked, QToolButton:hover {"
+            " border: none; background: transparent; }"
+        )
+
+    def paintEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        pixmap = None
+        if self.isChecked():
+            pixmap = self._selected_pixmap
+        elif self.underMouse():
+            pixmap = self._hilite_pixmap
+        if pixmap is not None and not pixmap.isNull():
+            painter = QPainter(self)
+            painter.drawPixmap(self.rect(), pixmap)
+            painter.end()
+        super().paintEvent(event)
 
 
 def _gauge_stylesheet(name: str, ctrltype: str) -> str:
@@ -428,12 +476,13 @@ class DisplayAdjustmentWindow(BaseWindow):
             page = _AdjustmentPage(ctrltype, title)
             self.pages.append(page)
             self._stack.addWidget(page)
-            button = QToolButton()
+            button = _SelectorButton()
             button.setCheckable(True)
             button.setAutoRaise(True)
             button.setToolTip(title)
-            button.setIcon(_pixmap_icon(72, ctrltype))
-            button.setIconSize(get_theme_pixmap(72, ctrltype).size())
+            icon_name = _SELECTOR_ICONS[ctrltype][False]
+            button.setIcon(_pixmap_icon(72, icon_name))
+            button.setIconSize(get_theme_pixmap(72, icon_name).size())
             button.clicked.connect(lambda _c=False, i=index: self._on_select(i))
             self._selector.addButton(button, index)
             self._selector_buttons.append(button)
