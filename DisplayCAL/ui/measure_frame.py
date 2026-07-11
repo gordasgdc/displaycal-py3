@@ -539,6 +539,21 @@ class MeasureFrame(BaseWindow):
                     self.display_size_mm[geometry] = size_mm
                 else:
                     size_mm = None
+        if size_mm is None:
+            # real_display_size_mm() has no macOS/Windows implementation (it
+            # only resolves physical size on Wayland), so it returns (0, 0)
+            # on those platforms. Fall back to Qt's own per-screen physical
+            # size query -- the equivalent of wx's ``wx.DisplaySizeMM()``
+            # fallback in wx_measure_frame.get_default_size(). Without this,
+            # the 300 px constant below is used regardless of the actual
+            # display, which on a non-Retina external monitor next to a
+            # Retina built-in one under-sizes the default by ~1.5x and
+            # inflates the scale saved to ``dimensions.measureframe`` (and
+            # thus the patch size Argyll draws) by the same factor.
+            physical = screen.physicalSize()
+            if physical.width() and physical.height():
+                size_mm = [physical.width(), physical.height()]
+                self.display_size_mm[geometry] = size_mm
         if size_mm:
             return float(
                 default_measureframe_size(

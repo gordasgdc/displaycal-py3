@@ -18806,7 +18806,15 @@ BEGIN_DATA
         if isinstance(txt, bytes):
             txt = txt.decode()
 
-        wx.CallAfter(self.audio_visual_feedback, txt)
+        if wx.GetApp() is not None:
+            wx.CallAfter(self.audio_visual_feedback, txt)
+        else:
+            # No wx.App (e.g. running under the Qt UI): nothing to marshal
+            # onto a wx main loop, so call directly. audio_visual_feedback
+            # only touches progress_wnd via hasattr/getattr and plays sounds
+            # through the toolkit-independent Sound.safe_play(), both safe
+            # off the GUI thread.
+            self.audio_visual_feedback(txt)
         if getattr(self, "measure_cmd", None):
             # i1 Pro, Spyders: Instrument Type
             # i1D3: Product Name
@@ -18964,7 +18972,12 @@ BEGIN_DATA
                 else:
                     self.madtpg.set_progress_bar_pos(start, end)
         # Parse
-        wx.CallAfter(self.parse, txt)
+        if wx.GetApp() is not None:
+            wx.CallAfter(self.parse, txt)
+        else:
+            # No wx.App (e.g. running under the Qt UI): call directly, same
+            # as the audio_visual_feedback dispatch above.
+            self.parse(txt)
 
     @property
     def _use_patternwindow(self):
