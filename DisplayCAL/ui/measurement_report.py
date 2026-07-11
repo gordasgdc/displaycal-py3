@@ -16,7 +16,7 @@ surfaced as Qt signals for the Qt main window to wire up, matching the
 deferral :class:`DisplayCAL.ui.measure_frame.MeasureFrame` made for its
 Measure button:
 
-* :attr:`ReportWindow.measure_requested` — the actual measurement run
+* :attr:`ReportPanel.measure_requested` — the actual measurement run
   (``setup_measurement`` / ``measurement_report`` / the big
   ``measurement_report_consumer`` ``placeholders2data`` assembly) lives in
   ``MainWindow``; standalone the button just emits this signal. Its bool
@@ -26,7 +26,7 @@ Measure button:
   profile's own tables instead of measuring) rather than a real measurement.
   The button's label swaps to ``self_check_report`` while Alt is held, same as
   wx's ``MainFrame.check_keydown`` polling timer.
-* :attr:`ReportWindow.edit_chart_requested` — opening the test-chart editor on
+* :attr:`ReportPanel.edit_chart_requested` — opening the test-chart editor on
   the parent window; standalone it is a no-op.
 
 The wx frame is built from ``xrc/report.xrc``; here the same widget set and
@@ -94,6 +94,8 @@ from DisplayCAL.util_list import natsort_key_factory
 from DisplayCAL.worker import Worker, get_current_profile_path
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from qtpy.QtGui import QCloseEvent
 
 #: File suffixes accepted for the profile controls / drag-and-drop.
@@ -107,20 +109,45 @@ CHART_SUFFIXES = (".cgats", ".cie", ".ti1", ".ti2", ".ti3", ".txt")
 TRC_ITEMS = ("Gamma 2.2", "trc.rec1886", "custom")
 
 
+def friendly_file_name(path: str) -> str:
+    """Return a human-readable label for ``path``.
+
+    Port of ``FileBrowseBitmapButtonWithChoiceHistory.GetName()``
+    (``wx_windows.py``): an ICC/ICM profile's embedded description if it has
+    one and is readable, else the file's base name -- run through
+    ``lang.getstr()`` either way, so a bundled testchart's file name (e.g.
+    ``"verify_extended.ti1"``, itself used as the translation key in
+    ``lang/en.yaml``) resolves to its friendly name ("Extended verification
+    testchart") while an arbitrary user file just keeps its own base name.
+
+    Args:
+        path (str): An absolute file path.
+    """
+    name = None
+    if os.path.splitext(path)[1].lower() in (".icc", ".icm"):
+        try:
+            name = ICCProfile(path).getDescription()
+        except (OSError, ICCProfileInvalidError):
+            pass
+    if not name:
+        name = os.path.basename(path)
+    return lang.getstr(name)
+
+
 class _GuardContext:
     """Suppress re-entrant control-change handlers while active.
 
     Qt emits ``toggled`` / ``valueChanged`` from programmatic ``setChecked`` /
     ``setValue`` (wx does not fire events from ``SetValue``), so while this
-    context is active :attr:`ReportWindow._updating` is truthy and the affected
+    context is active :attr:`ReportPanel._updating` is truthy and the affected
     slots return early instead of recursing when the bulk update methods set
     control values. The previous flag is saved/restored so nesting is safe.
 
     Args:
-        window (ReportWindow): The window whose update guard to toggle.
+        window (ReportPanel): The panel whose update guard to toggle.
     """
 
-    def __init__(self, window: ReportWindow) -> None:
+    def __init__(self, window: ReportPanel) -> None:
         self._window = window
 
     def __enter__(self) -> None:
@@ -136,12 +163,22 @@ class _FileBrowse(QWidget):
 
     Qt stand-in for wx ``FileBrowseButtonWithHistory``: an editable combo box
     (the drop-down keeps recently-used / preset paths as history) followed by a
-    browse button. The current value is the combo's edit text.
+    browse button.
 
     Args:
         dialog_title (str): Title for the file-open dialog.
         wildcard (str): Qt name filter, e.g. ``"ICC (*.icc *.icm)"``.
         parent (QWidget | None): Optional Qt parent.
+        name_func (Callable[[str], str] | None): Converts an absolute path to
+            the label shown in the combo (history items and the current
+            selection alike); the real path is kept as each item's
+            ``Qt.UserRole`` data and returned by :meth:`path` regardless of
+            what's displayed. Defaults to showing the raw path verbatim.
+            Mirrors wx's ``FileBrowseBitmapButtonWithChoiceHistory.GetName()``
+            (see :func:`friendly_file_name`), which is why e.g. the
+            Verification tab's chart/profile pickers show "Extended
+            verification testchart" instead of the bundled ``.ti1``'s full
+            path.
     """
 
     #: Emitted when the path changes (browse, history pick or typed entry).
@@ -152,12 +189,14 @@ class _FileBrowse(QWidget):
         dialog_title: str = "",
         wildcard: str = "",
         parent: QWidget | None = None,
+        name_func: Callable[[str], str] | None = None,
     ) -> None:
         super().__init__(parent)
         self._dialog_title = dialog_title
         self._wildcard = wildcard
         self._committed = ""
         self._history: list[str] = []
+        self._name_func = name_func or (lambda path: path)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self._combo = QComboBox()
@@ -175,9 +214,18 @@ class _FileBrowse(QWidget):
     def path(self) -> str:
         """Return the current path.
 
+        Resolves through the selected item's stored path when the visible
+        text is an unmodified history/preset label; falls back to the raw
+        edit text for freeform typing, matching :meth:`set_path`.
+
         Returns:
             str: The current path (may be empty).
         """
+        index = self._combo.currentIndex()
+        if index >= 0 and self._combo.itemText(index) == self._combo.currentText():
+            data = self._combo.itemData(index)
+            if data:
+                return data
         return self._combo.currentText()
 
     def set_path(self, path: str | None) -> None:
@@ -187,34 +235,41 @@ class _FileBrowse(QWidget):
             path (str | None): The path to show (``None`` clears the field).
         """
         path = path or ""
-        if path and self._combo.findText(path) == -1:
-            self._combo.addItem(path)
         self._committed = path
-        self._combo.setEditText(path)
+        if not path:
+            self._combo.setEditText("")
+            return
+        index = self._combo.findData(path)
+        if index == -1:
+            self._combo.addItem(self._name_func(path), path)
+            index = self._combo.count() - 1
+        self._combo.setCurrentIndex(index)
 
     def set_history(self, paths: list[str]) -> None:
-        """Populate the drop-down history, preserving the current edit text.
+        """Populate the drop-down history, preserving the current path.
 
         Args:
             paths (list[str]): Absolute paths to offer in the drop-down.
         """
         self._history = list(paths)
-        current = self._combo.currentText()
+        current = self._committed
         self._combo.blockSignals(True)
         self._combo.clear()
-        self._combo.addItems(self._history)
-        self._combo.setEditText(current)
+        for path in self._history:
+            self._combo.addItem(self._name_func(path), path)
         self._combo.blockSignals(False)
+        self.set_path(current)
 
     def _on_activated(self, _index: int) -> None:
-        self._committed = self._combo.currentText()
+        self._committed = self.path()
         self.changed.emit()
 
     def _on_edit_finished(self) -> None:
         # editingFinished also fires on focus-out without changes; only react to
         # an actual edit, mirroring the wx changeCallback.
-        if self._combo.currentText() != self._committed:
-            self._committed = self._combo.currentText()
+        current = self.path()
+        if current != self._committed:
+            self._committed = current
             self.changed.emit()
 
     def _on_browse(self) -> None:
@@ -227,11 +282,17 @@ class _FileBrowse(QWidget):
             self.changed.emit()
 
 
-class ReportWindow(BaseWindow):
-    """The measurement-report settings window.
+class ReportPanel(QWidget):
+    """The measurement-report settings controls.
+
+    Qt equivalent of wx's ``report.xrc`` panel (``mr_settings_panel``): the
+    same widget set embeds both in the standalone :class:`ReportWindow` (via
+    ``setCentralWidget``) and as the Qt main window's Verification tab
+    (mirroring wx's ``MainFrame`` embedding the same panel as its 5th tab,
+    ``display_cal.py:2450-2458``).
 
     Args:
-        parent (QWidget | None): Optional parent window.
+        parent (QWidget | None): Optional parent widget.
     """
 
     #: Emitted when the Measure button is pressed. The Qt main window connects
@@ -244,15 +305,39 @@ class ReportWindow(BaseWindow):
     #: opens its test-chart editor; standalone it is a no-op.
     edit_chart_requested = Signal()
 
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(
-            parent=parent,
-            name="reportframe",
-            title=lang.getstr("measurement_report"),
-            icon_name=APPNAME.lower(),
-        )
-        self.worker = Worker()
-        self.worker.set_argyll_version("xicclu")
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        show_measure_button: bool = True,
+        worker: Worker | None = None,
+    ) -> None:
+        """Construct the panel.
+
+        Args:
+            parent (QWidget | None): Optional parent widget.
+            show_measure_button (bool): Whether to build the panel's own
+                "Measure" button. ``report.xrc`` itself has no such button --
+                wx's standalone ``ReportFrame`` adds one programmatically
+                (``wx_report_frame.py:78``), while the embedded ``MainFrame``
+                tab relies on the shared ``buttonpanel``'s
+                ``measurement_report_btn`` instead. Default ``True`` matches
+                the standalone case (:class:`ReportWindow`); the Qt main
+                window's Verification tab passes ``False``.
+            worker (Worker | None): A pre-enumerated worker to adopt, mirroring
+                wx's ``MainFrame`` (which inherits ``ReportFrame`` and so
+                shares one ``self.worker`` for both) -- the Qt main window
+                passes its own instead of paying for a second Argyll-version
+                probe. Standalone (and tests) get a fresh one when omitted.
+        """
+        super().__init__(parent)
+        self._show_measure_button = show_measure_button
+        #: Set by :meth:`mr_update_controls`; see :meth:`can_measure`.
+        self._mr_can_measure = False
+        if worker is not None:
+            self.worker = worker
+        else:
+            self.worker = Worker()
+            self.worker.set_argyll_version("xicclu")
 
         # Profile-lookup blackpoints (see the wx frame). XYZbpout starts as None
         # and is seeded slightly above zero when an output profile is selected
@@ -287,7 +372,6 @@ class ReportWindow(BaseWindow):
             droptarget.install_on(ctrl)
 
         self.mr_update_controls()
-        self.restore_position()
 
     def _guard(self) -> _GuardContext:
         """Return a context manager that suppresses re-entrant handlers.
@@ -301,13 +385,16 @@ class ReportWindow(BaseWindow):
 
     def _build_ui(self) -> None:
         """Build the settings grid, Measure button and info panel."""
-        central = QWidget(self)
-        root = QVBoxLayout(central)
+        root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
 
-        # Header label.
+        # Header label (bold, matching wx's ``init_controls`` font-weight bump
+        # for ``mr_settings_label`` alongside the other tabs' headers).
         self.mr_settings_label = QLabel(lang.getstr("verification.settings"))
         self.mr_settings_label.setContentsMargins(16, 14, 0, 10)
+        header_font = self.mr_settings_label.font()
+        header_font.setBold(True)
+        self.mr_settings_label.setFont(header_font)
         root.addWidget(self.mr_settings_label)
 
         # 2-column settings grid.
@@ -330,18 +417,20 @@ class ReportWindow(BaseWindow):
         root.addWidget(grid_host)
 
         # Measure button (wx inserts it between the grid and info panel,
-        # right-aligned).
-        button_row = QHBoxLayout()
-        button_row.setContentsMargins(0, 0, 16, 16)
-        button_row.addStretch(1)
-        self.measurement_report_btn = QPushButton(lang.getstr("measure"))
-        self.measurement_report_btn.setDefault(True)
-        self.measurement_report_btn.clicked.connect(self._measure_btn_clicked)
-        button_row.addWidget(self.measurement_report_btn)
-        root.addLayout(button_row)
+        # right-aligned) -- only for the standalone window; the embedded
+        # Verification tab uses the shared action-bar button instead (see
+        # :meth:`__init__`).
+        if self._show_measure_button:
+            button_row = QHBoxLayout()
+            button_row.setContentsMargins(0, 0, 16, 16)
+            button_row.addStretch(1)
+            self.measurement_report_btn = QPushButton(lang.getstr("measure"))
+            self.measurement_report_btn.setDefault(True)
+            self.measurement_report_btn.clicked.connect(self._measure_btn_clicked)
+            button_row.addWidget(self.measurement_report_btn)
+            root.addLayout(button_row)
 
         root.addWidget(self._build_info_panel(), 1)
-        self.setCentralWidget(central)
 
     def _measure_btn_clicked(self) -> None:
         """Emit :attr:`measure_requested`, reporting whether Alt is held.
@@ -374,7 +463,7 @@ class ReportWindow(BaseWindow):
         row = QWidget()
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
-        self.chart_ctrl = _FileBrowse()
+        self.chart_ctrl = _FileBrowse(name_func=friendly_file_name)
         layout.addWidget(self.chart_ctrl, 1)
         self.fields_ctrl = QComboBox()
         self.fields_ctrl.addItems(["CMYK", "LAB", "RGB", "XYZ"])
@@ -420,7 +509,7 @@ class ReportWindow(BaseWindow):
         self.simulation_profile_cb.toggled.connect(
             self.use_simulation_profile_ctrl_handler
         )
-        self.simulation_profile_ctrl = _FileBrowse()
+        self.simulation_profile_ctrl = _FileBrowse(name_func=friendly_file_name)
         self._add_row(self.simulation_profile_cb, self.simulation_profile_ctrl)
 
         row = QWidget()
@@ -570,7 +659,7 @@ class ReportWindow(BaseWindow):
         """Build the device-link profile checkbox/browse row."""
         self.devlink_profile_cb = QCheckBox(lang.getstr("devicelink_profile"))
         self.devlink_profile_cb.toggled.connect(self.use_devlink_profile_ctrl_handler)
-        self.devlink_profile_ctrl = _FileBrowse()
+        self.devlink_profile_ctrl = _FileBrowse(name_func=friendly_file_name)
         self._add_row(self.devlink_profile_cb, self.devlink_profile_ctrl)
 
     def _build_output_row(self) -> None:
@@ -580,7 +669,7 @@ class ReportWindow(BaseWindow):
         row = QWidget()
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
-        self.output_profile_ctrl = _FileBrowse()
+        self.output_profile_ctrl = _FileBrowse(name_func=friendly_file_name)
         self.output_profile_ctrl.setVisible(False)
         layout.addWidget(self.output_profile_ctrl, 1)
         self.output_profile_current_btn = QPushButton(lang.getstr("profile.current"))
@@ -598,7 +687,12 @@ class ReportWindow(BaseWindow):
             QWidget: The info panel widget.
         """
         panel = QWidget()
-        panel.setStyleSheet("background-color: #FFFFFF;")
+        # wx's info panel doesn't set an explicit background either (it
+        # inherits the app's BGCOLOUR/FGCOLOUR like everything else) --
+        # matches DisplayCAL.ui.main_window.MainWindow._build_info_panel's
+        # equivalent for the other four tabs, so this one follows the app's
+        # light/dark theme instead of staying hardcoded white.
+        panel.setStyleSheet("border-top: 1px solid palette(mid);")
         outer = QVBoxLayout(panel)
         outer.setContentsMargins(16, 8, 16, 16)
         info_row = QHBoxLayout()
@@ -1527,7 +1621,7 @@ class ReportWindow(BaseWindow):
         self.output_profile_label.setEnabled(output_enabled)
         self.output_profile_ctrl.setEnabled(output_enabled)
         output_profile = bool(getattr(self, "output_profile", None))
-        self.measurement_report_btn.setEnabled(
+        self._mr_can_measure = (
             (
                 (
                     enable1
@@ -1554,6 +1648,21 @@ class ReportWindow(BaseWindow):
             and bool(getcfg("measurement_report.chart"))
             and os.path.isfile(getcfg("measurement_report.chart"))
         )
+        if self._show_measure_button:
+            self.measurement_report_btn.setEnabled(self._mr_can_measure)
+
+    def can_measure(self) -> bool:
+        """Whether the current settings allow a report measurement to run.
+
+        For the embedded Verification tab (no internal button), the Qt main
+        window's shared action-bar Measure button uses this to mirror what
+        the standalone window would otherwise show via
+        :attr:`measurement_report_btn`'s enabled state.
+
+        Returns:
+            bool: True if a report measurement/self-check can be started.
+        """
+        return self._mr_can_measure
 
     # -- estimated measurement time ----------------------------------------
 
@@ -1651,6 +1760,37 @@ class ReportWindow(BaseWindow):
             message (str): The message to display.
         """
         QMessageBox.critical(self, lang.getstr("error"), message)
+
+
+class ReportWindow(BaseWindow):
+    """Standalone top-level window wrapping :class:`ReportPanel`.
+
+    Used by the ``python -m DisplayCAL.ui.measurement_report`` entry point
+    (:func:`main`); the Qt main window instead embeds a bare
+    :class:`ReportPanel` directly as its Verification tab. Every attribute
+    not found on the window itself (e.g. ``measurement_report_btn``,
+    ``mr_update_controls``, the ``measure_requested``/``edit_chart_requested``
+    signals) is transparently forwarded to the wrapped panel.
+
+    Args:
+        parent (QWidget | None): Optional parent window.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(
+            parent=parent,
+            name="reportframe",
+            title=lang.getstr("measurement_report"),
+            icon_name=APPNAME.lower(),
+        )
+        self.panel = ReportPanel(self)
+        self.setCentralWidget(self.panel)
+        self.restore_position()
+
+    def __getattr__(self, name: str):
+        # Only consulted when normal attribute lookup fails, so this never
+        # shadows anything defined on ``BaseWindow``/``ReportWindow`` itself.
+        return getattr(self.panel, name)
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 (Qt override)
         """Persist geometry and config before closing.

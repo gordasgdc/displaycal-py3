@@ -48,15 +48,16 @@ compensation is on at the same time. The madVR/Prisma **API** install branch
 still isn't reproduced -- it needs the unported ``setup_patterngenerator``
 connection dialogs -- so it shows a not-yet-available notice; only the
 generic copy-to-path and ReShade-folder-detection destinations actually
-install. The measurement-report settings window
-(:meth:`MainWindow.measurement_report_btn_handler`) reuses the already-ported
-:mod:`DisplayCAL.ui.tools.testchart_editor` for its "edit chart" button, and its
-Measure button now runs the full chart/profile resolution, worker-driven
+install. The measurement-report settings live in the embedded **Verification**
+tab (:class:`~DisplayCAL.ui.measurement_report.ReportPanel`, matching wx's
+5th tab, ``display_cal.py:2450-2458``), whose "edit chart" button reuses the
+already-ported :mod:`DisplayCAL.ui.tools.testchart_editor`; the shared
+action-bar Measure button (:meth:`MainWindow.measurement_report_btn_handler`,
+matching wx's ``buttonpanel``-level ``measurement_report_btn`` rather than a
+per-tab one) runs the full chart/profile resolution, worker-driven
 measurement and HTML report generation via
 :mod:`DisplayCAL.measurement_report` (:meth:`MainWindow._on_report_measure_requested`
-onward) — not reproduced there: the self-check report (Alt+Measure), the
-low-res-B2A regenerate-tables offer, and the measurement-file sanity-check
-review dialog, see that module's docstring.
+onward).
 The pre-flight confirmation / overwrite dialogs (:meth:`MainWindow._check_overwrite`
 / :meth:`MainWindow._check_show_macos_bugs_warning` / :meth:`MainWindow
 ._current_cal_choice` / :meth:`MainWindow._fast_matrix_shaper_choice`, backed by
@@ -79,8 +80,7 @@ colorimeter-correction import/upload actions
 
 The Profiling tab's "Advanced..." (gamap) button opens the ported
 :class:`~DisplayCAL.ui.gamap_window.GamapWindow` (:meth:`MainWindow
-._gamap_btn_handler`), a singleton reused across opens like
-:attr:`MainWindow._report_window`. Its ``profile_settings_changed`` /
+._gamap_btn_handler`), a singleton reused across opens. Its ``profile_settings_changed`` /
 ``b2a_quality_changed`` signals drive :meth:`MainWindow
 ._mark_profile_settings_changed` and :meth:`MainWindow._update_bpc` /
 :meth:`MainWindow._update_lut3d_b2a_controls` respectively, replacing wx's
@@ -228,7 +228,7 @@ from DisplayCAL.ui.measurement_flow import (
     observer_items,
     run_measureframe_subprocess,
 )
-from DisplayCAL.ui.measurement_report import ReportWindow
+from DisplayCAL.ui.measurement_report import ReportPanel
 from DisplayCAL.ui.measurement_sanity_dialog import MeasurementSanityDialog
 from DisplayCAL.ui.patterngenerator_setup import Lut3DAPIInstallController
 from DisplayCAL.ui.profile_install_window import InstallProfileWindow
@@ -258,10 +258,11 @@ if TYPE_CHECKING:
 
 #: The settings tabs, in order: ``(config-ish key, icon name, label key)``.
 _TABS = (
-    ("display_instrument", "display-instrument", "display"),
+    ("display_instrument", "display-instrument", "display-instrument"),
     ("calibration", "calibration", "calibration"),
     ("profiling", "profiling", "profiling"),
     ("lut3d", "3dlut", "3dlut"),
+    ("verification", "dialog-ok", "verification"),
 )
 
 #: Calibration quality letters, ordered so ``index + 1`` is the wx slider value
@@ -792,7 +793,7 @@ class MainWindow(BaseWindow):
         """
         super().__init__(
             name="mainframe",
-            title=APPNAME,
+            title=f"{APPNAME} {VERSION_STRING}",
             icon_name=APPNAME.lower(),
         )
         adopted_worker = worker is not None
@@ -868,7 +869,6 @@ class MainWindow(BaseWindow):
         self._testchart_editor_window: TestchartEditorWindow | None = None
         self._synthicc_window: SynthICCWindow | None = None
         self._lut3d_window: LUT3DWindow | None = None
-        self._report_window: ReportWindow | None = None
         self._about_window: AboutWindow | None = None
         self._lut3d_api_install_controller: Lut3DAPIInstallController | None = None
         #: Staged by :meth:`_on_report_measure_requested`, consumed by
@@ -933,6 +933,7 @@ class MainWindow(BaseWindow):
         self._panels["calibration"] = self._build_calibration_tab()
         self._panels["profiling"] = self._build_profiling_tab()
         self._panels["lut3d"] = self._build_lut3d_tab()
+        self._panels["verification"] = self._build_verification_tab()
         for key, _icon, _label in _TABS:
             self.stack.addWidget(self._panels[key])
 
@@ -2033,6 +2034,23 @@ class MainWindow(BaseWindow):
             for paragraph in paragraphs
         )
 
+    @staticmethod
+    def _build_settings_header(label_key: str) -> QLabel:
+        """Build the bold "<Tab> settings" heading wx shows atop a tab.
+
+        Matches ``main.xrc``'s ``calibration_settings_label`` /
+        ``profile_settings_label`` / ``lut3d_settings_label`` (and
+        ``report.xrc``'s ``mr_settings_label``), bolded in code by wx's
+        ``init_controls`` (``display_cal.py:3551-3563``) rather than in the
+        xrc itself. The Display & Instrument tab has no such header in wx
+        either, so it doesn't call this.
+        """
+        label = QLabel(lang.getstr(label_key))
+        font = label.font()
+        font.setBold(True)
+        label.setFont(font)
+        return label
+
     def _build_info_panel(
         self, *rows: tuple[str, str], extra: QWidget | None = None
     ) -> QWidget:
@@ -2402,6 +2420,7 @@ class MainWindow(BaseWindow):
         outer = QVBoxLayout(panel)
         outer.setContentsMargins(16, 16, 16, 16)
         outer.setSpacing(12)
+        outer.addWidget(self._build_settings_header("calibration.settings"))
 
         toggles = QHBoxLayout()
         self.interactive_adjustment_cb = QCheckBox(
@@ -2592,6 +2611,9 @@ class MainWindow(BaseWindow):
         self._quality_row_widget = self._wrap(quality_row)
         form.addRow(lang.getstr("calibration.speed"), self._quality_row_widget)
 
+        self.cal_meas_time = QLabel()
+        form.addRow("", self.cal_meas_time)
+
         outer.addLayout(form)
         outer.addWidget(
             self._build_info_panel(
@@ -2607,6 +2629,7 @@ class MainWindow(BaseWindow):
         outer = QVBoxLayout(panel)
         outer.setContentsMargins(16, 16, 16, 16)
         outer.setSpacing(12)
+        outer.addWidget(self._build_settings_header("profile.settings"))
 
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -2748,6 +2771,7 @@ class MainWindow(BaseWindow):
         outer = QVBoxLayout(panel)
         outer.setContentsMargins(16, 16, 16, 16)
         outer.setSpacing(12)
+        outer.addWidget(self._build_settings_header("3dlut.settings"))
 
         self.lut3d_create_cb = QCheckBox(lang.getstr("3dlut.create_after_profiling"))
         self._add_check(self.lut3d_create_cb, "3dlut.create")
@@ -3088,6 +3112,25 @@ class MainWindow(BaseWindow):
         )
         return panel
 
+    def _build_verification_tab(self) -> QWidget:
+        """Build the Verification (measurement-report settings) tab.
+
+        Embeds :class:`~DisplayCAL.ui.measurement_report.ReportPanel` directly,
+        matching wx's 5th tab (``display_cal.py:2450-2458``, the same
+        ``report.xrc`` panel ``MainFrame`` loads as ``mr_settings_panel``) --
+        found missing entirely in the 2026-07-11 live wx-vs-Qt comparison
+        (see ``MAINFRAME_PORT_PLAN.md``). The panel is built without its own
+        Measure button (``show_measure_button=False``); the shared
+        action-bar button (:meth:`measurement_report_btn_handler`) is the
+        actual trigger, matching wx's ``buttonpanel``-level
+        ``measurement_report_btn`` rather than a per-tab one.
+        """
+        self._report_panel = ReportPanel(
+            self, show_measure_button=False, worker=self.worker
+        )
+        self._report_panel.edit_chart_requested.connect(self._open_testchart_editor)
+        return self._report_panel
+
     def _build_button_bar(self) -> QWidget:
         """Build the calibrate / profile action-button row.
 
@@ -3197,17 +3240,16 @@ class MainWindow(BaseWindow):
         self._update_action_buttons()
 
     def _update_action_buttons(self) -> None:
-        """Show exactly one calibrate/profile/3D-LUT-create action button, per wx.
+        """Show exactly one calibrate/profile/3D-LUT-create/report action button.
 
-        Mirrors the relevant part of ``MainFrame.update_main_controls``: wx
-        shows "Calibrate & Profile" by default, falling back to "Calibrate
-        only" or "Profile only" depending on the interactive-adjustment /
-        TRC / "update existing calibration" state, never more than one at
-        once, and hides all three whenever the 3D LUT tab is active with
-        manual creation (``lut3d_create_btn`` shown instead; wx also excludes
-        these whenever its Measurement Report *tab* is active, but this Qt
-        port's measurement-report button lives outside any tab, so that part
-        of the condition doesn't apply here).
+        Mirrors ``MainFrame.update_main_controls``: wx shows "Calibrate &
+        Profile" by default, falling back to "Calibrate only" or "Profile
+        only" depending on the interactive-adjustment / TRC / "update
+        existing calibration" state, never more than one at once, and hides
+        all three whenever the 3D LUT tab is active with manual creation
+        (``lut3d_create_btn`` shown instead) or the Verification tab is
+        active (``measurement_report_btn`` shown instead, matching wx's
+        ``mr_btn_show = self.mr_settings_panel.IsShown()``).
         """
         update_cal = self.calibration_update_cb.isChecked()
         update_profile = update_cal and config.is_profile()
@@ -3218,14 +3260,22 @@ class MainWindow(BaseWindow):
         lut3d_create_show = self.stack.currentWidget() is self._panels.get(
             "lut3d"
         ) and not getcfg("3dlut.create")
+        mr_btn_show = self.stack.currentWidget() is self._panels.get("verification")
         calibrate_and_profile_show = (
-            not lut3d_create_show and enable_cal and not update_profile
+            not lut3d_create_show
+            and not mr_btn_show
+            and enable_cal
+            and not update_profile
         )
         calibrate_show = (
-            not lut3d_create_show and enable_cal and not calibrate_and_profile_show
+            not lut3d_create_show
+            and not mr_btn_show
+            and enable_cal
+            and not calibrate_and_profile_show
         )
         profile_show = (
             not lut3d_create_show
+            and not mr_btn_show
             and not calibrate_and_profile_show
             and not update_cal
         )
@@ -3245,6 +3295,8 @@ class MainWindow(BaseWindow):
         self.lut3d_create_btn.setEnabled(
             config.is_profile() and getcfg("calibration.file", False) not in self.presets
         )
+        self.measurement_report_btn.setVisible(mr_btn_show)
+        self._update_measurement_report_btn_enabled()
 
     def update_displays(self) -> None:
         """Populate the display selector from ``worker.displays``."""
@@ -3441,6 +3493,7 @@ class MainWindow(BaseWindow):
         quality = calibration_quality_to_slider(getcfg("calibration.quality"))
         self.calibration_quality_ctrl.setValue(quality)
         self._update_calibration_quality_label()
+        self._update_cal_meas_time()
 
     def update_profile_controls(self) -> None:
         """Push stored profile config into the Profiling tab controls."""
@@ -4755,8 +4808,9 @@ class MainWindow(BaseWindow):
         setcfg("calibration.ambient_viewcond_adjust.lux", value)
 
     def _calibration_quality_changed(self, value: int) -> None:
-        """Persist the calibration quality and refresh its label."""
+        """Persist the calibration quality and refresh its labels."""
         self._update_calibration_quality_label()
+        self._update_cal_meas_time()
         if self._updating:
             return
         setcfg("calibration.quality", slider_to_calibration_quality(value))
@@ -4766,6 +4820,28 @@ class MainWindow(BaseWindow):
         quality = slider_to_calibration_quality(self.calibration_quality_ctrl.value())
         self.calibration_quality_info.setText(
             lang.getstr(f"calibration.speed.{_CALIBRATION_SPEED_LABELS[quality]}")
+        )
+
+    def _update_cal_meas_time(self) -> None:
+        """Refresh the Calibration tab's estimated-measurement-time label.
+
+        Qt port of ``MainFrame.update_estimated_measurement_time("cal")``,
+        found missing entirely in the 2026-07-11 live wx-vs-Qt comparison
+        (see ``MAINFRAME_PORT_PLAN.md``); the Profiling tab's equivalent
+        (:meth:`_update_testchart_meas_time`) was already wired in Session 9.
+        """
+        quality = slider_to_calibration_quality(self.calibration_quality_ctrl.value())
+        patches = profile_name_mod.calibration_measurement_patches(
+            self.worker, quality
+        )
+        estimate = profile_name_mod.estimate_measurement_time(
+            self.worker, patches, which="cal"
+        )
+        self.cal_meas_time.setText(estimate.label())
+        self.cal_meas_time.setStyleSheet(
+            "color: #FF3300;"
+            if estimate.hours is not None and estimate.hours > 7
+            else "color: #F07F00;" if estimate.is_long() else ""
         )
 
     # -- Profiling handlers -----------------------------------------------
@@ -4968,27 +5044,33 @@ class MainWindow(BaseWindow):
         window.activateWindow()
 
     def measurement_report_btn_handler(self) -> None:
-        """Open the measurement-report settings window.
+        """Run the Verification tab's current settings as a measurement report.
 
-        Mirrors wx's ``self.reportframe`` singleton: reuses a single window
-        instance, raising it if already open. Its "edit chart" button opens
-        the real, ported testchart editor via :meth:`_open_testchart_editor`;
-        its Measure button runs :meth:`_on_report_measure_requested`.
+        Qt port of ``MainFrame.measurement_report_handler``'s entry point.
+        This is the shared action-bar button (matching wx's ``buttonpanel``
+        ``measurement_report_btn``, not a button local to the tab), so it can
+        be pressed regardless of which tab is currently active -- exactly
+        like the Calibrate/Profile/Create-3D-LUT buttons it sits beside. Its
+        bool argument to :meth:`_on_report_measure_requested` mirrors wx's
+        ``wx.GetKeyState(wx.WXK_ALT)`` read: holding Alt while clicking
+        requests a self-check report instead of a real measurement.
         """
-        window = self._report_window
-        if window is None:
-            window = ReportWindow(self)
-            window.measure_requested.connect(self._on_report_measure_requested)
-            window.edit_chart_requested.connect(self._open_testchart_editor)
-            self._report_window = window
-        window.show()
-        window.raise_()
-        window.activateWindow()
+        self_check_report = bool(QApplication.keyboardModifiers() & Qt.AltModifier)
+        self._on_report_measure_requested(self_check_report)
+
+    def _update_measurement_report_btn_enabled(self) -> None:
+        """Sync the action-bar Measure button with the Verification tab's state.
+
+        Qt equivalent of the standalone ``ReportPanel``'s own button tracking
+        :meth:`~DisplayCAL.ui.measurement_report.ReportPanel.can_measure`;
+        the embedded tab has no button of its own to enable/disable (see
+        :meth:`_build_verification_tab`), so the shared action-bar one does.
+        """
+        self.measurement_report_btn.setEnabled(self._report_panel.can_measure())
 
     def _report_measurement_done(self) -> None:
-        """Re-enable the report window's Measure button after a cancel/error."""
-        if self._report_window is not None:
-            self._report_window.measurement_report_btn.setEnabled(True)
+        """Re-enable the Measure button after a cancel/error."""
+        self.measurement_report_btn.setEnabled(True)
 
     def _report_display_name(self) -> str:
         """The current display's label, stripped of the primary-display suffix."""
@@ -4997,7 +5079,7 @@ class MainWindow(BaseWindow):
         )
 
     def _on_report_measure_requested(self, self_check_report: bool = False) -> None:
-        """Handle the report window's Measure button.
+        """Handle the Verification tab's Measure action.
 
         Qt port of ``MainFrame.measurement_report_handler``: resolves the
         chart/profile/simulation setup via
@@ -5014,8 +5096,7 @@ class MainWindow(BaseWindow):
 
         Args:
             self_check_report: ``True`` when Alt was held at click time (see
-                :class:`~DisplayCAL.ui.measurement_report.ReportWindow`'s
-                ``measure_requested`` signal).
+                :meth:`measurement_report_btn_handler`).
         """
         if not check_set_argyll_bin():
             self._report_measurement_done()
@@ -7129,10 +7210,11 @@ class MainWindow(BaseWindow):
         Qt port of ``MainFrame.lut3d_set_path`` via
         :func:`~DisplayCAL.lut3d_settings.resolve_lut3d_path_info`: derives
         the 3D LUT's own path plus the devicelink/simulation profiles the
-        measurement-report tab defaults to, applying any changes via
-        ``setcfg`` and refreshing the report window if it's currently open
-        (wx's ``self.mr_update_controls()``, only reachable there since
-        ``MainFrame`` itself inherits ``ReportFrame``).
+        Verification tab defaults to, applying any changes via ``setcfg`` and
+        refreshing that tab's controls (wx's ``self.mr_update_controls()``,
+        reachable directly since ``MainFrame`` itself inherits ``ReportFrame``;
+        this port's :class:`~DisplayCAL.ui.measurement_report.ReportPanel` is
+        composed instead of inherited, so it's called on :attr:`_report_panel`).
         """
         info = lut3d_settings.resolve_lut3d_path_info(
             self.worker,
@@ -7150,8 +7232,9 @@ class MainWindow(BaseWindow):
             setcfg("measurement_report.devlink_profile", info.devlink_profile)
         if info.simulation_profile:
             setcfg("measurement_report.simulation_profile", info.simulation_profile)
-        if info.mr_option_changed and self._report_window is not None:
-            self._report_window.mr_update_controls()
+        if info.mr_option_changed:
+            self._report_panel.mr_update_controls()
+            self._update_measurement_report_btn_enabled()
 
     def _chain_3dlut_after_profile(self) -> None:
         """Auto-create (or offer to install) the 3D LUT after profiling.

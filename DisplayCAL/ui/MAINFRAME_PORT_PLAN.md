@@ -2571,6 +2571,173 @@ full suite green under `-n auto` (~104s).
 **Updated remaining-gaps list:** none named — Stage 7 (retire wx) is the only
 item left, still gated on maintainer confidence.
 
+**Live wx-vs-Qt visual diff pass (2026-07-11).** Per the Stage 7 gate's own
+requirement ("near identical in behaviour and layout ... across real-world
+use, not just headless construct-and-exercise checks"), ran both `MainFrame`
+and `MainWindow` side by side as real, separately-shown windows (wx on one
+monitor, Qt on the other; isolated `HOME` per process to dodge the
+single-instance app lock, both seeded from the same copied real preferences so
+config state was identical). Found 4 confirmed gaps, not yet fixed (maintainer
+chose to log-only for now):
+
+1. Window title: wx is `f"{APPNAME} {VERSION_STRING}"` (`display_cal.py:2218`,
+   e.g. "DisplayCAL 4.0.0.dev7"); Qt's `main_window.py` sets `APPNAME` only, no
+   version.
+2. **Structural:** wx's tab bar has 5 buttons — Display & Instrument /
+   Calibration / Profiling / 3D LUT / **Verification** — with Verification
+   embedding `report.xrc`'s panel directly as a tab (`display_cal.py:2450-2458`).
+   Qt has only 4 tabs; the same measurement-report settings live in a separate
+   floating `ReportWindow` opened via a button instead. Functionally
+   equivalent, structurally different from wx's actual layout — a real
+   decision point (embed as a 5th tab vs. keep the standalone window) before
+   Stage 7, not just a bug to port.
+3. wx shows a bold "**<Tab> settings**" section header at the top of the
+   Calibration, Profiling, and 3D LUT tab content (`main.xrc`'s
+   `calibration_settings_label` / `profile_settings_label` /
+   `lut3d_settings_label`; `report.xrc`'s `mr_settings_label` for Verification).
+   Confirmed absent in Qt's `main_window.py` on Calibration and Profiling via
+   screenshot (grepped source: no such label wired anywhere for any tab). Note
+   Display & Instrument has no such header in wx either, so Qt is correct
+   there — the gap is specific to the other tabs.
+4. Calibration tab only: wx shows "Estimated measurement time approximately 0
+   hour(s) 15 minutes" under the Calibration speed slider; Qt's Calibration tab
+   has no such line. Confirmed not a universal drop — Profiling shows the
+   equivalent line correctly in both toolkits.
+
+Full method notes (including a real gotcha: wx's `PlateButton`-based tab
+buttons aren't reachable via OS-level synthetic clicks at all — worked around
+by driving `tab_select_handler` directly from a small standalone script) are
+in memory as `qt-wx-visual-diff-2026-07-11`.
+
+**All 4 gaps closed (2026-07-11 follow-up).** Maintainer resolved gap 2's
+decision point in favor of the full-fidelity option (embed as a 5th tab, not
+keep the standalone window) and asked for all four to be implemented:
+
+1. **Window title.** `MainWindow.__init__` now passes
+   `title=f"{APPNAME} {VERSION_STRING}"` to `BaseWindow.__init__` (was
+   `title=APPNAME`).
+2. **Verification tab.** `DisplayCAL/ui/measurement_report.py`'s window class
+   was split: `ReportPanel(QWidget)` now holds all the settings-grid widgets
+   and logic (worker, chart/profile controls, `mr_update_controls`, …), and
+   `ReportWindow(BaseWindow)` is a thin wrapper that embeds one `ReportPanel`
+   as its central widget and forwards unresolved attributes to it via
+   `__getattr__` (so the `python -m DisplayCAL.ui.measurement_report`
+   standalone entry point, and its existing test suite, are unchanged).
+   `MainWindow._build_verification_tab()` embeds a second, bare `ReportPanel`
+   instance directly as the new 5th tab (`_TABS`), matching wx's actual
+   structure (`display_cal.py:2450-2458`, the same `report.xrc` panel loaded
+   as `MainFrame.mr_settings_panel`) instead of the removed floating-window
+   button. Two structural details fell out of reading wx closely enough to
+   embed it correctly, not just visually:
+   - `report.xrc` itself has **no** "Measure" button — wx's standalone
+     `ReportFrame` adds one programmatically (`wx_report_frame.py:78`); the
+     `measurement_report_btn` the embedded tab uses lives on `MainFrame`'s
+     shared `buttonpanel` instead (`main.xrc`), alongside
+     Calibrate/Calibrate & Profile/Profile/Create 3D LUT. `ReportPanel` grew a
+     `show_measure_button` constructor flag (`False` for the embedded tab)
+     and a `can_measure()` query so `MainWindow`'s shared action-bar button
+     can mirror the enabled state the panel would otherwise give its own
+     button.
+   - `MainFrame.update_main_controls` only shows exactly one of
+     Calibrate/Calibrate & Profile/Profile/`lut3d_create_btn`/
+     `measurement_report_btn` at a time, keyed on which tab is showing
+     (`mr_btn_show = self.mr_settings_panel.IsShown()`) — `_update_action_buttons`
+     already had this logic for the 3D LUT tab (`lut3d_create_show`) but,
+     per its own docstring, explicitly punted on the Verification case since
+     there was no such tab yet. Extended to match wx exactly now that there
+     is one.
+   The panel also now shares `MainWindow.worker` (passed in explicitly)
+   instead of constructing and Argyll-version-probing a second `Worker()`,
+   which wx gets for free since `MainFrame(ReportFrame, ...)` is a literal
+   multiple-inheritance mixin sharing one `self.worker`; this port composes
+   instead, so `ReportPanel.__init__` grew a `worker` parameter.
+3. **"`<Tab> settings`" headers.** New `MainWindow._build_settings_header()`
+   builds a bold `QLabel` (matching wx's `init_controls` bolding
+   `calibration_settings_label`/`profile_settings_label`/`lut3d_settings_label`
+   in code, not xrc), added atop the Calibration/Profiling/3D LUT tabs;
+   `ReportPanel`'s existing `mr_settings_label` gained the same bold weight
+   (it already existed but wasn't bolded). Display & Instrument still has
+   none, matching wx.
+4. **Calibration estimated-measurement-time.** `DisplayCAL/profile_name.py`
+   gained `calibration_measurement_patches()`, a port of the `which == "cal"`
+   branch of `MainFrame.update_estimated_measurement_time`
+   (`display_cal.py:5809-5844`, the dispcal.c iterative-refinement patch-count
+   formula). `MainWindow` gained a `cal_meas_time` label under the
+   Calibration-speed slider and `_update_cal_meas_time()`, wired from the
+   quality-slider handler and initial population, mirroring the
+   already-wired Profiling-tab equivalent (`_update_testchart_meas_time`,
+   Session 9).
+
+Tests: `tests/test_profile_name.py` (+3, `TestCalibrationMeasurementPatches`),
+`tests/test_ui_main_window.py` (tab-count/order, action-button visibility,
+Measure-button enable/disable and Alt self-check-report routing through the
+shared button, calibration meas-time), `tests/test_ui_measurement_report.py`
+unchanged (still exercises the standalone `ReportWindow` wrapper) plus a
+`can_measure()`/`show_measure_button` regression check. Full
+`tests/test_ui_main_window.py` (424 tests) confirmed green; a slow suite (real
+`ReportPanel`/`Worker` construction per test now happens for every one of the
+~420 tests, not just the ~10 that used to build a report window), not a hang
+-- ruled out by a same-suite baseline run on the pre-change tree taking
+comparably long.
+
+**Maintainer screenshot pass found 4 more gaps (2026-07-11, same day).**
+Running the actual app surfaced issues neither the headless tests nor the
+side-by-side comparison caught, all fixed:
+
+1. **Tab label.** wx's `TabButton(..., label="display-instrument", ...)`
+   passes a *translation key* (`display_cal.py:2406-2412`, resolved later by
+   `BaseFrame.setup_language`'s generic "translate every child's `.Label`"
+   pass, `wx_windows.py:2351+`), not display text -- so wx's first tab reads
+   "Display & instrument" (`lang/en.yaml`'s `display-instrument` key). This
+   Qt port's `_TABS` tuple had the right icon key but the wrong label key
+   (`"display"`, i.e. just "Display") for that one entry; a pre-existing bug,
+   not something the 2026-07-11 embedding work introduced, caught now because
+   this was the first time a maintainer looked at the tab row again after
+   Verification became a real 5th tab. Fixed by pointing it at
+   `"display-instrument"` like the other four tabs already correctly do (each
+   already reused the same string for both icon and label key).
+2. **Verification tab's info panel ignored the dark theme.** Its own
+   `_build_info_panel()` hardcoded `background-color: #FFFFFF` (predates the
+   embedding work; harmless while the panel only ever lived in a standalone
+   window sized to fit, but visually jarring once embedded next to the other
+   four tabs' theme-following info panels). Fixed to the same
+   `border-top: 1px solid palette(mid)` (no background-color at all) the
+   other four already use, matching wx (which sets no explicit background on
+   its info panels either).
+3. **Testchart/profile combo items showed raw absolute paths**, not friendly
+   names ("Extended verification testchart" in wx vs. the full
+   `.../verify_extended.ti1` path in Qt). wx's file-browse-with-history
+   widget (`FileBrowseBitmapButtonWithChoiceHistory.GetName()`,
+   `wx_windows.py:3536+`) resolves each path to a label before display: an
+   ICC/ICM profile's embedded description, or otherwise the file's base name
+   run through `lang.getstr()` -- which is why bundled testcharts resolve to
+   a translated name at all (`lang/en.yaml` uses the literal `.ti1` filename,
+   e.g. `"verify_extended.ti1"`, as the translation key). Ported as
+   `friendly_file_name()` in `measurement_report.py`; `_FileBrowse` gained a
+   `name_func` constructor parameter (defaulting to the identity/raw-path
+   behavior everyone else, e.g. `gamap_window.py`'s reuse of `_FileBrowse`,
+   keeps unchanged) that's now passed for all four of the Verification tab's
+   pickers (`chart_ctrl`, `simulation_profile_ctrl`, `devlink_profile_ctrl`,
+   `output_profile_ctrl`) -- the user only screenshot-flagged the first two,
+   but all four go through the same wx widget class, so leaving the other two
+   showing raw paths would've been a new, narrower inconsistency. Internally,
+   `_FileBrowse` now stores each combo item's real path as `Qt.UserRole` data
+   (`path()` resolves through it; freeform typed text neither in history nor
+   already selected still round-trips as a literal path, unchanged).
+
+**Deferred (maintainer's call, not yet decided):** the Verification tab's
+`chart_ctrl`/`simulation_profile_ctrl` render with a visibly different combo
+style than the plain (non-editable) combos used everywhere else in the app --
+because they're editable comboboxes (native Qt/OS chrome for an editable
+combo looks like a text field, not a plain dropdown button) plus a browse
+`…` button, both by design (matching wx's `FileBrowseButtonWithHistory`
+exactly, editable-with-history being the point). Not a regression from wx
+(confirmed identical there); cosmetic parity would mean either giving plain
+combos elsewhere the same editable chrome (wrong direction, most of them
+truly aren't user-typable) or stylesheet-overriding the editable ones to look
+non-editable (arguably undercuts the "you can type a path here" affordance).
+Left alone pending a maintainer decision on which way (if any) to reconcile.
+
 ### Stage 7 — Retire wx code paths
 
 Delete the wx modules whose Qt replacements have been verified equivalent.

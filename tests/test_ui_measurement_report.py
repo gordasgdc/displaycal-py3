@@ -187,3 +187,60 @@ class TestSignals:
         )
         window._measure_btn_clicked()
         assert received == [False]
+
+
+class TestEmbeddedPanel:
+    """The Qt main window's Verification tab embeds a bare ``ReportPanel``.
+
+    ``report.xrc`` itself has no "Measure" button (wx's standalone
+    ``ReportFrame`` adds one programmatically); the embedded tab relies on
+    ``MainFrame``'s shared ``buttonpanel`` button instead. See
+    ``MAINFRAME_PORT_PLAN.md``'s 2026-07-11 follow-up.
+    """
+
+    def test_show_measure_button_false_omits_button(self, qapp):
+        from DisplayCAL.ui.measurement_report import ReportPanel
+
+        saved = dict(config.CFG["Default"])
+        panel = ReportPanel(show_measure_button=False)
+        try:
+            assert not hasattr(panel, "measurement_report_btn")
+        finally:
+            config.CFG["Default"] = saved
+
+    def test_can_measure_reflects_settings_validity(self, qapp):
+        from DisplayCAL.ui.measurement_report import ReportPanel
+
+        saved = dict(config.CFG["Default"])
+        # Force the bundled default chart explicitly rather than relying on
+        # whatever ``measurement_report.chart`` an earlier test in the same
+        # process left behind (this file's own ``config.CFG`` leaks-between-
+        # tests trap -- see the ``window`` fixture's docstring above).
+        config.setcfg(
+            "measurement_report.chart", config.DEFAULTS["measurement_report.chart"]
+        )
+        panel = ReportPanel(show_measure_button=False)
+        try:
+            # A freshly-constructed panel loads a bundled default chart, so
+            # it should already be measurable without any further setup --
+            # matching what a real, un-clicked "Measure" button would show.
+            assert panel.can_measure() is True
+            # ``can_measure()`` mirrors whatever the last ``mr_update_controls``
+            # call computed (the same value that would drive the internal
+            # button's enabled state when ``show_measure_button`` is True).
+            panel._mr_can_measure = False
+            assert panel.can_measure() is False
+        finally:
+            config.CFG["Default"] = saved
+
+    def test_worker_param_is_adopted_without_reprobing(self, qapp):
+        from DisplayCAL.ui.measurement_report import ReportPanel
+        from DisplayCAL.worker import Worker
+
+        saved = dict(config.CFG["Default"])
+        shared_worker = Worker()
+        panel = ReportPanel(worker=shared_worker)
+        try:
+            assert panel.worker is shared_worker
+        finally:
+            config.CFG["Default"] = saved

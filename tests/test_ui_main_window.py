@@ -205,6 +205,7 @@ def test_tabs_present(window):
         "calibration",
         "profiling",
         "lut3d",
+        "verification",
     ]
 
 
@@ -614,6 +615,21 @@ def test_calibration_quality_slider_persists(window):
     assert getcfg("calibration.quality") == "h"
 
 
+def test_calibration_quality_slider_updates_meas_time(window):
+    """The Calibration tab shows an estimated-measurement-time line too.
+
+    Found missing entirely in the 2026-07-11 live wx-vs-Qt comparison (see
+    ``MAINFRAME_PORT_PLAN.md``); the Profiling tab's equivalent
+    (``testchart_meas_time``) was already wired.
+    """
+    window.calibration_quality_ctrl.setValue(4)
+    assert window.cal_meas_time.text()
+
+
+def test_calibration_controls_populate_meas_time_on_load(window):
+    assert window.cal_meas_time.text()
+
+
 def test_calibration_controls_reflect_config(qapp, stub_worker):
     setcfg("trc", "709")
     setcfg("calibration.quality", "u")
@@ -1012,31 +1028,48 @@ def test_ccxx_upload_action_handler_clears_controller_after_finish(
     assert window._ccxx_upload_controller is None
 
 
-def test_measurement_report_btn_handler_opens_window(window):
+def test_verification_tab_embeds_report_panel(window):
+    """The Verification tab is a real 5th tab embedding ``ReportPanel``.
+
+    Matches wx's 5th tab (``display_cal.py:2450-2458``); found missing in the
+    2026-07-11 live wx-vs-Qt comparison.
+    """
+    assert window._panels["verification"] is window._report_panel
+    assert window.stack.indexOf(window._report_panel) != -1
+    assert not hasattr(window._report_panel, "measurement_report_btn")
+
+
+def test_measurement_report_btn_handler_runs_report_no_alt(window, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        window, "_on_report_measure_requested", lambda self_check=False: calls.append(self_check)
+    )
+    monkeypatch.setattr(
+        mw.QApplication, "keyboardModifiers", staticmethod(lambda: mw.Qt.NoModifier)
+    )
     window.measurement_report_btn_handler()
-    try:
-        assert window._report_window is not None
-    finally:
-        window._report_window.close()
+    assert calls == [False]
 
 
-def test_measurement_report_btn_handler_reuses_window_instance(window):
+def test_measurement_report_btn_handler_runs_report_self_check_with_alt(
+    window, monkeypatch
+):
+    calls = []
+    monkeypatch.setattr(
+        window, "_on_report_measure_requested", lambda self_check=False: calls.append(self_check)
+    )
+    monkeypatch.setattr(
+        mw.QApplication, "keyboardModifiers", staticmethod(lambda: mw.Qt.AltModifier)
+    )
     window.measurement_report_btn_handler()
-    try:
-        first = window._report_window
-        window.measurement_report_btn_handler()
-        assert window._report_window is first
-    finally:
-        window._report_window.close()
+    assert calls == [True]
 
 
-def test_report_window_edit_chart_requested_opens_testchart_editor(window):
-    window.measurement_report_btn_handler()
+def test_report_panel_edit_chart_requested_opens_testchart_editor(window):
     try:
-        window._report_window.edit_chart_requested.emit()
+        window._report_panel.edit_chart_requested.emit()
         assert window._testchart_editor_window is not None
     finally:
-        window._report_window.close()
         if window._testchart_editor_window is not None:
             window._testchart_editor_window.close()
 
@@ -1080,20 +1113,24 @@ def _fake_report_context(**overrides):
 
 @pytest.fixture
 def report_window(window):
-    window.measurement_report_btn_handler()
-    yield window._report_window
-    window._report_window.close()
+    """The embedded Verification-tab panel.
+
+    Named ``report_window`` for historical reasons (predates the panel being
+    embedded rather than a standalone window); kept so the tests below that
+    exercise the report-measurement flow don't all need renaming.
+    """
+    return window._report_panel
 
 
 def test_report_measure_requested_missing_argyll_reenables_button(
     window, report_window, monkeypatch
 ):
     monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: False)
-    report_window.measurement_report_btn.setEnabled(False)
+    window.measurement_report_btn.setEnabled(False)
 
     window._on_report_measure_requested()
 
-    assert report_window.measurement_report_btn.isEnabled() is True
+    assert window.measurement_report_btn.isEnabled() is True
 
 
 def test_report_measure_requested_setup_error_shows_dialog(
@@ -1110,12 +1147,12 @@ def test_report_measure_requested_setup_error_shows_dialog(
     )
     errors = []
     monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
-    report_window.measurement_report_btn.setEnabled(False)
+    window.measurement_report_btn.setEnabled(False)
 
     window._on_report_measure_requested()
 
     assert "no chart" in errors[0][2]
-    assert report_window.measurement_report_btn.isEnabled() is True
+    assert window.measurement_report_btn.isEnabled() is True
 
 
 def test_report_measure_requested_cancelled_save_dialog_is_noop(
@@ -1132,12 +1169,12 @@ def test_report_measure_requested_cancelled_save_dialog_is_noop(
     )
     began = []
     monkeypatch.setattr(window, "_begin_report_measurement", lambda: began.append(True))
-    report_window.measurement_report_btn.setEnabled(False)
+    window.measurement_report_btn.setEnabled(False)
 
     window._on_report_measure_requested()
 
     assert began == []
-    assert report_window.measurement_report_btn.isEnabled() is True
+    assert window.measurement_report_btn.isEnabled() is True
 
 
 def test_report_measure_requested_overwrite_declined_is_noop(
@@ -3340,14 +3377,14 @@ def test_apply_lut3d_path_sets_lut3d_path_and_devlink(window, tmp_path):
     )
 
 
-def test_apply_lut3d_path_refreshes_open_report_window_on_change(window, tmp_path):
+def test_apply_lut3d_path_refreshes_report_panel_on_change(window, tmp_path, monkeypatch):
     cal_path = tmp_path / "test2.cal"
     cal_path.write_bytes(b"")
     setcfg("calibration.file", str(cal_path))
     setcfg("measurement_report.devlink_profile", None)
     refreshed = []
-    window._report_window = SimpleNamespace(
-        mr_update_controls=lambda: refreshed.append(True)
+    monkeypatch.setattr(
+        window._report_panel, "mr_update_controls", lambda: refreshed.append(True)
     )
 
     window._apply_lut3d_path()
@@ -3355,7 +3392,9 @@ def test_apply_lut3d_path_refreshes_open_report_window_on_change(window, tmp_pat
     assert refreshed == [True]
 
 
-def test_apply_lut3d_path_skips_refresh_when_nothing_changed(window, tmp_path):
+def test_apply_lut3d_path_skips_refresh_when_nothing_changed(
+    window, tmp_path, monkeypatch
+):
     cal_path = tmp_path / "test3.cal"
     cal_path.write_bytes(b"")
     setcfg("calibration.file", str(cal_path))
@@ -3364,8 +3403,8 @@ def test_apply_lut3d_path_skips_refresh_when_nothing_changed(window, tmp_path):
     )
     setcfg("measurement_report.devlink_profile", expected_devlink)
     refreshed = []
-    window._report_window = SimpleNamespace(
-        mr_update_controls=lambda: refreshed.append(True)
+    monkeypatch.setattr(
+        window._report_panel, "mr_update_controls", lambda: refreshed.append(True)
     )
 
     window._apply_lut3d_path()

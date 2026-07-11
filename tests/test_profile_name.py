@@ -349,6 +349,41 @@ class TestEstimateMeasurementTime:
         assert not brief.is_long()
 
 
+class TestCalibrationMeasurementPatches:
+    class _FakeWorker:
+        def __init__(self, features):
+            self._features = features
+
+        def get_instrument_features(self):
+            return self._features
+
+    def test_higher_quality_measures_more_patches(self):
+        worker = self._FakeWorker({})
+        low = pn.calibration_measurement_patches(worker, "l")
+        high = pn.calibration_measurement_patches(worker, "u")
+        assert high > low
+
+    def test_fixed_integration_time_scales_patches(self):
+        # A fixed (all-equal) integration time triggers the SpyderX-style
+        # scale-factor adjustment; a varying one does not.
+        varying = pn.calibration_measurement_patches(
+            self._FakeWorker({"integration_time": (0.1, 0.2)}), "m"
+        )
+        fixed = pn.calibration_measurement_patches(
+            self._FakeWorker({"integration_time": (2.45, 2.45)}), "m"
+        )
+        # The fixed case is scaled by 2.45 / 2.45 == 1.0 and rounded, so it
+        # should equal the unscaled (varying-branch-skipped) computation
+        # rounded to the nearest integer.
+        assert fixed == round(varying)
+
+    def test_feeds_into_estimate_measurement_time(self):
+        worker = self._FakeWorker({"integration_time": (0.1, 0.1)})
+        patches = pn.calibration_measurement_patches(worker, "h")
+        estimate = pn.estimate_measurement_time(worker, patches, which="cal")
+        assert estimate.hours is not None
+
+
 class TestLoadTestchartFromFile:
     def test_loads_bundled_ti1(self):
         path = os.path.join(

@@ -766,6 +766,61 @@ def estimate_measurement_time(
     return MeasurementTimeEstimate(hours, minutes)
 
 
+#: Per-quality-letter ``(isteps, rsteps, maxits, mxrpts)`` dispcal.c constants,
+#: mirroring ``MainFrame.update_estimated_measurement_time``'s ``which == "cal"``
+#: branch (``display_cal.py:5811-5817``).
+_CAL_QUALITY_STEPS = {
+    "v": (10, 16, 1, 10),
+    "l": (12, 32, 2, 10),
+    "m": (16, 64, 3, 12),
+    "h": (20, 96, 4, 16),
+    "u": (24, 128, 5, 24),
+}
+
+
+def calibration_measurement_patches(worker, quality: str) -> float:
+    """Estimate the patch count a calibration run at ``quality`` will measure.
+
+    Faithful port of the ``which == "cal"`` branch of
+    ``MainFrame.update_estimated_measurement_time`` (``display_cal.py:5809-5844``),
+    the dispcal.c-derived iterative-refinement patch count, adjusted for a
+    fixed-integration-time instrument (e.g. SpyderX) the same way wx does.
+    Feed the result to :func:`estimate_measurement_time` with ``which="cal"``.
+
+    Args:
+        worker: The :class:`~DisplayCAL.worker.Worker` instance (for
+            instrument features).
+        quality (str): A ``calibration.quality`` letter (``v``/``l``/``m``/
+            ``h``/``u``).
+    """
+    isteps, rsteps, maxits, mxrpts = _CAL_QUALITY_STEPS[quality]
+
+    # 1st iteration
+    rsteps /= 1 << (maxits - 1)
+    patches = rsteps
+    # 2nd..nth iteration
+    for _i in range(maxits - 1):
+        rsteps *= 2
+        patches += rsteps
+    # Multiply by estimated repeats
+    patches *= mxrpts / 1.5
+    # Amount of precal patches is always 9
+    patches += 9
+    # Initial amount of cal patches is always isteps * 4
+    patches += isteps * 4
+
+    # Adjust by dark integration time (scale factor)
+    integration_time = worker.get_instrument_features().get("integration_time")
+    if integration_time and (
+        sum(integration_time) / float(len(integration_time)) == integration_time[0]
+    ):  # Check for fixed integration time
+        # This helps estimation for instruments with fixed integration time
+        # (e.g. SpyderX)
+        patches *= float(integration_time[0]) / 2.45
+        patches = round(patches)
+    return patches
+
+
 def icc_profile_has_embedded_ti3(profile: ICCProfile) -> bool:
     """Return whether ``profile`` embeds a TI3 measurement file.
 
