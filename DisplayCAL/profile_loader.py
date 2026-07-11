@@ -63,6 +63,7 @@ from DisplayCAL.meta import (
 )
 from DisplayCAL.options import DEBUG, VERBOSE
 from DisplayCAL.util_list import natsort_key_factory
+from DisplayCAL.util_mac import osascript
 from DisplayCAL.util_os import (
     getenvu,
     is_superuser,
@@ -135,6 +136,8 @@ else:
 
 if TYPE_CHECKING:
     from _win32typing import PyDISPLAY_DEVICE
+
+    from DisplayCAL.worker import Worker
 
 
 def debug_print(*args, **kwargs) -> None:
@@ -2430,6 +2433,114 @@ class ProfileLoader:
 
         return errors
 
+    def _clobbered_displays(self, worker: Worker, dispwin: str) -> list[int]:
+        """Return indices of displays whose loaded calibration looks clobbered.
+
+        Args:
+            worker (Worker): Worker with an up-to-date ``displays`` list.
+            dispwin (str): Path to the dispwin executable.
+
+        Returns:
+            list[int]: Zero-based indices of clobbered displays.
+        """
+        clobbered = []
+        for i in range(len(worker.displays)):
+            if config.is_virtual_display(i):
+                continue
+            profile_arg = worker.get_dispwin_display_profile_argument(i)
+            if profile_arg == "-L":
+                # No installed profile path to verify against
+                continue
+            if worker.calibration_is_clobbered(dispwin, i, profile_arg):
+                clobbered.append(i)
+        return clobbered
+
+    def _reload_clobbered_displays(
+        self,
+        worker: Worker,
+        dispwin: str,
+        max_passes: None | int = None,
+        settle: float = 0.5,
+    ) -> bool:
+        """Reload calibration for every clobbered display, batched to converge.
+
+        Re-loading one display's calibration runs (and exits) a dispwin
+        process, which is exactly the event that can trigger macOS to clobber
+        a *different* display's VideoLUT (issue #694). Fixing displays one at
+        a time and moving on to the next index - without re-checking the
+        displays already handled - can therefore ping-pong between displays
+        forever instead of converging (issue #824). Each pass here re-scans
+        the *entire* display list, re-loads every display currently found
+        clobbered, lets the VideoLUT settle, and repeats until nothing is
+        clobbered or the pass budget runs out.
+
+        On some systems, reloading display A deterministically clobbers
+        display B and vice versa, every single time (confirmed by hand on a
+        2-display Mac) - no amount of retrying within a single tick can ever
+        converge that case, since the very last reload always evicts the
+        previous one. Callers should use the return value to detect this and
+        back off rather than retrying indefinitely tick after tick.
+
+        Args:
+            worker (Worker): Worker with an up-to-date ``displays`` list.
+            dispwin (str): Path to the dispwin executable.
+            max_passes (None | int): Maximum number of scan/reload passes.
+                Defaults to ``profile_loader.macos_reapply_watch_max_passes``.
+            settle (float): Seconds to wait between passes.
+
+        Returns:
+            bool: True if every display verified clean before the pass budget
+                ran out, False if some display was still clobbered when it
+                gave up.
+        """
+        if max_passes is None:
+            max_passes = int(
+                config.getcfg("profile_loader.macos_reapply_watch_max_passes")
+            )
+        for _ in range(max(1, max_passes)):
+            if self._shutdown:
+                return True
+            clobbered = self._clobbered_displays(worker, dispwin)
+            if not clobbered:
+                return True
+            for i in clobbered:
+                if self._shutdown:
+                    return True
+                print(
+                    f"VideoLUT for display {i + 1:d} was clobbered - "
+                    "re-loading calibration"
+                )
+                self.apply_profiles(index=i)
+            time.sleep(settle)
+        print(
+            "Some displays' VideoLUTs are still clobbered after "
+            f"{max_passes:d} re-load passes - will retry on the next watch tick"
+        )
+        return False
+
+    def _notify_macos_watch_unstable(self) -> None:
+        """Warn the user that automatic VideoLUT recovery is not converging.
+
+        Some multi-display Macs exhibit a deterministic oscillation where
+        reloading one display's calibration always clobbers another display's
+        VideoLUT and vice-versa (issue #824): no amount of retrying can ever
+        converge that case, since the last reload always evicts the previous
+        one. Rather than keep hammering dispwin (and the displays) forever,
+        this surfaces a one-time notification recommending a sleep/wake
+        cycle, which reloads calibration through the OS's normal path
+        (rather than Argyll's) and has been confirmed to recover cleanly.
+        """
+        message = (
+            f"{APPNAME} could not automatically stabilize your displays' "
+            "calibration. Try putting your Mac to sleep and waking it "
+            "(or closing and re-opening the lid) to recover."
+        )
+        print(f"{APPNAME}: {message}")
+        try:
+            osascript(f'display notification "{message}" with title "{APPNAME}"')
+        except Exception as exception:
+            print(exception)
+
     def _macos_watch(self) -> None:
         """Keep re-loading calibration on macOS if the VideoLUT gets clobbered.
 
@@ -2439,6 +2550,13 @@ class ProfileLoader:
         calibration loader by default, so this keeps the apply-profiles process
         running and periodically verifies that each display's calibration is
         still loaded, re-applying it for any display where it isn't.
+
+        On some multi-display setups, a display's own reload deterministically
+        clobbers another display's VideoLUT (issue #824), so recovery can fail
+        to converge no matter how many times it's retried within a tick. After
+        several consecutive ticks without converging, this backs off - stops
+        touching the displays for a while and shows a one-time notification -
+        instead of endlessly re-triggering the flicker.
 
         This blocks until ``self._shutdown`` is set, keeping the process alive.
         """
@@ -2450,6 +2568,18 @@ class ProfileLoader:
         interval = max(
             1, int(config.getcfg("profile_loader.macos_reapply_watch_interval"))
         )
+        unstable_threshold = max(
+            1,
+            int(
+                config.getcfg("profile_loader.macos_reapply_watch_unstable_threshold")
+            ),
+        )
+        backoff_seconds = max(
+            0,
+            int(config.getcfg("profile_loader.macos_reapply_watch_backoff_seconds")),
+        )
+        unstable_ticks = 0
+        backoff_until = 0.0
         worker = Worker()
         debug_print("Starting macOS VideoLUT watch (issue #694 mitigation)")
         while not self._shutdown:
@@ -2462,6 +2592,10 @@ class ProfileLoader:
             # profiling - it owns the VideoLUT during that time.
             if self._is_displaycal_running():
                 continue
+            if time.time() < backoff_until:
+                # Recovery hasn't been converging - leave the displays alone
+                # for the backoff window instead of continuing to flicker them.
+                continue
             try:
                 worker.enumerate_displays_and_ports(
                     silent=True,
@@ -2472,21 +2606,14 @@ class ProfileLoader:
             except Exception as exception:
                 print(exception)
                 continue
-            for i in range(len(worker.displays)):
-                if self._shutdown:
-                    return
-                if config.is_virtual_display(i):
-                    continue
-                profile_arg = worker.get_dispwin_display_profile_argument(i)
-                if profile_arg == "-L":
-                    # No installed profile path to verify against
-                    continue
-                if worker.calibration_is_clobbered(dispwin, i, profile_arg):
-                    print(
-                        f"VideoLUT for display {i + 1:d} was clobbered - "
-                        "re-loading calibration"
-                    )
-                    self.apply_profiles(index=i)
+            if self._reload_clobbered_displays(worker, dispwin):
+                unstable_ticks = 0
+                continue
+            unstable_ticks += 1
+            if unstable_ticks >= unstable_threshold:
+                self._notify_macos_watch_unstable()
+                unstable_ticks = 0
+                backoff_until = time.time() + backoff_seconds
 
     def notify(
         self,
