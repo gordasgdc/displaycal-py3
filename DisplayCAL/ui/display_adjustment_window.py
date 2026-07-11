@@ -250,9 +250,9 @@ class _AdjustmentPage(QWidget):
                     "calibration.interactive_display_adjustment.generic_hint.plural"
                 )
             )
-            self._add_gauge("R", text="R")
-            self._add_gauge("G", text="G")
-            self._add_gauge("B", text="B")
+            self._add_gauge("R", text="R", btm_marker=False)
+            self._add_gauge("G", text="G", top_marker=False, btm_marker=False)
+            self._add_gauge("B", text="B", top_marker=False)
             self._add_label("rgb")
 
         # The luminance gauge + read-out (present on every non-check_all page).
@@ -260,12 +260,22 @@ class _AdjustmentPage(QWidget):
         self._add_label("luminance")
 
     def _add_gauge(
-        self, name: str, text: str | None = None, icon: str | None = None
+        self,
+        name: str,
+        text: str | None = None,
+        icon: str | None = None,
+        top_marker: bool = True,
+        btm_marker: bool = True,
     ) -> None:
-        """Add a gauge row: top/bottom target-marker ticks bracketing a
-        leading label / icon and a channel-coloured 1..100 progress bar."""
-        self._grid.addWidget(_marker_label("top"), self._row, 1, 1, 2)
-        self._row += 1
+        """Add a gauge row: a leading label / icon and a channel-coloured
+        1..100 progress bar, optionally bracketed by top/bottom
+        target-marker ticks. For a run of adjacent gauges (R/G/B), only the
+        first's top and the last's bottom marker should be drawn -- passing
+        ``top_marker=False`` / ``btm_marker=False`` suppresses the ticks
+        that would otherwise appear between them."""
+        if top_marker:
+            self._grid.addWidget(_marker_label("top"), self._row, 1, 1, 2)
+            self._row += 1
         head = QLabel(text or " ")
         head.setStyleSheet(f"color: {FGCOLOUR};")
         if icon:
@@ -281,8 +291,9 @@ class _AdjustmentPage(QWidget):
         self._grid.addWidget(head, self._row, 0)
         self._grid.addWidget(gauge, self._row, 1, 1, 2)
         self._row += 1
-        self._grid.addWidget(_marker_label("btm"), self._row, 1, 1, 2)
-        self._row += 1
+        if btm_marker:
+            self._grid.addWidget(_marker_label("btm"), self._row, 1, 1, 2)
+            self._row += 1
 
     def _add_label(
         self, name: str, icon: str | None = None, tooltip: str | None = None
