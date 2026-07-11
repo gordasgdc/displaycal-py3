@@ -13,17 +13,10 @@ from DisplayCAL.worker import Worker, reload_black_videoluts
 
 
 class FakeMultiDisplayWorker:
-    """A stand-in for Worker with a configurable per-display clobbered set."""
+    """A stand-in for Worker exposing just the ``displays`` list."""
 
-    def __init__(self, ndisplays, clobbered):
+    def __init__(self, ndisplays):
         self.displays = [f"Display {i + 1}" for i in range(ndisplays)]
-        self.clobbered = set(clobbered)
-
-    def get_dispwin_display_profile_argument(self, display_no):
-        return f"/tmp/display{display_no}.icc"
-
-    def calibration_is_clobbered(self, dispwin, display_no, profile_arg):
-        return display_no in self.clobbered
 
 
 def _profile_loader_stub():
@@ -201,102 +194,135 @@ def test_reload_black_videoluts_ignores_unreadable_displays():
     assert runs == []
 
 
-def test_clobbered_displays_skips_virtual_and_uninstalled():
-    """Virtual displays and displays with no installed profile are skipped."""
-    worker = FakeMultiDisplayWorker(ndisplays=3, clobbered={0, 1, 2})
-    worker.get_dispwin_display_profile_argument = lambda display_no: (
-        "-L" if display_no == 1 else f"/tmp/display{display_no}.icc"
-    )
+def _maxima_from_clobbered(ndisplays, clobbered):
+    """Build a get_macos_videolut_maxima()-shaped list from a clobbered set."""
+    return [0.0 if i in clobbered else 1.0 for i in range(ndisplays)]
+
+
+def test_clobbered_displays_skips_virtual_displays():
+    """Virtual displays are skipped even if their VideoLUT reads as black."""
+    worker = FakeMultiDisplayWorker(ndisplays=3)
     pl = _profile_loader_stub()
-    with mock.patch(
-        "DisplayCAL.profile_loader.config.is_virtual_display",
-        side_effect=lambda i: i == 2,
+    with (
+        mock.patch(
+            "DisplayCAL.profile_loader.config.is_virtual_display",
+            side_effect=lambda i: i == 2,
+        ),
+        mock.patch(
+            "DisplayCAL.worker.get_macos_videolut_maxima",
+            return_value=_maxima_from_clobbered(3, {0, 2}),
+        ),
     ):
         assert pl._clobbered_displays(worker, "dispwin") == [0]
 
 
 def test_reload_clobbered_displays_batches_simultaneous_clobbers_in_one_pass():
-    """Two displays black at once are both reloaded within a single pass."""
-    worker = FakeMultiDisplayWorker(ndisplays=2, clobbered={0, 1})
+    """Two displays black at once are both reloaded within a single call."""
+    worker = FakeMultiDisplayWorker(ndisplays=2)
+    clobbered = {0, 1}
     pl = _profile_loader_stub()
     calls = []
 
-    def fake_apply_profiles(index=None):
-        calls.append(index)
-        worker.clobbered.discard(index)
+    def fake_reload(indices, log=None):
+        calls.append(list(indices))
+        for i in indices:
+            clobbered.discard(i)
+        return list(indices)
 
-    pl.apply_profiles = fake_apply_profiles
     with (
         mock.patch(
             "DisplayCAL.profile_loader.config.is_virtual_display",
             return_value=False,
+        ),
+        mock.patch(
+            "DisplayCAL.worker.get_macos_videolut_maxima",
+            side_effect=lambda: _maxima_from_clobbered(2, clobbered),
+        ),
+        mock.patch(
+            "DisplayCAL.worker.reload_macos_videoluts", side_effect=fake_reload
         ),
         mock.patch("DisplayCAL.profile_loader.time.sleep"),
     ):
         converged = pl._reload_clobbered_displays(
             worker, "dispwin", max_passes=5, settle=0
         )
-    assert calls == [0, 1]
+    assert calls == [[0, 1]]
     assert converged is True
 
 
-def test_reload_clobbered_displays_converges_after_ping_pong():
-    """Fixing one display re-clobbers the other (issue #824); it must still converge.
+def test_reload_clobbered_displays_converges_after_a_reload_not_sticking():
+    """A display whose reload doesn't stick right away is retried until it converges.
 
-    This reproduces the reported multi-display loop: reloading display 0
-    "clobbers" display 1 and vice-versa, but on the third pass nothing is
-    clobbered any more (the OS settles), and the batched reload must notice
-    that and stop instead of looping forever.
+    Reloading all clobbered displays from one process (rather than one
+    dispwin subprocess per display) avoids the deterministic multi-display
+    ping-pong that issue #824 was originally about, but the pass loop
+    remains as a safety net for a display simply not sticking on the first
+    try (e.g. disturbed again before the next scan).
     """
-    worker = FakeMultiDisplayWorker(ndisplays=2, clobbered={0})
+    worker = FakeMultiDisplayWorker(ndisplays=2)
+    clobbered = {0}
     pl = _profile_loader_stub()
     calls = []
     passes_done = 0
 
-    def fake_apply_profiles(index=None):
+    def fake_reload(indices, log=None):
         nonlocal passes_done
-        calls.append(index)
-        worker.clobbered.discard(index)
-        other = 1 - index
+        calls.append(list(indices))
+        for i in indices:
+            clobbered.discard(i)
         if passes_done < 2:
-            worker.clobbered.add(other)
+            clobbered.add(0)
+        return list(indices)
 
     def fake_sleep(_seconds):
         nonlocal passes_done
         passes_done += 1
 
-    pl.apply_profiles = fake_apply_profiles
     with (
         mock.patch(
             "DisplayCAL.profile_loader.config.is_virtual_display",
             return_value=False,
+        ),
+        mock.patch(
+            "DisplayCAL.worker.get_macos_videolut_maxima",
+            side_effect=lambda: _maxima_from_clobbered(2, clobbered),
+        ),
+        mock.patch(
+            "DisplayCAL.worker.reload_macos_videoluts", side_effect=fake_reload
         ),
         mock.patch("DisplayCAL.profile_loader.time.sleep", side_effect=fake_sleep),
     ):
         converged = pl._reload_clobbered_displays(
             worker, "dispwin", max_passes=10, settle=0
         )
-    assert not worker.clobbered
-    assert calls == [0, 1, 0]
+    assert not clobbered
+    assert calls == [[0], [0], [0]]
     assert converged is True
 
 
 def test_reload_clobbered_displays_stops_after_max_passes_without_hanging():
-    """A never-converging ping-pong must be bounded, not loop forever."""
-    worker = FakeMultiDisplayWorker(ndisplays=2, clobbered={0})
+    """A display that never sticks must be bounded, not retried forever."""
+    worker = FakeMultiDisplayWorker(ndisplays=2)
+    clobbered = {0}
     pl = _profile_loader_stub()
     calls = []
 
-    def fake_apply_profiles(index=None):
-        calls.append(index)
-        worker.clobbered.discard(index)
-        worker.clobbered.add(1 - index)
+    def fake_reload(indices, log=None):
+        calls.append(list(indices))
+        # Reload "succeeds" but the display is immediately clobbered again.
+        return list(indices)
 
-    pl.apply_profiles = fake_apply_profiles
     with (
         mock.patch(
             "DisplayCAL.profile_loader.config.is_virtual_display",
             return_value=False,
+        ),
+        mock.patch(
+            "DisplayCAL.worker.get_macos_videolut_maxima",
+            side_effect=lambda: _maxima_from_clobbered(2, clobbered),
+        ),
+        mock.patch(
+            "DisplayCAL.worker.reload_macos_videoluts", side_effect=fake_reload
         ),
         mock.patch("DisplayCAL.profile_loader.time.sleep"),
     ):
@@ -304,34 +330,41 @@ def test_reload_clobbered_displays_stops_after_max_passes_without_hanging():
             worker, "dispwin", max_passes=4, settle=0
         )
     assert len(calls) == 4
-    assert worker.clobbered
+    assert clobbered
     assert converged is False
 
 
 def test_reload_clobbered_displays_stops_on_shutdown():
     """The shutdown flag must break out of the reload loop promptly."""
-    worker = FakeMultiDisplayWorker(ndisplays=1, clobbered={0})
+    worker = FakeMultiDisplayWorker(ndisplays=1)
+    clobbered = {0}
     pl = _profile_loader_stub()
     calls = []
 
-    def fake_apply_profiles(index=None):
-        calls.append(index)
+    def fake_reload(indices, log=None):
+        calls.append(list(indices))
         pl._shutdown = True
         # Still "clobbered" - a real shutdown just stops trying.
-        worker.clobbered.add(0)
+        return []
 
-    pl.apply_profiles = fake_apply_profiles
     with (
         mock.patch(
             "DisplayCAL.profile_loader.config.is_virtual_display",
             return_value=False,
+        ),
+        mock.patch(
+            "DisplayCAL.worker.get_macos_videolut_maxima",
+            side_effect=lambda: _maxima_from_clobbered(1, clobbered),
+        ),
+        mock.patch(
+            "DisplayCAL.worker.reload_macos_videoluts", side_effect=fake_reload
         ),
         mock.patch("DisplayCAL.profile_loader.time.sleep"),
     ):
         converged = pl._reload_clobbered_displays(
             worker, "dispwin", max_passes=10, settle=0
         )
-    assert calls == [0]
+    assert calls == [[0]]
     assert converged is True
 
 

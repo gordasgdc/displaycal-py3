@@ -2190,6 +2190,7 @@ class WPopen(sp.Popen):
 
 
 _coregraphics = None
+_corefoundation = None
 
 
 def _get_coregraphics():
@@ -2205,6 +2206,45 @@ def _get_coregraphics():
     return _coregraphics or None
 
 
+def _get_corefoundation():
+    """Return the CoreFoundation CDLL (macOS only), or None."""
+    global _corefoundation
+    if _corefoundation is None and sys.platform == "darwin":
+        try:
+            _corefoundation = ctypes.CDLL(
+                "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation"
+            )
+        except OSError:
+            _corefoundation = False  # Mark as tried-and-failed
+    return _corefoundation or None
+
+
+def _macos_active_display_ids(max_displays=16):
+    """Return active CGDirectDisplayIDs in CoreGraphics enumeration order.
+
+    This order matches ArgyllCMS' ``dispwin -d`` numbering (both come from
+    CGGetActiveDisplayList), so index i here is display i+1 for dispwin.
+
+    Returns:
+        None | ctypes.CDLL, list[int]: The CoreGraphics CDLL (for reuse by the
+            caller) and the list of display IDs, or (None, []) if
+            CoreGraphics is unavailable.
+    """
+    cg = _get_coregraphics()
+    if cg is None:
+        return None, []
+    cg.CGGetActiveDisplayList.argtypes = [
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    ids = (ctypes.c_uint32 * max_displays)()
+    count = ctypes.c_uint32(0)
+    if cg.CGGetActiveDisplayList(max_displays, ids, ctypes.byref(count)) != 0:
+        return cg, []
+    return cg, list(ids[: count.value])
+
+
 def get_macos_videolut_maxima(max_displays=16):
     """Return the maximum VideoLUT output value for each active display (macOS).
 
@@ -2218,14 +2258,9 @@ def get_macos_videolut_maxima(max_displays=16):
         list[None | float]: Per-display maxima (0.0 - 1.0), None for a display
             that couldn't be read, or [] if CoreGraphics is unavailable.
     """
-    cg = _get_coregraphics()
-    if cg is None:
+    cg, ids = _macos_active_display_ids(max_displays)
+    if cg is None or not ids:
         return []
-    cg.CGGetActiveDisplayList.argtypes = [
-        ctypes.c_uint32,
-        ctypes.POINTER(ctypes.c_uint32),
-        ctypes.POINTER(ctypes.c_uint32),
-    ]
     cg.CGDisplayGammaTableCapacity.restype = ctypes.c_uint32
     cg.CGDisplayGammaTableCapacity.argtypes = [ctypes.c_uint32]
     cg.CGGetDisplayTransferByTable.argtypes = [
@@ -2236,13 +2271,8 @@ def get_macos_videolut_maxima(max_displays=16):
         ctypes.POINTER(ctypes.c_float),
         ctypes.POINTER(ctypes.c_uint32),
     ]
-    ids = (ctypes.c_uint32 * max_displays)()
-    count = ctypes.c_uint32(0)
-    if cg.CGGetActiveDisplayList(max_displays, ids, ctypes.byref(count)) != 0:
-        return []
     maxima = []
-    for i in range(count.value):
-        did = ids[i]
+    for did in ids:
         cap = cg.CGDisplayGammaTableCapacity(did) or 256
         red = (ctypes.c_float * cap)()
         green = (ctypes.c_float * cap)()
@@ -2263,6 +2293,210 @@ def get_macos_videolut_maxima(max_displays=16):
                     channel_max = channel[j]
         maxima.append(channel_max)
     return maxima
+
+
+def get_macos_videolut_capacity(display_index, max_displays=16):
+    """Return the VideoLUT entry count for one active macOS display.
+
+    Args:
+        display_index (int): Zero-based display index (CoreGraphics/dispwin
+            order, see :func:`_macos_active_display_ids`).
+
+    Returns:
+        None | int: The VideoLUT capacity, or None if it couldn't be read.
+    """
+    cg, ids = _macos_active_display_ids(max_displays)
+    if cg is None or display_index >= len(ids):
+        return None
+    cg.CGDisplayGammaTableCapacity.restype = ctypes.c_uint32
+    cg.CGDisplayGammaTableCapacity.argtypes = [ctypes.c_uint32]
+    return cg.CGDisplayGammaTableCapacity(ids[display_index]) or None
+
+
+def set_macos_videolut(display_index, red, green, blue, max_displays=16):
+    """Set one active macOS display's VideoLUT directly via CoreGraphics.
+
+    Bypasses spawning a ``dispwin`` subprocess entirely. Argyll's dispwin has
+    to exit after every invocation, and macOS's own cleanup of a just-exited
+    process's transient VideoLUT claim has a bug where it can zero a
+    *different*, untouched display's gamma table (issue #824). Applying
+    corrected tables to every clobbered display from a single persistent
+    process, with no process exit in between, avoids that OS bug entirely -
+    confirmed experimentally on real multi-display hardware.
+
+    Args:
+        display_index (int): Zero-based display index (CoreGraphics/dispwin
+            order, see :func:`_macos_active_display_ids`).
+        red, green, blue (Sequence[float]): Per-channel output values
+            (0.0 - 1.0), all the same length.
+
+    Returns:
+        bool: True on success.
+    """
+    cg, ids = _macos_active_display_ids(max_displays)
+    if cg is None or display_index >= len(ids):
+        return False
+    nent = len(red)
+    cg.CGSetDisplayTransferByTable.restype = ctypes.c_int32
+    cg.CGSetDisplayTransferByTable.argtypes = [
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_float),
+    ]
+    red_arr = (ctypes.c_float * nent)(*red)
+    green_arr = (ctypes.c_float * nent)(*green)
+    blue_arr = (ctypes.c_float * nent)(*blue)
+    return (
+        cg.CGSetDisplayTransferByTable(
+            ids[display_index], nent, red_arr, green_arr, blue_arr
+        )
+        == 0
+    )
+
+
+def vcgt_values_to_videolut(vcgt_values, nent):
+    """Interpolate vcgt channel points onto a VideoLUT of ``nent`` entries.
+
+    Args:
+        vcgt_values (list[list[float, float]]): A single channel's vcgt
+            points as returned by
+            :meth:`DisplayCAL.icc_profile.VideoCardGammaType.get_values`,
+            i.e. ``[input_0_255, output_0_65535]`` pairs.
+        nent (int): Target VideoLUT entry count.
+
+    Returns:
+        list[float]: ``nent`` output values (0.0 - 1.0), linearly
+            interpolated the same way ArgyllCMS' dispwin interpolates a
+            .cal file's entries onto a display's actual VideoLUT size.
+    """
+    ncal = len(vcgt_values)
+    values = [point[1] / 65535.0 for point in vcgt_values]
+    if ncal < 2 or nent < 2:
+        return [values[-1] if values else 1.0] * nent
+    out = []
+    for i in range(nent):
+        pos = (ncal - 1) * i / (nent - 1)
+        ix = min(int(pos), ncal - 2)
+        weight = pos - ix
+        out.append(values[ix] + weight * (values[ix + 1] - values[ix]))
+    return out
+
+
+def get_macos_display_profile_data(display_index, max_displays=16):
+    """Return the raw ICC profile bytes CoreGraphics currently has for a display.
+
+    Uses ``CGDisplayCopyColorSpace()``/``CGColorSpaceCopyICCData()`` directly,
+    rather than DisplayCAL's usual :func:`DisplayCAL.icc_profile.get_display_profile`
+    (which queries the "Image Events" AppleScript scripting interface - this
+    has been confirmed to fail outright on current macOS, e.g. Tahoe, raising
+    "Can't get display profile of display N (-1728)"), and rather than
+    running a dispwin subprocess (which risks re-triggering issue #824).
+
+    Args:
+        display_index (int): Zero-based display index (CoreGraphics/dispwin
+            order, see :func:`_macos_active_display_ids`).
+
+    Returns:
+        None | bytes: The profile data, or None if it couldn't be read.
+    """
+    cg, ids = _macos_active_display_ids(max_displays)
+    if cg is None or display_index >= len(ids):
+        return None
+    cf = _get_corefoundation()
+    if cf is None:
+        return None
+    cg.CGDisplayCopyColorSpace.restype = ctypes.c_void_p
+    cg.CGDisplayCopyColorSpace.argtypes = [ctypes.c_uint32]
+    cg.CGColorSpaceCopyICCData.restype = ctypes.c_void_p
+    cg.CGColorSpaceCopyICCData.argtypes = [ctypes.c_void_p]
+    cg.CGColorSpaceRelease.argtypes = [ctypes.c_void_p]
+    cf.CFDataGetLength.restype = ctypes.c_long
+    cf.CFDataGetLength.argtypes = [ctypes.c_void_p]
+    cf.CFDataGetBytePtr.restype = ctypes.c_void_p
+    cf.CFDataGetBytePtr.argtypes = [ctypes.c_void_p]
+    cf.CFRelease.argtypes = [ctypes.c_void_p]
+
+    colorspace = cg.CGDisplayCopyColorSpace(ids[display_index])
+    if not colorspace:
+        return None
+    try:
+        icc_data = cg.CGColorSpaceCopyICCData(colorspace)
+        if not icc_data:
+            return None
+        try:
+            length = cf.CFDataGetLength(icc_data)
+            ptr = cf.CFDataGetBytePtr(icc_data)
+            if not ptr or length <= 0:
+                return None
+            return ctypes.string_at(ptr, length)
+        finally:
+            cf.CFRelease(icc_data)
+    finally:
+        cg.CGColorSpaceRelease(colorspace)
+
+
+def _get_macos_display_profile(display_index, log=None):
+    """Return an ICCProfile for a display, preferring CoreGraphics over AppleScript.
+
+    See :func:`get_macos_display_profile_data` for why. Falls back to
+    :func:`DisplayCAL.icc_profile.get_display_profile` if CoreGraphics
+    doesn't yield usable profile data.
+
+    Returns:
+        None | ICCProfile: The display's current profile, or None.
+    """
+    data = get_macos_display_profile_data(display_index)
+    if data:
+        try:
+            return ICCProfile(data)
+        except Exception as exception:
+            if log:
+                log(exception)
+    try:
+        return get_display_profile(display_index)
+    except Exception as exception:
+        if log:
+            log(exception)
+        return None
+
+
+def reload_macos_videoluts(indices, log=None):
+    """Re-apply calibration to macOS displays directly via CoreGraphics.
+
+    Reads each display's currently active ICC profile (no subprocess) and
+    applies its vcgt calibration (or a linear ramp if it has none) to all
+    given displays back-to-back, from this single process. See
+    :func:`set_macos_videolut` for why avoiding a subprocess-per-display
+    matters (issue #824).
+
+    Args:
+        indices (Iterable[int]): Zero-based display indices to reload.
+        log (None | Callable): Optional logging callable.
+
+    Returns:
+        list[int]: Indices that were successfully reloaded.
+    """
+    reloaded = []
+    for i in indices:
+        nent = get_macos_videolut_capacity(i)
+        if not nent:
+            continue
+        profile = _get_macos_display_profile(i, log=log)
+        vcgt = profile.tags.get("vcgt") if profile else None
+        if vcgt:
+            r_points, g_points, b_points = vcgt.get_values()[:3]
+            red = vcgt_values_to_videolut(r_points, nent)
+            green = vcgt_values_to_videolut(g_points, nent)
+            blue = vcgt_values_to_videolut(b_points, nent)
+        else:
+            red = green = blue = [j / (nent - 1.0) for j in range(nent)]
+        if set_macos_videolut(i, red, green, blue):
+            reloaded.append(i)
+        elif log:
+            log(f"Failed to set VideoLUT for display {i + 1:d}")
+    return reloaded
 
 
 def reload_black_videoluts(
