@@ -6121,27 +6121,22 @@ def test_on_update_check_finished_does_not_chain_when_not_silent(window, monkeyp
     window._on_update_check_finished(found=False, silent=False)
 
 
-def test_instrument_setup_spyder2_needed_shows_notice_then_donation_check(
-    window, monkeypatch
-):
+def test_instrument_setup_spyder2_needed_runs_wizard(window, monkeypatch):
     from DisplayCAL import instrument_setup as isetup
 
     monkeypatch.setattr(
         isetup,
         "resolve_instrument_setup_needs",
         lambda *a, **k: isetup.InstrumentSetupNeeds(
-            needs_spyder2_enable=True, needs_correction_import=False
+            needs_spyder2_enable=True,
+            needs_correction_import=False,
+            recheck_after_spyder2=False,
         ),
     )
-    infos = []
-    monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: infos.append(a))
-    donation_calls = []
-    monkeypatch.setattr(
-        window, "_show_donation_message_if_needed", lambda: donation_calls.append(True)
-    )
+    calls = []
+    monkeypatch.setattr(window, "_enable_spyder2", lambda recheck: calls.append(recheck))
     window._run_instrument_setup_and_donation_check()
-    assert infos
-    assert donation_calls == [True]
+    assert calls == [False]
 
 
 def test_instrument_setup_import_needed_runs_import_controller(window, monkeypatch):
@@ -6152,7 +6147,9 @@ def test_instrument_setup_import_needed_runs_import_controller(window, monkeypat
         isetup,
         "resolve_instrument_setup_needs",
         lambda *a, **k: isetup.InstrumentSetupNeeds(
-            needs_spyder2_enable=False, needs_correction_import=True
+            needs_spyder2_enable=False,
+            needs_correction_import=True,
+            recheck_after_spyder2=False,
         ),
     )
 
@@ -6185,7 +6182,9 @@ def test_instrument_setup_nothing_needed_goes_straight_to_donation_check(
         isetup,
         "resolve_instrument_setup_needs",
         lambda *a, **k: isetup.InstrumentSetupNeeds(
-            needs_spyder2_enable=False, needs_correction_import=False
+            needs_spyder2_enable=False,
+            needs_correction_import=False,
+            recheck_after_spyder2=False,
         ),
     )
     donation_calls = []
@@ -6194,6 +6193,114 @@ def test_instrument_setup_nothing_needed_goes_straight_to_donation_check(
     )
     window._run_instrument_setup_and_donation_check()
     assert donation_calls == [True]
+
+
+def test_enable_spyder2_wires_controller_and_clears_on_finish(window, monkeypatch):
+    from DisplayCAL.ui import spyder2_enable as s2
+
+    def fake_run(self):
+        self.finished.emit(True)
+
+    monkeypatch.setattr(s2.Spyder2EnableController, "run", fake_run)
+    monkeypatch.setattr(window, "_update_spyder2_menu_state", lambda: None)
+    monkeypatch.setattr(
+        window,
+        "_run_instrument_setup_and_donation_check",
+        lambda: None,
+    )
+    window._enable_spyder2(recheck=True)
+    assert window._spyder2_enable_controller is None
+
+
+def test_spyder2_enable_finished_attempted_and_recheck_reruns_full_check(
+    window, monkeypatch
+):
+    calls = []
+    monkeypatch.setattr(
+        window,
+        "_run_instrument_setup_and_donation_check",
+        lambda: calls.append("recheck"),
+    )
+    monkeypatch.setattr(
+        window, "_show_donation_message_if_needed", lambda: calls.append("donation")
+    )
+    monkeypatch.setattr(window, "_update_spyder2_menu_state", lambda: None)
+    window._on_spyder2_enable_finished(attempted=True, recheck=True)
+    assert calls == ["recheck"]
+
+
+def test_spyder2_enable_finished_attempted_no_recheck_shows_donation(
+    window, monkeypatch
+):
+    calls = []
+    monkeypatch.setattr(
+        window,
+        "_run_instrument_setup_and_donation_check",
+        lambda: pytest.fail("should not recheck"),
+    )
+    monkeypatch.setattr(
+        window, "_show_donation_message_if_needed", lambda: calls.append("donation")
+    )
+    monkeypatch.setattr(window, "_update_spyder2_menu_state", lambda: None)
+    window._on_spyder2_enable_finished(attempted=True, recheck=False)
+    assert calls == ["donation"]
+
+
+def test_spyder2_enable_finished_cancelled_and_recheck_runs_import_controller(
+    window, monkeypatch
+):
+    from DisplayCAL.ui import colorimeter_correction_io as ccio
+
+    def fake_run(self):
+        self.finished.emit()
+
+    monkeypatch.setattr(ccio.ImportController, "run", fake_run)
+    monkeypatch.setattr(window, "_update_spyder2_menu_state", lambda: None)
+    donation_calls = []
+    monkeypatch.setattr(
+        window,
+        "_show_donation_message_if_needed",
+        lambda: donation_calls.append(True),
+    )
+    window._on_spyder2_enable_finished(attempted=False, recheck=True)
+    assert donation_calls == [True]
+    assert window._instrument_setup_import_controller is None
+
+
+def test_spyder2_enable_finished_cancelled_no_recheck_shows_donation(
+    window, monkeypatch
+):
+    calls = []
+    monkeypatch.setattr(
+        window, "_show_donation_message_if_needed", lambda: calls.append("donation")
+    )
+    monkeypatch.setattr(window, "_update_spyder2_menu_state", lambda: None)
+    window._on_spyder2_enable_finished(attempted=False, recheck=False)
+    assert calls == ["donation"]
+
+
+def test_update_spyder2_menu_state_reflects_worker(window, monkeypatch):
+    monkeypatch.setattr(mw, "get_argyll_util", lambda name: "/bin/spyd2en")
+    monkeypatch.setattr(
+        window.worker, "spyder2_firmware_exists", lambda scope=None: True
+    )
+    window._update_spyder2_menu_state()
+    assert window.enable_spyder2_action.isEnabled() is True
+    assert window.enable_spyder2_action.isChecked() is True
+
+    monkeypatch.setattr(mw, "get_argyll_util", lambda name: None)
+    window._update_spyder2_menu_state()
+    assert window.enable_spyder2_action.isEnabled() is False
+    assert window.enable_spyder2_action.isChecked() is False
+
+
+def test_enable_spyder2_action_triggers_wizard_without_recheck(window, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        window, "_enable_spyder2", lambda recheck: calls.append(recheck)
+    )
+    window.enable_spyder2_action.trigger()
+    assert calls == [False]
 
 
 def test_show_donation_message_if_needed_shows_dialog_when_flagged(

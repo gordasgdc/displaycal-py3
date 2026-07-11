@@ -8,14 +8,16 @@ whether an import prompt is needed and whether to show the donation message.
 The actual prompts (colorimeter-correction import dialog, donation dialog)
 are toolkit-specific and live with their caller.
 
-Deliberately not reproduced here (documented at the one call site that needs
-it, ``ui/main_window.py``): the Spyder2 "enable" wizard
-(``MainFrame.enable_spyder2_handler``), which downloads/patches OEM firmware
-through the discontinued ``spyd2en`` Argyll utility for a colorimeter that has
-been out of production since 2009 — judged not worth a first Qt port given how
-small its remaining install base is. ``needs_spyder2_enable`` is still
-detected (so the caller can show a one-line not-yet-available notice rather
-than silently doing nothing), but no wizard is built.
+The Spyder2 "enable" wizard itself (``MainFrame.enable_spyder2_handler``,
+which downloads/patches OEM firmware through the discontinued ``spyd2en``
+Argyll utility) is a toolkit-specific flow and lives in
+:mod:`DisplayCAL.ui.spyder2_enable`; this module only detects whether it's
+needed (``needs_spyder2_enable``) and, once that flow has actually run
+(success or failure, not a plain dialog cancel), whether the caller should
+recheck from scratch for other pending imports (``recheck_after_spyder2`` —
+port of the ``check_instrument_setup`` bool wx threads into
+``enable_spyder2_handler``, which is what its consumer uses to decide whether
+to re-run ``check_instrument_setup`` once enabling finishes).
 """
 
 from __future__ import annotations
@@ -35,6 +37,7 @@ class InstrumentSetupNeeds:
 
     needs_spyder2_enable: bool
     needs_correction_import: bool
+    recheck_after_spyder2: bool
 
 
 def resolve_instrument_setup_needs(
@@ -77,9 +80,11 @@ def resolve_instrument_setup_needs(
     spyd4 = (
         "Spyder4" in worker.instruments or "Spyder5" in worker.instruments
     ) and not worker.spyder4_cal_exists()
+    other_imports_pending = i1d3 or icd or spyd4
     return InstrumentSetupNeeds(
         needs_spyder2_enable=spyd2,
-        needs_correction_import=not spyd2 and (i1d3 or icd or spyd4),
+        needs_correction_import=not spyd2 and other_imports_pending,
+        recheck_after_spyder2=other_imports_pending,
     )
 
 

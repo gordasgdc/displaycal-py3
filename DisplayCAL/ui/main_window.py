@@ -101,9 +101,13 @@ wx's ``StartupFrame.setup_frame_finish`` tail: a silent update check
 / donation-nag check (:mod:`DisplayCAL.instrument_setup`) when nothing needs
 updating. The colorimeter-correction import prompt reuses the same
 ``ImportController`` the Tools menu does; the Spyder2 firmware-enable wizard
-is not reproduced (a not-yet-available notice instead, matching the
-madVR/Prisma-install precedent), see :mod:`DisplayCAL.instrument_setup`'s
-module docstring.
+(:mod:`DisplayCAL.ui.spyder2_enable`'s ``Spyder2EnableController``) runs when
+:mod:`DisplayCAL.instrument_setup` detects a Spyder2 that needs its firmware
+enabled, and :meth:`MainWindow._on_spyder2_enable_finished` re-runs the whole
+instrument-setup check afterward when
+``InstrumentSetupNeeds.recheck_after_spyder2`` says other imports are still
+pending, mirroring wx's ``enable_spyder2_consumer`` recursion into
+``check_instrument_setup``.
 
 The window is opt-in behind ``DISPLAYCAL_UI=qt`` / ``--qt`` (wired in
 :mod:`DisplayCAL.main`), so it never displaces the still-shipping wx main window.
@@ -228,6 +232,7 @@ from DisplayCAL.ui.measurement_report import ReportWindow
 from DisplayCAL.ui.measurement_sanity_dialog import MeasurementSanityDialog
 from DisplayCAL.ui.profile_install_window import InstallProfileWindow
 from DisplayCAL.ui.progress_dialog import ProgressDialog
+from DisplayCAL.ui.spyder2_enable import Spyder2EnableController
 from DisplayCAL.ui.tooltip_window import TooltipWindow
 from DisplayCAL.ui.tools.profile_info import ProfileInfoWindow
 from DisplayCAL.ui.tools.synth_profile import SynthICCWindow
@@ -843,6 +848,7 @@ class MainWindow(BaseWindow):
         #: the Tools-menu-triggered one, so their ``finished`` handlers can stay
         #: independent -- this one chains into the donation-message check).
         self._instrument_setup_import_controller: ImportController | None = None
+        self._spyder2_enable_controller: Spyder2EnableController | None = None
         #: Recent calibrations/profiles (index 0 is always "", the "new
         #: settings" choice) and bundled presets, mirroring wx's
         #: ``MainFrame.recent_cals`` / ``.presets``.
@@ -1427,6 +1433,13 @@ class MainWindow(BaseWindow):
         (:meth:`_measurement_file_check_action_handler`), and
         "measurement_file.check_sanity.auto"
         (:meth:`_measurement_file_check_auto_toggled`).
+
+        Of wx's ``instrument`` submenu, only "enable_spyder2" is reproduced
+        (:meth:`_enable_spyder2`, backed by
+        :mod:`DisplayCAL.ui.spyder2_enable`); the Argyll instrument
+        configuration-file / driver install-uninstall entries and
+        "calibrate_instrument" are not (they need the still-unported
+        driver-installer / `oeminst` plumbing wx's own handlers wrap).
         """
         tools_menu = self.menuBar().addMenu(f"&{lang.getstr('menu.tools')}")
         ccxx_menu = tools_menu.addMenu(
@@ -1440,6 +1453,16 @@ class MainWindow(BaseWindow):
             lang.getstr("colorimeter_correction.upload")
         )
         upload_action.triggered.connect(self._ccxx_upload_action_handler)
+
+        instrument_menu = tools_menu.addMenu(lang.getstr("instrument"))
+        self.enable_spyder2_action = instrument_menu.addAction(
+            lang.getstr("enable_spyder2")
+        )
+        self.enable_spyder2_action.setCheckable(True)
+        self.enable_spyder2_action.triggered.connect(
+            lambda: self._enable_spyder2(recheck=False)
+        )
+        self._update_spyder2_menu_state()
 
         advanced_menu = tools_menu.addMenu(lang.getstr("advanced"))
         synthicc_action = advanced_menu.addAction(lang.getstr("synthicc.create"))
@@ -1605,25 +1628,12 @@ class MainWindow(BaseWindow):
             self._run_instrument_setup_and_donation_check()
 
     def _run_instrument_setup_and_donation_check(self) -> None:
-        """Qt port of ``MainFrame.check_instrument_setup``'s dispatch.
-
-        Not reproduced: the Spyder2 "enable" wizard (see
-        :mod:`DisplayCAL.instrument_setup`'s module docstring) -- shown as a
-        not-yet-available notice, then falls straight through to the
-        donation check like a cancelled wx wizard would.
-        """
+        """Qt port of ``MainFrame.check_instrument_setup``'s dispatch."""
         needs = instrument_setup.resolve_instrument_setup_needs(
             self.worker, self._ccmx_catalog.instruments.values()
         )
         if needs.needs_spyder2_enable:
-            QMessageBox.information(
-                self,
-                self.windowTitle(),
-                "Enabling this Spyder2 colorimeter isn't available in this "
-                "Qt build yet. Use Tools > Colorimeter correction > Import "
-                "to import a correction manually instead.",
-            )
-            self._show_donation_message_if_needed()
+            self._enable_spyder2(recheck=needs.recheck_after_spyder2)
             return
         if needs.needs_correction_import:
             controller = ImportController(self.worker, self)
@@ -1637,6 +1647,60 @@ class MainWindow(BaseWindow):
         self._instrument_setup_import_controller = None
         self.update_colorimeter_correction_matrix_ctrl_items(force=True)
         self._show_donation_message_if_needed()
+
+    def _enable_spyder2(self, recheck: bool = False) -> None:
+        """Run the Spyder2 firmware-enable wizard (Tools menu / instrument setup).
+
+        Args:
+            recheck: whether the caller wants a follow-up step run once the
+                wizard completes (port of wx's ``enable_spyder2_handler``
+                ``check_instrument_setup`` bool: True when other
+                colorimeter-correction imports are also pending). Only set
+                from the automatic instrument-setup check; the Tools-menu
+                action passes False, matching wx's own menu handler (called
+                with no callafter).
+        """
+        controller = Spyder2EnableController(self.worker, self)
+        controller.finished.connect(
+            lambda attempted: self._on_spyder2_enable_finished(attempted, recheck)
+        )
+        self._spyder2_enable_controller = controller
+        controller.run()
+
+    def _on_spyder2_enable_finished(self, attempted: bool, recheck: bool) -> None:
+        self._spyder2_enable_controller = None
+        self._update_spyder2_menu_state()
+        if attempted:
+            # A full attempt (success or failure) ran through the async
+            # producer/consumer, matching wx's ``enable_spyder2_consumer``:
+            # re-run the whole check from scratch if other imports are
+            # pending (which may show this same wizard again, e.g. after a
+            # failed attempt -- faithful to wx, not a bug), else go straight
+            # to the donation nag.
+            if recheck:
+                self._run_instrument_setup_and_donation_check()
+            else:
+                self._show_donation_message_if_needed()
+            return
+        # The dialog/file-picker was cancelled before anything ran -- wx's
+        # synchronous fall-through in ``check_instrument_setup`` (the async
+        # worker call was never dispatched) skips re-checking Spyder2 itself
+        # and goes straight to whatever comes after it.
+        if recheck:
+            controller = ImportController(self.worker, self)
+            controller.finished.connect(self._on_instrument_setup_import_finished)
+            self._instrument_setup_import_controller = controller
+            controller.run()
+        else:
+            self._show_donation_message_if_needed()
+
+    def _update_spyder2_menu_state(self) -> None:
+        """Port of wx's ``menuitem_enable_spyder2`` enable/check refresh."""
+        spyd2en = bool(get_argyll_util("spyd2en"))
+        self.enable_spyder2_action.setEnabled(spyd2en)
+        self.enable_spyder2_action.setChecked(
+            spyd2en and self.worker.spyder2_firmware_exists()
+        )
 
     def _show_donation_message_if_needed(self) -> None:
         if instrument_setup.should_show_donation_message():

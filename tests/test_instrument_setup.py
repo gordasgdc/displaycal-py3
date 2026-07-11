@@ -63,6 +63,10 @@ class TestResolveInstrumentSetupNeeds:
         # Spyder2 also matches the "icd" correction-import condition, but the
         # wx original short-circuits the import check while spyd2 is pending.
         assert needs.needs_correction_import is False
+        # ...though the caller should still recheck for it once the Spyder2
+        # wizard finishes (port of wx's ``i1d3 or icd or spyd4`` bool threaded
+        # into ``enable_spyder2_handler``).
+        assert needs.recheck_after_spyder2 is True
 
     def test_spyder2_with_firmware_present_falls_through_to_import_check(self):
         setcfg("colorimeter_correction_matrix_file", "AUTO:")
@@ -70,6 +74,16 @@ class TestResolveInstrumentSetupNeeds:
         needs = isetup.resolve_instrument_setup_needs(worker, [])
         assert needs.needs_spyder2_enable is False
         assert needs.needs_correction_import is True
+        assert needs.recheck_after_spyder2 is True
+
+    def test_recheck_after_spyder2_false_when_nothing_else_pending(self):
+        setcfg("colorimeter_correction_matrix_file", "AUTO:")
+        worker = FakeWorker(instruments=["Spyder2"], spyder2_firmware=False)
+        needs = isetup.resolve_instrument_setup_needs(
+            worker, ["Spyder2"]  # already covered, so "icd" is False too
+        )
+        assert needs.needs_spyder2_enable is True
+        assert needs.recheck_after_spyder2 is False
 
     def test_spyder4_needs_import_when_cal_missing(self):
         setcfg("colorimeter_correction_matrix_file", "AUTO:")

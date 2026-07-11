@@ -2417,6 +2417,62 @@ destinations; the Spyder2 firmware-enable wizard; and the standalone
 `LUT3DFrame` tool window remain, plus Stage 7 (retire wx), still gated on
 maintainer confidence. `CCXXPlot` visualization is now fully ported.
 
+**Spyder2 firmware-enable wizard (2026-07-11), closed same day.** Maintainer
+picked this over the madVR/Prisma 3D LUT API install destinations and the
+standalone `LUT3DFrame` tool window when offered a choice — the smallest of
+the three remaining gaps.
+
+New `DisplayCAL/ui/spyder2_enable.py` ports
+`MainFrame.enable_spyder2_handler` / `enable_spyder2` /
+`enable_spyder2_producer` / `enable_spyder2_consumer`: `_EnableSpyder2Dialog`
+(auto-detect vs. manual-installer-file choice, plus install-user/
+install-systemwide radios, mirroring the inline `ConfirmDialog` wx builds)
+and `Spyder2EnableController` (a `QObject` owning a background
+`_EnableThread`, following the `ImportController`/`UploadController`
+pattern in `colorimeter_correction_io.py`). The pure `_enable_spyder2` /
+`_enable_spyder2_producer` module functions are a near-literal port of the
+wx methods of the same name (local-OEM-install glob probe on
+macOS/Windows, web-download fallback via `Worker.download`, firmware-exists
+re-check after a successful `spyd2en` run).
+
+Elevated (system-wide) runs authenticate via `Worker.authenticate`, wired
+through the same `PasswordPromptAdapter` seam as `profile_install_window.py`
+/ `colorimeter_correction_io.py`. Unlike wx — which authenticates
+synchronously on the GUI thread *before* dispatching to a worker thread,
+because its own `exec_cmd` refuses to show a password dialog off the main
+thread — this port skips that dance entirely and lets `Worker.exec_cmd`'s
+elevated branch authenticate directly on the background thread, matching the
+simpler pattern `InstallProfileWindow` already established (the Qt adapter
+is itself thread-safe).
+
+Wired at both of wx's two call sites: a new Tools > Instrument submenu
+(`enable_spyder2_action`, checkable, enable/checked state refreshed by
+`_update_spyder2_menu_state()` — port of the `menuitem_enable_spyder2`
+`Enable`/`Check` calls in wx's `update_menus`), and the automatic
+instrument-setup check on startup, replacing the not-yet-available notice
+`_run_instrument_setup_and_donation_check` showed since that check was first
+ported. `DisplayCAL/instrument_setup.py` gained a `recheck_after_spyder2`
+field on `InstrumentSetupNeeds` (`i1d3 or icd or spyd4`, independent of the
+spyd2 need) — the toolkit-neutral equivalent of the `check_instrument_setup`
+bool wx threads into `enable_spyder2_handler`, so
+`MainWindow._on_spyder2_enable_finished` knows whether to re-run the whole
+instrument-setup check (an attempted enable, success or failure) or jump
+straight to the correction-import controller (a cancelled dialog, which in
+wx falls through synchronously without re-checking Spyder2 itself — faithfully
+reproduced, including that a *failed* attempt with other imports pending can
+show the wizard again on the recheck, same as wx).
+
+23 new tests in `tests/test_ui_spyder2_enable.py` (dialog, the two pure
+producer functions, and the controller's dialog-cancel/file-cancel/success/
+failure/exception/asroot paths), 3 in `tests/test_instrument_setup.py`, 9 in
+`tests/test_ui_main_window.py` (replacing the 3 stale tests that constructed
+`InstrumentSetupNeeds` without the new field). Full suite green under
+`-n auto`.
+
+**Updated remaining-gaps list:** madVR/Prisma 3D LUT API install
+destinations and the standalone `LUT3DFrame` tool window remain, plus Stage 7
+(retire wx), still gated on maintainer confidence.
+
 ### Stage 7 — Retire wx code paths
 
 Delete the wx modules whose Qt replacements have been verified equivalent.
