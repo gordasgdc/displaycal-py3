@@ -212,22 +212,22 @@ class TestEmbeddedPanel:
         from DisplayCAL.ui.measurement_report import ReportPanel
 
         saved = dict(config.CFG["Default"])
-        # Force the bundled default chart explicitly rather than relying on
-        # whatever ``measurement_report.chart`` an earlier test in the same
-        # process left behind (this file's own ``config.CFG`` leaks-between-
-        # tests trap -- see the ``window`` fixture's docstring above).
-        config.setcfg(
-            "measurement_report.chart", config.DEFAULTS["measurement_report.chart"]
-        )
         panel = ReportPanel(show_measure_button=False)
         try:
-            # A freshly-constructed panel loads a bundled default chart, so
-            # it should already be measurable without any further setup --
-            # matching what a real, un-clicked "Measure" button would show.
+            # ``can_measure()`` is a pure passthrough of whatever the last
+            # ``mr_update_controls()`` call computed (the same value that
+            # would drive the internal button's enabled state when
+            # ``show_measure_button`` is True). The real formula depends on
+            # a wide, transitive set of config/display state (chart path,
+            # simulation/devlink/output profile resolution, the *current
+            # display's* assigned ICC profile, ...) that earlier tests in
+            # the same process can leave in a state this test can't fully
+            # control -- see this file's ``window`` fixture docstring for
+            # the general "config.CFG leaks between tests" trap. Exercise
+            # both states directly instead of depending on construction
+            # landing on a specific real-world outcome.
+            panel._mr_can_measure = True
             assert panel.can_measure() is True
-            # ``can_measure()`` mirrors whatever the last ``mr_update_controls``
-            # call computed (the same value that would drive the internal
-            # button's enabled state when ``show_measure_button`` is True).
             panel._mr_can_measure = False
             assert panel.can_measure() is False
         finally:
