@@ -2434,24 +2434,38 @@ class ProfileLoader:
         return errors
 
     def _clobbered_displays(self, worker: Worker, dispwin: str) -> list[int]:
-        """Return indices of displays whose loaded calibration looks clobbered.
+        """Return indices of displays whose VideoLUT looks clobbered (black).
+
+        Reads each display's VideoLUT directly via CoreGraphics rather than
+        running ``dispwin -V``. Spawning any dispwin subprocess - even a
+        read-only verify - can itself trigger macOS to clobber a *different*
+        display's VideoLUT (issue #824), since Argyll's dispwin always
+        restores its own captured baseline gamma table on exit, and it is
+        that restore-then-exit sequence that the OS mishandles. See
+        :func:`DisplayCAL.worker.get_macos_videolut_maxima`.
 
         Args:
             worker (Worker): Worker with an up-to-date ``displays`` list.
-            dispwin (str): Path to the dispwin executable.
+            dispwin (str): Path to the dispwin executable. Unused now, kept
+                for interface stability with callers/tests.
 
         Returns:
             list[int]: Zero-based indices of clobbered displays.
         """
+        from DisplayCAL.worker import get_macos_videolut_maxima
+
+        threshold = float(
+            config.getcfg("profile_loader.macos_videolut_black_threshold")
+        )
+        maxima = get_macos_videolut_maxima()
         clobbered = []
         for i in range(len(worker.displays)):
             if config.is_virtual_display(i):
                 continue
-            profile_arg = worker.get_dispwin_display_profile_argument(i)
-            if profile_arg == "-L":
-                # No installed profile path to verify against
+            if i >= len(maxima):
                 continue
-            if worker.calibration_is_clobbered(dispwin, i, profile_arg):
+            maximum = maxima[i]
+            if maximum is not None and maximum < threshold:
                 clobbered.append(i)
         return clobbered
 
@@ -2462,28 +2476,26 @@ class ProfileLoader:
         max_passes: None | int = None,
         settle: float = 0.5,
     ) -> bool:
-        """Reload calibration for every clobbered display, batched to converge.
+        """Reload calibration for every clobbered display, all in one process.
 
-        Re-loading one display's calibration runs (and exits) a dispwin
-        process, which is exactly the event that can trigger macOS to clobber
-        a *different* display's VideoLUT (issue #694). Fixing displays one at
-        a time and moving on to the next index - without re-checking the
-        displays already handled - can therefore ping-pong between displays
-        forever instead of converging (issue #824). Each pass here re-scans
-        the *entire* display list, re-loads every display currently found
-        clobbered, lets the VideoLUT settle, and repeats until nothing is
-        clobbered or the pass budget runs out.
-
-        On some systems, reloading display A deterministically clobbers
-        display B and vice versa, every single time (confirmed by hand on a
-        2-display Mac) - no amount of retrying within a single tick can ever
-        converge that case, since the very last reload always evicts the
-        previous one. Callers should use the return value to detect this and
-        back off rather than retrying indefinitely tick after tick.
+        Applies every clobbered display's calibration directly via
+        CoreGraphics (see :func:`DisplayCAL.worker.reload_macos_videoluts`),
+        back-to-back from this single still-running process. Re-loading one
+        display's calibration by running (and exiting) a dispwin process is
+        exactly the event that triggers macOS to clobber a *different*
+        display's VideoLUT (issue #694/#824's root cause): macOS mishandles
+        the cleanup of a just-exited process's transient VideoLUT claim.
+        Reloading every clobbered display from a single process that never
+        exits between them avoids that OS bug entirely, confirmed
+        experimentally on real multi-display hardware - so a single pass is
+        expected to converge immediately. The pass loop remains as a safety
+        net in case a display's VideoLUT is disturbed again mid-reload (e.g.
+        by an unrelated display reconfiguration).
 
         Args:
             worker (Worker): Worker with an up-to-date ``displays`` list.
-            dispwin (str): Path to the dispwin executable.
+            dispwin (str): Path to the dispwin executable. Unused now, kept
+                for interface stability with callers/tests.
             max_passes (None | int): Maximum number of scan/reload passes.
                 Defaults to ``profile_loader.macos_reapply_watch_max_passes``.
             settle (float): Seconds to wait between passes.
@@ -2493,6 +2505,8 @@ class ProfileLoader:
                 ran out, False if some display was still clobbered when it
                 gave up.
         """
+        from DisplayCAL.worker import reload_macos_videoluts
+
         if max_passes is None:
             max_passes = int(
                 config.getcfg("profile_loader.macos_reapply_watch_max_passes")
@@ -2503,14 +2517,14 @@ class ProfileLoader:
             clobbered = self._clobbered_displays(worker, dispwin)
             if not clobbered:
                 return True
-            for i in clobbered:
-                if self._shutdown:
-                    return True
-                print(
-                    f"VideoLUT for display {i + 1:d} was clobbered - "
-                    "re-loading calibration"
-                )
-                self.apply_profiles(index=i)
+            print(
+                "VideoLUT for display(s) "
+                f"{', '.join(str(i + 1) for i in clobbered)} was clobbered - "
+                "re-loading calibration"
+            )
+            reload_macos_videoluts(clobbered, log=print)
+            if self._shutdown:
+                return True
             time.sleep(settle)
         print(
             "Some displays' VideoLUTs are still clobbered after "

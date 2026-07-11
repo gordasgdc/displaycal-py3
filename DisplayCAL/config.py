@@ -1887,6 +1887,14 @@ DEFAULTS = {
     # re-loading (and thereby re-triggering the bug). See
     # profile_loader.ProfileLoader._calibration_load_discrepancy().
     "profile_loader.clobbered_discrepancy_threshold": 25,
+    # VideoLUT maximum output value (0.0 - 1.0) below which the macOS
+    # background watch considers a display's calibration clobbered/black.
+    # Checked directly via CoreGraphics rather than by running `dispwin -V`,
+    # since spawning any dispwin subprocess - even a read-only verify - can
+    # itself trigger the OS to clobber a *different* display (issue #824).
+    # See profile_loader.ProfileLoader._clobbered_displays() and
+    # worker.get_macos_videolut_maxima().
+    "profile_loader.macos_videolut_black_threshold": 0.05,
     "profile_loader.quantize_bits": 16,
     "profile_loader.reset_gamma_ramps": 0,
     "profile_loader.show_notifications": 0,
