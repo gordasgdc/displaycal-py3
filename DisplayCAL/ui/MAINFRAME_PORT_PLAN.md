@@ -2362,6 +2362,61 @@ destinations; the Spyder2 firmware-enable wizard; `CCXXPlot` visualization;
 the standalone `LUT3DFrame` tool window; and Stage 7 (retire wx), still
 gated on maintainer confidence. wx's Help menu is now fully ported.
 
+**`CCXXPlot` visualization (2026-07-11), closed same day.** Maintainer
+picked this over the Spyder2 firmware wizard / standalone `LUT3DFrame` /
+madVR-Prisma install destinations when offered a choice — it was the
+smallest of the four (`wx_ccxx_plot.py` is 587 lines vs. 2381 for
+`wx_lut_3d_frame.py`).
+
+Split into three files, following this port's data/render separation
+(`ui/plot/gamut_data.py`+`gamut.py`, `ui/plot/curve_data.py`+`curve.py`):
+
+* `DisplayCAL/ui/plot/ccxx_data.py` — toolkit-neutral port of
+  `CCXXPlot.__init__`'s computation (CCSS spectral-curve extraction with
+  Catmull-Rom up-interpolation for low-resolution spectra, or CCMX
+  matrix-inversion "flower" plot geometry; XYZ->display-RGB colour
+  resolution; the `nicenum`/`expt` axis-rounding helpers from Argyll's
+  `plot/plot.c`) plus a new `comparison_gamut_triangle()` helper (the CIE xy
+  view's Rec.2020/AdobeRGB/DCI-P3/Rec.709 overlay triangles, absent from
+  `ui/plot/colorspaces.py`'s gamut-projection registry since that's a
+  different concern). Runs the same blocking `spec2cie` subprocess call the
+  wx original made synchronously in `__init__` (no new `QThread` — matches
+  wx's actual, also-blocking behaviour rather than "improving" it out of
+  scope). One deliberate correctness fix over a literal transcription: kept
+  the wx `attrs.get("size", 0) > 11.25` branch in `_resolve_rgb()` even
+  though it's dead code for today's fixed marker sizes (10/5), since a
+  faithful colorimetry port shouldn't silently drop an unreachable-but-
+  documented branch.
+* `DisplayCAL/ui/plot/ccxx.py` — `CCXXPlotWidget(pg.PlotWidget)`, a thin
+  renderer over the precomputed data (`draw_ccxx()`/`draw_cie()`), following
+  `gamut.py`'s theme-follows-OS-palette convention rather than the wx
+  canvas's hard-coded near-black colours. Interactive zoom/pan is
+  pyqtgraph's own default wheel-zoom/drag-pan (disabled via
+  `setMouseEnabled(False)` for the static CCMX flower plot, matching wx's
+  `SetEnableDrag(False)`) rather than reproducing the wx canvas's hand-rolled
+  mouse-wheel/+/- key handlers, which pyqtgraph's `PlotWidget` already
+  subsumes.
+* `DisplayCAL/ui/ccxx_plot_window.py` — `CCXXPlotWindow(BaseWindow)`, the
+  toggle button (CCSS only, mirroring wx's `self.is_ccss` guard on
+  `toggle_btn`) and x-label caption around the widget.
+
+Wired into `MainWindow.colorimeter_correction_info_btn_handler` (previously
+a "not available in this Qt build yet" `QMessageBox.information` stub),
+replicating wx's `ccxx_plot_windows` dict cache keyed by
+`md5(bytes(cgats)).digest()` so re-clicking "info" for an already-open
+correction re-raises the existing window instead of reopening it. 13 new
+tests in `tests/test_ui_plot_ccxx_data.py` (pure data, both CCMX and the
+repo's bundled CCSS fixture, real `spec2cie` subprocess run), 6 in
+`tests/test_ui_ccxx_plot_window.py` (window construction/toggle plus the
+`MainWindow` handler's guard clauses and caching); one stale test in
+`tests/test_ui_main_window.py` asserting the old stub notice replaced with a
+no-file-selected guard-clause test. Full suite green under `-n auto`.
+
+**Updated remaining-gaps list:** madVR/Prisma 3D LUT API install
+destinations; the Spyder2 firmware-enable wizard; and the standalone
+`LUT3DFrame` tool window remain, plus Stage 7 (retire wx), still gated on
+maintainer confidence. `CCXXPlot` visualization is now fully ported.
+
 ### Stage 7 — Retire wx code paths
 
 Delete the wx modules whose Qt replacements have been verified equivalent.

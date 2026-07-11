@@ -435,15 +435,15 @@ def test_colorimeter_correction_create_btn_handler_opens_window(window):
         window._ccxx_create_window.close()
 
 
-def test_colorimeter_correction_info_btn_handler_shows_notice(window, monkeypatch):
-    calls = []
-    monkeypatch.setattr(
-        mw.QMessageBox,
-        "information",
-        staticmethod(lambda *a, **k: calls.append(True)),
-    )
+def test_colorimeter_correction_info_btn_handler_noop_without_file(window):
+    """No CCMX/CCSS selected -> no plot window opens.
+
+    See ``tests/test_ui_ccxx_plot_window.py`` for the full CCXXPlotWindow
+    open/cache/toggle coverage.
+    """
+    setcfg("colorimeter_correction_matrix_file", "")
     window.colorimeter_correction_info_btn_handler()
-    assert calls == [True]
+    assert window._ccxx_plot_windows == {}
 
 
 def test_observer_ctrl_lives_on_calibration_tab(window):

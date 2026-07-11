@@ -118,6 +118,7 @@ import platform
 import re
 import sys
 from decimal import Decimal
+from hashlib import md5
 from typing import TYPE_CHECKING, Callable
 
 from qtpy.QtCore import QSize, Qt, QThread, QTimer, Signal
@@ -200,6 +201,7 @@ from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import get_theme_pixmap, get_themed_pixmap
 from DisplayCAL.ui.theme import is_dark
 from DisplayCAL.ui.base_window import BaseWindow
+from DisplayCAL.ui.ccxx_plot_window import CCXXPlotWindow
 from DisplayCAL.ui.colorimeter_correction_io import (
     ImportController,
     UploadController,
@@ -829,6 +831,10 @@ class MainWindow(BaseWindow):
         self._ccmx_catalog = ColorimeterCorrectionCatalog()
         self._ccxx_web_controller: WebCheckController | None = None
         self._ccxx_create_window: CreateCorrectionWindow | None = None
+        #: Open CCXXPlotWindow instances keyed by md5(bytes(cgats)), mirroring
+        #: wx's ``ccxx_plot_windows`` (re-showing an already-open plot instead
+        #: of recomputing/reopening it).
+        self._ccxx_plot_windows: dict[bytes, CCXXPlotWindow] = {}
         self._ccxx_import_controller: ImportController | None = None
         self._ccxx_upload_controller: UploadController | None = None
         self._update_check_controller: UpdateCheckController | None = None
@@ -4414,18 +4420,34 @@ class MainWindow(BaseWindow):
         self._ccxx_create_window = window
 
     def colorimeter_correction_info_btn_handler(self) -> None:
-        """Plot the selected CCMX/CCSS's spectra or matrix.
+        """Plot the selected CCMX/CCSS's spectra or matrix."""
+        ccmx = getcfg("colorimeter_correction_matrix_file").split(":", 1)
+        if len(ccmx) < 2 or not os.path.isfile(ccmx[1]):
+            return
+        try:
+            cgats = CGATS(ccmx[1])
+        except CGATSError as exception:
+            QMessageBox.critical(
+                self, lang.getstr("colorimeter_correction.info"), str(exception)
+            )
+            return
+        if 0 not in cgats:
+            return
 
-        Not yet ported (the wx ``CCXXPlot`` visualization is out of scope
-        for this Qt port slice, matching the deferral already made in
-        ``colorimeter_correction_io.py``).
-        """
-        QMessageBox.information(
-            self,
-            lang.getstr("colorimeter_correction.info"),
-            "Plotting colorimeter-correction spectra/matrices isn't "
-            "available in this Qt build yet.",
-        )
+        key = md5(bytes(cgats)).digest()  # noqa: S324
+        window = self._ccxx_plot_windows.get(key)
+        if window is None:
+            try:
+                window = CCXXPlotWindow(cgats, self.worker)
+            except Exception as exception:  # noqa: BLE001 (report on GUI thread)
+                QMessageBox.critical(
+                    self, lang.getstr("colorimeter_correction.info"), str(exception)
+                )
+                return
+            self._ccxx_plot_windows[key] = window
+        window.show()
+        window.raise_()
+        window.activateWindow()
 
     def _display_delay_override_toggled(self, checked: bool) -> None:
         """Enable the delay spinbox and persist the override flag."""
