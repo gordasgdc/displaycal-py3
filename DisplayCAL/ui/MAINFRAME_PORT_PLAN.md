@@ -2738,6 +2738,88 @@ truly aren't user-typable) or stylesheet-overriding the editable ones to look
 non-editable (arguably undercuts the "you can type a path here" affordance).
 Left alone pending a maintainer decision on which way (if any) to reconcile.
 
+**Real-hardware end-to-end testing pass (2026-07-11/12, commits `56919ca8`
+through `6079cf73`, versions dev9-dev16).** Per the Stage 7 gate's own
+"real-world use, not just headless checks" requirement, the maintainer ran
+actual calibration/profiling sessions under `DISPLAYCAL_UI=qt` on real
+hardware (MacBook Pro M1 Pro + external DELL UP2516D) and reported whatever
+broke. Found and fixed, roughly in the order hit:
+
+- `Worker._write()` called `wx.CallAfter()` unconditionally on every
+  `dispcal`/`dispread` output line — crashed immediately under Qt (`dev9`).
+  Also fixed measurement patches rendering ~1.5x oversized on non-Retina
+  external displays (`MeasureFrame._default_measureframe_size()` had no
+  `screen.physicalSize()` fallback for `real_display_size_mm()`'s permanent
+  `(0, 0)` on macOS/Windows — see
+  [[real-display-size-mm-c-extension-removed]]).
+- Rebased onto `develop` to carry over PR #826's macOS multi-display
+  VideoLUT fix (#824) — no Qt-specific changes needed (`dev10`).
+- `WorkerRunController.run()` never set `worker.thread`, so
+  `Worker.exec_cmd()`'s keep-alive gate never passed for the
+  non-interactive path — profiling looked frozen, `dispread` sat waiting on
+  a keypress DisplayCAL never sent. Also restored wx's main-window
+  hide-for-the-whole-run behaviour (Qt was re-showing it between
+  measurement sub-steps) (`dev11`).
+- A subtler stall past `dev11`: `Worker.__init__` never set
+  `instrument_calibration_complete` and its siblings (only wx-only
+  `Worker.start()` did, via a per-run reset block the Qt controllers never
+  called), so `check_instrument_calibration()` raised `AttributeError` on
+  the very first `parse()` call — then got silently swallowed by
+  `Files.write()`'s overly-broad `except AttributeError`, hanging every
+  Qt-driven run with no visible error. Fixed via a shared
+  `Worker._init_run_state()` and a stricter `Files.write()` check (see
+  [[qt-profiling-patch-stuck-investigation]]). **First confirmed full
+  calibration + profiling run completing end to end under
+  `DISPLAYCAL_UI=qt`** (`dev12`).
+- `DisplayAdjustmentWindow` close/clipping bugs (orphaned `dispcal`
+  subprocess on close; metric labels clipping their second line) plus the
+  remaining gauge-parity gaps (channel colours, luminance grey/white,
+  target-tick marks) — see [[displaycal-qt-adjustment-window-close-and-clipping-fixes]]
+  and [[displaycal-qt-adjustment-window-ui-polish]] (`dev13`).
+- Two more `wx.CallAfter`/`wx.lib.delayedresult` crashes with no `wx.App`
+  running: the abort path (`quit_terminate_cmd`) and video-levels detection
+  (`_detect_video_levels`'s `ConfirmDialog`, which gained a genuine Qt
+  `confirm3()` counterpart) — see [[qt-abort-subprocess-wx-callafter-crash]]
+  (`dev14`).
+- Remaining `DisplayAdjustmentWindow` gauge bugs found in the same live
+  session: redundant target-marker ticks between the R/G/B gauges (only R's
+  top and B's bottom should show) (`dev15`); and the default-selected
+  "White Level" selector button rendering with a null icon (built from the
+  raw `ctrltype` string, which doesn't match any icon file, unlike the two
+  ctrltypes that happen to coincide with their own icon name) plus wx's
+  droplet-shaped checked/hover tab background, never ported (`dev16`).
+
+Verified via a real offscreen screenshot pass across all five
+`DisplayAdjustmentWindow` pages (rgb_gain/white-point, rgb_offset/black-point,
+check_all, plus the menu phase) after `dev16` — gauge colours, marker-tick
+placement, and the droplet selector background all render correctly; no
+further gaps found this pass.
+
+**Headless hardening pass (2026-07-12), no code changes.** With no local
+Argyll hardware to run another live session, extended the offscreen
+screenshot method to cases the prior live-testing passes hadn't hit yet, all
+clean (no regressions found):
+- CRT mode (`measurement_mode=c`): the black-level page's enabled/selected
+  state both with and without an explicit `calibration.black_luminance`
+  target, the luminance-page icon swap to `contrast`, and the black-level
+  page's icon swap to `luminance`, all match `_setup`'s wx logic exactly.
+- A simulated multi-step measurement sequence on one window instance (menu →
+  start → "Doing some initial measurements" → three successive readings
+  converging from dE 9.0 to 0.3 → back to menu) — gauge positions, label
+  text, checkmark visibility and button/indicator state all transition
+  correctly across repeated `parse_output()` calls on the same page, not just
+  in a single final-state snapshot.
+- Read through `AdjustmentController`/`_AdjustmentTerminal`
+  (`ui/worker_runner.py`) end to end; wiring looks correct and is already
+  covered by `test_ui_worker_runner.py`.
+- `TooltipWindow` (`display_tech_info_show_btn`'s popup) renders and wraps
+  correctly.
+
+Confirmed via `grep` that no hardcoded light-only style (the
+`background-color: #FFFFFF` class of bug hit twice before, in the
+Verification tab's info panel and the original main-window info panels)
+remains anywhere under `DisplayCAL/ui/`.
+
 ### Stage 7 — Retire wx code paths
 
 Delete the wx modules whose Qt replacements have been verified equivalent.
