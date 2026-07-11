@@ -1862,6 +1862,23 @@ DEFAULTS = {
     # (the "black screen" bug). See profile_loader.ProfileLoader._macos_watch().
     "profile_loader.macos_reapply_watch": 1,
     "profile_loader.macos_reapply_watch_interval": 5,
+    # Maximum number of scan/reload passes the macOS watch will run in a
+    # single tick to converge all displays before giving up until the next
+    # tick. Re-loading one display's calibration can itself trigger the OS to
+    # clobber a *different* display (issue #824), so each pass re-scans and
+    # re-loads every clobbered display together rather than reacting to one
+    # display at a time, which could ping-pong between displays forever. See
+    # profile_loader.ProfileLoader._reload_clobbered_displays().
+    "profile_loader.macos_reapply_watch_max_passes": 5,
+    # Some multi-display Macs never converge (reloading one display
+    # deterministically clobbers another's VideoLUT and vice-versa, issue
+    # #824). After this many consecutive watch ticks without converging, back
+    # off instead of retrying forever. See
+    # profile_loader.ProfileLoader._macos_watch().
+    "profile_loader.macos_reapply_watch_unstable_threshold": 3,
+    # How long (in seconds) to stop touching the displays after the unstable
+    # threshold above is hit, before trying again.
+    "profile_loader.macos_reapply_watch_backoff_seconds": 300,
     # VideoLUT verify discrepancy (in percent) above which the loaded
     # calibration is considered clobbered/degenerate (e.g. a black screen)
     # rather than just quantization noise. dispwin's own "is loaded" tolerance
