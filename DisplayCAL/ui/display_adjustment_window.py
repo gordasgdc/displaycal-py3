@@ -32,7 +32,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from qtpy.QtCore import Qt, Signal
-from qtpy.QtGui import QIcon
+from qtpy.QtGui import QIcon, QPixmap
 from qtpy.QtWidgets import (
     QButtonGroup,
     QGridLayout,
@@ -47,7 +47,7 @@ from qtpy.QtWidgets import (
 )
 
 from DisplayCAL import localization as lang
-from DisplayCAL.config import getcfg, writecfg
+from DisplayCAL.config import get_data_path, getcfg, writecfg
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.ui.assets import get_theme_pixmap
 from DisplayCAL.ui.base_window import BaseWindow
@@ -64,8 +64,26 @@ if TYPE_CHECKING:
 
 # Colours the wx frame uses verbatim.
 BGCOLOUR = "#333333"
+BORDERCOLOUR = "#222222"
 FGCOLOUR = "#999999"
 GREEN = "#33cc00"
+
+# Gauge bar gradients (dark -> bright shade), per channel, from
+# ``DisplayAdjustmentPanel.add_gauge``'s ``gaugecolors``. The dim set is used
+# on the "black_level" and "rgb_offset" (CRT black-point) pages, the bright
+# set everywhere else. "L" is a grey/white gradient, never blue.
+_GAUGE_COLOURS_DIM = {
+    "R": ("#660000", "#cc0000"),
+    "G": ("#006600", "#00cc00"),
+    "B": ("#000066", "#0000cc"),
+    "L": ("#666666", "#cccccc"),
+}
+_GAUGE_COLOURS_BRIGHT = {
+    "R": ("#990000", "#ff0000"),
+    "G": ("#009900", "#00ff00"),
+    "B": ("#000099", "#0000ff"),
+    "L": ("#999999", "#ffffff"),
+}
 
 # Page definitions, in the wx tab order. Each entry is
 # ``(ctrltype, title-key, argyll key num)``; the title is joined from one or two
@@ -102,11 +120,74 @@ def _pixmap_icon(size: int, name: str) -> QIcon:
     return QIcon(get_theme_pixmap(size, name))
 
 
+def _gauge_stylesheet(name: str, ctrltype: str) -> str:
+    """QSS for gauge ``name``'s channel-coloured bar, matching wx's gradient.
+
+    Port of ``DisplayAdjustmentPanel.add_gauge``'s ``gaugecolors``: each
+    channel gets its own dark -> bright gradient (R red, G green, B blue, L
+    grey/white -- never blue), dimmed on the CRT black-point pages.
+    """
+    colours = (
+        _GAUGE_COLOURS_DIM
+        if ctrltype in ("black_level", "rgb_offset")
+        else _GAUGE_COLOURS_BRIGHT
+    )
+    dark, bright = colours[name]
+    return (
+        f"QProgressBar {{ background-color: {BORDERCOLOUR};"
+        f" border: 1px solid {BORDERCOLOUR}; }}"
+        "QProgressBar::chunk { background-color:"
+        f" qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {dark}, stop:1 {bright}); }}"
+    )
+
+
 def _set_pixmap(label: QLabel, size: int, name: str) -> None:
     """Set ``label``'s pixmap to the themed asset ``name`` if it exists."""
     pixmap = get_theme_pixmap(size, name)
     if not pixmap.isNull():
         label.setPixmap(pixmap)
+
+
+def _marker_label(direction: str) -> QLabel:
+    """A gauge's target-value tick mark (``theme/marker_top``/``_btm``).
+
+    The asset is a 200x10 PNG that is transparent except for a short tick at
+    its horizontal centre; port of ``DisplayAdjustmentPanel.add_marker``,
+    which places one above and one below every gauge to mark the target
+    (50%) position. Stretched to the gauge's actual (DPI/layout-dependent)
+    width via ``setScaledContents`` so the tick stays exactly centred.
+    """
+    label = QLabel()
+    label.setFixedHeight(10)
+    label.setScaledContents(True)
+    path = get_data_path(f"theme/marker_{direction}.png")
+    if path:
+        pixmap = QPixmap(path)
+        if not pixmap.isNull():
+            label.setPixmap(pixmap)
+    return label
+
+
+def _reserve_metric_label_size(label: QLabel) -> None:
+    """Lock in room for the widest/tallest metric read-out up front.
+
+    Every metric label (``luminance`` / ``black_level`` / ``rgb`` /
+    ``white_point`` / ``black_point``) starts as one blank line, then later
+    grows to one or two real lines (a target/initial line plus a current
+    line) once readings arrive -- after the window is already shown and Qt's
+    top-level layout no longer auto-grows the window to fit. Left alone, that
+    second line gets clipped at the bottom of the window instead of making it
+    taller. Port of the wx frame's ``add_txt``, which sizes a worst-case
+    two-line placeholder with ``Fit()`` and locks it in with ``SetMinSize()``
+    before any real reading has arrived.
+    """
+    words = (lang.getstr("initial"), lang.getstr("current"), lang.getstr("target"))
+    longest = max(words, key=len)
+    placeholder = f"{longest} x 0.0000 y 0.0000 VDT 0000K 0.0 ΔE*00\nX"
+    original = label.text()
+    label.setText(placeholder)
+    label.setMinimumSize(label.sizeHint())
+    label.setText(original)
 
 
 class _AdjustmentPage(QWidget):
@@ -181,7 +262,10 @@ class _AdjustmentPage(QWidget):
     def _add_gauge(
         self, name: str, text: str | None = None, icon: str | None = None
     ) -> None:
-        """Add a gauge row: a leading label / icon and a 1..100 progress bar."""
+        """Add a gauge row: top/bottom target-marker ticks bracketing a
+        leading label / icon and a channel-coloured 1..100 progress bar."""
+        self._grid.addWidget(_marker_label("top"), self._row, 1, 1, 2)
+        self._row += 1
         head = QLabel(text or " ")
         head.setStyleSheet(f"color: {FGCOLOUR};")
         if icon:
@@ -192,9 +276,12 @@ class _AdjustmentPage(QWidget):
         gauge.setValue(0)
         gauge.setTextVisible(False)
         gauge.setFixedHeight(10)
+        gauge.setStyleSheet(_gauge_stylesheet(name, self.ctrltype))
         self.gauges[name] = gauge
         self._grid.addWidget(head, self._row, 0)
         self._grid.addWidget(gauge, self._row, 1, 1, 2)
+        self._row += 1
+        self._grid.addWidget(_marker_label("btm"), self._row, 1, 1, 2)
         self._row += 1
 
     def _add_label(
@@ -217,6 +304,7 @@ class _AdjustmentPage(QWidget):
         col += 1
         label = QLabel(" ")
         label.setStyleSheet(f"color: {FGCOLOUR};")
+        _reserve_metric_label_size(label)
         self._grid.addWidget(label, self._row, col, 1, 3 - col)
         self.labels[name] = (label, checkmark)
         self._row += 1
@@ -287,6 +375,13 @@ class DisplayAdjustmentWindow(BaseWindow):
     #: (``" "`` to abort, ``"1"``..``"5"`` to start a page, ``"7"`` / ``"8"`` to
     #: continue, or a raw menu key). Wired to ``worker.safe_send`` in 5c-iii.
     send_requested = Signal(str)
+
+    #: Emitted once the window has accepted a close request. The driver uses
+    #: this to abort a still-running interactive ``dispcal`` subprocess -
+    #: without it, closing the window while measuring (or while parked at the
+    #: interactive menu) leaves the subprocess -- and its on-screen patch
+    #: window -- running with nothing left to talk to it.
+    closing = Signal()
 
     def __init__(self, parent: QtWidget | None = None) -> None:
         super().__init__(
@@ -657,7 +752,14 @@ class DisplayAdjustmentWindow(BaseWindow):
         self.restore_position()
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
-        """Persist config on close, mirroring the wx frame.
+        """Persist config on close and tell the driver to abort, mirroring wx.
+
+        The wx frame's own ``keepGoing`` flag *is* what ``Worker.calibrate``
+        polls (it reads the frame directly as ``progress_wnd``), so setting it
+        false on close was enough to unwind the running ``dispcal``. Under Qt
+        the worker instead polls a thread-safe proxy (``_AdjustmentTerminal``),
+        so :attr:`keep_going` going false here does nothing on its own; the
+        driver must be told explicitly via :attr:`closing`.
 
         Args:
             event (QCloseEvent): The Qt close event.
@@ -665,3 +767,5 @@ class DisplayAdjustmentWindow(BaseWindow):
         self.keep_going = False
         writecfg()
         super().closeEvent(event)
+        if event.isAccepted():
+            self.closing.emit()

@@ -832,6 +832,7 @@ class AdjustmentController(QObject):
         self._thread: _ProducerThread | None = None
         self._consumer: Callable | None = None
         window.send_requested.connect(self._on_send)
+        window.closing.connect(self._on_window_closing)
 
     @property
     def is_running(self) -> bool:
@@ -880,6 +881,22 @@ class AdjustmentController(QObject):
         """Forward a key requested by the window to the ``dispcal`` subprocess."""
         with contextlib.suppress(Exception):
             self._worker.safe_send(key)
+
+    def _on_window_closing(self) -> None:
+        """Abort a still-running interactive ``dispcal`` when the window closes.
+
+        Closing the window (whether idle at the menu or mid-measurement)
+        otherwise leaves the producer thread blocked on the subprocess forever:
+        nothing is left to answer its prompts, so the process -- and its
+        on-screen patch window -- stays up and the main window never comes
+        back. Mirrors :meth:`WorkerRunController._on_cancel`.
+        """
+        if not self.is_running:
+            return
+        if self._terminal is not None:
+            self._terminal.keepGoing = False
+        with contextlib.suppress(Exception):
+            self._worker.abort_subprocess(False)
 
     def _on_finished(self, result: object) -> None:
         """Handle calibration completion on the GUI thread."""

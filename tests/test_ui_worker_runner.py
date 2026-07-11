@@ -433,6 +433,7 @@ class _FakeAdjustmentWindow(QObject):
     """Stand-in for the Qt ``DisplayAdjustmentWindow`` the driver marshals to."""
 
     send_requested = Signal(str)
+    closing = Signal()
 
     def __init__(self):
         super().__init__()
@@ -484,6 +485,7 @@ class FakeCalibrateWorker:
         self.thread = None
         self._result = result
         self._block = block
+        self.abort_calls = []
 
     def calibrate(self, remove=True):
         # Emit a chunk so the terminal marshalling is exercised end to end.
@@ -495,6 +497,13 @@ class FakeCalibrateWorker:
     def safe_send(self, data):
         self.sent.append(data)
         return True
+
+    def abort_subprocess(self, confirm=False):
+        # A real Worker kills the dispcal subprocess, which unblocks its
+        # producer thread; the block Event stands in for that here.
+        self.abort_calls.append(confirm)
+        if self._block is not None:
+            self._block.set()
 
     def log(self, *args, **kwargs):
         pass
@@ -595,6 +604,35 @@ def test_adjustment_controller_run_calls_consumer_and_cleans_up(qapp):
     assert worker.thread is None
     assert window.shown is False
     assert ctrl.is_running is False
+
+
+def test_adjustment_controller_aborts_worker_when_window_closes(qapp):
+    # Closing the window mid-measurement must abort the still-running
+    # dispcal subprocess -- otherwise its on-screen patch window is left
+    # open with nothing left to answer its prompts, and the main window
+    # never gets control back.
+    window = _FakeAdjustmentWindow()
+    block = Event()
+    worker = FakeCalibrateWorker(block=block)
+    ctrl = wr.AdjustmentController(worker, window)
+    ctrl.run(remove=True)
+    assert ctrl.is_running is True
+
+    window.closing.emit()
+
+    assert worker.abort_calls == [False]
+    assert ctrl._terminal.keepGoing is False
+    assert _spin_until(qapp, lambda: ctrl.is_running is False)
+
+
+def test_adjustment_controller_closing_is_noop_when_not_running(qapp):
+    window = _FakeAdjustmentWindow()
+    worker = FakeCalibrateWorker()
+    ctrl = wr.AdjustmentController(worker, window)
+
+    window.closing.emit()  # Nothing running yet; must not touch the worker.
+
+    assert worker.abort_calls == []
 
 
 def test_adjustment_controller_ignores_second_run_while_running(qapp):
