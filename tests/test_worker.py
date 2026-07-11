@@ -376,6 +376,33 @@ def test_worker_password_prompt_defaults_to_none():
     assert worker.password_prompt is None
 
 
+def test_detected_levels_issue_confirm_prefers_progress_wnd_confirm3():
+    """Under Qt (progress_wnd.confirm3 present), no wx ConfirmDialog is built.
+
+    Worker._detect_video_levels() used to build/show a 3-button wx
+    ConfirmDialog directly, which asserts with "No wx.App created yet" when
+    there is no running wx.App (the Qt UI path). detected_levels_issue_confirm
+    must route through progress_wnd.confirm3() instead when it's available.
+    """
+    worker = Worker()
+    seen = {}
+
+    class FakeProgressWnd:
+        def confirm3(self, msg, retry, alt, cancel):
+            seen["msg"] = msg
+            seen["retry"] = retry
+            seen["alt"] = alt
+            seen["cancel"] = cancel
+            return "alt"
+
+    worker.progress_wnd = FakeProgressWnd()
+    worker._detected_levels_issue_confirm_wait = True
+    worker.detected_levels_issue_confirm()
+    assert seen  # confirm3 was actually called, not the wx dialog
+    assert worker._use_detected_video_levels is True
+    assert worker._detected_levels_issue_confirm_wait is False
+
+
 def test_worker_authenticate_threads_password_prompt(monkeypatch):
     """Worker.authenticate() passes Worker.password_prompt to Sudo.authenticate()."""
     worker = Worker()

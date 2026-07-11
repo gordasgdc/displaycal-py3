@@ -339,6 +339,50 @@ def test_adapter_confirm_returns_false_on_cancel(qapp):
         dlg.deleteLater()
 
 
+def test_adapter_confirm3_same_thread_shows_directly(qapp):
+    # Called on the GUI thread (unusual), confirm3() shows directly, no blocking.
+    dlg = pd.ProgressDialog()
+    adapter = wr.ProgressAdapter(dlg)
+    adapter._ask3 = lambda request: "alt"
+    try:
+        assert adapter.confirm3("hi", "Retry", "Fix", "Cancel") == "alt"
+    finally:
+        dlg.deleteLater()
+
+
+def test_adapter_confirm3_blocks_worker_until_gui_answers(qapp):
+    # Worker.detected_levels_issue_confirm's three-way prompt: the request is
+    # shown on the GUI thread and blocks the worker thread until answered.
+    dlg = pd.ProgressDialog()
+    adapter = wr.ProgressAdapter(dlg)
+    seen = {}
+
+    def fake_ask3(request):
+        seen["msg"] = request.msg
+        seen["retry"] = request.retry
+        seen["alt"] = request.alt
+        seen["cancel"] = request.cancel
+        return "retry"
+
+    adapter._ask3 = fake_ask3
+    results = []
+    thread = wr._ProducerThread(
+        lambda: adapter.confirm3("levels issue", "Retry", "Fix", "Cancel")
+    )
+    thread.finished_with_result.connect(results.append)
+    try:
+        thread.start()
+        assert _spin_until(qapp, lambda: results)
+        assert results == ["retry"]
+        assert seen["msg"] == "levels issue"
+        assert seen["retry"] == "Retry"
+        assert seen["alt"] == "Fix"
+        assert seen["cancel"] == "Cancel"
+    finally:
+        thread.wait()
+        dlg.deleteLater()
+
+
 # --- PasswordPromptAdapter (Worker.authenticate() elevated install) --------
 
 
@@ -560,6 +604,13 @@ def test_adjustment_terminal_confirm_same_thread_shows_directly(qapp):
     terminal = wr._AdjustmentTerminal(window)
     terminal._ask = lambda request: True
     assert terminal.confirm("place instrument", "OK", "Cancel") is True
+
+
+def test_adjustment_terminal_confirm3_same_thread_shows_directly(qapp):
+    window = _FakeAdjustmentWindow()
+    terminal = wr._AdjustmentTerminal(window)
+    terminal._ask3 = lambda request: "cancel"
+    assert terminal.confirm3("levels issue", "Retry", "Fix", "Cancel") == "cancel"
 
 
 def test_adjustment_controller_forwards_send_to_worker(qapp):

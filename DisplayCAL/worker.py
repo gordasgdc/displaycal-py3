@@ -1603,6 +1603,25 @@ def insert_ti_patches_omitting_RGB_duplicates(cgats1, cgats2_path, logfn=print):
     return cgats2
 
 
+class _DirectResult:
+    """Stand-in for a ``wx.lib.delayedresult`` result delivered without wx.
+
+    Mimics the ``.get()`` contract of ``delayedresult``'s result objects
+    (return the value, or raise if it is an exception) so consumers written
+    against that API, such as ``Worker.quit_terminate_consumer``, work
+    unchanged when there is no ``wx.App`` to marshal the callback through.
+    """
+
+    def __init__(self, result):
+        self._result = result
+
+    def get(self):
+        """Return the wrapped result, raising it if it is an exception."""
+        if isinstance(self._result, Exception):
+            raise self._result
+        return self._result
+
+
 class EvalFalse:
     """Evaluate to False in boolean comparisons."""
 
@@ -4110,14 +4129,21 @@ END_DATA
                 if not config.is_virtual_display():
                     # Could be a misconfiguration of display or graphics driver.
                     # Make the user aware.
-                    self._detected_levels_issue_confirm_wait = True
-                    wx.CallAfter(self.detected_levels_issue_confirm)
-                    # Wait for call to return
-                    while (
-                        self._detected_levels_issue_confirm_wait
-                        and not self.subprocess_abort
-                    ):
-                        sleep(0.05)
+                    if wx.GetApp() is not None:
+                        self._detected_levels_issue_confirm_wait = True
+                        wx.CallAfter(self.detected_levels_issue_confirm)
+                        # Wait for call to return
+                        while (
+                            self._detected_levels_issue_confirm_wait
+                            and not self.subprocess_abort
+                        ):
+                            sleep(0.05)
+                    else:
+                        # No wx.App (e.g. running under the Qt UI): nothing to
+                        # marshal onto a wx main loop. detected_levels_issue_confirm's
+                        # Qt confirm3() call already blocks this thread until
+                        # the user answers, so call it directly.
+                        self.detected_levels_issue_confirm()
                     if self._use_detected_video_levels is False:
                         return False
                     if self._use_detected_video_levels is None:
@@ -4143,19 +4169,26 @@ END_DATA
 
     def detected_levels_issue_confirm(self):
         """Show a confirmation dialog to the user if a levels issue was detected."""
-        dlg = ConfirmDialog(
-            None,
-            msg=lang.getstr("display.levels_issue_detected"),
-            ok=lang.getstr("retry"),
-            alt=lang.getstr("fix_output_levels_using_vcgt"),
-            wrap=100,
-        )
-        result = dlg.ShowModal()
-        dlg.Destroy()
-        if result == wx.ID_OK:
-            # Retry
+        msg = lang.getstr("display.levels_issue_detected")
+        retry = lang.getstr("retry")
+        alt = lang.getstr("fix_output_levels_using_vcgt")
+        confirm3 = getattr(self.progress_wnd, "confirm3", None)
+        if callable(confirm3):
+            # Qt path: no wx.App to build/show a wx ConfirmDialog against.
+            choice = confirm3(msg, retry, alt, lang.getstr("cancel"))
+        else:
+            dlg = ConfirmDialog(None, msg=msg, ok=retry, alt=alt, wrap=100)
+            result = dlg.ShowModal()
+            dlg.Destroy()
+            if result == wx.ID_OK:
+                choice = "retry"
+            elif result == wx.ID_CANCEL:
+                choice = "cancel"
+            else:
+                choice = "alt"
+        if choice == "retry":
             self._use_detected_video_levels = None
-        elif result == wx.ID_CANCEL:
+        elif choice == "cancel":
             self._use_detected_video_levels = False
         else:
             # Fix output levels using calibration
@@ -4321,7 +4354,27 @@ END_DATA
         if self.use_patterngenerator or self.use_madnet_tpg:
             abortfilename = os.path.join(self.tempdir, ".abort")
             open(abortfilename, "w").close()
-        delayedresult.startWorker(self.quit_terminate_consumer, self.quit_terminate_cmd)
+        if wx.GetApp() is not None:
+            delayedresult.startWorker(
+                self.quit_terminate_consumer, self.quit_terminate_cmd
+            )
+        else:
+            # No wx.App (e.g. running under the Qt UI): wx.lib.delayedresult
+            # delivers both the result and any exception via wx.CallAfter,
+            # which asserts without a running wx.App. Run the termination on
+            # a plain thread and hand the result to the consumer directly.
+            def _run_quit_terminate_cmd():
+                try:
+                    result = self.quit_terminate_cmd()
+                except Exception as exception:
+                    result = exception
+                self.quit_terminate_consumer(_DirectResult(result))
+
+            threading.Thread(
+                target=_run_quit_terminate_cmd,
+                name="quit_terminate_cmd",
+                daemon=True,
+            ).start()
 
     def quit_terminate_consumer(self, delayedResult):
         """Consumer for delayed result of subprocess termination.
@@ -4339,7 +4392,12 @@ END_DATA
                 self.log(traceback.format_exc(), fn=LOG)
             result = UnloggedError(safe_str(exception))
         if isinstance(result, Exception):
-            show_result_dialog(result, getattr(self, "progress_wnd", None))
+            if wx.GetApp() is not None:
+                show_result_dialog(result, getattr(self, "progress_wnd", None))
+            else:
+                # No Qt equivalent of show_result_dialog yet; at least log the
+                # error instead of crashing on the wx-only dialog.
+                self.log(f"{APPNAME}: {safe_str(result)}", fn=LOG)
             result = False
         self.subprocess_abort = False
         if not result:
@@ -15560,12 +15618,15 @@ BEGIN_DATA
         # sys.stdout from another thread can fail sporadically with IOError 9
         # 'Bad file descriptor', so don't use sys.stdout
         # Careful: Python 2.5 Producer objects don't have a name attribute
+        # self.thread may be present but None (e.g. the Qt UI clears it once
+        # its producer thread finishes), so check for None, not just presence.
+        thread = getattr(self, "thread", None)
         if (
-            hasattr(self, "thread")
-            and self.thread.is_alive()
+            thread is not None
+            and thread.is_alive()
             and (
                 not hasattr(current_thread(), "name")
-                or current_thread().name != self.thread.name
+                or current_thread().name != thread.name
             )
         ):
             logfn = LOG
@@ -15647,9 +15708,8 @@ BEGIN_DATA
                     fn=logfn,
                 )
         subprocess_isalive = self.isalive(subprocess)
-        if subprocess_isalive or (
-            hasattr(self, "thread") and not self.thread.is_alive()
-        ):
+        thread = getattr(self, "thread", None)
+        if subprocess_isalive or (thread is not None and not thread.is_alive()):
             # We don't normally need this as closing of the progress window is
             # handled by _generic_consumer(), but there are two cases where it
             # is desirable to have this 'safety net':
@@ -15666,19 +15726,27 @@ BEGIN_DATA
             #    happen if we design our result consumer correctly to handle
             #    this particular case, but we need to make sure the user can
             #    close the progress window in case we mess up.
-            if hasattr(self, "thread") and not self.thread.is_alive():
-                wx.CallAfter(self.stop_progress)
+            have_wx_app = wx.GetApp() is not None
+            if thread is not None and not thread.is_alive():
+                if have_wx_app:
+                    wx.CallAfter(self.stop_progress)
+                else:
+                    # No wx.App (e.g. running under the Qt UI): nothing to
+                    # marshal onto a wx main loop, so call directly.
+                    self.stop_progress()
             if subprocess_isalive:
-                wx.CallAfter(
-                    show_result_dialog,
-                    Warning(
-                        f"Couldn't terminate {self.cmd}. Please try to end it manually "
-                        f"before continuing to use {APPNAME}. If you can not terminate "
-                        f"{self.cmd}, restarting {APPNAME} may also help. Apologies "
-                        "for the inconvenience."
-                    ),
-                    self.owner,
+                message = (
+                    f"Couldn't terminate {self.cmd}. Please try to end it manually "
+                    f"before continuing to use {APPNAME}. If you can not terminate "
+                    f"{self.cmd}, restarting {APPNAME} may also help. Apologies "
+                    "for the inconvenience."
                 )
+                if have_wx_app:
+                    wx.CallAfter(show_result_dialog, Warning(message), self.owner)
+                else:
+                    # No Qt equivalent of show_result_dialog yet; at least log
+                    # the warning instead of crashing on the wx-only dialog.
+                    self.log(f"{APPNAME}: {message}", fn=logfn)
         if self.patterngenerator:
             self.patterngenerator.listening = False
         return not subprocess_isalive

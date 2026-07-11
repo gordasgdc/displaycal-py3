@@ -121,6 +121,27 @@ class _ConfirmRequest:
         self.event = Event()
 
 
+class _Confirm3Request:
+    """A pending three-button confirmation, handed worker thread to GUI thread.
+
+    Mirrors :class:`_ConfirmRequest`, but for the one wx ``ConfirmDialog``
+    usage with an ``alt`` third button
+    (``Worker.detected_levels_issue_confirm``): retry / fix via calibration /
+    cancel.
+    """
+
+    __slots__ = ("alt", "cancel", "event", "icon", "msg", "result", "retry")
+
+    def __init__(self, msg: str, retry: str, alt: str, cancel: str, icon: str) -> None:
+        self.msg = msg
+        self.retry = retry
+        self.alt = alt
+        self.cancel = cancel
+        self.icon = icon
+        self.result = "cancel"
+        self.event = Event()
+
+
 class _PasswordRequest:
     """A pending sudo password prompt, handed from the worker thread to the GUI thread.
 
@@ -292,6 +313,7 @@ class ProgressAdapter(QObject):
     _progress = Signal(float, str)
     _title = Signal(str)
     _confirm_requested = Signal(object)
+    _confirm3_requested = Signal(object)
 
     def __init__(self, dialog: ProgressDialog, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -309,6 +331,7 @@ class ProgressAdapter(QObject):
         # Queued so a confirm requested from the worker thread is shown on the
         # GUI thread; the worker thread blocks until the request is answered.
         self._confirm_requested.connect(self._on_confirm_requested)
+        self._confirm3_requested.connect(self._on_confirm3_requested)
 
     # -- wx progress_wnd interface (may run on the worker thread) -----------
 
@@ -412,6 +435,66 @@ class ProgressAdapter(QObject):
         box.addButton(request.cancel, QMessageBox.ButtonRole.RejectRole)
         box.exec()
         return box.clickedButton() is ok_button
+
+    def confirm3(  # noqa: PLR0913
+        self,
+        msg: str,
+        retry: str,
+        alt: str,
+        cancel: str,
+        icon: str = "dialog-warning",
+    ) -> str:
+        """Show a modal three-button confirmation, blocking the worker thread.
+
+        Services ``Worker.detected_levels_issue_confirm`` in place of the wx
+        ``ConfirmDialog(ok=retry, alt=alt)`` it built inline.
+
+        Args:
+            msg (str): The message to show.
+            retry (str): The "retry" (primary) button label.
+            alt (str): The alternate-action button label.
+            cancel (str): The cancel button label.
+            icon (str): The icon name, ``"dialog-warning"`` for a warning else
+                an information icon.
+
+        Returns:
+            str: ``"retry"``, ``"alt"``, or ``"cancel"``.
+        """
+        request = _Confirm3Request(msg, retry, alt, cancel, icon)
+        if QThread.currentThread() is self.thread():
+            return self._ask3(request)
+        self._confirm3_requested.emit(request)
+        request.event.wait()
+        return request.result
+
+    def _on_confirm3_requested(self, request: _Confirm3Request) -> None:
+        """Show the three-button dialog on the GUI thread and release the worker."""
+        try:
+            request.result = self._ask3(request)
+        finally:
+            request.event.set()
+
+    def _ask3(self, request: _Confirm3Request) -> str:
+        """Show the actual Qt three-button dialog (GUI thread)."""
+        from qtpy.QtWidgets import QMessageBox
+
+        box = QMessageBox(self._dialog)
+        box.setIcon(
+            QMessageBox.Icon.Warning
+            if request.icon == "dialog-warning"
+            else QMessageBox.Icon.Information
+        )
+        box.setText(request.msg)
+        retry_button = box.addButton(request.retry, QMessageBox.ButtonRole.AcceptRole)
+        alt_button = box.addButton(request.alt, QMessageBox.ButtonRole.ActionRole)
+        box.addButton(request.cancel, QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is retry_button:
+            return "retry"
+        if clicked is alt_button:
+            return "alt"
+        return "cancel"
 
     # The worker probes these for visibility / layout; they are not meaningful
     # for the adapter, so they are safe no-ops / simple answers.
@@ -634,6 +717,7 @@ class _AdjustmentTerminal(QObject):
     _reset = Signal()
     _show = Signal()
     _confirm_requested = Signal(object)
+    _confirm3_requested = Signal(object)
 
     def __init__(self, window: object, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -651,6 +735,7 @@ class _AdjustmentTerminal(QObject):
         self._reset.connect(window.reset)
         self._show.connect(self._on_show)
         self._confirm_requested.connect(self._on_confirm_requested)
+        self._confirm3_requested.connect(self._on_confirm3_requested)
 
     # -- FilteredStream terminal (worker thread) ----------------------------
 
@@ -761,6 +846,66 @@ class _AdjustmentTerminal(QObject):
         box.addButton(request.cancel, QMessageBox.ButtonRole.RejectRole)
         box.exec()
         return box.clickedButton() is ok_button
+
+    def confirm3(  # noqa: PLR0913
+        self,
+        msg: str,
+        retry: str,
+        alt: str,
+        cancel: str,
+        icon: str = "dialog-warning",
+    ) -> str:
+        """Show a modal three-button confirmation, blocking the worker thread.
+
+        Services ``Worker.detected_levels_issue_confirm``, mirroring
+        :meth:`ProgressAdapter.confirm3`.
+
+        Args:
+            msg (str): The message to show.
+            retry (str): The "retry" (primary) button label.
+            alt (str): The alternate-action button label.
+            cancel (str): The cancel button label.
+            icon (str): The icon name, ``"dialog-warning"`` for a warning else
+                an information icon.
+
+        Returns:
+            str: ``"retry"``, ``"alt"``, or ``"cancel"``.
+        """
+        request = _Confirm3Request(msg, retry, alt, cancel, icon)
+        if QThread.currentThread() is self.thread():
+            return self._ask3(request)
+        self._confirm3_requested.emit(request)
+        request.event.wait()
+        return request.result
+
+    def _on_confirm3_requested(self, request: _Confirm3Request) -> None:
+        """Show the three-button dialog on the GUI thread and release the worker."""
+        try:
+            request.result = self._ask3(request)
+        finally:
+            request.event.set()
+
+    def _ask3(self, request: _Confirm3Request) -> str:
+        """Show the actual Qt three-button dialog, parented to the window."""
+        from qtpy.QtWidgets import QMessageBox
+
+        box = QMessageBox(self._window)
+        box.setIcon(
+            QMessageBox.Icon.Warning
+            if request.icon == "dialog-warning"
+            else QMessageBox.Icon.Information
+        )
+        box.setText(request.msg)
+        retry_button = box.addButton(request.retry, QMessageBox.ButtonRole.AcceptRole)
+        alt_button = box.addButton(request.alt, QMessageBox.ButtonRole.ActionRole)
+        box.addButton(request.cancel, QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is retry_button:
+            return "retry"
+        if clicked is alt_button:
+            return "alt"
+        return "cancel"
 
     def _on_show(self) -> None:
         """Show / raise the window on the GUI thread."""
