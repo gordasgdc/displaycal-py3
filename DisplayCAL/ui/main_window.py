@@ -230,6 +230,7 @@ from DisplayCAL.ui.measurement_flow import (
 )
 from DisplayCAL.ui.measurement_report import ReportWindow
 from DisplayCAL.ui.measurement_sanity_dialog import MeasurementSanityDialog
+from DisplayCAL.ui.patterngenerator_setup import Lut3DAPIInstallController
 from DisplayCAL.ui.profile_install_window import InstallProfileWindow
 from DisplayCAL.ui.progress_dialog import ProgressDialog
 from DisplayCAL.ui.spyder2_enable import Spyder2EnableController
@@ -867,6 +868,7 @@ class MainWindow(BaseWindow):
         self._synthicc_window: SynthICCWindow | None = None
         self._report_window: ReportWindow | None = None
         self._about_window: AboutWindow | None = None
+        self._lut3d_api_install_controller: Lut3DAPIInstallController | None = None
         #: Staged by :meth:`_on_report_measure_requested`, consumed by
         #: :meth:`_run_report_measurement` / :meth:`_on_report_measurement_finished`
         #: (the report flow doesn't fit :class:`MeasurementAction`, so it can't
@@ -6498,14 +6500,13 @@ class MainWindow(BaseWindow):
         Qt port of ``profile_finish_action``'s ``install_3dlut_api`` branch
         (``display_cal.py:12504-12556``). madVR (via ``madtpg``) and Prisma
         (its HTTP REST API) both install through ``Worker.install_3dlut``,
-        which is already toolkit-neutral, but reaching that point needs the
-        still-unported ``setup_patterngenerator`` connection dialogs (the
-        Prisma host prompt with mDNS discovery, the madTPG connect-wait
-        dialog) -- so, matching the CCXX-info-button / elevated-install-scope
-        precedent, this port shows a not-yet-available notice for that branch
-        instead of attempting an unconfigured connection. Every other format
-        copies the file to a user-chosen location (:meth:`lut3d_settings
-        .install_via_copy`, which also detects and patches a ReShade install).
+        which is already toolkit-neutral; reaching that point needs the
+        madVR/Prisma connection dialogs ported in
+        :mod:`DisplayCAL.ui.patterngenerator_setup`
+        (:class:`~DisplayCAL.ui.patterngenerator_setup.Lut3DAPIInstallController`).
+        Every other format copies the file to a user-chosen location
+        (:meth:`lut3d_settings.install_via_copy`, which also detects and
+        patches a ReShade install).
 
         Args:
             lut3d_path: Path to the already-created 3D LUT file.
@@ -6522,13 +6523,12 @@ class MainWindow(BaseWindow):
             )
         ) or is_prisma
         if install_via_api:
-            QMessageBox.information(
-                self,
-                self.windowTitle(),
-                "Installing directly to madVR or Prisma isn't available in "
-                "this Qt build yet. Choose a plain 3D LUT format (not madVR) "
-                "to save the file to a location of your choice instead.",
+            controller = Lut3DAPIInstallController(
+                self.worker, lut3d_path, is_prisma, self
             )
+            controller.finished.connect(self._on_lut3d_api_install_finished)
+            self._lut3d_api_install_controller = controller
+            controller.run()
             return
         dst_path = self._prompt_3dlut_copy_destination(file_format, lut3d_path)
         if not dst_path:
@@ -6545,6 +6545,10 @@ class MainWindow(BaseWindow):
             QMessageBox.critical(self, APPNAME, str(exception))
             return
         setcfg("last_3dlut_path", written[0])
+
+    def _on_lut3d_api_install_finished(self) -> None:
+        """Release the finished :class:`Lut3DAPIInstallController`."""
+        self._lut3d_api_install_controller = None
 
     def _prompt_3dlut_copy_destination(self, file_format: str, lut3d_path: str) -> str:
         """Prompt for the 3D LUT copy destination, per ``3dlut.format``.

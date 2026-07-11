@@ -3132,10 +3132,32 @@ def test_offer_install_3dlut_accepts_routes_to_install(window, monkeypatch, tmp_
     assert calls == [(str(lut_path), "cube", False)]
 
 
-def test_install_3dlut_madvr_shows_not_available_notice(window, monkeypatch):
+class _FakeLut3DAPISignal:
+    def __init__(self) -> None:
+        self._slot = None
+
+    def connect(self, slot) -> None:
+        self._slot = slot
+
+
+def test_install_3dlut_madvr_runs_api_install_controller(window, monkeypatch):
     setcfg("3dlut.trc", "gamma2.2")
-    infos = []
-    monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: infos.append(a))
+    created = []
+
+    class _FakeController:
+        def __init__(self, worker, lut3d_path, is_prisma, parent):
+            self.worker = worker
+            self.lut3d_path = lut3d_path
+            self.is_prisma = is_prisma
+            self.parent = parent
+            self.finished = _FakeLut3DAPISignal()
+            self.ran = False
+            created.append(self)
+
+        def run(self) -> None:
+            self.ran = True
+
+    monkeypatch.setattr(mw, "Lut3DAPIInstallController", _FakeController)
     copies = []
     monkeypatch.setattr(
         mw.lut3d_settings, "install_via_copy", lambda *a, **k: copies.append(a)
@@ -3143,13 +3165,31 @@ def test_install_3dlut_madvr_shows_not_available_notice(window, monkeypatch):
 
     window._install_3dlut("/tmp/lut.3dlut", "madVR", False)
 
-    assert infos
+    assert len(created) == 1
+    controller = created[0]
+    assert controller.worker is window.worker
+    assert controller.lut3d_path == "/tmp/lut.3dlut"
+    assert controller.is_prisma is False
+    assert controller.parent is window
+    assert controller.ran is True
     assert copies == []
+    assert window._lut3d_api_install_controller is controller
 
 
-def test_install_3dlut_prisma_shows_not_available_notice(window, monkeypatch):
-    infos = []
-    monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: infos.append(a))
+def test_install_3dlut_prisma_runs_api_install_controller(window, monkeypatch):
+    created = []
+
+    class _FakeController:
+        def __init__(self, worker, lut3d_path, is_prisma, parent):
+            self.is_prisma = is_prisma
+            self.finished = _FakeLut3DAPISignal()
+            self.ran = False
+            created.append(self)
+
+        def run(self) -> None:
+            self.ran = True
+
+    monkeypatch.setattr(mw, "Lut3DAPIInstallController", _FakeController)
     copies = []
     monkeypatch.setattr(
         mw.lut3d_settings, "install_via_copy", lambda *a, **k: copies.append(a)
@@ -3157,8 +3197,18 @@ def test_install_3dlut_prisma_shows_not_available_notice(window, monkeypatch):
 
     window._install_3dlut("/tmp/lut.3dl", "3dl", True)
 
-    assert infos
+    assert len(created) == 1
+    assert created[0].is_prisma is True
+    assert created[0].ran is True
     assert copies == []
+
+
+def test_on_lut3d_api_install_finished_clears_controller(window):
+    window._lut3d_api_install_controller = object()
+
+    window._on_lut3d_api_install_finished()
+
+    assert window._lut3d_api_install_controller is None
 
 
 def test_install_3dlut_plain_format_prompts_and_copies(window, monkeypatch, tmp_path):

@@ -2473,6 +2473,81 @@ failure/exception/asroot paths), 3 in `tests/test_instrument_setup.py`, 9 in
 destinations and the standalone `LUT3DFrame` tool window remain, plus Stage 7
 (retire wx), still gated on maintainer confidence.
 
+**madVR/Prisma 3D LUT API install destinations (2026-07-11), closing the
+last named "Remaining gaps" item besides the standalone `LUT3DFrame` tool
+window and Stage 7.** Ported the madVR and Prisma branches of
+`MainFrame.setup_patterngenerator` (`display_cal.py:10738-11065`) into new
+`DisplayCAL/ui/patterngenerator_setup.py`, replacing the "not available in
+this Qt build yet" notice `_install_3dlut` had shown since the Session 17
+3D-LUT-install-offer-chain slice. wx's other two branches — Resolve/"Web @
+localhost"/`Chromecast *` (a wait-for-connection dialog) and the final
+"no LUT access" error — belong to the still-unported *live*
+pattern-generator measurement flow (`visual_whitepoint_editor_handler`,
+`luminance_measure_handler`, `MainFrame.setup_measurement`'s pattern-generator
+path), not the 3D LUT install offer, and were left out as out of scope for
+this slice.
+
+- `PrismaHostDialog(QDialog)`: hostname/IP combo pre-populated by background
+  discovery (`PrismaPatternGeneratorClient.listen()`/`.announce()`/`.bind()`
+  — plain `socket`/`threading`, already toolkit-neutral despite being called
+  "mDNS discovery" in earlier notes; it's actually a raw UDP broadcast/
+  response protocol on ports 7737/7747, not real mDNS/zeroconf), with a
+  background connectivity check (`socket.gethostbyname` +
+  `patterngenerator.connect()`) gating the OK button, matching wx's
+  `check_host`/`check_host_consumer` exactly. `upload=True` (the 3D-LUT-install
+  call site) also shows the preset combo and the computed upload filename
+  (`prisma_upload_filename()`, a pure port of the wx gamut-shortening +
+  timestamp logic).
+- `connect_madvr()`: runs `Worker.madtpg_connect()` on a background
+  `_CallThread`, only showing a cancellable `QProgressDialog` if it's still
+  running after a 200 ms grace period (matching wx's `sleep(0.2)` probe).
+  **Deliberate deviation from wx:** wx's fast-completion path silently drops
+  a connection failure that happens inside that 200 ms window (the exception
+  is shown async via a stray `wx.CallAfter`, but the function itself falls
+  through to `return retval`, which stays `True`) — this reads as an
+  unintentional race, not a feature worth preserving, so this port always
+  evaluates the real outcome and returns `False` (with the error shown) on
+  failure, fast or slow.
+- `Lut3DAPIInstallController(QObject)`: the port of
+  `profile_finish_action`'s `install_3dlut_api` branch
+  (`display_cal.py:12504-12556`) — connects via `connect_patterngenerator()`
+  then runs the already-toolkit-neutral `Worker.install_3dlut` on a
+  background thread behind an indeterminate progress dialog, showing the
+  `Info`/`Error` result via `QMessageBox`. Wired into
+  `MainWindow._install_3dlut` in place of the old notice; a new
+  `self._lut3d_api_install_controller` instance attribute keeps it alive for
+  the duration of the flow (freed via a `finished` signal), following the
+  `_report_window`/`_testchart_editor_window` singleton-attribute precedent.
+
+Hit a real signal-delivery gotcha while writing `connect_madvr`'s tests: a
+`QThread`'s `done` signal, connected from a plain (non-`QObject`) receiver
+and emitted from the worker thread, is a *queued* connection — it is only
+delivered once something pumps the GUI thread's event loop
+(`processEvents()`/`exec_()`), so code that just blocks on `QThread.wait()`
+without pumping events (as the fast-completion path here does, deliberately,
+to avoid needing a nested event loop for the common case) never sees it.
+Fixed by having `_CallThread` also stash its outcome directly on
+`self.result` inside `run()` — safe to read after `wait()` returns because
+that call only returns once `run()` has fully completed, sidestepping the
+delivery question entirely. Separately, `QProgressDialog.closeEvent()` emits
+`canceled` even when *we* close it because the background thread finished on
+its own — the first version of `connect_madvr` mistook a normal successful
+completion for a user cancel; fixed via a `finished_naturally` flag checked
+first in the cancel handler.
+
+20 new tests in `tests/test_ui_patterngenerator_setup.py`; in
+`tests/test_ui_main_window.py`, 3 new tests replace the 2 stale "not
+available yet" ones. Full `test_ui_main_window.py` + new file suite (439
+tests) green under `-n auto`.
+
+**Updated remaining-gaps list:** the standalone `LUT3DFrame` tool window
+(`ui/tools/lut3d.py` already exists as a working, independently-written
+implementation — including the abstract-profile, input-value-clipping-warning
+and `lut3d_trc_apply_ctrl` controls earlier sessions flagged as its
+distinguishing "superset" features — but isn't cross-linked from any menu, so
+whether a further gap remains here needs a maintainer look, not just more
+porting); and Stage 7 (retire wx), still gated on maintainer confidence.
+
 ### Stage 7 — Retire wx code paths
 
 Delete the wx modules whose Qt replacements have been verified equivalent.
