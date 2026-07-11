@@ -11090,6 +11090,12 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         elif not self.setup_patterngenerator(self):
             return
         writecfg()
+        if sys.platform == "darwin":
+            # Pre-create worker measurement sounds on the main thread. On
+            # macOS, first-time sound/backend setup from the worker thread can
+            # trigger Cocoa initialization via ctypes and crash.
+            with contextlib.suppress(Exception):
+                self.worker._init_sounds(dummy=False)
         if pending_function_kwargs.get("wrapup", True):
             self.worker.wrapup(False)
         pending_function_kwargs.pop("wrapup", None)
