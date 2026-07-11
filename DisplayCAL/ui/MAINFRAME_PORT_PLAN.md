@@ -2548,6 +2548,29 @@ distinguishing "superset" features — but isn't cross-linked from any menu, so
 whether a further gap remains here needs a maintainer look, not just more
 porting); and Stage 7 (retire wx), still gated on maintainer confidence.
 
+**Cross-link the standalone `LUT3DFrame`/`LUT3DWindow` tool window
+(2026-07-11).** Given a choice between wiring this in and starting Stage 7,
+the maintainer picked wiring it in. Investigated first: unlike every other
+`menu.tools.advanced` entry ported so far, wx itself never had a Tools-menu
+item opening `LUT3DFrame` — it was only ever reachable as its own
+console-script application (`displaycal-3dlut-maker` /
+`DisplayCAL.main:main_3dlut_maker`), never from `MainFrame`'s menu bar
+(`mainmenu.xrc`'s only 3D-LUT-related item, `3dlut.tab.enable`, just toggles
+the *embedded* tab's visibility). So this is a genuinely new addition, not a
+port of an existing wx menu entry.
+
+Added `MainWindow._lut3d_window_action_handler` (new `self._lut3d_window:
+LUT3DWindow | None` singleton attribute) and a "3dlut.frame.title"-labelled
+action in the Tools > Advanced submenu, right after "synthicc.create" — same
+reuse-singleton/`show()`/`raise_()`/`activateWindow()` pattern as
+`_synthicc_create_action_handler`. `LUT3DWindow()` needs no constructor
+arguments (it builds its own `Worker()` internally), so the cross-link is a
+5-line handler. 4 new tests in `tests/test_ui_main_window.py` (425 total),
+full suite green under `-n auto` (~104s).
+
+**Updated remaining-gaps list:** none named — Stage 7 (retire wx) is the only
+item left, still gated on maintainer confidence.
+
 ### Stage 7 — Retire wx code paths
 
 Delete the wx modules whose Qt replacements have been verified equivalent.

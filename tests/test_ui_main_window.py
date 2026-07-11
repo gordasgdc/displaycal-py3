@@ -5414,6 +5414,27 @@ def test_synthicc_create_action_handler_reuses_window_instance(window):
         window._synthicc_window.close()
 
 
+# --- Tools > Advanced menu: standalone 3D LUT maker --------------------------
+
+
+def test_lut3d_window_action_handler_opens_window(window):
+    window._lut3d_window_action_handler()
+    try:
+        assert window._lut3d_window is not None
+    finally:
+        window._lut3d_window.close()
+
+
+def test_lut3d_window_action_handler_reuses_window_instance(window):
+    window._lut3d_window_action_handler()
+    try:
+        first = window._lut3d_window
+        window._lut3d_window_action_handler()
+        assert window._lut3d_window is first
+    finally:
+        window._lut3d_window.close()
+
+
 # --- Tools > Advanced menu: "specplot.run" ----------------------------------
 
 

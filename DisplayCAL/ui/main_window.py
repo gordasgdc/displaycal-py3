@@ -235,6 +235,7 @@ from DisplayCAL.ui.profile_install_window import InstallProfileWindow
 from DisplayCAL.ui.progress_dialog import ProgressDialog
 from DisplayCAL.ui.spyder2_enable import Spyder2EnableController
 from DisplayCAL.ui.tooltip_window import TooltipWindow
+from DisplayCAL.ui.tools.lut3d import LUT3DWindow
 from DisplayCAL.ui.tools.profile_info import ProfileInfoWindow
 from DisplayCAL.ui.tools.synth_profile import SynthICCWindow
 from DisplayCAL.ui.tools.testchart_editor import TestchartEditorWindow
@@ -866,6 +867,7 @@ class MainWindow(BaseWindow):
         self._current_testchart_path: str | None = None
         self._testchart_editor_window: TestchartEditorWindow | None = None
         self._synthicc_window: SynthICCWindow | None = None
+        self._lut3d_window: LUT3DWindow | None = None
         self._report_window: ReportWindow | None = None
         self._about_window: AboutWindow | None = None
         self._lut3d_api_install_controller: Lut3DAPIInstallController | None = None
@@ -1428,7 +1430,11 @@ class MainWindow(BaseWindow):
         All six entries of ``menu.tools.advanced`` are now reproduced:
         "synthicc.create" (:meth:`_synthicc_create_action_handler`, a
         cross-link to the already-ported standalone tool,
-        ``ui/tools/synth_profile.py``), "profile.b2a.hires"
+        ``ui/tools/synth_profile.py``), plus one entry with no wx
+        precedent -- the standalone 3D LUT maker
+        (:meth:`_lut3d_window_action_handler`, cross-linking
+        ``ui/tools/lut3d.py``'s ``LUT3DWindow``, which wx only ever exposed
+        as its own console-script app, never from a menu) -- "profile.b2a.hires"
         (:meth:`_profile_hires_b2a_action_handler`), "measure.testchart"
         (:meth:`_measure_testchart_action_handler`), "specplot.run"
         (:meth:`_specplot_action_handler`), "measurement_file.check_sanity"
@@ -1469,6 +1475,8 @@ class MainWindow(BaseWindow):
         advanced_menu = tools_menu.addMenu(lang.getstr("advanced"))
         synthicc_action = advanced_menu.addAction(lang.getstr("synthicc.create"))
         synthicc_action.triggered.connect(self._synthicc_create_action_handler)
+        lut3d_action = advanced_menu.addAction(lang.getstr("3dlut.frame.title"))
+        lut3d_action.triggered.connect(self._lut3d_window_action_handler)
         advanced_menu.addSeparator()
         hires_b2a_action = advanced_menu.addAction(lang.getstr("profile.b2a.hires"))
         hires_b2a_action.triggered.connect(self._profile_hires_b2a_action_handler)
@@ -5163,6 +5171,24 @@ class MainWindow(BaseWindow):
         if window is None:
             window = SynthICCWindow()
             self._synthicc_window = window
+        window.show()
+        window.raise_()
+        window.activateWindow()
+
+    def _lut3d_window_action_handler(self) -> None:
+        """Open the standalone 3D LUT maker (Tools > Advanced menu).
+
+        Unlike this menu's other entries, wx has no matching menu item for
+        this -- ``LUT3DFrame`` was only ever reachable as its own console-
+        script application (``displaycal-3dlut-maker``). This is a new
+        cross-link (not a port) to the already-complete standalone
+        :class:`~DisplayCAL.ui.tools.lut3d.LUT3DWindow`, following the same
+        singleton pattern as :meth:`_synthicc_create_action_handler`.
+        """
+        window = self._lut3d_window
+        if window is None:
+            window = LUT3DWindow()
+            self._lut3d_window = window
         window.show()
         window.raise_()
         window.activateWindow()
