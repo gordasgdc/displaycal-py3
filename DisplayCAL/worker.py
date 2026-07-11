@@ -135,6 +135,7 @@ from DisplayCAL.config import (
     ISAPP,
     PROFILE_EXT,
     PYDIR,
+    PYNAME,
     SCRIPT_EXT,
     get_data_path,
     get_icon,
@@ -3865,7 +3866,8 @@ class Worker(WorkerBase):
             ):
                 # On the Mac dispcal's test window
                 # hides the cursor and steals focus
-                start_new_thread(mac_app_activate, (1, wx.GetApp().AppName))
+                app_name = wx.GetApp().AppName if wx.GetApp() is not None else PYNAME
+                start_new_thread(mac_app_activate, (1, app_name))
             # IMPORTANT: When making changes to the instrument on screen
             # detection, also apply them to appropriate part in Worker.exec_cmd
             if self.instrument_calibration_complete or (
@@ -3893,8 +3895,15 @@ class Worker(WorkerBase):
                 # Delay to work-around a problem with i1D2 and Argyll 1.7
                 # to 1.8.3 under Mac OS X 10.11 El Capitan where skipping
                 # interactive display adjustment would botch the first
-                # reading (black)
-                wx.CallLater(1500, self.instrument_on_screen_continue)
+                # reading (black).
+                # threading.Timer (not wx.CallLater) because under Qt this
+                # method runs inline on the measurement thread (no wx.App to
+                # pump a CallLater timer), so a wx.CallLater here would just
+                # never fire and the run would stall forever waiting on a
+                # keypress that's never sent.
+                timer = threading.Timer(1.5, self.instrument_on_screen_continue)
+                timer.daemon = True
+                timer.start()
         elif self.instrument_place_on_spot_msg:
             self.log(f"{APPNAME}: Assuming instrument on screen")
             self.instrument_on_screen = True
@@ -15991,6 +16000,72 @@ BEGIN_DATA
             return False
         return self.argyll_support_file_exists("spyd4cal.bin")
 
+    def _init_run_state(
+        self,
+        *,
+        interactive_frame="",
+        pauseable=False,
+        cancelable=True,
+        show_remaining_time=True,
+        fancy=True,
+        resume=False,
+    ):
+        """Reset the per-run state a worker operation needs before it starts.
+
+        Toolkit-neutral seam shared by the wx ``start()`` entry point and the
+        Qt ``WorkerRunController`` / ``AdjustmentController``
+        (``DisplayCAL.ui.worker_runner``). ``Worker.__init__`` does not set
+        most of this - it's only ever been initialized here - so a caller
+        that skips this method leaves attributes like
+        ``instrument_calibration_complete`` unset. ``parse()`` (called for
+        every line of Argyll output) reads that attribute unconditionally on
+        its first call, so a run started without this raises
+        ``AttributeError`` immediately - silently, since ``Files.write()``
+        treats an ``AttributeError`` from a sink as "not file-like" and
+        swallows it - which stalls the run waiting on a keypress that
+        nothing ever sends.
+
+        Args:
+            interactive_frame (str or wx.TopLevelWindow): Type of
+                interactive window, or a wx.TopLevelWindow instance for wx
+                callers. Qt callers pass "" or "adjust".
+            pauseable (bool): Is the operation pauseable?
+            cancelable (bool): Is the operation cancelable?
+            show_remaining_time (bool): Show remaining time in the progress
+                dialog (wx only).
+            fancy (bool): Use fancy progress dialog with throbber & sound
+                (wx only).
+            resume (bool): Resume previous progress (keeps
+                ``instrument_on_screen`` instead of resetting it).
+        """
+        self.activated = False
+        self.cmdname = None
+        self.cmdrun = False
+        self.finished = False
+        self.instrument_calibration_complete = False
+        self._last_calibration_msg = None
+        if not resume:
+            self.instrument_on_screen = False
+        self.instrument_place_on_screen_msg = False
+        self.instrument_sensor_position_msg = False
+        self.interactive_frame = interactive_frame
+        self.is_single_measurement = interactive_frame in {"ambient", "luminance"} or (
+            isinstance(interactive_frame, wx.TopLevelWindow)
+            and interactive_frame.Name == "VisualWhitepointEditor"
+        )
+        self.is_ambient_measurement = interactive_frame == "ambient"
+        self.lastcmdname = None
+        self.pauseable = pauseable
+        self.paused = False
+        self.cancelable = cancelable
+        self.show_remaining_time = show_remaining_time
+        self.fancy = fancy
+        self.resume = resume
+        self.subprocess_abort = False
+        self.abort_requested = False
+        self.starttime = time()
+        self.thread_abort = False
+
     def start(
         self,
         consumer,
@@ -16084,33 +16159,14 @@ BEGIN_DATA
         if not parent:
             parent = self.owner
         progress_start = max(progress_start, 1)  # Can't be zero!
-        self.activated = False
-        self.cmdname = None
-        self.cmdrun = False
-        self.finished = False
-        self.instrument_calibration_complete = False
-        self._last_calibration_msg = None
-        if not resume:
-            self.instrument_on_screen = False
-        self.instrument_place_on_screen_msg = False
-        self.instrument_sensor_position_msg = False
-        self.interactive_frame = interactive_frame
-        self.is_single_measurement = interactive_frame in {"ambient", "luminance"} or (
-            isinstance(interactive_frame, wx.TopLevelWindow)
-            and interactive_frame.Name == "VisualWhitepointEditor"
+        self._init_run_state(
+            interactive_frame=interactive_frame,
+            pauseable=pauseable,
+            cancelable=cancelable,
+            show_remaining_time=show_remaining_time,
+            fancy=fancy,
+            resume=resume,
         )
-        self.is_ambient_measurement = interactive_frame == "ambient"
-        self.lastcmdname = None
-        self.pauseable = pauseable
-        self.paused = False
-        self.cancelable = cancelable
-        self.show_remaining_time = show_remaining_time
-        self.fancy = fancy
-        self.resume = resume
-        self.subprocess_abort = False
-        self.abort_requested = False
-        self.starttime = time()
-        self.thread_abort = False
         if (
             fancy
             and (

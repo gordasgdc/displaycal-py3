@@ -122,6 +122,20 @@ class FakeWorker:
     def abort_subprocess(self, confirm=False):
         self.abort_calls.append(confirm)
 
+    def _init_run_state(self, **kwargs):
+        # Stand-in for Worker._init_run_state: record what a real worker
+        # would set so tests can assert on it, without pulling in the real
+        # Worker's full per-run state reset.
+        self.interactive_frame = kwargs.get("interactive_frame", "")
+        self.pauseable = kwargs.get("pauseable", False)
+        self.cancelable = kwargs.get("cancelable", True)
+        self.paused = False
+        self.subprocess_abort = False
+        self.thread_abort = False
+        self.abort_requested = False
+        self.finished = False
+        self.starttime = time.time()
+
 
 def _spin_until(qapp, predicate, timeout_s=3.0):
     """Pump the event loop until ``predicate`` is true or the timeout elapses."""
@@ -484,6 +498,18 @@ class FakeCalibrateWorker:
 
     def log(self, *args, **kwargs):
         pass
+
+    def _init_run_state(self, **kwargs):
+        # Stand-in for Worker._init_run_state (see FakeWorker's copy).
+        self.interactive_frame = kwargs.get("interactive_frame", "")
+        self.pauseable = kwargs.get("pauseable", False)
+        self.cancelable = kwargs.get("cancelable", True)
+        self.paused = False
+        self.subprocess_abort = False
+        self.thread_abort = False
+        self.abort_requested = False
+        self.finished = False
+        self.starttime = time.time()
 
 
 def test_producer_thread_is_alive_reflects_running(qapp):

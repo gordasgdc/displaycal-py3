@@ -20,7 +20,6 @@ from __future__ import annotations
 import contextlib
 import re
 from threading import Event
-from time import time
 from typing import TYPE_CHECKING, Callable
 
 from qtpy.QtCore import QObject, QThread, QTimer, Signal
@@ -555,20 +554,10 @@ class WorkerRunController(QObject):
         self._thread.start()
 
     def _prepare_worker(self, *, pauseable: bool, cancelable: bool) -> None:
-        """Initialise the worker state ``Worker.start()`` would set.
-
-        Only the non-interactive subset the measurement path reads is set here.
-        """
+        """Initialise the worker state ``Worker.start()`` would set."""
         worker = self._worker
         worker.interactive = False
-        worker.pauseable = pauseable
-        worker.paused = False
-        worker.cancelable = cancelable
-        worker.subprocess_abort = False
-        worker.thread_abort = False
-        worker.abort_requested = False
-        worker.finished = False
-        worker.starttime = time()
+        worker._init_run_state(pauseable=pauseable, cancelable=cancelable)
 
     def _on_poll(self) -> None:
         """Read the worker buffers and advance the dialog (GUI thread)."""
@@ -883,15 +872,9 @@ class AdjustmentController(QObject):
         """Set the interactive worker state ``Worker.start()`` would set."""
         worker = self._worker
         worker.interactive = True
-        worker.interactive_frame = "adjust"
-        worker.pauseable = True
-        worker.paused = False
-        worker.cancelable = True
-        worker.subprocess_abort = False
-        worker.thread_abort = False
-        worker.abort_requested = False
-        worker.finished = False
-        worker.starttime = time()
+        worker._init_run_state(
+            interactive_frame="adjust", pauseable=True, cancelable=True
+        )
 
     def _on_send(self, key: str) -> None:
         """Forward a key requested by the window to the ``dispcal`` subprocess."""

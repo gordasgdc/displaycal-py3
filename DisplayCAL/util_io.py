@@ -154,9 +154,15 @@ class Files:
             data (str | bytes | bytearray): The data to write to the files.
         """
         for item in self.files:
-            try:
-                item.write(data)
-            except AttributeError:  # TODO: restore safe_log, safe_print etc...
+            # getattr (not try/except AttributeError around the call) so a
+            # real AttributeError raised from *inside* item.write() - e.g. a
+            # sink touching an uninitialized attribute - propagates instead
+            # of being misread as "item has no write() and must be a plain
+            # callable" and silently discarded.
+            write = getattr(item, "write", None)
+            if write is not None:
+                write(data)
+            else:  # TODO: restore safe_log, safe_print etc...
                 with contextlib.suppress(TypeError):
                     item(data)
 
