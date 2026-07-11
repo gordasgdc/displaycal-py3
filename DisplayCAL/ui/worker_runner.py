@@ -543,6 +543,13 @@ class WorkerRunController(QObject):
         self._dialog.start_clock()
 
         self._thread = _ProducerThread(producer, wargs, wkwargs or {}, parent=self)
+        # exec_cmd() only wires the subprocess output into worker.recent/
+        # lastmsg/self (and thus into parse(), which answers Argyll's
+        # mid-measurement "hit a key to continue" prompts via safe_send())
+        # when hasattr(worker, "thread") and worker.thread.is_alive() - so
+        # this has to stand in for worker.thread here exactly like
+        # AdjustmentController does for the interactive path.
+        self._worker.thread = self._thread
         self._thread.finished_with_result.connect(self._on_finished)
         self._poll.start()
         self._thread.start()
@@ -591,6 +598,7 @@ class WorkerRunController(QObject):
             # run() has returned by the time this queued slot fires; wait()
             # returns immediately and avoids a "destroyed while running" warning.
             self._thread.wait()
+        self._worker.thread = None
         consumer = self._consumer
         self._consumer = None
         self._adapter = None

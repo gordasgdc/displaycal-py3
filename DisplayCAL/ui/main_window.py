@@ -5526,8 +5526,12 @@ class MainWindow(BaseWindow):
             self._start_measureframe_subprocess()
 
     def _drive_testchart_measurement(self) -> None:
-        """Restore the main window and run the staged testchart measurement."""
-        self._restore_after_measurement()
+        """Run the staged testchart measurement.
+
+        Deliberately does not restore the main window here (see
+        :meth:`_drive_measurement`); :meth:`_on_measure_testchart_finished`
+        already does that once the patch reading itself completes.
+        """
         self._run_measure_testchart()
 
     def _run_measure_testchart(self) -> None:
@@ -5855,8 +5859,12 @@ class MainWindow(BaseWindow):
             self._start_measureframe_subprocess()
 
     def _drive_report_measurement(self) -> None:
-        """Restore the main window and run the staged report measurement."""
-        self._restore_after_measurement()
+        """Run the staged report measurement.
+
+        Deliberately does not restore the main window here (see
+        :meth:`_drive_measurement`); :meth:`_on_report_measurement_finished`
+        already does that once the patch reading itself completes.
+        """
         self._run_report_measurement()
 
     def _run_report_measurement(self) -> None:
@@ -6927,6 +6935,10 @@ class MainWindow(BaseWindow):
             use_patternwindow=getattr(self.worker, "_use_patternwindow", False),
             wrapup=wrapup,
         )
+        # Mirror wx's MainFrame.setup_measurement calling self.HideAll() before
+        # dispatching: the main window shouldn't stay on screen competing with
+        # the patch/measure frame while a measurement is in progress.
+        self.hide()
         if plan.mode is PresentationMode.CALL_PENDING:
             self.call_pending_function()
         elif plan.mode is PresentationMode.SHOW_FRAME:
@@ -7003,15 +7015,23 @@ class MainWindow(BaseWindow):
     def _drive_measurement(self, action: MeasurementAction) -> None:
         """Run the staged Argyll measurement for ``action``.
 
-        Restores the main window and emits :attr:`measurement_requested`, which
-        is connected to :meth:`_on_measurement_requested` to actually run the
-        worker. Emitting through the signal (rather than calling the runner
-        directly) keeps the committed run observable by other layers and tests.
+        Emits :attr:`measurement_requested`, which is connected to
+        :meth:`_on_measurement_requested` to actually run the worker. Emitting
+        through the signal (rather than calling the runner directly) keeps the
+        committed run observable by other layers and tests.
+
+        Deliberately does not restore the main window here: wx keeps
+        ``MainFrame`` hidden through the whole patch-reading measurement
+        (``just_calibrate_finish``/``just_profile_finish``/
+        ``calibrate_and_profile_finish`` only call ``self.Show()`` once the
+        measurement itself has finished, even when a patch-free stage like
+        ``colprof`` follows), so the Qt finish handlers
+        (:meth:`_on_calibration_finished`, :meth:`_on_measurement_finished`)
+        are what bring it back.
 
         Args:
             action (MeasurementAction): The workflow the user committed to.
         """
-        self._restore_after_measurement()
         self.measurement_requested.emit(action)
 
     def _restore_after_measurement(self) -> None:
@@ -7084,6 +7104,12 @@ class MainWindow(BaseWindow):
             result (object): ``True`` on success, ``False`` / ``None`` when the
                 run did not complete, or an ``Exception`` on failure.
         """
+        # wx's just_profile_finish calls self.Show() unconditionally here, even
+        # on the success path that chains into colprof next: colprof doesn't
+        # touch the screen, so there's no more reason to keep the main window
+        # hidden once the patch reading itself is done.
+        self.show()
+        self.raise_()
         if isinstance(result, Exception):
             QMessageBox.critical(self, APPNAME, str(result))
             return
@@ -7336,9 +7362,13 @@ class MainWindow(BaseWindow):
         """
         self.worker.interactive = False
         if isinstance(result, Exception):
+            self.show()
+            self.raise_()
             QMessageBox.critical(self, APPNAME, str(result))
             return
         if not result:
+            self.show()
+            self.raise_()
             if not getcfg("dry_run"):
                 QMessageBox.information(
                     self, APPNAME, lang.getstr("calibration.incomplete")
@@ -7346,8 +7376,16 @@ class MainWindow(BaseWindow):
             return
         self.worker.log(f"{APPNAME}: Calibration complete")
         if action is MeasurementAction.CALIBRATE_AND_PROFILE:
+            # Matches wx's calibrate_finish: chains straight into the
+            # characterization measurement without showing the main window,
+            # since another patch-reading run is about to start.
             self._run_profile_measurement()
             return
+        # Calibrate-only: no more patches to read (colprof, if chained below,
+        # doesn't touch the screen), so bring the main window back now -
+        # matches wx's just_calibrate_finish calling self.Show() unconditionally.
+        self.show()
+        self.raise_()
         self.update_calibration_file_ctrl()
         if getcfg("profile.update") or self.worker.dispcal_create_fast_matrix_shaper:
             self._on_profile_build_finished(
