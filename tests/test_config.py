@@ -281,3 +281,90 @@ def test_initcfg_module_skips_defaults(monkeypatch, tmp_path):
     assert "calibration.ambient_viewcond_adjust" not in set_keys
     assert "profile.save_path" not in set_keys
 
+
+# writecfg atomicity/locking and oversized-config quarantine (#828)
+
+def test_writecfg_writes_atomically_and_locks(monkeypatch, tmp_path):
+    """writecfg() must write via a locked temp file + atomic replace."""
+    monkeypatch.setattr(config, "CONFIG_HOME", str(tmp_path))
+
+    fresh_cfg = config.CaseSensitiveConfigParser()
+    fresh_cfg.add_section(config.configparser.DEFAULTSECT)
+    config.setcfg("lang", "en", cfg=fresh_cfg)
+
+    assert config.writecfg(cfg=fresh_cfg) is True
+
+    cfgfile = tmp_path / f"{config.APPBASENAME}.ini"
+    assert cfgfile.is_file()
+    assert "lang = en" in cfgfile.read_text()
+
+    # No leftover temp files from the atomic-replace step.
+    assert [p for p in tmp_path.iterdir() if p.suffix == ".tmp"] == []
+    # The lock file used to serialize concurrent writers must exist.
+    assert (tmp_path / f"{config.APPBASENAME}.ini.lock").is_file()
+
+
+def test_writecfg_blocks_while_lock_held(monkeypatch, tmp_path):
+    """A concurrent writer must wait for the lock instead of interleaving."""
+    import threading
+    import time as time_module
+
+    monkeypatch.setattr(config, "CONFIG_HOME", str(tmp_path))
+    cfgfile = tmp_path / f"{config.APPBASENAME}.ini"
+    lockfilename = tmp_path / f"{config.APPBASENAME}.ini.lock"
+
+    fresh_cfg = config.CaseSensitiveConfigParser()
+    fresh_cfg.add_section(config.configparser.DEFAULTSECT)
+    config.setcfg("lang", "en", cfg=fresh_cfg)
+
+    # Hold the exclusive lock ourselves first, simulating a second process
+    # (e.g. the profile loader) already mid-write.
+    held_lockfile = open(lockfilename, "a+b")
+    lock = config.FileLock(held_lockfile, exclusive=True, blocking=True)
+
+    result = {}
+
+    def writer():
+        result["ok"] = config.writecfg(cfg=fresh_cfg)
+
+    t = threading.Thread(target=writer)
+    t.start()
+    time_module.sleep(0.2)
+    # writecfg() must still be blocked waiting for our lock.
+    assert t.is_alive()
+    assert not cfgfile.exists()
+
+    lock.unlock()
+    held_lockfile.close()
+    t.join(timeout=5)
+
+    assert not t.is_alive()
+    assert result.get("ok") is True
+    assert "lang = en" in cfgfile.read_text()
+
+
+def test_fetch_config_files_quarantines_oversized_file(monkeypatch, tmp_path):
+    """A pathologically large config file must be quarantined, not parsed."""
+    monkeypatch.setattr(config, "MAX_CFG_FILE_SIZE", 64)
+    cfgfile = tmp_path / "DisplayCAL.ini"
+    cfgfile.write_text("[Default]\nlast_icc_path = " + ("x" * 200) + "\n")
+
+    cfgfiles = config.fetch_config_files(["DisplayCAL"], [str(tmp_path)])
+
+    assert cfgfiles == []
+    assert not cfgfile.exists()
+    quarantined = list(tmp_path.glob("DisplayCAL.ini.corrupt-*"))
+    assert len(quarantined) == 1
+
+
+def test_fetch_config_files_loads_normal_sized_file(monkeypatch, tmp_path):
+    """A normal-sized config file must load as before."""
+    monkeypatch.setattr(config, "MAX_CFG_FILE_SIZE", 10 * 1024 * 1024)
+    cfgfile = tmp_path / "DisplayCAL.ini"
+    cfgfile.write_text("[Default]\nlang = en\n")
+
+    cfgfiles = config.fetch_config_files(["DisplayCAL"], [str(tmp_path)])
+
+    assert cfgfiles == [str(cfgfile)]
+    assert cfgfile.exists()
+
