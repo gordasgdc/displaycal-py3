@@ -3990,7 +3990,18 @@ class Worker(WorkerBase):
             )
         ):
             # Single spotread reading, we are done
-            wx.CallLater(1000, self.quit_terminate_cmd)
+            if wx.GetApp() is not None:
+                wx.CallLater(1000, self.quit_terminate_cmd)
+            else:
+                # No wx.App (e.g. running under the Qt UI): this method runs
+                # inline on the measurement thread (see the similar comment
+                # in check_instrument_place_on_screen), so wx.CallLater would
+                # just raise "The wx.App object must be created first!"
+                # instead of scheduling anything. Use a plain threading.Timer
+                # instead.
+                timer = threading.Timer(1.0, self.quit_terminate_cmd)
+                timer.daemon = True
+                timer.start()
 
     def get_skip_video_levels_detection(self):
         """Return True if we should skip video levels detection.

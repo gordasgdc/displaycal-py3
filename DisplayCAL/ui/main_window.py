@@ -3536,11 +3536,31 @@ class MainWindow(BaseWindow):
 
     #: Rounder pill-style corners for the bottom action buttons, closer to
     #: wx's native ``wxButton`` shape on most platforms than Qt's default
-    #: (near-rectangular under this app's dark styling).
+    #: (near-rectangular under this app's dark styling). A plain
+    #: ``border-radius``/``padding``-only stylesheet leaves the native
+    #: platform chrome (and its theme-following background) in charge, which
+    #: on macOS renders these with no visible fill at all -- an explicit
+    #: white background (with dark text, in *both* the light and dark theme,
+    #: matching wx's own action buttons) is needed for the rounded shape to
+    #: actually be visible against the surrounding themed panel.
     _ACTION_BUTTON_STYLE = (
         "QPushButton {"
-        " border-radius: 8px;"
+        " border-radius: 12px;"
         " padding: 6px 18px;"
+        " background-color: #ffffff;"
+        " color: #222222;"
+        " border: 1px solid #c0c0c0;"
+        "}"
+        "QPushButton:hover {"
+        " background-color: #f2f2f2;"
+        "}"
+        "QPushButton:pressed {"
+        " background-color: #e0e0e0;"
+        "}"
+        "QPushButton:disabled {"
+        " background-color: #eaeaea;"
+        " color: #999999;"
+        " border-color: #d5d5d5;"
         "}"
     )
 

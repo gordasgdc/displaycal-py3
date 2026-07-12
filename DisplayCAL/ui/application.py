@@ -50,6 +50,27 @@ class Application(QApplication):
         self.top_window = None
         self.aboutToQuit.connect(self._run_exitfuncs)
 
+        # Re-theme live when the OS switches light/dark mode. Qt does not do
+        # this on its own -- apply_theme() only ran once, above -- and wx's
+        # MainFrame never had to handle it either (it read
+        # wx.SystemSettings.GetColour() fresh on every paint). colorScheme()/
+        # colorSchemeChanged only exist from Qt 6.5, hence the guard;
+        # older Qt just keeps the palette it launched with.
+        color_scheme_changed = getattr(self.styleHints(), "colorSchemeChanged", None)
+        if color_scheme_changed is not None:
+            color_scheme_changed.connect(self._on_color_scheme_changed)
+
+    def _on_color_scheme_changed(self, _scheme: object) -> None:
+        """Reapply the theme when the OS light/dark preference changes.
+
+        Args:
+            _scheme (Qt.ColorScheme): The new scheme (unused; :func:`apply_theme`
+                re-detects it via :func:`~DisplayCAL.ui.theme.is_dark`).
+        """
+        from DisplayCAL.ui.theme import apply_theme
+
+        apply_theme(self)
+
         if install_sigint:
             signal.signal(signal.SIGINT, self._signal_handler)
             # Give the Python interpreter a chance to run its signal handlers;

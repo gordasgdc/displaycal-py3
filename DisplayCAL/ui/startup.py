@@ -38,7 +38,7 @@ from typing import Callable
 
 from qtpy.QtCore import QObject, QRect, Qt, QThread, QTimer, Signal
 from qtpy.QtGui import QColor, QPainter, QPixmap
-from qtpy.QtWidgets import QSplashScreen
+from qtpy.QtWidgets import QApplication, QSplashScreen
 
 from DisplayCAL import audio, colormath, config
 from DisplayCAL import localization as lang
@@ -53,6 +53,36 @@ _VERSION_ALPHAS = (0, 0.2, 0.4, 0.6, 0.8, 1, 0.95, 0.9, 0.85, 0.8, 0.75)
 
 #: Interval between icon-reveal / version-fade frames (``1000 / 30`` fps).
 _FRAME_INTERVAL_MS = round(1000 / 30.0)
+
+#: Point size for the splash status message and version-number overlay. wx
+#: draws both with the same unmodified native frame font
+#: (``StartupFrame.Draw``'s ``dc.SetFont(self.GetFont())``); this matches
+#: ``theme.FONT_POINT_SIZE``, the size the rest of this Qt UI is themed to,
+#: rather than the previous mismatched defaults (message: whatever
+#: ``painter.font()`` happened to be, version: a hardcoded ``9``, smaller
+#: than the message text despite wx sizing both identically).
+_SPLASH_FONT_POINT_SIZE = 11
+
+
+def screen_dpr() -> float:
+    """Return the primary screen's device pixel ratio (1.0 if unavailable).
+
+    The splash text is drawn with :class:`QPainter` directly onto a bare
+    ``QPixmap`` (no widget, no ``devicePixelRatio`` of its own), unlike every
+    other label in this UI which Qt rasterizes through the normal widget
+    paint path and therefore scales for HiDPI automatically. Left alone, that
+    makes the hand-painted splash text (and the version-number overlay) come
+    out noticeably smaller/softer than the rest of the app on a Retina/HiDPI
+    screen -- :meth:`_SplashAnimator._render_frame` renders at this ratio and
+    tags the result so :class:`QSplashScreen` displays it at the correct
+    logical size.
+
+    Returns:
+        float: The device pixel ratio to render the splash at.
+    """
+    app = QApplication.instance()
+    screen = app.primaryScreen() if app else None
+    return screen.devicePixelRatio() if screen else 1.0
 
 
 def splash_pixmap() -> QPixmap:
@@ -235,6 +265,9 @@ def _draw_embossed_message(painter: QPainter, w: int, h: int, message: str) -> N
     """
     rect = QRect(0, round(h * 0.75), w, 40)
     align = int(Qt.AlignHCenter | Qt.AlignTop)
+    font = painter.font()
+    font.setPointSize(_SPLASH_FONT_POINT_SIZE)
+    painter.setFont(font)
     for color, dy in (("#101010", 2), ("#000000", 1), ("#CCCCCC", 0)):
         painter.setPen(QColor(color))
         painter.drawText(rect.translated(0, dy), align, message)
@@ -255,7 +288,7 @@ def _draw_version_text(painter: QPainter, w: int) -> None:
     rect = QRect(0, 116, w, 20)
     align = int(Qt.AlignHCenter | Qt.AlignTop)
     font = painter.font()
-    font.setPointSize(9)
+    font.setPointSize(_SPLASH_FONT_POINT_SIZE)
     painter.setFont(font)
     painter.setPen(QColor("#D3D3D3"))
     painter.drawText(rect, align, VERSION_STRING)
@@ -283,6 +316,12 @@ class _SplashAnimator(QObject):
         self._anim_frames = load_anim_frames()
         self._version_frames = load_version_frames()
         self._zoom_scales = zoom_scales() if getcfg("splash.zoom") else []
+        #: Device pixel ratio to render each composited frame at, so
+        #: hand-painted text comes out crisp/correctly sized on HiDPI (see
+        #: :func:`screen_dpr`). The source art stays single-resolution and is
+        #: simply upscaled along with everything else -- soft, but no softer
+        #: than before, and consistent with the (now correctly sized) text.
+        self._dpr = screen_dpr()
         self._frame = 0
         self._total = (
             len(self._zoom_scales) + len(self._anim_frames) + len(self._version_frames)
@@ -314,9 +353,20 @@ class _SplashAnimator(QObject):
 
     def _render_frame(self, index: int) -> None:
         w, h = self._base.width(), self._base.height()
-        composite = QPixmap(self._base.size())
+        dpr = self._dpr
+        # devicePixelRatio must NOT be set yet: QPainter auto-applies a
+        # device-tagged target's ratio on top of any painter.scale() already
+        # in effect, so tagging composite before painting would double the
+        # scale (drawing lands 2x too far out and clips against the physical
+        # edge). Paint into a plain (untagged) physical-size pixmap and tag
+        # it only once the drawing is done, below.
+        composite = QPixmap(round(w * dpr), round(h * dpr))
         composite.fill(Qt.transparent)
         painter = QPainter(composite)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        # Logical coordinates from here on -- the scale makes every existing
+        # drawPixmap/drawText call below land at the right physical pixel.
+        painter.scale(dpr, dpr)
         painter.drawPixmap(0, 0, self._base)
         if index < len(self._zoom_scales):
             if self._anim_frames:
@@ -324,9 +374,11 @@ class _SplashAnimator(QObject):
             _draw_embossed_message(painter, w, h, self._message)
             painter.end()
             scale = self._zoom_scales[index]
+            # composite.size() is physical pixels; scaled()/zoom_painter below
+            # work in that same physical space (no painter.scale() on either).
             scaled = composite.scaled(
-                max(1, round(w * scale)),
-                max(1, round(h * scale)),
+                max(1, round(composite.width() * scale)),
+                max(1, round(composite.height() * scale)),
                 Qt.KeepAspectRatio,
                 Qt.SmoothTransformation,
             )
@@ -334,11 +386,12 @@ class _SplashAnimator(QObject):
             frame_pixmap.fill(Qt.transparent)
             zoom_painter = QPainter(frame_pixmap)
             zoom_painter.drawPixmap(
-                round(w / 2 - scaled.width() / 2),
-                round(h / 2 - scaled.height() / 2),
+                round((composite.width() - scaled.width()) / 2),
+                round((composite.height() - scaled.height()) / 2),
                 scaled,
             )
             zoom_painter.end()
+            frame_pixmap.setDevicePixelRatio(dpr)
         else:
             if self._anim_frames:
                 anim_index = min(
@@ -353,6 +406,7 @@ class _SplashAnimator(QObject):
                 painter.setOpacity(1.0)
             _draw_embossed_message(painter, w, h, self._message)
             painter.end()
+            composite.setDevicePixelRatio(dpr)
             frame_pixmap = composite
         self._splash.setPixmap(frame_pixmap)
 
