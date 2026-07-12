@@ -2275,7 +2275,7 @@ class ProfileInfoFrame(LUTFrame):
                 desc = profile.getDescription()
                 profile_path = os.path.join(
                     self.worker.tempdir,
-                    f"{make_argyll_compatible_path(desc)}{PROFILE_EXT}",
+                    f"{make_argyll_compatible_path(desc, is_name=True)}{PROFILE_EXT}",
                 )
                 profile.write(profile_path)
             profile_mtime = os.stat(profile_path).st_mtime
@@ -2295,7 +2295,7 @@ class ProfileInfoFrame(LUTFrame):
                     comparison_profile_path = os.path.join(
                         self.worker.tempdir,
                         make_argyll_compatible_path(
-                            os.path.basename(comparison_profile_path)
+                            os.path.basename(comparison_profile_path), is_name=True
                         ),
                     )
                     comparison_profile.write(comparison_profile_path)

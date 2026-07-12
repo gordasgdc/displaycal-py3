@@ -4682,7 +4682,9 @@ END_DATA
         result = None
 
         path = os.path.split(path)
-        path = os.path.join(path[0], make_argyll_compatible_path(path[1]))
+        path = os.path.join(
+            path[0], make_argyll_compatible_path(path[1], is_name=True)
+        )
         filename, ext = os.path.splitext(path)
         name = os.path.basename(filename)
 
@@ -4702,7 +4704,7 @@ END_DATA
             hdr = smpte2084 or hlg
 
             profile_in_basename = make_argyll_compatible_path(
-                os.path.basename(profile_in.filename)
+                os.path.basename(profile_in.filename), is_name=True
             )
 
             # XXX: collink creates dark blotch in yellow with perceptual intent
@@ -4755,7 +4757,7 @@ END_DATA
             link_filename = os.path.join(cwd, link_basename)
 
             profile_out_basename = make_argyll_compatible_path(
-                os.path.basename(profile_out.filename)
+                os.path.basename(profile_out.filename), is_name=True
             )
             if profile_in_basename == profile_out_basename:
                 (profile_out_filename, profile_out_ext) = os.path.splitext(
@@ -15854,7 +15856,7 @@ BEGIN_DATA
             return result
         if basename is None:
             basename = getcfg("profile.name.expanded")
-        basename = make_argyll_compatible_path(basename)
+        basename = make_argyll_compatible_path(basename, is_name=True)
         self.set_sessionlogfile(None, basename, dirname)
         return os.path.join(dirname, basename)
 
