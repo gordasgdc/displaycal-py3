@@ -92,6 +92,33 @@ def test_make_argyll_compatible_path_2():
     assert result == expected_result
 
 
+def test_make_argyll_compatible_path_is_name_strips_path_separators():
+    """A profile name/description containing '/' must not be able to smuggle
+    a path separator into the sanitized filename (#819)."""
+    test_value = "My Display / Profile"
+    result = make_argyll_compatible_path(test_value, is_name=True)
+    assert "/" not in result
+    assert os.path.sep not in result
+    assert result == "My Display _ Profile"
+
+
+def test_make_argyll_compatible_path_is_name_strips_path_separators_bytes():
+    """Same as above but for bytes input."""
+    test_value = b"My Display / Profile"
+    result = make_argyll_compatible_path(test_value, is_name=True)
+    assert b"/" not in result
+    assert result == b"My Display _ Profile"
+
+
+def test_make_argyll_compatible_path_is_name_strips_all_invalid_chars():
+    """is_name=True should strip the full set of filename-invalid characters,
+    not just path separators."""
+    test_value = 'a\\b/c:d;e*f?g"h<i>j|k'
+    result = make_argyll_compatible_path(test_value, is_name=True)
+    for char in '\\/:;*?"<>|':
+        assert char not in result
+
+
 def test_worker_get_instrument_name_1():
     """Worker.get_instrument_name() is working properly."""
     worker = Worker()

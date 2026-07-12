@@ -1313,9 +1313,7 @@ def get_cgats_path(cgats: bytes) -> str:
         descriptor = descriptor.groups()[0]
     descriptor = descriptor.decode("utf-8")
     description = descriptor or lang.getstr("unnamed")
-    name = re.sub(r"[\\/:;*?\"<>|]+", "_", make_argyll_compatible_path(description))[
-        :255
-    ]
+    name = make_argyll_compatible_path(description, is_name=True)[:255]
     extension = cgats.split()[0].lower().decode("utf-8")
     return os.path.join(config.get_argyll_data_dir(), f"{name}.{extension}")
 
@@ -5142,9 +5140,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 # way the filename is processed must be the same
                 if (
                     add_basename_to_desc_on_mismatch
-                    and re.sub(
-                        r"[\\/:;*?\"<>|]+", "_", make_argyll_compatible_path(desc)
-                    )
+                    and make_argyll_compatible_path(desc, is_name=True)
                     != os.path.splitext(os.path.basename(path))[0]
                 ):
                     desc = "{} <{}>".format(
@@ -5268,9 +5264,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     # way the filename is processed must be the same
                     if (
                         add_basename_to_desc_on_mismatch
-                        and re.sub(
-                            r"[\\/:;*?\"<>|]+", "_", make_argyll_compatible_path(desc)
-                        )
+                        and make_argyll_compatible_path(desc, is_name=True)
                         != os.path.splitext(os.path.basename(ccmx[1]))[0]
                     ):
                         desc = "{} <{}>".format(
@@ -10610,11 +10604,10 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     # (max 31 chars)
                     # See also colorimeter_correction_check_overwite, the
                     # way the filename is processed must be the same
-                    argyll_compatible_path = make_argyll_compatible_path(desc)
-                    if (
-                        re.sub(r"[\\/:;*?\"<>|]+", "_", argyll_compatible_path)
-                        != filename
-                    ):
+                    argyll_compatible_path = make_argyll_compatible_path(
+                        desc, is_name=True
+                    )
+                    if argyll_compatible_path != filename:
                         ccmx = "{} &amp;lt;{}&amp;gt;".format(
                             desc,
                             ellipsis_(ccmx, 31, "m"),
@@ -17418,7 +17411,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 profile_name = getcfg("profile.name.expanded")
                 ti3 = os.path.join(
                     profile_save_path,
-                    f"{make_argyll_compatible_path(profile_name)}.ti3",
+                    f"{make_argyll_compatible_path(profile_name, is_name=True)}.ti3",
                 )
                 if not os.path.isfile(ti3):
                     ti3 = None
@@ -18058,7 +18051,8 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         result = dlg.ShowModal()
         profile_save_path = os.path.split(dlg.GetPath())
         profile_save_path = os.path.join(
-            profile_save_path[0], make_argyll_compatible_path(profile_save_path[1])
+            profile_save_path[0],
+            make_argyll_compatible_path(profile_save_path[1], is_name=True),
         )
         dlg.Destroy()
         if result != wx.ID_OK:
@@ -18097,7 +18091,8 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             return
         # Copy ti3 to temp dir
         ti3_tmp_path = os.path.join(
-            tmp_working_dir, make_argyll_compatible_path(f"{profile_name}.ti3")
+            tmp_working_dir,
+            make_argyll_compatible_path(f"{profile_name}.ti3", is_name=True),
         )
         if len(collected_ti3s) > 1:
             # Collect files for averaging
@@ -18221,7 +18216,8 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         result = dlg.ShowModal()
         profile_save_path = os.path.split(dlg.GetPath())
         profile_save_path = os.path.join(
-            profile_save_path[0], make_argyll_compatible_path(profile_save_path[1])
+            profile_save_path[0],
+            make_argyll_compatible_path(profile_save_path[1], is_name=True),
         )
         dlg.Destroy()
         if result != wx.ID_OK:
@@ -18616,7 +18612,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             if not self.check_profile_name(profile_name):
                 self.profile_name_textctrl.ChangeValue(DEFAULTS.get("profile.name", ""))
                 profile_name = self.create_profile_name()
-        profile_name = make_argyll_compatible_path(profile_name)
+        profile_name = make_argyll_compatible_path(profile_name, is_name=True)
         if profile_name != self.profile_name.GetLabel():
             setcfg("profile.name", self.profile_name_textctrl.GetValue())
             self.profile_name.SetToolTipString(profile_name)

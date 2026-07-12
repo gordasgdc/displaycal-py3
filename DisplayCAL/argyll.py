@@ -625,14 +625,14 @@ def get_argyll_latest_version() -> str:
 
 
 @overload
-def make_argyll_compatible_path(path: bytes) -> bytes: ...
+def make_argyll_compatible_path(path: bytes, is_name: bool = ...) -> bytes: ...
 
 
 @overload
-def make_argyll_compatible_path(path: str) -> str: ...
+def make_argyll_compatible_path(path: str, is_name: bool = ...) -> str: ...
 
 
-def make_argyll_compatible_path(path):
+def make_argyll_compatible_path(path, is_name=False):
     """Make the path compatible with the Argyll utilities.
 
     This is currently only effective under Windows to make sure that any
@@ -641,10 +641,24 @@ def make_argyll_compatible_path(path):
 
     Args:
         path (bytes | str): The path to be made compatible.
+        is_name (bool): If True, treat ``path`` as a single filename/profile
+            name component instead of a real filesystem path. All invalid
+            filename characters (including path separators such as ``/`` and
+            ``\\``) are replaced instead of being preserved as directory
+            boundaries. Use this whenever the string is not guaranteed to be
+            an actual, already validated path (e.g. an ICC profile
+            description or a user-editable profile name).
 
     Returns:
         bytes | str: The compatible path.
     """
+    if is_name:
+        pattern = r'[\\/:;*?"<>|]+'
+        substitute = "_"
+        if isinstance(path, bytes):
+            pattern = pattern.encode("utf-8")
+            substitute = substitute.encode("utf-8")
+        return make_filename_safe(re.sub(pattern, substitute, path))
     skip = -1
     regex = r"\\\\\?\\"
     driver_letter_escape_char = ":"

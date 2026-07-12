@@ -7,7 +7,6 @@ module integrates with wxPython for plotting and user interaction.
 
 import math
 import os
-import re
 import sys
 
 import numpy
@@ -1255,12 +1254,8 @@ class LUTFrame(BaseFrame):
         else:
             cal = os.path.join(
                 cwd,
-                re.sub(
-                    r"[\\/:*?\"<>|]+",
-                    "",
-                    make_argyll_compatible_path(
-                        self.profile.getDescription() or "Video LUT"
-                    ),
+                make_argyll_compatible_path(
+                    self.profile.getDescription() or "Video LUT", is_name=True
                 ),
             )
             vcgt_to_cal(self.profile).write(cal)
@@ -1416,12 +1411,9 @@ class LUTFrame(BaseFrame):
                 return
             outfilename = os.path.join(
                 tmp,
-                re.sub(
-                    r"[\\/:*?\"<>|]+",
-                    "",
-                    make_argyll_compatible_path(
-                        config.get_display_name(include_geometry=True) or "Video LUT"
-                    ),
+                make_argyll_compatible_path(
+                    config.get_display_name(include_geometry=True) or "Video LUT",
+                    is_name=True,
                 ),
             )
             result = self.worker.save_current_video_lut(
