@@ -5950,7 +5950,7 @@ END_DATA
             domain_max = "DOMAIN_MAX {} {} {}".format(
                 *((f"{{:.{len(str(maxval)[fp_offset + 1 :]):d}f}}",) * 3)
             )
-            lut.append([domain_max.format((maxval,) * 3)])
+            lut.append([domain_max.format(*((maxval,) * 3))])
             lut.append([])
             for RGB_triplet in RGB_out:
                 lut.append([])
