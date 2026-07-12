@@ -4252,7 +4252,7 @@ def test_trc_dependent_rows_hidden_for_as_measured_regardless_of_advanced(window
 
 def test_trc_typed_gamma_row_needs_advanced_options(window):
     # Row 1 ("Gamma 2.2") is a typed-gamma row: its text/type fields and the
-    # black-point-correction slider only appear with advanced options on.
+    # black-point-correction row only appear with advanced options on.
     window.trc_ctrl.setCurrentIndex(1)
 
     setcfg("show_advanced_options", 0)
@@ -4260,7 +4260,9 @@ def test_trc_typed_gamma_row_needs_advanced_options(window):
     assert window.trc_textctrl.isHidden() is True
     assert window.trc_type_ctrl.isHidden() is True
     assert (
-        window._calibration_form.isRowVisible(window.black_point_correction_ctrl)
+        window._calibration_form.isRowVisible(
+            window._black_point_correction_row_widget
+        )
         is False
     )
     # The calibration-speed row only needs a non-"as measured" TRC, not advanced.
@@ -4271,9 +4273,27 @@ def test_trc_typed_gamma_row_needs_advanced_options(window):
     assert window.trc_textctrl.isHidden() is False
     assert window.trc_type_ctrl.isHidden() is False
     assert (
-        window._calibration_form.isRowVisible(window.black_point_correction_ctrl)
+        window._calibration_form.isRowVisible(
+            window._black_point_correction_row_widget
+        )
         is True
     )
+    # Auto is off by default, so the manual slider/spinbox show within the row.
+    assert window.black_point_correction_ctrl.isHidden() is False
+    assert window.black_point_correction_intctrl.isHidden() is False
+
+    # Turning "Auto" on hides the manual slider/spinbox but keeps the row
+    # (and the auto checkbox itself) visible.
+    window.black_point_correction_auto_cb.setChecked(True)
+    assert (
+        window._calibration_form.isRowVisible(
+            window._black_point_correction_row_widget
+        )
+        is True
+    )
+    assert window.black_point_correction_ctrl.isHidden() is True
+    assert window.black_point_correction_intctrl.isHidden() is True
+    assert getcfg("calibration.black_point_correction.auto") == 1
 
 
 def test_trc_custom_row_always_shows_gamma_fields(window):
@@ -4754,7 +4774,9 @@ def test_create_profile_action_handler_runs_with_selected_paths(
 
 def test_build_file_menu_matches_wx_xrc_order(window):
     # mainmenu.xrc's menu.file order, minus the Ctrl+O accelerator (asserted
-    # separately) and BaseWindow's own trailing separator/Quit.
+    # separately). wx's "Preferences" item (labelled via ``menuitem
+    # .set_argyll_bin``) sits between its own separator and the one
+    # BaseWindow adds ahead of Quit.
     expected = [
         "calibration.load",
         "testchart.set",
@@ -4766,6 +4788,8 @@ def test_build_file_menu_matches_wx_xrc_order(window):
         "install_display_profile",
         "profile.share",
         "profile.info",
+        "",  # separator
+        "menuitem.set_argyll_bin",
         "",  # BaseWindow's end separator
         "menuitem.quit",
     ]

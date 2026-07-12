@@ -172,14 +172,19 @@ from DisplayCAL import measurement_report as measurement_report_pipeline
 from DisplayCAL import localization as lang
 from DisplayCAL import profile_name as profile_name_mod
 from DisplayCAL.argyll import (
+    check_argyll_bin,
     check_set_argyll_bin,
     get_argyll_util,
     make_argyll_compatible_path,
 )
+from DisplayCAL.argyll_names import ALTNAMES as ARGYLL_ALTNAMES
+from DisplayCAL.argyll_names import NAMES as ARGYLL_NAMES
+from DisplayCAL.argyll_names import OPTIONAL as ARGYLL_OPTIONAL
 from DisplayCAL.cgats import CGATS, CGATSError
 from DisplayCAL.colorimeter_correction import ColorimeterCorrectionCatalog
 from DisplayCAL.config import (
     DEFAULTS,
+    EXE_EXT,
     PROFILE_EXT,
     get_data_path,
     get_verified_path,
@@ -239,6 +244,7 @@ from DisplayCAL.ui.tools.lut3d import LUT3DWindow
 from DisplayCAL.ui.tools.profile_info import ProfileInfoWindow
 from DisplayCAL.ui.tools.synth_profile import SynthICCWindow
 from DisplayCAL.ui.tools.testchart_editor import TestchartEditorWindow
+from DisplayCAL.ui.tools.visual_whitepoint_editor import VisualWhitepointEditorWindow
 from DisplayCAL.ui.update_check_window import UpdateCheckController
 from DisplayCAL.ui.worker_runner import AdjustmentController, WorkerRunController
 from DisplayCAL.util_decimal import stripzeros
@@ -767,6 +773,28 @@ def lut3d_encoding_items(codes: list[str]) -> list[tuple[str, str]]:
     return [(code, lang.getstr(f"3dlut.encoding.type_{code}")) for code in codes]
 
 
+class _TabStack(QStackedWidget):
+    """A :class:`QStackedWidget` that sizes to the current page only.
+
+    Qt's default ``sizeHint()``/``minimumSizeHint()`` consider every child
+    page (so switching tabs never causes a layout jump), which means a wide
+    row on one settings tab silently forces a horizontal scrollbar on every
+    other, narrower tab -- surfaced when the Calibration tab's rows were
+    widened to use more of the tab's available width (issue: wx's own tabs
+    scroll independently, not in lockstep). Each tab manages its own
+    ``QScrollArea`` behaviour via the shared wrapper in ``_build_ui``, so
+    there is no layout-jump downside to sizing only the visible page here.
+    """
+
+    def sizeHint(self) -> QSize:  # noqa: N802 (Qt override)
+        widget = self.currentWidget()
+        return widget.sizeHint() if widget else super().sizeHint()
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 (Qt override)
+        widget = self.currentWidget()
+        return widget.minimumSizeHint() if widget else super().minimumSizeHint()
+
+
 class MainWindow(BaseWindow):
     """DisplayCAL's Qt main window (shell + all four settings tabs)."""
 
@@ -889,6 +917,9 @@ class MainWindow(BaseWindow):
         #: tables for, consumed by :meth:`_on_profile_hires_b2a_finished`.
         self._pending_hires_b2a_profile: ICCProfile | None = None
         self._gamap_window: GamapWindow | None = None
+        self._visual_whitepoint_editor_window: VisualWhitepointEditorWindow | None = (
+            None
+        )
         #: 3D LUT input-colorspace combo: description -> profile path,
         #: mirroring wx's ``MainFrame.input_profiles`` (populated once from
         #: the bundled reference profiles, see ``_lut3d_init_input_profiles``).
@@ -928,7 +959,7 @@ class MainWindow(BaseWindow):
         layout.addWidget(self._header_widget)
         layout.addWidget(self._tabbar_widget)
 
-        self.stack = QStackedWidget()
+        self.stack = _TabStack()
         self._panels["display_instrument"] = self._build_display_instrument_tab()
         self._panels["calibration"] = self._build_calibration_tab()
         self._panels["profiling"] = self._build_profiling_tab()
@@ -1065,6 +1096,17 @@ class MainWindow(BaseWindow):
         profile_info_action = QAction(lang.getstr("profile.info"), self)
         profile_info_action.triggered.connect(self.profile_info_btn_handler)
         self._file_menu.insertAction(self._file_menu_end_separator, profile_info_action)
+
+        self._file_menu.insertSeparator(self._file_menu_end_separator)
+
+        set_argyll_bin_action = QAction(lang.getstr("menuitem.set_argyll_bin"), self)
+        set_argyll_bin_action.triggered.connect(self._set_argyll_bin_handler)
+        self._file_menu.insertAction(
+            self._file_menu_end_separator, set_argyll_bin_action
+        )
+
+        self.menuitem_testchart_edit = testchart_edit_action
+        self.menuitem_create_profile_from_edid = create_profile_from_edid_action
 
     def _create_profile_action_handler(self) -> None:
         """File menu "Create profile from measurement data..." handler.
@@ -1376,6 +1418,49 @@ class MainWindow(BaseWindow):
         self._install_profile_window.raise_()
         self._install_profile_window.activateWindow()
 
+    def _set_argyll_bin_handler(self) -> None:
+        """File menu "Locate ArgyllCMS executables..." handler.
+
+        Qt port of the directory-picker half of ``argyll.set_argyll_bin``: on
+        an invalid selection, re-prompts with the same missing-executables
+        message wx shows rather than looping a native ``wx.DirDialog``. Not
+        reproduced: wx's "ArgyllCMS not found" chooser dialog with its
+        download/browse/homebrew options, only reachable when this is invoked
+        indirectly via :func:`~DisplayCAL.argyll.check_set_argyll_bin` (still
+        used, unchanged, everywhere this Qt port needs Argyll and doesn't have
+        it yet) -- this menu action is the explicit "browse for it manually"
+        path, so that chooser has no role here.
+        """
+        default_dir = os.path.join(*get_verified_path("argyll.dir"))
+        while True:
+            path = QFileDialog.getExistingDirectory(
+                self, lang.getstr("dialog.set_argyll_bin"), default_dir
+            )
+            if not path:
+                return
+            path = path.rstrip(os.path.sep)
+            if os.path.basename(path) != "bin":
+                path = os.path.join(path, "bin")
+            if check_argyll_bin([path]):
+                setcfg("argyll.dir", path)
+                writecfg()
+                return
+            missing = [
+                f" {lang.getstr('or')} ".join(
+                    altname + EXE_EXT
+                    for altname in ARGYLL_ALTNAMES.get(name, [])
+                    if "argyll" not in altname
+                )
+                for name in ARGYLL_NAMES
+                if not get_argyll_util(name, [path]) and name not in ARGYLL_OPTIONAL
+            ]
+            QMessageBox.critical(
+                self,
+                APPNAME,
+                f"{path}\n\n{lang.getstr('argyll.dir.invalid', ', '.join(missing))}",
+            )
+            default_dir = path
+
     def _profile_share_action_handler(self) -> None:
         """File menu "Upload profile..." handler.
 
@@ -1392,17 +1477,48 @@ class MainWindow(BaseWindow):
         )
 
     def _build_options_menu(self) -> None:
-        """Add an Options menu with the "show advanced options" toggle.
+        """Add an Options menu matching wx's ``menu.options`` (``mainmenu.xrc``).
 
-        Toolkit-neutral scope note: wx's ``menu.options`` also carries the
-        startup-sound/splash/fancy-progress/3D-LUT-tab-visibility toggles and
-        a whole "advanced" submenu of debug switches (``use_separate_lut_access``,
-        ``enable_argyll_debug``, ``extra_args``, etc., see ``mainmenu.xrc``);
-        none of that is reproduced here, only ``show_advanced_options`` itself,
-        since it's the one setting that gates the visibility of controls this
-        window already has.
+        ``use_fancy_progress`` is deliberately not reproduced: it toggles
+        between two wx progress-dialog styles, and this port only has one
+        ``ProgressDialog`` implementation, so the setting gates nothing here.
+        ``splash.simple`` is also not reproduced: wx's shaped, translucent
+        splash window is faked by grabbing a screenshot of the desktop
+        behind it and compositing the splash art on top (``StartupFrame
+        .grab_image``), a trick that can fail or look wrong on some
+        platforms -- ``splash.simple`` is the plain-opaque-background
+        fallback for when it does. Qt's ``QSplashScreen`` supports real
+        translucent windows natively (no desktop screenshot involved), so
+        there's nothing here for a fallback to guard against; the
+        illustrated splash is used unconditionally (see
+        :func:`~DisplayCAL.ui.startup.splash_pixmap`). ``extra_args`` (wx's
+        separate ``ExtraArgsFrame``, seven raw dispcal/dispread/spotread/
+        specplot/colprof/collink/targen argument text fields) is also not
+        reproduced -- a standalone window port on its own, out of scope for
+        this menu pass.
         """
         options_menu = self.menuBar().addMenu(f"&{lang.getstr('menu.options')}")
+
+        self.startup_sound_action = options_menu.addAction(
+            lang.getstr("startup_sound.enable")
+        )
+        self.startup_sound_action.setCheckable(True)
+        self.startup_sound_action.setChecked(bool(getcfg("startup_sound.enable")))
+        self.startup_sound_action.toggled.connect(
+            lambda checked: setcfg("startup_sound.enable", int(checked))
+        )
+
+        options_menu.addSeparator()
+
+        self.enable_3dlut_tab_action = options_menu.addAction(
+            lang.getstr("3dlut.tab.enable")
+        )
+        self.enable_3dlut_tab_action.setCheckable(True)
+        self.enable_3dlut_tab_action.setChecked(bool(getcfg("3dlut.tab.enable")))
+        self.enable_3dlut_tab_action.toggled.connect(self._enable_3dlut_tab_toggled)
+
+        options_menu.addSeparator()
+
         self.show_advanced_options_action = options_menu.addAction(
             lang.getstr("show_advanced_options")
         )
@@ -1413,6 +1529,164 @@ class MainWindow(BaseWindow):
         self.show_advanced_options_action.toggled.connect(
             self._show_advanced_options_toggled
         )
+
+        advanced_menu = options_menu.addMenu(lang.getstr("advanced"))
+
+        self.use_separate_lut_access_action = advanced_menu.addAction(
+            lang.getstr("use_separate_lut_access")
+        )
+        self.use_separate_lut_access_action.setCheckable(True)
+        self.use_separate_lut_access_action.setChecked(
+            bool(getcfg("use_separate_lut_access"))
+        )
+        self.use_separate_lut_access_action.toggled.connect(
+            self._use_separate_lut_access_toggled
+        )
+
+        self.do_not_use_video_lut_action = advanced_menu.addAction(
+            lang.getstr("calibration.do_not_use_video_lut")
+        )
+        self.do_not_use_video_lut_action.setCheckable(True)
+        self.do_not_use_video_lut_action.setChecked(
+            bool(getcfg("calibration.do_not_use_video_lut"))
+        )
+        self.do_not_use_video_lut_action.toggled.connect(
+            self._do_not_use_video_lut_toggled
+        )
+
+        advanced_menu.addSeparator()
+
+        self.skip_legacy_serial_ports_action = advanced_menu.addAction(
+            lang.getstr("skip_legacy_serial_ports")
+        )
+        self.skip_legacy_serial_ports_action.setCheckable(True)
+        self.skip_legacy_serial_ports_action.setChecked(
+            bool(getcfg("skip_legacy_serial_ports"))
+        )
+        self.skip_legacy_serial_ports_action.toggled.connect(
+            lambda checked: setcfg("skip_legacy_serial_ports", int(checked))
+        )
+
+        advanced_menu.addSeparator()
+
+        self.allow_skip_sensor_cal_action = advanced_menu.addAction(
+            lang.getstr("allow_skip_sensor_cal")
+        )
+        self.allow_skip_sensor_cal_action.setCheckable(True)
+        self.allow_skip_sensor_cal_action.setChecked(
+            bool(getcfg("allow_skip_sensor_cal"))
+        )
+        self.allow_skip_sensor_cal_action.toggled.connect(
+            lambda checked: setcfg("allow_skip_sensor_cal", int(checked))
+        )
+
+        advanced_menu.addSeparator()
+
+        self.enable_argyll_debug_action = advanced_menu.addAction(
+            lang.getstr("enable_argyll_debug")
+        )
+        self.enable_argyll_debug_action.setCheckable(True)
+        self.enable_argyll_debug_action.setChecked(bool(getcfg("argyll.debug")))
+        self.enable_argyll_debug_action.setEnabled(not bool(getcfg("dry_run")))
+        self.enable_argyll_debug_action.toggled.connect(
+            self._enable_argyll_debug_toggled
+        )
+
+        self.enable_dry_run_action = advanced_menu.addAction(lang.getstr("dry_run"))
+        self.enable_dry_run_action.setCheckable(True)
+        self.enable_dry_run_action.setChecked(bool(getcfg("dry_run")))
+        self.enable_dry_run_action.toggled.connect(self._enable_dry_run_toggled)
+
+        options_menu.addSeparator()
+
+        restore_defaults_action = options_menu.addAction(
+            lang.getstr("restore_defaults")
+        )
+        restore_defaults_action.triggered.connect(self._restore_defaults_handler)
+
+    def _use_separate_lut_access_toggled(self, checked: bool) -> None:
+        """Options > Advanced > "Use separate video card gamma table access".
+
+        Qt port of ``use_separate_lut_access_handler``.
+        """
+        setcfg("use_separate_lut_access", int(checked))
+        self.update_displays()
+        self.update_display_lut_ctrl()
+
+    def _do_not_use_video_lut_toggled(self, checked: bool) -> None:
+        """Options > Advanced > "Do not use video card gamma table...".
+
+        Qt port of ``do_not_use_video_lut_handler``: warns when the new state
+        disagrees with what the current display (a pattern generator or not)
+        would need, letting the user revert.
+        """
+        is_patterngenerator = config.is_patterngenerator()
+        if checked != is_patterngenerator:
+            answer = QMessageBox.warning(
+                self,
+                APPNAME,
+                lang.getstr("calibration.do_not_use_video_lut.warning"),
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if answer != QMessageBox.Yes:
+                self.do_not_use_video_lut_action.blockSignals(True)
+                self.do_not_use_video_lut_action.setChecked(is_patterngenerator)
+                self.do_not_use_video_lut_action.blockSignals(False)
+                return
+        setcfg("calibration.do_not_use_video_lut", int(checked))
+
+    def _enable_argyll_debug_toggled(self, checked: bool) -> None:
+        """Options > Advanced > "Enable ArgyllCMS debugging output".
+
+        Qt port of ``enable_argyll_debug_handler``: warns (Argyll debug
+        output can include sensitive readings) before turning it on.
+        """
+        if checked:
+            answer = QMessageBox.question(
+                self,
+                APPNAME,
+                lang.getstr("argyll.debug.warning1"),
+                QMessageBox.Ok | QMessageBox.Cancel,
+                QMessageBox.Cancel,
+            )
+            if answer != QMessageBox.Ok:
+                self.enable_argyll_debug_action.blockSignals(True)
+                self.enable_argyll_debug_action.setChecked(False)
+                self.enable_argyll_debug_action.blockSignals(False)
+                return
+        setcfg("argyll.debug", int(checked))
+
+    def _enable_dry_run_toggled(self, checked: bool) -> None:
+        """Options > Advanced > "Dry run".
+
+        Qt port of ``enable_dry_run_handler``: dry-run and Argyll debug are
+        mutually exclusive (debug output requires a real run).
+        """
+        setcfg("dry_run", int(checked))
+        self.enable_argyll_debug_action.setEnabled(not checked)
+
+    def _restore_defaults_handler(self) -> None:
+        """Options menu "Restore defaults" handler.
+
+        Qt port of the menu-triggered path of ``restore_defaults_handler``:
+        confirms, resets config via
+        :func:`~DisplayCAL.calibration_file.restore_defaults`, then
+        repopulates every control.
+        """
+        answer = QMessageBox.question(
+            self,
+            APPNAME,
+            lang.getstr("app.confirm_restore_defaults"),
+            QMessageBox.Ok | QMessageBox.Cancel,
+            QMessageBox.Cancel,
+        )
+        if answer != QMessageBox.Ok:
+            return
+        calibration_file.restore_defaults()
+        writecfg()
+        self.update_displays()
+        self.update_controls()
 
     def _build_tools_menu(self) -> None:
         """Add a Tools menu with the colorimeter-correction and Advanced actions.
@@ -1449,8 +1723,36 @@ class MainWindow(BaseWindow):
         configuration-file / driver install-uninstall entries and
         "calibrate_instrument" are not (they need the still-unported
         driver-installer / `oeminst` plumbing wx's own handlers wrap).
+
+        wx's ``video_card_gamma_table`` submenu (load/reset the display's
+        video card gamma table directly, independent of a full calibrate
+        run) is now reproduced too, reusing the already-ported
+        :meth:`_load_cal` / :meth:`_reset_video_lut`. Not reproduced:
+        ``calibration.show_lut`` (the LUT curve-viewer toggle) and
+        ``infoframe.toggle``/``log.autoshow`` (the log window) -- both need a
+        whole new window this Qt port doesn't have yet, unlike the
+        self-contained VCGT actions.
         """
         tools_menu = self.menuBar().addMenu(f"&{lang.getstr('menu.tools')}")
+
+        vcgt_menu = tools_menu.addMenu(lang.getstr("video_card_gamma_table"))
+        load_cal_or_profile_action = vcgt_menu.addAction(
+            lang.getstr("calibration.load_from_cal_or_profile")
+        )
+        load_cal_or_profile_action.triggered.connect(
+            self._load_cal_or_profile_action_handler
+        )
+        load_display_profile_action = vcgt_menu.addAction(
+            lang.getstr("calibration.load_from_display_profile")
+        )
+        load_display_profile_action.triggered.connect(
+            self._load_display_profile_cal_action_handler
+        )
+        reset_cal_action = vcgt_menu.addAction(lang.getstr("calibration.reset"))
+        reset_cal_action.triggered.connect(self._reset_video_lut_action_handler)
+
+        tools_menu.addSeparator()
+
         ccxx_menu = tools_menu.addMenu(
             lang.getstr("colorimeter_correction_matrix_file")
         )
@@ -2001,7 +2303,11 @@ class MainWindow(BaseWindow):
             pixmap = self._pixmap(32, icon_name)
             if not pixmap.isNull():
                 button.setIcon(pixmap)
-            button.setText(lang.getstr(label_key))
+            # Escape "&" (wx doesn't treat it as a mnemonic marker on a
+            # plain label the way Qt does by default; an unescaped "&" here
+            # is silently consumed instead of shown, e.g. "Display &
+            # instrument" rendering as "Display  instrument").
+            button.setText(lang.getstr(label_key).replace("&", "&&"))
             # ``toggled`` (not ``clicked``): macOS accessibility clients (incl.
             # VoiceOver, and the ``AXPress`` action used by automated UI
             # testing) toggle a checkable ``QToolButton``'s state directly
@@ -2117,7 +2423,9 @@ class MainWindow(BaseWindow):
         display_form = QFormLayout()
         self.display_ctrl = QComboBox()
         self.display_ctrl.currentIndexChanged.connect(self.display_ctrl_handler)
-        display_form.addRow(lang.getstr("display"), self.display_ctrl)
+        # No row label: the group box is already titled "Display" right
+        # above this combo, so a per-row "Display" label would just repeat it.
+        display_form.addRow("", self.display_ctrl)
         self.display_lut_ctrl = QComboBox()
         self.display_lut_ctrl.currentIndexChanged.connect(
             self.display_lut_ctrl_handler
@@ -2167,14 +2475,17 @@ class MainWindow(BaseWindow):
         instrument_form = QFormLayout()
         self.comport_ctrl = QComboBox()
         self.comport_ctrl.currentIndexChanged.connect(self.comport_ctrl_handler)
-        instrument_form.addRow(lang.getstr("instrument"), self.comport_ctrl)
         self.measurement_mode_ctrl = QComboBox()
         self.measurement_mode_ctrl.currentIndexChanged.connect(
             self.measurement_mode_ctrl_handler
         )
-        instrument_form.addRow(
-            lang.getstr("measurement_mode"), self.measurement_mode_ctrl
-        )
+        # Instrument and Mode share one row: no "Instrument" label (the group
+        # box is already titled "Instrument"), but "Mode" keeps its label.
+        instrument_row = QHBoxLayout()
+        instrument_row.addWidget(self.comport_ctrl, 1)
+        instrument_row.addWidget(QLabel(lang.getstr("measurement_mode")))
+        instrument_row.addWidget(self.measurement_mode_ctrl, 1)
+        instrument_form.addRow("", self._wrap(instrument_row))
         instrument_outer.addLayout(instrument_form)
 
         self.blacklevel_drift_compensation_cb = QCheckBox(
@@ -2440,6 +2751,12 @@ class MainWindow(BaseWindow):
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self._calibration_form = form
+        # wx's rows stretch across most of the tab's width; the default
+        # growth policy only grows fields with an explicit Expanding size
+        # policy, leaving every row's combos/sliders pinned to their
+        # minimum size and the rest of the tab empty (issue: rows read as
+        # "crammed into the middle" against wx).
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
 
         # Observer (wx places this at the top of the Calibration tab, right
         # after the two toggles, not on the Display & Instrument tab).
@@ -2485,14 +2802,24 @@ class MainWindow(BaseWindow):
         self.whitepoint_y_ctrl.setSingleStep(0.0001)
         self.whitepoint_y_ctrl.setPrefix("y ")
         self.whitepoint_y_ctrl.valueChanged.connect(self._whitepoint_changed)
+        self.whitepoint_ctrl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.visual_whitepoint_editor_btn = self._tool_button(
+            "color", "whitepoint.visual_editor", self._visual_whitepoint_editor_btn_handler
+        )
+        self.whitepoint_measure_btn = self._tool_button(
+            "stock_3d-color-picker",
+            "ambient.measure",
+            lambda: self._ambient_measure_btn_handler("whitepoint_measure_btn"),
+        )
         whitepoint_row = QHBoxLayout()
-        whitepoint_row.addWidget(self.whitepoint_ctrl)
+        whitepoint_row.addWidget(self.whitepoint_ctrl, 1)
         whitepoint_row.addWidget(self.whitepoint_colortemp_ctrl)
         whitepoint_row.addWidget(self.whitepoint_colortemp_locus_label)
         whitepoint_row.addWidget(self.whitepoint_colortemp_locus_ctrl)
         whitepoint_row.addWidget(self.whitepoint_x_ctrl)
         whitepoint_row.addWidget(self.whitepoint_y_ctrl)
-        whitepoint_row.addStretch(1)
+        whitepoint_row.addWidget(self.visual_whitepoint_editor_btn)
+        whitepoint_row.addWidget(self.whitepoint_measure_btn)
         form.addRow(lang.getstr("whitepoint"), self._wrap(whitepoint_row))
 
         # White level (luminance).
@@ -2506,10 +2833,10 @@ class MainWindow(BaseWindow):
         self.luminance_textctrl.setDecimals(2)
         self.luminance_textctrl.setSuffix(" cd/m²")
         self.luminance_textctrl.valueChanged.connect(self._luminance_changed)
+        self.luminance_ctrl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         luminance_row = QHBoxLayout()
-        luminance_row.addWidget(self.luminance_ctrl)
+        luminance_row.addWidget(self.luminance_ctrl, 1)
         luminance_row.addWidget(self.luminance_textctrl)
-        luminance_row.addStretch(1)
         form.addRow(lang.getstr("calibration.luminance"), self._wrap(luminance_row))
 
         # Black level (black luminance).
@@ -2527,10 +2854,12 @@ class MainWindow(BaseWindow):
         self.black_luminance_textctrl.valueChanged.connect(
             self._black_luminance_changed
         )
+        self.black_luminance_ctrl.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Fixed
+        )
         black_luminance_row = QHBoxLayout()
-        black_luminance_row.addWidget(self.black_luminance_ctrl)
+        black_luminance_row.addWidget(self.black_luminance_ctrl, 1)
         black_luminance_row.addWidget(self.black_luminance_textctrl)
-        black_luminance_row.addStretch(1)
         self._black_luminance_row_widget = self._wrap(black_luminance_row)
         form.addRow(
             lang.getstr("calibration.black_luminance"),
@@ -2549,11 +2878,11 @@ class MainWindow(BaseWindow):
             [lang.getstr("trc.type.relative"), lang.getstr("trc.type.absolute")]
         )
         self.trc_type_ctrl.currentIndexChanged.connect(self._trc_changed)
+        self.trc_ctrl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         trc_row = QHBoxLayout()
-        trc_row.addWidget(self.trc_ctrl)
+        trc_row.addWidget(self.trc_ctrl, 1)
         trc_row.addWidget(self.trc_textctrl)
         trc_row.addWidget(self.trc_type_ctrl)
-        trc_row.addStretch(1)
         form.addRow(lang.getstr("trc"), self._wrap(trc_row))
 
         # Black output offset (0-100 %).
@@ -2562,9 +2891,19 @@ class MainWindow(BaseWindow):
         self.black_output_offset_ctrl.valueChanged.connect(
             self._black_output_offset_changed
         )
+        self.black_output_offset_intctrl = QSpinBox()
+        self.black_output_offset_intctrl.setRange(0, 100)
+        self.black_output_offset_intctrl.setSuffix("%")
+        self.black_output_offset_intctrl.valueChanged.connect(
+            self._black_output_offset_intctrl_changed
+        )
+        black_output_offset_row = QHBoxLayout()
+        black_output_offset_row.addWidget(self.black_output_offset_ctrl, 1)
+        black_output_offset_row.addWidget(self.black_output_offset_intctrl)
+        self._black_output_offset_row_widget = self._wrap(black_output_offset_row)
         form.addRow(
             lang.getstr("calibration.black_output_offset"),
-            self.black_output_offset_ctrl,
+            self._black_output_offset_row_widget,
         )
 
         # Ambient light level adjustment.
@@ -2579,22 +2918,79 @@ class MainWindow(BaseWindow):
         self.ambient_adjust_textctrl.setDecimals(2)
         self.ambient_adjust_textctrl.setSuffix(" Lux")
         self.ambient_adjust_textctrl.valueChanged.connect(self._ambient_lux_changed)
+        self.ambient_adjust_textctrl.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Fixed
+        )
+        self.ambient_measure_btn = self._tool_button(
+            "stock_3d-color-picker",
+            "ambient.measure",
+            lambda: self._ambient_measure_btn_handler("ambient_measure_btn"),
+        )
         ambient_row = QHBoxLayout()
         ambient_row.addWidget(self.ambient_adjust_cb)
-        ambient_row.addWidget(self.ambient_adjust_textctrl)
-        ambient_row.addStretch(1)
+        ambient_row.addWidget(self.ambient_adjust_textctrl, 1)
+        ambient_row.addWidget(self.ambient_measure_btn)
         self._ambient_row_widget = self._wrap(ambient_row)
         form.addRow("", self._ambient_row_widget)
 
-        # Black point correction (0-100 %).
+        # Black point correction (0-100 %), auto checkbox, and the
+        # rate sub-controls -- the latter permanently hidden, matching wx's
+        # own ``DEFAULTS["calibration.black_point_rate.enabled"]`` gate,
+        # which is hardcoded ``0`` there too (dead code in wx today, not
+        # just here; kept for byte-for-byte parity in case that ever flips).
+        self.black_point_correction_auto_cb = QCheckBox(lang.getstr("auto"))
+        self._value_checks["calibration.black_point_correction.auto"] = (
+            self.black_point_correction_auto_cb
+        )
+        self.black_point_correction_auto_cb.toggled.connect(
+            self._black_point_correction_auto_toggled
+        )
         self.black_point_correction_ctrl = QSlider(Qt.Horizontal)
         self.black_point_correction_ctrl.setRange(0, 100)
         self.black_point_correction_ctrl.valueChanged.connect(
             self._black_point_correction_changed
         )
+        self.black_point_correction_intctrl = QSpinBox()
+        self.black_point_correction_intctrl.setRange(0, 100)
+        self.black_point_correction_intctrl.setSuffix("%")
+        self.black_point_correction_intctrl.valueChanged.connect(
+            self._black_point_correction_intctrl_changed
+        )
+        self.black_point_rate_label = QLabel(lang.getstr("calibration.black_point_rate"))
+        self.black_point_rate_ctrl = QSlider(Qt.Horizontal)
+        self.black_point_rate_ctrl.setRange(5, 2000)
+        self.black_point_rate_ctrl.setValue(400)
+        self.black_point_rate_ctrl.valueChanged.connect(
+            self._black_point_rate_slider_changed
+        )
+        self.black_point_rate_floatctrl = QDoubleSpinBox()
+        self.black_point_rate_floatctrl.setRange(0.05, 20.0)
+        self.black_point_rate_floatctrl.setDecimals(2)
+        self.black_point_rate_floatctrl.setSingleStep(0.01)
+        self.black_point_rate_floatctrl.setValue(4.0)
+        self.black_point_rate_floatctrl.valueChanged.connect(
+            self._black_point_rate_floatctrl_changed
+        )
+        # Dead per wx's DEFAULTS["calibration.black_point_rate.enabled"] gate.
+        self.black_point_rate_label.setVisible(False)
+        self.black_point_rate_ctrl.setVisible(False)
+        self.black_point_rate_floatctrl.setVisible(False)
+        self.black_point_correction_ctrl.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Fixed
+        )
+        black_point_correction_row = QHBoxLayout()
+        black_point_correction_row.addWidget(self.black_point_correction_auto_cb)
+        black_point_correction_row.addWidget(self.black_point_correction_ctrl, 1)
+        black_point_correction_row.addWidget(self.black_point_correction_intctrl)
+        black_point_correction_row.addWidget(self.black_point_rate_label)
+        black_point_correction_row.addWidget(self.black_point_rate_ctrl)
+        black_point_correction_row.addWidget(self.black_point_rate_floatctrl)
+        self._black_point_correction_row_widget = self._wrap(
+            black_point_correction_row
+        )
         form.addRow(
             lang.getstr("calibration.black_point_correction"),
-            self.black_point_correction_ctrl,
+            self._black_point_correction_row_widget,
         )
 
         # Calibration quality / speed.
@@ -2604,10 +3000,12 @@ class MainWindow(BaseWindow):
             self._calibration_quality_changed
         )
         self.calibration_quality_info = QLabel()
+        self.calibration_quality_ctrl.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Fixed
+        )
         quality_row = QHBoxLayout()
-        quality_row.addWidget(self.calibration_quality_ctrl)
+        quality_row.addWidget(self.calibration_quality_ctrl, 1)
         quality_row.addWidget(self.calibration_quality_info)
-        quality_row.addStretch(1)
         self._quality_row_widget = self._wrap(quality_row)
         form.addRow(lang.getstr("calibration.speed"), self._quality_row_widget)
 
@@ -2634,6 +3032,7 @@ class MainWindow(BaseWindow):
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self._profiling_form = form
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
 
         self.profile_type_ctrl = QComboBox()
         self.profile_type_ctrl.addItems(
@@ -2655,11 +3054,11 @@ class MainWindow(BaseWindow):
         self._add_check(
             self.black_point_compensation_cb, "profile.black_point_compensation"
         )
+        self.profile_type_ctrl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         type_row = QHBoxLayout()
-        type_row.addWidget(self.profile_type_ctrl)
+        type_row.addWidget(self.profile_type_ctrl, 1)
         type_row.addWidget(self.gamap_btn)
         type_row.addWidget(self.black_point_compensation_cb)
-        type_row.addStretch(1)
         self._profile_type_row_widget = self._wrap(type_row)
         form.addRow(lang.getstr("profile.type"), self._profile_type_row_widget)
 
@@ -2667,10 +3066,12 @@ class MainWindow(BaseWindow):
         self.profile_quality_ctrl.setRange(1, len(PROFILE_QUALITY_LEVELS))
         self.profile_quality_ctrl.valueChanged.connect(self._profile_quality_changed)
         self.profile_quality_info = QLabel()
+        self.profile_quality_ctrl.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Fixed
+        )
         quality_row = QHBoxLayout()
-        quality_row.addWidget(self.profile_quality_ctrl)
+        quality_row.addWidget(self.profile_quality_ctrl, 1)
         quality_row.addWidget(self.profile_quality_info)
-        quality_row.addStretch(1)
         form.addRow(lang.getstr("profile.quality"), self._wrap(quality_row))
 
         # Testchart chooser.
@@ -2700,10 +3101,12 @@ class MainWindow(BaseWindow):
         self.testchart_patches_amount_ctrl.valueChanged.connect(
             self._testchart_patches_amount_changed
         )
+        self.testchart_patches_amount_ctrl.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Fixed
+        )
         patches_row = QHBoxLayout()
-        patches_row.addWidget(self.testchart_patches_amount_ctrl)
+        patches_row.addWidget(self.testchart_patches_amount_ctrl, 1)
         patches_row.addWidget(self.testchart_patches_amount)
-        patches_row.addStretch(1)
         self._patches_row_widget = self._wrap(patches_row)
         form.addRow(
             lang.getstr("testchart.patches_amount"), self._patches_row_widget
@@ -3131,11 +3534,25 @@ class MainWindow(BaseWindow):
         self._report_panel.edit_chart_requested.connect(self._open_testchart_editor)
         return self._report_panel
 
+    #: Rounder pill-style corners for the bottom action buttons, closer to
+    #: wx's native ``wxButton`` shape on most platforms than Qt's default
+    #: (near-rectangular under this app's dark styling).
+    _ACTION_BUTTON_STYLE = (
+        "QPushButton {"
+        " border-radius: 8px;"
+        " padding: 6px 18px;"
+        "}"
+    )
+
     def _build_button_bar(self) -> QWidget:
         """Build the calibrate / profile action-button row.
 
         The buttons stage a :class:`MeasurementAction` through :attr:`flow` and
-        present the measurement area (see :meth:`begin_measurement`).
+        present the measurement area (see :meth:`begin_measurement`). Centred
+        (stretch spacers on both sides), matching the tab bar's own centring
+        further up the window rather than wx's actual right-aligned
+        ``buttonpanel`` -- the maintainer asked for the buttons centred, a
+        deliberate deviation from wx here.
         """
         bar = QWidget()
         bar.setObjectName("buttonpanel")
@@ -3170,7 +3587,9 @@ class MainWindow(BaseWindow):
             self.measurement_report_btn,
         ):
             button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+            button.setStyleSheet(self._ACTION_BUTTON_STYLE)
             row.addWidget(button)
+        row.addStretch(1)
         return bar
 
     # -- small construction helpers ---------------------------------------
@@ -3332,8 +3751,32 @@ class MainWindow(BaseWindow):
         if current in keys:
             self.observer_ctrl.setCurrentIndex(keys.index(current))
 
+    def _update_edid_menu_state(self) -> None:
+        """Enable "Create profile from EDID data..." only with usable EDID chromaticities.
+
+        Port of wx's ``update_menus``' ``menuitem_create_profile_from_edid
+        .Enable(...)`` check: the File-menu action needs red/green/blue
+        chromaticity coordinates and a usable name to build a profile from,
+        neither of which every display's EDID actually reports.
+        """
+        edid = self.worker.get_display_edid() if self.worker.displays else {}
+        self.menuitem_create_profile_from_edid.setEnabled(
+            bool(
+                self.worker.displays
+                and edid
+                and edid.get("monitor_name", edid.get("ascii", edid.get("product_id")))
+                and edid.get("red_x")
+                and edid.get("red_y")
+                and edid.get("green_x")
+                and edid.get("green_y")
+                and edid.get("blue_x")
+                and edid.get("blue_y")
+            )
+        )
+
     def update_display_instrument_controls(self) -> None:
         """Push stored display/instrument config into their Qt controls."""
+        self._update_edid_menu_state()
         self._sync_check("drift_compensation.whitelevel")
         self._sync_check("drift_compensation.blacklevel")
 
@@ -3478,12 +3921,17 @@ class MainWindow(BaseWindow):
         self.trc_type_ctrl.setCurrentIndex(type_row)
         self._apply_trc_mode()
 
-        self.black_output_offset_ctrl.setValue(
-            round(_as_float(getcfg("calibration.black_output_offset")) * 100)
-        )
-        self.black_point_correction_ctrl.setValue(
-            round(_as_float(getcfg("calibration.black_point_correction")) * 100)
-        )
+        boo = round(_as_float(getcfg("calibration.black_output_offset")) * 100)
+        self.black_output_offset_ctrl.setValue(boo)
+        self.black_output_offset_intctrl.setValue(boo)
+        bpc = round(_as_float(getcfg("calibration.black_point_correction")) * 100)
+        self.black_point_correction_ctrl.setValue(bpc)
+        self.black_point_correction_intctrl.setValue(bpc)
+        self._sync_check("calibration.black_point_correction.auto")
+        rate = _as_float(getcfg("calibration.black_point_rate")) or 4.0
+        self.black_point_rate_ctrl.setValue(round(rate * 100))
+        self.black_point_rate_floatctrl.setValue(rate)
+        self._apply_trc_mode()
 
         self._sync_check("calibration.ambient_viewcond_adjust")
         self.ambient_adjust_textctrl.setValue(
@@ -3553,6 +4001,7 @@ class MainWindow(BaseWindow):
         interdependent config change, without needing to route through
         :meth:`update_controls`.
         """
+        self._update_lut3d_tab_enabled()
         was_updating = self._updating
         self._updating = True
         try:
@@ -4182,6 +4631,7 @@ class MainWindow(BaseWindow):
         setcfg("display.number", index + 1)
         if self.display_lut_link_ctrl.isVisibleTo(self):
             self.display_lut_link_ctrl_handler(self.display_lut_link_ctrl.isChecked())
+        self._update_edid_menu_state()
 
     def comport_ctrl_handler(self, index: int) -> None:
         """Persist the selected instrument (comport) number.
@@ -4749,11 +5199,13 @@ class MainWindow(BaseWindow):
         selected at all (row 0, "as measured", hides it) regardless of
         advanced options.
 
-        Not reproduced (see the wx ``black_point_correction_auto_handler``
-        this doubles as): the "auto" black-point-correction checkbox and its
-        rate sub-controls, which this Qt port doesn't have yet, so
-        ``black_point_correction_ctrl`` is always treated as the manual
-        (non-auto) case.
+        Doubles as (part of) wx's ``black_point_correction_auto_handler``:
+        the black-point-correction row's auto checkbox is shown by this same
+        rule, and within it, the manual slider/spinbox additionally hide
+        while :meth:`_black_point_correction_auto_toggled`'s "Auto" is
+        checked (``calibration.black_point_correction.auto``). The rate
+        sub-controls next to it stay permanently hidden regardless (see
+        their construction-time comment).
         """
         show_advanced = bool(getcfg("show_advanced_options"))
         index = self.trc_ctrl.currentIndex()
@@ -4767,12 +5219,18 @@ class MainWindow(BaseWindow):
             index in (3, 5) or (index > 0 and show_advanced),
         )
         self._calibration_form.setRowVisible(
-            self.black_output_offset_ctrl,
+            self._black_output_offset_row_widget,
             index == 7 or (index > 0 and show_advanced),
         )
+        bpc_row_visible = index > 0 and show_advanced
         self._calibration_form.setRowVisible(
-            self.black_point_correction_ctrl, index > 0 and show_advanced
+            self._black_point_correction_row_widget, bpc_row_visible
         )
+        manual_visible = bpc_row_visible and not bool(
+            getcfg("calibration.black_point_correction.auto")
+        )
+        self.black_point_correction_ctrl.setVisible(manual_visible)
+        self.black_point_correction_intctrl.setVisible(manual_visible)
         self._calibration_form.setRowVisible(self._quality_row_widget, index > 0)
 
     def _trc_changed(self, *_args: object) -> None:
@@ -4790,22 +5248,226 @@ class MainWindow(BaseWindow):
             setcfg("trc.type", "G" if self.trc_type_ctrl.currentIndex() == 1 else "g")
 
     def _black_output_offset_changed(self, value: int) -> None:
-        """Persist the black output offset (slider 0-100 -> 0.0-1.0)."""
+        """Slider moved: sync the spinbox and persist (0-100 -> 0.0-1.0)."""
         if self._updating:
             return
+        self.black_output_offset_intctrl.setValue(value)
+        setcfg("calibration.black_output_offset", value / 100.0)
+
+    def _black_output_offset_intctrl_changed(self, value: int) -> None:
+        """Spinbox edited: sync the slider and persist (0-100 -> 0.0-1.0)."""
+        if self._updating:
+            return
+        self.black_output_offset_ctrl.setValue(value)
         setcfg("calibration.black_output_offset", value / 100.0)
 
     def _black_point_correction_changed(self, value: int) -> None:
-        """Persist the black point correction (slider 0-100 -> 0.0-1.0)."""
+        """Slider moved: sync the spinbox and persist (0-100 -> 0.0-1.0)."""
         if self._updating:
             return
+        self.black_point_correction_intctrl.setValue(value)
         setcfg("calibration.black_point_correction", value / 100.0)
+
+    def _black_point_correction_intctrl_changed(self, value: int) -> None:
+        """Spinbox edited: sync the slider and persist (0-100 -> 0.0-1.0)."""
+        if self._updating:
+            return
+        self.black_point_correction_ctrl.setValue(value)
+        setcfg("calibration.black_point_correction", value / 100.0)
+
+    def _black_point_correction_auto_toggled(self, checked: bool) -> None:
+        """Options menu-independent "Auto" checkbox for black point correction.
+
+        Qt port of ``black_point_correction_auto_handler``: persists the
+        auto flag and re-applies TRC-dependent row visibility (the manual
+        slider/spinbox portion of this row hides while auto is on).
+        """
+        if not self._updating:
+            setcfg("calibration.black_point_correction.auto", int(checked))
+        self._apply_trc_mode()
+
+    def _black_point_rate_slider_changed(self, value: int) -> None:
+        """Slider moved: sync the float spinbox and persist (x100 -> float).
+
+        Dead in practice (see the construction-time comment): this row is
+        permanently hidden, matching wx's own hardcoded-off feature flag.
+        """
+        if self._updating:
+            return
+        self.black_point_rate_floatctrl.setValue(value / 100.0)
+        setcfg("calibration.black_point_rate", value / 100.0)
+
+    def _black_point_rate_floatctrl_changed(self, value: float) -> None:
+        """Float spinbox edited: sync the slider and persist."""
+        if self._updating:
+            return
+        self.black_point_rate_ctrl.setValue(round(value * 100))
+        setcfg("calibration.black_point_rate", value)
 
     def _ambient_lux_changed(self, value: float) -> None:
         """Persist the ambient light level (Lux)."""
         if self._updating:
             return
         setcfg("calibration.ambient_viewcond_adjust.lux", value)
+
+    def _visual_whitepoint_editor_btn_handler(self) -> None:
+        """Open the visual whitepoint editor tool.
+
+        Qt port of ``visual_whitepoint_editor_handler``: reuses a single
+        window instance, matching the ``_gamap_window`` /
+        ``_testchart_editor_window`` singleton precedent elsewhere on this
+        window.
+        """
+        window = self._visual_whitepoint_editor_window
+        if window is None:
+            window = VisualWhitepointEditorWindow()
+            self._visual_whitepoint_editor_window = window
+        window.show()
+        window.raise_()
+        window.activateWindow()
+
+    def _ambient_measure_btn_handler(self, evtobjname: str) -> None:
+        """Whitepoint/ambient "measure" button handler.
+
+        Qt port of wx's ``ambient_measure_handler`` for the two buttons this
+        port has (``whitepoint_measure_btn``, ``ambient_measure_btn``) --
+        both drive Argyll's ``spotread`` directly in ambient mode (using the
+        instrument's diffuser, no on-screen patch). Not reproduced: the
+        white/black luminance measure buttons (need an on-screen patch
+        window wx builds ad hoc) and the visual-whitepoint-editor's own
+        measure button (a separate, editor-embedded flow).
+
+        Args:
+            evtobjname: Which button was clicked (``"whitepoint_measure_btn"``
+                or ``"ambient_measure_btn"``), threaded through to the
+                consumer exactly like wx threads ``event.GetEventObject()
+                .Name``.
+        """
+        if not check_set_argyll_bin():
+            return
+        if sys.platform == "win32" and sys.getwindowsversion() < (5, 1):
+            QMessageBox.critical(
+                self, APPNAME, lang.getstr("windows.version.unsupported")
+            )
+            return
+        controller = self._ensure_run_controller()
+        controller.run(
+            self._ambient_measure_producer,
+            lambda result: self._ambient_measure_consumer(result, evtobjname),
+            progress_msg=lang.getstr("ambient.measure"),
+            pauseable=False,
+        )
+
+    def _ambient_measure_producer(self) -> str | bool | Exception:
+        """Run ``spotread`` in ambient mode, returning its captured output.
+
+        Qt port of ``ambient_measure_producer``, always in ``"-a"`` (ambient)
+        mode -- wx's ``"-e"`` (emissive) branch only triggers for the visual
+        whitepoint editor's own measure button, not reproduced here.
+        """
+        cmd = get_argyll_util("spotread")
+        args = ["-v", "-a", "-x"]
+        if getcfg("extra_args.spotread").strip():
+            args += parse_argument_string(getcfg("extra_args.spotread"))
+        result = self.worker.add_measurement_features(
+            args, False, allow_nondefault_observer=True, ambient=True
+        )
+        if isinstance(result, Exception):
+            return result
+        return self.worker.exec_cmd(cmd, args, capture_output=True, skip_scripts=True)
+
+    def _ambient_measure_consumer(
+        self, result: str | bool | Exception, evtobjname: str
+    ) -> None:
+        """Parse ``spotread`` output and update the whitepoint/ambient fields.
+
+        Qt port of ``ambient_measure_consumer``, scoped to the two buttons
+        :meth:`_ambient_measure_btn_handler` drives (the luminance and
+        visual-whitepoint-editor branches of the wx consumer don't apply).
+        """
+        if not result or isinstance(result, Exception):
+            if isinstance(result, Exception):
+                QMessageBox.critical(self, APPNAME, str(result))
+            return
+        text = re.sub(
+            r"[^\t\n\r\x20-\x7f]", "", "".join(self.worker.output)
+        ).strip()
+        if getcfg("whitepoint.colortemp.locus") == "T":
+            k_match = re.search(
+                r"Planckian temperature += (\d+(?:\.\d+)?)K", text, re.I
+            )
+        else:
+            k_match = re.search(
+                r"Daylight temperature += (\d+(?:\.\d+)?)K", text, re.I
+            )
+        yxy_match = re.search(
+            r"Yxy: (\d+(?:\.\d+)) (\d+(?:\.\d+)) (\d+(?:\.\d+))", text
+        )
+        lux_match = re.search(r"Ambient = (\d+(?:\.\d+)) Lux", text, re.I)
+        if not (k_match or yxy_match or lux_match):
+            QMessageBox.critical(self, APPNAME, text + lang.getstr("failure"))
+            return
+        k = float(k_match.group(1)) if k_match else None
+
+        set_whitepoint = evtobjname == "whitepoint_measure_btn"
+        set_ambient = evtobjname == "ambient_measure_btn"
+        if (
+            set_whitepoint
+            and not set_ambient
+            and lux_match
+            and getcfg("show_advanced_options")
+            and getcfg("trc", False) in ("709", "240")
+        ):
+            answer = QMessageBox.question(
+                self,
+                APPNAME,
+                lang.getstr("ambient.set"),
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            set_ambient = answer == QMessageBox.Yes
+
+        if set_ambient:
+            if lux_match:
+                self.ambient_adjust_textctrl.setValue(float(lux_match.group(1)))
+                self.ambient_adjust_cb.setChecked(True)
+            else:
+                QMessageBox.critical(
+                    self,
+                    APPNAME,
+                    lang.getstr("ambient.measure.light_level.missing"),
+                )
+            if not set_whitepoint and k is not None and 4000 <= k <= 25000:
+                answer = QMessageBox.question(
+                    self,
+                    APPNAME,
+                    lang.getstr("whitepoint.set"),
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No,
+                )
+                set_whitepoint = answer == QMessageBox.Yes
+
+        if not set_whitepoint:
+            return
+        if not k and not yxy_match:
+            QMessageBox.critical(
+                self,
+                APPNAME,
+                lang.getstr(
+                    "ambient.measure.color.unsupported",
+                    self.comport_ctrl.currentText(),
+                ),
+            )
+            return
+        if k and self.whitepoint_ctrl.currentIndex() in (0, 1):
+            self.whitepoint_ctrl.setCurrentIndex(1)
+            self.whitepoint_colortemp_ctrl.setValue(round(k))
+        elif yxy_match:
+            self.whitepoint_ctrl.setCurrentIndex(2)
+            _y, x, y = yxy_match.groups()
+            self.whitepoint_x_ctrl.setValue(round(float(x), 4))
+            self.whitepoint_y_ctrl.setValue(round(float(y), 4))
+        self._whitepoint_changed()
 
     def _calibration_quality_changed(self, value: int) -> None:
         """Persist the calibration quality and refresh its labels."""
@@ -6039,9 +6701,9 @@ class MainWindow(BaseWindow):
         ):
             path = ti1_path
 
-        self.create_testchart_btn.setEnabled(
-            path != "auto" and not getcfg("profile.update")
-        )
+        testchart_edit_enabled = path != "auto" and not getcfg("profile.update")
+        self.create_testchart_btn.setEnabled(testchart_edit_enabled)
+        self.menuitem_testchart_edit.setEnabled(testchart_edit_enabled)
         self._profiling_form.setRowVisible(self._patches_row_widget, path == "auto")
 
         if path == "auto":
@@ -6299,9 +6961,41 @@ class MainWindow(BaseWindow):
             key (str): The tab identifier (see :data:`_TABS`).
         """
         self.stack.setCurrentWidget(self._panels[key])
+        # _TabStack's size hints depend on the current page; poke the layout
+        # chain so the scroll area re-measures instead of keeping whatever
+        # (possibly wider or narrower) size the previous tab cached.
+        self.stack.updateGeometry()
+        self._scroll_area.updateGeometry()
         button = self._tab_buttons[key]
         if not button.isChecked():
             button.setChecked(True)
+        self._update_action_buttons()
+
+    def _update_lut3d_tab_enabled(self) -> None:
+        """Enable/disable the 3D LUT tab per the ``3dlut.tab.enable`` toggle.
+
+        Port of wx's ``self.lut3d_settings_btn.Enable(bool(getcfg(
+        "3dlut.tab.enable")))`` plus the ``update_main_controls`` guard that
+        switches away from the tab if it's disabled while shown.
+        """
+        enabled = bool(getcfg("3dlut.tab.enable"))
+        button = self._tab_buttons["lut3d"]
+        button.setEnabled(enabled)
+        if not enabled and button.isChecked():
+            self._tab_buttons["display_instrument"].setChecked(True)
+
+    def _enable_3dlut_tab_toggled(self, checked: bool) -> None:
+        """Options menu "Enable 3D LUT tab" handler.
+
+        Port of wx's ``enable_3dlut_tab_handler``.
+        """
+        setcfg("3dlut.tab.enable", int(checked))
+        setcfg("3dlut.tab.enable.backup", int(checked))
+        if not checked:
+            setcfg("3dlut.create", 0)
+            self.update_lut3d_controls()
+        else:
+            self._update_lut3d_tab_enabled()
         self._update_action_buttons()
 
     # -- measurement actions (Stage 4) ------------------------------------
@@ -6783,6 +7477,7 @@ class MainWindow(BaseWindow):
             if answer == QMessageBox.Yes:
                 self.black_luminance_ctrl.setCurrentIndex(0)
                 setcfg("calibration.black_point_correction.auto", 0)
+                self.black_point_correction_auto_cb.setChecked(False)
                 self.black_point_correction_ctrl.setValue(0)
         if not profile or not preflight_checks.should_warn_profile_bugs():
             return None
@@ -6904,6 +7599,65 @@ class MainWindow(BaseWindow):
             skip_scripts=True,
             silent=silent,
         )
+
+    def _report_vcgt_result(self, result: bool | Exception) -> None:
+        """Show a success/failure notice for a user-triggered VCGT action.
+
+        Shared tail for the three Tools > "Video card gamma table" actions,
+        which -- unlike :meth:`_load_cal`/:meth:`_reset_video_lut`'s other,
+        silent, internal callers -- are direct user actions and so get the
+        same success/failure feedback wx's ``InfoDialog`` gives.
+        """
+        if isinstance(result, Exception):
+            QMessageBox.critical(self, APPNAME, str(result))
+        elif result:
+            QMessageBox.information(self, APPNAME, lang.getstr("success"))
+        else:
+            QMessageBox.critical(self, APPNAME, lang.getstr("failure"))
+
+    def _load_cal_or_profile_action_handler(self) -> None:
+        """Tools menu "Load calibration curves from cal or profile...".
+
+        Qt port of ``load_profile_cal_handler``.
+        """
+        if not check_set_argyll_bin():
+            return
+        default_dir, default_file = get_verified_path("last_cal_or_icc_path")
+        path, _filter = QFileDialog.getOpenFileName(
+            self,
+            lang.getstr("calibration.load_from_cal_or_profile"),
+            os.path.join(default_dir, default_file or ""),
+            f"{lang.getstr('filetype.cal_icc')} (*.cal *.icc *.icm)",
+        )
+        if not path:
+            return
+        if not os.path.exists(path):
+            QMessageBox.critical(self, APPNAME, lang.getstr("file.missing", path))
+            return
+        setcfg("last_cal_or_icc_path", path)
+        self._report_vcgt_result(self._load_cal(path, silent=False))
+
+    def _load_display_profile_cal_action_handler(self) -> None:
+        """Tools menu "Load calibration curves from display profile".
+
+        Qt port of ``load_display_profile_cal`` (menu-triggered path).
+        """
+        if not check_set_argyll_bin():
+            return
+        profile = config.get_display_profile()
+        if not profile or not profile.filename:
+            QMessageBox.critical(self, APPNAME, lang.getstr("profile.invalid"))
+            return
+        self._report_vcgt_result(self._load_cal(profile.filename, silent=False))
+
+    def _reset_video_lut_action_handler(self) -> None:
+        """Tools menu "Reset video card gamma table".
+
+        Qt port of ``reset_cal`` (menu-triggered path).
+        """
+        if not check_set_argyll_bin():
+            return
+        self._report_vcgt_result(self._reset_video_lut())
 
     def begin_measurement(
         self, action: MeasurementAction, *, wrapup: bool = True

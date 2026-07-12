@@ -2820,6 +2820,190 @@ Confirmed via `grep` that no hardcoded light-only style (the
 Verification tab's info panel and the original main-window info panels)
 remains anywhere under `DisplayCAL/ui/`.
 
+**Maintainer live-usage pass found 6 more gaps (2026-07-12), all fixed.**
+Running the real app surfaced issues neither the visual-diff pass nor the
+screenshot passes above caught, since several only show up with
+`show_advanced_options` on or a non-default `3dlut.tab.enable`:
+
+1. **Splash screen had no version number.** wx's own splash never showed one
+   either (`theme/splash_version.png` is just the static "3" logo badge, not
+   a real version overlay) -- a genuine gap in both toolkits, closed only
+   here. `DisplayCAL/ui/startup.py` gained `_draw_version_text()`, drawing
+   `meta.VERSION_STRING` under the wordmark with the same fade-in alpha as
+   the "3" badge.
+2. **File menu was missing wx's "Preferences" item** (labelled via
+   `menuitem.set_argyll_bin`, "Locate ArgyllCMS executables..."), and two
+   existing items' enabled-state never tracked the condition wx uses
+   (`testchart.edit` always enabled instead of following
+   `create_testchart_btn`'s enabled state; `create_profile_from_edid` always
+   enabled instead of requiring usable EDID chromaticities). New
+   `MainWindow._set_argyll_bin_handler()` is a Qt port of the directory-
+   picker half of `argyll.set_argyll_bin` (not the wx-only download/browse/
+   homebrew "not found" chooser, only reachable indirectly via
+   `check_set_argyll_bin`, which every other Argyll-needing action already
+   calls unchanged). `_update_edid_menu_state()` mirrors wx's `update_menus`
+   EDID check, wired from `update_display_instrument_controls()` and
+   `display_ctrl_handler()`. `create_profile_from_edid`'s label was also
+   shortened to "Create profile from EDID data..." (maintainer's call, the
+   spelled-out "extended display identification data" hadn't registered as
+   EDID for years) -- updated in `en.yaml` and every other language file
+   that had the long form (fr/ko/ru/ukr/zh_hk/zh_cn; de/es/it already said
+   "EDID").
+3. **Options menu only had `show_advanced_options`.** Built out the rest of
+   wx's `menu.options` that gates real behaviour in this Qt port:
+   `startup_sound.enable` / `3dlut.tab.enable` (both read by
+   `ui/startup.py`/the tab-enable logic below), an `advanced` submenu
+   (`use_separate_lut_access`, `calibration.do_not_use_video_lut`,
+   `skip_legacy_serial_ports`, `allow_skip_sensor_cal`,
+   `enable_argyll_debug`, `dry_run`), and `restore_defaults` (calling the
+   already-toolkit-neutral `calibration_file.restore_defaults()`).
+   Deliberately not reproduced: `use_fancy_progress` (gates nothing here,
+   this port has one `ProgressDialog`) and `extra_args` (wx's separate
+   seven-field `ExtraArgsFrame`, a standalone window port on its own).
+   `splash.simple` is **not** reproduced either, on the maintainer's
+   instruction: it exists in wx only to work around its shaped splash
+   window's screenshot-compositing trick (`StartupFrame.grab_image`)
+   sometimes failing; Qt's `QSplashScreen` supports real translucent
+   windows natively, so nothing here needs a fallback.
+   `ui/startup.py::splash_pixmap()` now always returns the illustrated
+   splash.
+4. **The 3D LUT tab was always enabled**, ignoring `3dlut.tab.enable`
+   (default `0`) entirely -- a real gap: that flag also gates the relative-
+   colorimetric-rendering-intent confirmation prompt and the measurement-
+   report simulation-profile auto-linking in `lut3d_settings.py`, so
+   silently treating it as always-on diverged from wx in more than tab
+   visibility. New `MainWindow._update_lut3d_tab_enabled()` disables the tab
+   button and force-switches away from it when checked (matching wx's
+   `lut3d_settings_btn.Enable(...)` + the `tab_select_handler` fallback in
+   `update_main_controls`), wired from `update_lut3d_controls()` and a new
+   `_enable_3dlut_tab_toggled()` Options-menu handler (port of
+   `enable_3dlut_tab_handler`). The 3D LUT tab's "Black output offset"
+   slider+spinbox the maintainer flagged as missing turned out to already
+   exist (`lut3d_trc_black_output_offset_ctrl`/`_intctrl`, landed Session
+   10) in the right position between the tone-curve block and "Apply
+   calibration (vcgt)" -- verified via `compute_trc_visibility` that it
+   shows correctly once "Create 3D LUT" is checked and either advanced
+   options are on or a custom/SMPTE 2084 TRC is picked, faithfully matching
+   `LUT3DMixin.lut3d_show_trc_controls`'s embedded-tab branch; not a bug.
+5. **Tools menu was missing wx's `video_card_gamma_table` submenu**
+   (load calibration curves from a cal/profile file, load from the current
+   display profile, reset video card gamma table to linear) -- three
+   self-contained actions reusing the already-ported `_load_cal()`/
+   `_reset_video_lut()`, just not exposed as user-triggerable menu items
+   before. Not reproduced: `calibration.show_lut` (LUT curve-viewer toggle)
+   and `infoframe.toggle`/`log.autoshow` (the log window), both needing a
+   whole new window this port doesn't have, unlike the self-contained VCGT
+   actions. Also still not reproduced, noted for a future session: the
+   `menu.language` submenu (needs live-retranslation infrastructure this
+   port's `setup_language()` explicitly punts on today) and the Argyll
+   instrument configuration-file/driver install-uninstall entries (need the
+   still-unported OS driver-installer plumbing).
+6. **Display & Instrument tab: three real layout bugs.** The tab-bar label
+   lost its "&" (Qt's `QToolButton` treats a bare `&` as a mnemonic marker
+   and silently swallows it, unlike wx's plain label; now escaped to `&&`
+   in `_build_tabbar`). The Display and Instrument combos each repeated
+   their group box's own title as a per-row label (`form.addRow(lang
+   .getstr("display"), ...)` where the box was already titled "Display");
+   both rows now pass `""`. The Instrument and Mode combos were stacked
+   in separate rows; wx does too (`main.xrc`'s `wxFlexGridSizer` for that
+   column is `cols=1, rows=2`) but the maintainer asked for them combined
+   into one row here, a deliberate deviation from wx -- done via a new
+   `instrument_row` `QHBoxLayout`.
+
+**Calibration/Profiling tab width + cross-tab bleed, and new Calibration
+controls (2026-07-12).** The maintainer compared side by side with wx and
+found the Calibration tab's rows "crammed into the middle" instead of using
+the tab's available width, plus three missing controls: a whitepoint-measure
+button beside the daylight/blackbody "Reference" combo, an ambient-luminance-
+measure button after the ambient-adjustment field, and a black-point-
+correction "Auto" checkbox + "Rate" slider/spinbox.
+
+- **Width.** Root cause: `QFormLayout`'s default growth policy only grows
+  fields with an explicit `Expanding` size policy, and every composite row
+  (a `QHBoxLayout` wrapped via `_wrap()`) ended in a bare `addStretch(1)`
+  that absorbed 100% of any reclaimed space invisibly -- the row's wrapper
+  widget *did* grow (confirmed instrumented), but nothing inside it visibly
+  followed. Fixed by giving each row's primary combo/slider
+  `QSizePolicy.Expanding` + a `1` stretch factor in its `addWidget()` call,
+  removing the trailing `addStretch(1)`, and setting
+  `form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)` on both the
+  Calibration and Profiling tabs' forms.
+- **Cross-tab bleed (a real latent bug this surfaced, not new).** Widening
+  Calibration's rows pushed its minimum width above the other tabs',
+  and `QStackedWidget`'s default `sizeHint()`/`minimumSizeHint()` consider
+  *every* page (to avoid layout jumps switching tabs) -- so the widest tab's
+  minimum silently forced a horizontal scrollbar on every other, narrower
+  tab (confirmed instrumented: the shared stack's minimum width was 855px
+  against a 782px viewport, coming from cross-tab contamination, not any
+  single tab's own content). Fixed with a new `_TabStack(QStackedWidget)`
+  overriding both size-hint methods to reflect only `currentWidget()`;
+  `_select_tab()` now also calls `updateGeometry()` on the stack and scroll
+  area after switching so the cached hint is re-measured. Each tab still
+  scrolls independently exactly as before, since the actual scrolling is a
+  property of the shared `QScrollArea`, not the stack.
+- **New Calibration-tab controls**, all wired to the same
+  `WorkerRunController` pattern already used for `create_profile`/
+  `create_3dlut`:
+  - `whitepoint_measure_btn` + `visual_whitepoint_editor_btn` at the end of
+    the whitepoint row (matching `main.xrc`'s actual widget order), the
+    latter cross-linking the already-ported `VisualWhitepointEditorWindow`
+    tool (singleton pattern, like `_gamap_window`).
+  - `ambient_measure_btn` after the ambient-adjustment field.
+  - Both measure buttons drive a new `_ambient_measure_btn_handler()` /
+    `_ambient_measure_producer()` / `_ambient_measure_consumer()`, a Qt port
+    of wx's `ambient_measure_handler`/`_producer`/`_consumer` scoped to
+    these two buttons: runs Argyll's `spotread -a` (ambient mode, the
+    instrument's own diffuser, no on-screen patch) and regex-parses the
+    Planckian/Daylight-temperature, Yxy and Ambient-lux lines from its
+    output, then sets the whitepoint colortemp/xy fields or the ambient-lux
+    field depending on which button was clicked -- including the
+    cross-prompt confirm dialogs wx shows ("also set the ambient level from
+    this whitepoint reading?" / "also set the whitepoint from this ambient
+    reading?"). Not reproduced: the white/black luminance measure buttons
+    (`luminance_measure_btn`/`black_luminance_measure_btn`, which need an
+    on-screen patch window wx builds ad hoc -- a different, unrequested
+    flow) and the visual-whitepoint-editor's own embedded measure button.
+  - `black_point_correction_auto_cb` ("Auto") + the "Rate" slider/spinbox
+    (`black_point_rate_ctrl`/`_floatctrl`), plus a previously-missing
+    `black_output_offset_intctrl`/`black_point_correction_intctrl` spinbox
+    beside each existing slider (mirroring the 3D LUT tab's own
+    slider+spinbox pattern, `calibration.black_point_correction.auto`
+    persisted, gating the manual slider/spinbox's visibility exactly like
+    wx's `black_point_correction_auto_handler`). The Rate sub-controls are
+    built and wired but **permanently hidden**, on the maintainer's
+    instruction after finding wx's own `DEFAULTS["calibration
+    .black_point_rate.enabled"]` is hardcoded `0` -- dead code in wx today
+    too, kept here only so both toolkits would show it identically if that
+    flag ever flips on.
+- Regression risk: two existing tests encoded the old structure directly
+  (`isRowVisible(black_point_correction_ctrl)` when that widget stopped
+  being a row-field itself; the file-menu order test predating the
+  Preferences item) -- updated, not skipped. Full `test_ui_main_window.py`
+  (424 tests) green under `-n auto`.
+
+**Bottom action-button bar and dark-theme background (2026-07-12), maintainer
+requests found while reviewing the above.** The Calibrate/Calibrate & Profile/
+Profile/Create 3D LUT/Measurement Report buttons are now centred (stretch
+spacers on both sides of the row, like the tab bar already does -- a
+deliberate deviation from wx's actual right-aligned `buttonpanel`) and use a
+rounder pill-style stylesheet (`border-radius: 8px`), closer to wx's native
+`wxButton` shape than Qt's near-rectangular default under this app's custom
+palette. Separately, the dark palette's `Window`/`Base`/`ToolTipBase` moved
+from `#333333` to `#1a1a1a` (`AlternateBase`/`Button` adjusted to keep the
+same relative contrast): `#333333` turned out to be wx's *plot-canvas*
+`BGCOLOUR` constant (`wx_lut_viewer.py` etc.), never the actual `MainFrame`
+window background, which wx paints with the OS-native
+`wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)` -- measured directly
+(`wx.App()` + query, headless) at `#171717` on this Mac in Dark Mode, a lot
+darker than the plot-canvas grey the Qt palette had been copying. Not
+switched to a live OS-colour query: `base_window.py` already documents that
+Qt's native macOS style ignores the real dark-mode window colour unless the
+palette is set explicitly, which is why this port hardcodes a palette per
+scheme instead of trusting native rendering end-to-end; `#1a1a1a` is a
+same-tradeoff snapshot of the real colour, not a live query, so it can drift
+again if the OS default ever changes (flagged to the maintainer, not treated
+as a defect).
+
 ### Stage 7 — Retire wx code paths
 
 Delete the wx modules whose Qt replacements have been verified equivalent.

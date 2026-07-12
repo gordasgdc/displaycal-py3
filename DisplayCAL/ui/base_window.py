@@ -54,7 +54,7 @@ class BaseWindow(ScriptingHostMixin, QMainWindow):
         # the native style otherwise fills top-level windows with the OS's own
         # (light) window background material instead of our themed palette,
         # which is how the dark scheme ends up visibly lighter than wx's
-        # hard-coded ``#333333`` (see ``DisplayCAL.ui.theme``).
+        # actual native window background (see ``DisplayCAL.ui.theme``).
         self.setAutoFillBackground(True)
         if name:
             self.setObjectName(name)

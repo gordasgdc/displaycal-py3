@@ -43,6 +43,7 @@ from qtpy.QtWidgets import QSplashScreen
 from DisplayCAL import audio, colormath, config
 from DisplayCAL import localization as lang
 from DisplayCAL.config import getcfg, hascfg
+from DisplayCAL.meta import VERSION_STRING
 from DisplayCAL.options import FORCE_SKIP_INITIAL_INSTRUMENT_DETECTION
 from DisplayCAL.worker import Worker
 
@@ -55,16 +56,21 @@ _FRAME_INTERVAL_MS = round(1000 / 30.0)
 
 
 def splash_pixmap() -> QPixmap:
-    """Return the configured splash image as a ``QPixmap``.
+    """Return the illustrated splash image as a ``QPixmap``.
 
-    Mirrors ``StartupFrame``'s ``splash.simple`` config switch between the
-    plain and illustrated splash images.
+    wx offers a "simple splash screen" fallback (``splash.simple``) because
+    its shaped, translucent splash window is faked by grabbing a screenshot
+    of the desktop behind it and compositing the splash art on top (see
+    ``StartupFrame.grab_image``) -- a trick that can fail or look wrong on
+    some platforms, hence the plain opaque fallback. Qt's ``QSplashScreen``
+    supports real translucent windows natively (``WA_TranslucentBackground``,
+    no desktop screenshot involved), so that fallback has nothing to guard
+    against here and this always uses the illustrated splash.
 
     Returns:
         QPixmap: The splash bitmap, or a null pixmap if the asset is missing.
     """
-    name = "theme/splash-simple.png" if getcfg("splash.simple") else "theme/splash.png"
-    path = config.get_data_path(name)
+    path = config.get_data_path("theme/splash.png")
     return QPixmap(path) if path else QPixmap()
 
 
@@ -234,6 +240,27 @@ def _draw_embossed_message(painter: QPainter, w: int, h: int, message: str) -> N
         painter.drawText(rect.translated(0, dy), align, message)
 
 
+def _draw_version_text(painter: QPainter, w: int) -> None:
+    """Draw the running version string just below the DisplayCAL3 wordmark.
+
+    Not part of the wx splash (``theme/splash_version.png`` there is only the
+    static "3" logo badge, no actual version number) -- a new addition so the
+    splash reflects which build is starting, independent of the "3" badge's
+    own fade-in alpha (the caller sets the painter opacity for that).
+
+    Args:
+        painter (QPainter): The active painter to draw into.
+        w (int): The splash pixmap width.
+    """
+    rect = QRect(0, 116, w, 20)
+    align = int(Qt.AlignHCenter | Qt.AlignTop)
+    font = painter.font()
+    font.setPointSize(9)
+    painter.setFont(font)
+    painter.setPen(QColor("#D3D3D3"))
+    painter.drawText(rect, align, VERSION_STRING)
+
+
 class _SplashAnimator(QObject):
     """Drive the splash-screen icon-reveal / version-fade animation.
 
@@ -321,6 +348,9 @@ class _SplashAnimator(QObject):
             version_index = index - len(self._zoom_scales) - len(self._anim_frames)
             if 0 <= version_index < len(self._version_frames):
                 painter.drawPixmap(0, 0, self._version_frames[version_index])
+                painter.setOpacity(_VERSION_ALPHAS[version_index])
+                _draw_version_text(painter, w)
+                painter.setOpacity(1.0)
             _draw_embossed_message(painter, w, h, self._message)
             painter.end()
             frame_pixmap = composite
