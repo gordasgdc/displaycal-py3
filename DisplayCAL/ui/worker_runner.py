@@ -20,17 +20,18 @@ from __future__ import annotations
 import contextlib
 import re
 from threading import Event
+from time import time
 from typing import TYPE_CHECKING, Callable
 
 from qtpy.QtCore import QObject, QThread, QTimer, Signal
 
 from DisplayCAL import localization as lang
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui.progress_dialog import ProgressDialog
 
 if TYPE_CHECKING:
     from qtpy.QtWidgets import QWidget
 
-    from DisplayCAL.ui.progress_dialog import ProgressDialog
     from DisplayCAL.worker import Worker
 
 # How often (ms) the GUI-thread poll reads the worker output buffers. Matches
@@ -976,6 +977,13 @@ class AdjustmentController(QObject):
         self._terminal: _AdjustmentTerminal | None = None
         self._thread: _ProducerThread | None = None
         self._consumer: Callable | None = None
+        self._progress_dialog: ProgressDialog | None = None
+        self._adapter: ProgressAdapter | None = None
+        self._swapped = False
+        self._start_time = 0.0
+        self._poll = QTimer(self)
+        self._poll.setInterval(POLL_INTERVAL_MS)
+        self._poll.timeout.connect(self._on_poll)
         window.send_requested.connect(self._on_send)
         window.closing.connect(self._on_window_closing)
 
@@ -1000,6 +1008,8 @@ class AdjustmentController(QObject):
         self._worker.terminal = self._terminal
         self._worker.progress_wnd = self._terminal
         self._consumer = consumer
+        self._swapped = False
+        self._start_time = time()
 
         self._window.reset()
         self._window.place()
@@ -1012,6 +1022,7 @@ class AdjustmentController(QObject):
         # attaches the interactive terminal to the output stream.
         self._worker.thread = self._thread
         self._thread.finished_with_result.connect(self._on_finished)
+        self._poll.start()
         self._thread.start()
 
     def _prepare_worker(self) -> None:
@@ -1026,6 +1037,74 @@ class AdjustmentController(QObject):
         """Forward a key requested by the window to the ``dispcal`` subprocess."""
         with contextlib.suppress(Exception):
             self._worker.safe_send(key)
+
+    def _on_poll(self) -> None:
+        """Advance progress, swapping to a plain progress dialog once due.
+
+        Toolkit-neutral port of the ``wx.CallAfter(self.swap_progress_wnds)``
+        branch of ``Worker.progress_handler`` (worker.py): once ``dispcal``
+        moves past keyboard interaction into unattended measurement (a
+        percentage appears, the interactive window isn't mid-measurement, and
+        a few seconds have passed since the run started), keyboard prompts are
+        no longer needed. wx swaps the interactive frame for a progress
+        dialog there; that branch never fires here because it depends on a
+        running wx event loop pumping ``wx.CallAfter``, so without this poll
+        the adjustment window would neither hide nor hand off to a progress
+        dialog once "Continue calibration" moves past the interactive step.
+        """
+        from DisplayCAL.worker import FilteredStream
+
+        try:
+            msg = self._worker.recent.read(FilteredStream.triggers)
+            lastmsg = self._worker.lastmsg.read(FilteredStream.triggers).strip()
+        except Exception:  # noqa: BLE001 - buffers may be mid-write; skip a tick
+            return
+        percentage, lastmsg = parse_progress(msg, lastmsg)
+        if not self._swapped:
+            if (
+                percentage is not None
+                and time() > self._start_time + 3
+                and not getattr(self._window, "is_measuring", False)
+            ):
+                self._swap_to_progress_dialog()
+            return
+        if percentage is not None:
+            text = "\n".join(part for part in (msg, lastmsg) if part).strip()
+            self._progress_dialog.set_progress(percentage, text or None)
+        else:
+            text = (msg or lastmsg).strip()
+            if text:
+                self._progress_dialog.pulse(text)
+
+    def _swap_to_progress_dialog(self) -> None:
+        """Hide the adjustment window and switch to a plain progress dialog."""
+        self._swapped = True
+        if self._progress_dialog is None:
+            self._progress_dialog = ProgressDialog(self.parent(), pauseable=True)
+        dialog = self._progress_dialog
+        self._adapter = ProgressAdapter(dialog)
+        self._worker.progress_wnd = self._adapter
+        dialog.cancelled.connect(self._on_cancel)
+        dialog.pause_toggled.connect(self._on_pause)
+        dialog.reset()
+        dialog.setWindowTitle(lang.getstr("calibration"))
+        dialog.pause_button.setVisible(True)
+        dialog.place()
+        dialog.show()
+        dialog.start_clock()
+        self._window.hide()
+
+    def _on_cancel(self) -> None:
+        """Ask the worker to abort when the user cancels the progress dialog."""
+        if self._adapter is not None:
+            self._adapter.keepGoing = False
+        with contextlib.suppress(Exception):
+            self._worker.abort_subprocess(False)
+
+    def _on_pause(self, paused: bool) -> None:  # noqa: FBT001
+        """Reflect the dialog pause state so ``Worker.pause_continue`` sees it."""
+        if self._adapter is not None:
+            self._adapter.paused = paused
 
     def _on_window_closing(self) -> None:
         """Abort a still-running interactive ``dispcal`` when the window closes.
@@ -1045,6 +1124,14 @@ class AdjustmentController(QObject):
 
     def _on_finished(self, result: object) -> None:
         """Handle calibration completion on the GUI thread."""
+        self._poll.stop()
+        if self._swapped and self._progress_dialog is not None:
+            self._progress_dialog.stop_clock()
+            self._progress_dialog.hide()
+            with contextlib.suppress(TypeError):
+                self._progress_dialog.cancelled.disconnect(self._on_cancel)
+            with contextlib.suppress(TypeError):
+                self._progress_dialog.pause_toggled.disconnect(self._on_pause)
         self._window.hide()
         self._worker.progress_wnd = None
         self._worker.terminal = None
@@ -1057,6 +1144,8 @@ class AdjustmentController(QObject):
         self._consumer = None
         self._terminal = None
         self._thread = None
+        self._adapter = None
+        self._swapped = False
         if consumer is not None:
             consumer(result)
         self.finished.emit(result)

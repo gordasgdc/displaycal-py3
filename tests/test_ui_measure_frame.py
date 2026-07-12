@@ -7,9 +7,16 @@ display geometry as plain tuples (see ``DisplayCAL/ui/MAINFRAME_PORT_PLAN.md``,
 Stage 1).
 """
 
+import os
+
 import pytest
 
-from DisplayCAL.ui.measure_frame import (
+# Run headless: pick the offscreen platform before any Qt import.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ.setdefault("QT_API", "pyside6")
+
+from DisplayCAL.ui.measure_frame import (  # noqa: E402
+    MeasureFrame,
     compute_dimensions,
     compute_frame_geometry,
     default_measureframe_size,
@@ -93,3 +100,77 @@ def test_compute_dimensions_detects_fullscreen():
         (1920, 1040), (0, 0), DISPLAY, CLIENT, DEFAULT_SIZE, 25
     )
     assert dims == "0.5,0.5,50.0"
+
+
+# --- widget lifecycle: geometry persistence across the show/hide cycle -----
+#
+# ``MainWindow`` keeps a single ``MeasureFrame`` alive for the whole session
+# and hides (rather than closes) it between the interactive-placement step and
+# the actual measurement. wx's ``MeasureFrame.Show(False)`` saves the current
+# geometry to config every time; without the equivalent here, a position/size
+# the user picked by dragging or resizing the window (as opposed to using the
+# zoom buttons, which already save via ``place_n_zoom``) is silently discarded
+# and ``dispread`` draws its patch wherever the frame was last placed instead
+# of where the user actually left it.
+
+pytest.importorskip("qtpy")
+
+from DisplayCAL import config as _config  # noqa: E402
+from DisplayCAL import localization as lang  # noqa: E402
+from DisplayCAL.config import getcfg, setcfg  # noqa: E402
+
+
+@pytest.fixture(scope="session")
+def qapp():
+    """Provide a singleton offscreen QApplication for the test session."""
+    from qtpy.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication([])
+    yield app
+
+
+@pytest.fixture(autouse=True)
+def _init():
+    """Config + localization must be live for the widget to build its labels."""
+    _config.initcfg()
+    lang.init()
+    yield
+
+
+def test_hide_persists_current_geometry(qapp):
+    frame = MeasureFrame()
+    try:
+        frame.show()
+        frame.setFixedSize(321, 321)
+        frame.move(10, 20)
+        expected = frame.get_dimensions()
+        # A sentinel clearly different from whatever get_dimensions() reads,
+        # so the assertion below can only pass if hideEvent actually ran.
+        setcfg("dimensions.measureframe", "0,0,1")
+
+        frame.hide()
+
+        assert getcfg("dimensions.measureframe") == expected
+    finally:
+        frame.deleteLater()
+
+
+def test_show_reapplies_stored_dimensions_every_time(qapp):
+    frame = MeasureFrame()
+    try:
+        setcfg("dimensions.measureframe", "0.5,0.5,1.0")
+        frame.show()
+        first_size = frame.size()
+        frame.hide()
+
+        # Something else (e.g. a previous show/hide cycle) changes config
+        # while the frame is hidden ...
+        setcfg("dimensions.measureframe", "0.5,0.5,2.0")
+
+        # ... showing again must pick up the new geometry, not just keep
+        # whatever the window happened to have from its first show.
+        frame.show()
+
+        assert frame.size() != first_size
+    finally:
+        frame.deleteLater()

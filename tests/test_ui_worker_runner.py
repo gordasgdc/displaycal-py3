@@ -699,3 +699,123 @@ def test_adjustment_controller_ignores_second_run_while_running(qapp):
     finally:
         block.set()
         assert _spin_until(qapp, lambda: ctrl.is_running is False)
+
+
+def test_adjustment_controller_swaps_to_progress_dialog_after_delay(qapp):
+    # Once dispcal moves past keyboard interaction into unattended
+    # measurement (a real percentage, a few seconds in, not mid-measurement),
+    # the adjustment window must hide and a plain progress dialog take over --
+    # this is the Qt equivalent of wx's Worker.swap_progress_wnds, which never
+    # fires here because it depends on a running wx event loop.
+    window = _FakeAdjustmentWindow()
+    block = Event()
+    worker = FakeCalibrateWorker(block=block)
+    worker.recent = _FakeBuffer()
+    worker.lastmsg = _FakeBuffer()
+    ctrl = wr.AdjustmentController(worker, window)
+    try:
+        ctrl.run(remove=True)
+        assert _spin_until(qapp, lambda: window.parsed)
+        ctrl._start_time -= 10
+        worker.lastmsg.set("Patch 26 of 100")
+        ctrl._on_poll()
+        assert ctrl._swapped is True
+        assert window.shown is False
+        assert isinstance(worker.progress_wnd, wr.ProgressAdapter)
+        assert ctrl._progress_dialog.isVisible() is True
+    finally:
+        block.set()
+        assert _spin_until(qapp, lambda: ctrl.is_running is False)
+        if ctrl._progress_dialog is not None:
+            ctrl._progress_dialog.deleteLater()
+
+
+def test_adjustment_controller_does_not_swap_before_delay(qapp):
+    window = _FakeAdjustmentWindow()
+    block = Event()
+    worker = FakeCalibrateWorker(block=block)
+    worker.recent = _FakeBuffer()
+    worker.lastmsg = _FakeBuffer()
+    ctrl = wr.AdjustmentController(worker, window)
+    try:
+        ctrl.run(remove=True)
+        worker.lastmsg.set("Patch 26 of 100")
+        ctrl._on_poll()  # too soon after start -- must not swap yet
+        assert ctrl._swapped is False
+        assert window.shown is True
+    finally:
+        block.set()
+        assert _spin_until(qapp, lambda: ctrl.is_running is False)
+
+
+def test_adjustment_controller_does_not_swap_while_measuring(qapp):
+    window = _FakeAdjustmentWindow()
+    window.is_measuring = True
+    block = Event()
+    worker = FakeCalibrateWorker(block=block)
+    worker.recent = _FakeBuffer()
+    worker.lastmsg = _FakeBuffer()
+    ctrl = wr.AdjustmentController(worker, window)
+    try:
+        ctrl.run(remove=True)
+        ctrl._start_time -= 10
+        worker.lastmsg.set("Patch 26 of 100")
+        ctrl._on_poll()
+        assert ctrl._swapped is False
+        assert window.shown is True
+    finally:
+        block.set()
+        assert _spin_until(qapp, lambda: ctrl.is_running is False)
+
+
+def test_adjustment_controller_cancel_after_swap_aborts_worker(qapp):
+    window = _FakeAdjustmentWindow()
+    block = Event()
+    worker = FakeCalibrateWorker(block=block)
+    worker.recent = _FakeBuffer()
+    worker.lastmsg = _FakeBuffer()
+    ctrl = wr.AdjustmentController(worker, window)
+    try:
+        ctrl.run(remove=True)
+        ctrl._start_time -= 10
+        worker.lastmsg.set("Patch 26 of 100")
+        ctrl._on_poll()
+        assert ctrl._progress_dialog is not None
+
+        ctrl._progress_dialog.cancelled.emit()
+
+        assert worker.abort_calls == [False]
+        assert ctrl._adapter.keepGoing is False
+    finally:
+        block.set()
+        assert _spin_until(qapp, lambda: ctrl.is_running is False)
+        if ctrl._progress_dialog is not None:
+            ctrl._progress_dialog.deleteLater()
+
+
+def test_adjustment_controller_finish_after_swap_hides_progress_dialog(qapp):
+    window = _FakeAdjustmentWindow()
+    block = Event()
+    worker = FakeCalibrateWorker(result=True, block=block)
+    worker.recent = _FakeBuffer()
+    worker.lastmsg = _FakeBuffer()
+    ctrl = wr.AdjustmentController(worker, window)
+    got = []
+    ctrl.run(got.append, remove=True)
+    ctrl._start_time -= 10
+    worker.lastmsg.set("Patch 26 of 100")
+    ctrl._on_poll()
+    assert ctrl._swapped is True
+    dialog = ctrl._progress_dialog
+    assert dialog.isVisible() is True
+
+    block.set()
+    # Wait on the consumer callback (fired at the end of _on_finished), not
+    # just is_running, so the dialog-hide assertion below can't race ahead of
+    # _on_finished actually having run.
+    assert _spin_until(qapp, lambda: got)
+
+    assert dialog.isVisible() is False
+    assert ctrl._swapped is False
+    assert ctrl._adapter is None
+    dialog.deleteLater()

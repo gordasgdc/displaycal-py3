@@ -60,7 +60,8 @@ from DisplayCAL.config import (
 )
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.ui.application import Application
-from DisplayCAL.ui.assets import get_theme_pixmap
+from DisplayCAL.ui.assets import get_themed_pixmap
+from DisplayCAL.ui.theme import is_dark
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.util_list import strlist
 from DisplayCAL.worker import Worker
@@ -71,7 +72,14 @@ except ImportError:
     real_display_size_mm = None
 
 if TYPE_CHECKING:
-    from qtpy.QtGui import QCloseEvent, QMoveEvent, QPaintEvent, QScreen, QShowEvent
+    from qtpy.QtGui import (
+        QCloseEvent,
+        QHideEvent,
+        QMoveEvent,
+        QPaintEvent,
+        QScreen,
+        QShowEvent,
+    )
 
 
 # -- toolkit-neutral geometry maths (extracted from wx place_n_zoom /
@@ -256,18 +264,23 @@ def _dither_rgb_image(
 # -- widgets ------------------------------------------------------------------
 
 
-def _icon_button(name: str, tooltip: str) -> QToolButton:
+def _icon_button(name: str, tooltip: str, *, dark: bool) -> QToolButton:
     """Return a small flat tool button with a themed 16px icon.
 
     Args:
         name (str): Themed icon base name.
         tooltip (str): The button tooltip.
+        dark (bool): Whether the app is in its dark scheme -- the zoom/center
+            glyphs are plain gray monochrome icons designed for a light
+            background (like wx's), so without recoloring them the same way
+            :meth:`MainWindow._pixmap` does for the rest of the app, they are
+            nearly invisible against a dark window.
 
     Returns:
         QToolButton: The configured button.
     """
     button = QToolButton()
-    pixmap = get_theme_pixmap(16, name)
+    pixmap = get_themed_pixmap(16, name, dark)
     if not pixmap.isNull():
         button.setIcon(QIcon(pixmap))
     button.setAutoRaise(True)
@@ -364,7 +377,6 @@ class MeasureFrame(BaseWindow):
         self.display_size_mm: dict[tuple[int, int, int, int], list[float]] = {}
         self.default_size = float(DEFAULTS.get("size.measureframe", 300))
         self._current_geometry: tuple[int, int, int, int] | None = None
-        self._placed = False
 
         self._panel = _MeasurePanel(self)
         self._build_controls()
@@ -375,6 +387,7 @@ class MeasureFrame(BaseWindow):
     def _build_controls(self) -> None:
         """Build the zoom / centre / measure controls on the panel."""
         wayland = os.getenv("XDG_SESSION_TYPE") == "wayland"
+        dark = is_dark(self)
 
         root = QVBoxLayout(self._panel)
         root.setContentsMargins(0, 0, 0, 0)
@@ -382,19 +395,19 @@ class MeasureFrame(BaseWindow):
         # Row 1 (top): zoom buttons.
         zoom_row = QHBoxLayout()
         self.zoommax_button = _icon_button(
-            "zoom-best-fit", lang.getstr("measureframe.zoommax")
+            "zoom-best-fit", lang.getstr("measureframe.zoommax"), dark=dark
         )
         self.zoommax_button.clicked.connect(self.zoommax_handler)
         self.zoomin_button = _icon_button(
-            "zoom-in", lang.getstr("measureframe.zoomin")
+            "zoom-in", lang.getstr("measureframe.zoomin"), dark=dark
         )
         self.zoomin_button.clicked.connect(self.zoomin_handler)
         self.zoomnormal_button = _icon_button(
-            "zoom-original", lang.getstr("measureframe.zoomnormal")
+            "zoom-original", lang.getstr("measureframe.zoomnormal"), dark=dark
         )
         self.zoomnormal_button.clicked.connect(self.zoomnormal_handler)
         self.zoomout_button = _icon_button(
-            "zoom-out", lang.getstr("measureframe.zoomout")
+            "zoom-out", lang.getstr("measureframe.zoomout"), dark=dark
         )
         self.zoomout_button.clicked.connect(self.zoomout_handler)
         zoom_row.addStretch(1)
@@ -422,7 +435,7 @@ class MeasureFrame(BaseWindow):
             self.center_widget.setWordWrap(True)
         else:
             self.center_widget = _icon_button(
-                "window-center", lang.getstr("measureframe.center")
+                "window-center", lang.getstr("measureframe.center"), dark=dark
             )
             self.center_widget.clicked.connect(self.center_handler)
         center_row.addWidget(self.center_widget)
@@ -760,7 +773,15 @@ class MeasureFrame(BaseWindow):
     # -- Qt lifecycle ------------------------------------------------------
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 (Qt override)
-        """Show the controls and apply the stored geometry on first show.
+        """Show the controls and apply the stored geometry.
+
+        Mirrors wx's ``MeasureFrame.Show(True)``: since the main window keeps
+        a single frame instance alive across a whole session (hiding rather
+        than closing it between measurement steps, see
+        ``MainWindow._present_measureframe``), geometry is re-applied on
+        *every* show, not just the first -- otherwise a size/position picked
+        up from config after this frame was last hidden (e.g. by
+        :meth:`hideEvent`) would never actually reach the window.
 
         Args:
             event (QShowEvent): The Qt show event.
@@ -771,15 +792,10 @@ class MeasureFrame(BaseWindow):
             self.darken_cb.setChecked(
                 bool(int(getcfg("measure.darken_background")))
             )
-        if not self._placed:
-            self._placed = True
-            self.place_n_zoom(
-                *(
-                    float(v)
-                    for v in getcfg("dimensions.measureframe").split(",")
-                )
-            )
-            _, self._current_geometry, _ = self._get_display()
+        self.place_n_zoom(
+            *(float(v) for v in getcfg("dimensions.measureframe").split(","))
+        )
+        _, self._current_geometry, _ = self._get_display()
 
     def moveEvent(self, event: QMoveEvent) -> None:  # noqa: N802 (Qt override)
         """Track the display the window moves to and update ``display.number``.
@@ -799,6 +815,29 @@ class MeasureFrame(BaseWindow):
         display_no = get_argyll_display_number(geometry)
         if display_no is not None:
             setcfg("display.number", display_no + 1)
+
+    def hideEvent(self, event: QHideEvent) -> None:  # noqa: N802 (Qt override)
+        """Persist the geometry whenever the frame is hidden.
+
+        The main window keeps this frame alive for the whole session and
+        hides it (rather than closing it) between the interactive-placement
+        step and the actual measurement -- ``MainWindow.call_pending_function``
+        calls ``self.measureframe.hide()`` directly. Without saving here (wx's
+        ``MeasureFrame.Show(False)`` does the equivalent
+        ``setcfg("dimensions.measureframe", self.get_dimensions())``), any
+        position/size the user picked by dragging or resizing (as opposed to
+        the zoom buttons, which already call :meth:`place_n_zoom` ->
+        ``setcfg``) would be discarded and ``dispread`` would draw its patch
+        wherever the frame was last placed instead of where the user left it.
+
+        Args:
+            event (QHideEvent): The Qt hide event.
+        """
+        # Guard against saving a bogus (never-placed) geometry: _current_geometry
+        # is only set once showEvent has run place_n_zoom() at least once.
+        if self._current_geometry is not None:
+            self.save_dimensions()
+        super().hideEvent(event)
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 (Qt override)
         """Persist the geometry before the base class handles closing.

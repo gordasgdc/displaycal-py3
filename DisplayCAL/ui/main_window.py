@@ -2394,10 +2394,6 @@ class MainWindow(BaseWindow):
             text_label.setWordWrap(True)
             text_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
             grid.addWidget(text_label, row_index, 1)
-        # Keep icon/text rows packed at the top; push leftover vertical
-        # space (from the ``outer.addWidget(panel, 1)`` stretch factor at
-        # each tab's call site) into a trailing spacer row instead.
-        grid.setRowStretch(len(rows), 1)
         outer.addLayout(grid)
         if extra is not None:
             extra_row = QHBoxLayout()
@@ -2405,6 +2401,12 @@ class MainWindow(BaseWindow):
             extra_row.addWidget(extra)
             extra_row.addStretch(1)
             outer.addLayout(extra_row)
+        # Keep icon/text rows (and the optional extra button row) packed at
+        # the top; push leftover vertical space (from the
+        # ``outer.addWidget(panel, 1)`` stretch factor at each tab's call
+        # site) below everything instead of between the text and the
+        # button.
+        outer.addStretch(1)
         return panel
 
     def _build_display_instrument_tab(self) -> QWidget:
