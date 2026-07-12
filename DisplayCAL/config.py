@@ -11,6 +11,8 @@ import os
 import re
 import string
 import sys
+import tempfile
+import time
 from decimal import Decimal
 from enum import IntEnum
 from typing import TYPE_CHECKING, Any
@@ -52,6 +54,7 @@ from DisplayCAL.safe_print import (  # noqa: F401
 )
 from DisplayCAL.util_io import StringIOu as StringIO
 from DisplayCAL.util_os import (
+    FileLock,
     expanduseru,
     getenvu,
     is_superuser,
@@ -2627,6 +2630,11 @@ def makecfgdir(which: None | str = None, worker: None | Worker = None) -> bool:
 
 CFGINITED = {}
 
+# A legitimate config file is a few KB at most. Anything past this is
+# treated as corrupted rather than risking an out-of-memory parse (issue
+# #828).
+MAX_CFG_FILE_SIZE = 10 * 1024 * 1024
+
 
 def initcfg(
     module: None | str = None,
@@ -2730,9 +2738,26 @@ def fetch_config_files(
             if not os.path.isfile(cfgfile):
                 continue
             try:
-                mtime = os.stat(cfgfile).st_mtime
+                stat = os.stat(cfgfile)
+                mtime = stat.st_mtime
             except OSError as exception:
                 print(f"Warning - os.stat('{cfgfile}') failed: {exception}")
+                break
+            if stat.st_size > MAX_CFG_FILE_SIZE:
+                # A config file this large can only be the result of
+                # corruption -- some option value grew unbounded, e.g. by
+                # repeated appends of mis-decoded text (issue #828).
+                # Parsing it would blow up memory and likely crash, so
+                # quarantine it instead of loading it.
+                quarantined = f"{cfgfile}.corrupt-{int(time.time())}"
+                print(
+                    f"Warning - '{cfgfile}' is {stat.st_size} bytes, "
+                    f"which looks corrupted. Moving it to '{quarantined}' "
+                    "and falling back to defaults."
+                )
+                with contextlib.suppress(OSError):
+                    os.replace(cfgfile, quarantined)
+                break
             last_checked = CFGINITED.get(cfgfile)
             if force_load or mtime != last_checked:
                 CFGINITED[cfgfile] = mtime
@@ -3217,6 +3242,7 @@ def writecfg(
     if which == "user":
         # user config - stores everything and overrides system-wide config
         cfgfilename = os.path.join(CONFIG_HOME, f"{cfgbasename}.ini")
+        lockfilename = cfgfilename + ".lock"
         try:
             io = StringIO()
             cfg.write(io)
@@ -3233,8 +3259,20 @@ def writecfg(
                 optionlines = lines[1:]
             # Sorting works as long as config has only one section
             lines = lines[:1] + sorted(optionlines)
-            with open(cfgfilename, "wb") as cfgfile:
-                cfgfile.write((os.linesep.join(lines) + os.linesep).encode())
+            data = (os.linesep.join(lines) + os.linesep).encode()
+            # Take an exclusive lock and write to a temp file, then
+            # atomically replace the real config file. Without this, two
+            # processes writing the config at the same time (e.g. the
+            # profile loader and the main app running concurrently) could
+            # interleave their writes and corrupt the file.
+            with open(lockfilename, "a+b") as lockfile:
+                with FileLock(lockfile, exclusive=True, blocking=True):
+                    fd, tmpfilename = tempfile.mkstemp(
+                        dir=CONFIG_HOME, prefix=f"{cfgbasename}.", suffix=".tmp"
+                    )
+                    with os.fdopen(fd, "wb") as cfgfile:
+                        cfgfile.write(data)
+                    os.replace(tmpfilename, cfgfilename)
         except Exception as exception:
             print(
                 "Warning - could not write user configuration file "
