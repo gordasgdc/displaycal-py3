@@ -22,7 +22,7 @@ jobs:
     env:
       DISPLAY: :0
       DEBIAN_FRONTEND: noninteractive
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
@@ -96,7 +96,7 @@ jobs:
       run: |
         py_version="${{ matrix.python-version }}"
         py_version="${py_version//./}"
-        uv pip install --system "https://extras.wxpython.org/wxPython4/extras/linux/gtk3/ubuntu-22.04/wxpython-${{ env.WX_VERSION }}-cp${py_version}-cp${py_version}-linux_x86_64.whl"
+        uv pip install --system "https://extras.wxpython.org/wxPython4/extras/linux/gtk3/ubuntu-24.04/wxpython-${{ env.WX_VERSION }}-cp${py_version}-cp${py_version}-linux_x86_64.whl"
 
     - name: Install Python dependencies
       run: |
