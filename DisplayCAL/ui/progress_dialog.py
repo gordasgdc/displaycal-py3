@@ -1,13 +1,14 @@
 """Native Qt progress dialog for long-running worker operations.
 
-Qt successor to the essential, worker-facing behaviour of
-:class:`DisplayCAL.wx_windows.ProgressDialog` (see
+Qt successor to :class:`DisplayCAL.wx_windows.ProgressDialog` (see
 ``DisplayCAL/ui/MAINFRAME_PORT_PLAN.md``, Stage 5 -- the worker execution
-layer). The wx dialog is ~840 lines because it also carries the *fancy*
-presentation: an animated throbber (``AnimatedBitmap`` / ``get_bitmaps``),
-looping sound effects (``audio.Sound``), a gradient ``BetterPyGauge`` and
-Windows taskbar-progress integration. None of that is load-bearing, so this port
-drops it, matching the simplifications the other ported tools made.
+layer). It reproduces the wx dialog's "fancy" presentation -- the dark
+theme, the animated shutter/patch throbber (:mod:`.progress_widgets`,
+porting wx ``AnimatedBitmap`` / ``get_bitmaps``) and the thin
+colour-cycling gauge (porting wx ``BetterPyGauge``) -- since those are the
+visible chrome users compare against the wx dialog. Looping sound effects
+(``audio.Sound``) and Windows taskbar-progress integration are not visual
+and remain out of scope.
 
 What is preserved is the contract the flow actually depends on:
 
@@ -30,12 +31,13 @@ from __future__ import annotations
 from time import gmtime, strftime, time
 from typing import TYPE_CHECKING
 
-from qtpy.QtCore import Qt, QTimer, Signal
+from qtpy.QtCore import QSize, Qt, QTimer, Signal
+from qtpy.QtGui import QFontMetrics, QIcon
 from qtpy.QtWidgets import (
     QDialog,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
-    QProgressBar,
     QPushButton,
     QVBoxLayout,
 )
@@ -43,6 +45,11 @@ from qtpy.QtWidgets import (
 from DisplayCAL import config
 from DisplayCAL import localization as lang
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui.progress_widgets import (
+    AnimatedBitmap,
+    GradientGauge,
+    get_progress_bitmaps,
+)
 
 if TYPE_CHECKING:
     from qtpy.QtGui import QCloseEvent, QMoveEvent
@@ -51,6 +58,43 @@ if TYPE_CHECKING:
 # Placeholder shown for elapsed / remaining time before an estimate exists,
 # matching the wx dialog's ``REMAINING_TIME_LABEL``.
 TIME_UNKNOWN = "--:--:--"
+
+# Dark theme, lifted from DisplayCAL.wx_windows.ProgressDialog.__init__
+# (self.BackgroundColour = "#141414" / self.ForegroundColour = "#FFFFFF").
+_STYLESHEET = """
+QDialog#progressdialog {
+    background-color: #141414;
+}
+QDialog#progressdialog QLabel {
+    color: #FFFFFF;
+    background: transparent;
+}
+QDialog#progressdialog QPushButton {
+    color: #FFFFFF;
+    background-color: #222222;
+    border: none;
+    border-radius: 3px;
+    padding: 5px 14px;
+}
+QDialog#progressdialog QPushButton:hover {
+    background-color: #333333;
+}
+QDialog#progressdialog QPushButton:pressed {
+    background-color: #111111;
+}
+QDialog#progressdialog QPushButton:disabled {
+    color: #777777;
+    background-color: #1a1a1a;
+}
+QDialog#progressdialog QPushButton#soundButton {
+    padding: 0px;
+}
+"""
+
+# Fade timing for switching between animation/sound "progress types", keyed
+# by the type being faded *out* of. Matches
+# DisplayCAL.wx_windows.ProgressDialog.set_progress_type.
+_FADE_DELAY_MS = {0: 4000, 1: 500, 2: 2000}
 
 
 # --- pure time maths -------------------------------------------------------
@@ -130,6 +174,7 @@ class ProgressDialog(QDialog):
         self.setWindowTitle(title)
         # Keep the dialog non-modal; the driver disables the owner window.
         self.setModal(False)
+        self.setStyleSheet(_STYLESHEET)
 
         self._maximum = maximum
         self._progress = 0.0
@@ -141,38 +186,60 @@ class ProgressDialog(QDialog):
         # When determinate progress first advanced, for the remaining estimate.
         self._progress_start_time: float | None = None
         self._show_remaining_time = show_remaining_time
+        # 0 = processing, 1 = measuring, 2 = generating test patches; drives
+        # which throbber animation plays. Matches wx ``progress_type``.
+        self.progress_type = 0
 
-        layout = QVBoxLayout(self)
+        outer = QHBoxLayout(self)
+        self.animbmp = AnimatedBitmap(self)
+        outer.addWidget(self.animbmp, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        layout = QVBoxLayout()
+        outer.addLayout(layout, 1)
 
         self._message = QLabel(message or lang.getstr("please_wait"))
         self._message.setWordWrap(True)
-        self._message.setMinimumWidth(400)
-        self._message.setMinimumHeight(64)
         self._message.setAlignment(
             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
         )
+        # Reserve space for 4 lines of ~80 characters, matching wx's own
+        # sizing trick (``self.msg.Label = "\n".join(["E" * 80] * 4)``) so
+        # the dialog doesn't start out narrower than the wx one.
+        metrics = QFontMetrics(self._message.font())
+        self._message.setMinimumSize(
+            metrics.horizontalAdvance("E" * 80), metrics.height() * 4
+        )
         layout.addWidget(self._message)
 
-        self._gauge = QProgressBar()
-        self._gauge.setTextVisible(False)
-        self._gauge.setRange(0, 0)  # indeterminate until set_progress()
+        self._gauge = GradientGauge()
         layout.addWidget(self._gauge)
 
-        time_row = QHBoxLayout()
-        self._elapsed_label = QLabel(f"{lang.getstr('elapsed_time')} {TIME_UNKNOWN}")
-        time_row.addWidget(self._elapsed_label)
+        # Two label+value rows in a grid, matching the wx dialog's
+        # ``wx.FlexGridSizer(0, 2, 0, margin)`` (stacked, not side by side).
+        time_grid = QGridLayout()
+        time_grid.setColumnStretch(1, 1)
+        time_grid.addWidget(QLabel(lang.getstr("elapsed_time")), 0, 0)
+        self._elapsed_label = QLabel(TIME_UNKNOWN)
+        time_grid.addWidget(self._elapsed_label, 0, 1, Qt.AlignmentFlag.AlignLeft)
         if show_remaining_time:
-            self._remaining_label = QLabel(
-                f"{lang.getstr('remaining_time')} {TIME_UNKNOWN}"
+            time_grid.addWidget(QLabel(lang.getstr("remaining_time")), 1, 0)
+            self._remaining_label = QLabel(TIME_UNKNOWN)
+            time_grid.addWidget(
+                self._remaining_label, 1, 1, Qt.AlignmentFlag.AlignLeft
             )
-            time_row.addStretch(1)
-            time_row.addWidget(self._remaining_label)
         else:
             self._remaining_label = None
-        layout.addLayout(time_row)
+        layout.addLayout(time_grid)
 
         button_row = QHBoxLayout()
         button_row.addStretch(1)
+        self.sound_on_off_btn = QPushButton()
+        self.sound_on_off_btn.setObjectName("soundButton")
+        self.sound_on_off_btn.setIcon(self._sound_icon())
+        self.sound_on_off_btn.setIconSize(QSize(16, 16))
+        self.sound_on_off_btn.setFixedSize(28, 28)
+        self.sound_on_off_btn.clicked.connect(self._on_sound_toggle)
+        button_row.addWidget(self.sound_on_off_btn)
         self.pause_button = QPushButton(lang.getstr("pause"))
         self.pause_button.setVisible(pauseable)
         self.pause_button.clicked.connect(self._on_pause_clicked)
@@ -211,13 +278,9 @@ class ProgressDialog(QDialog):
         self._progress_start_time = None
         self._start_time = time()
         self._gauge.setRange(0, 0)
-        self._elapsed_label.setText(
-            f"{lang.getstr('elapsed_time')} {format_elapsed(0)}"
-        )
+        self._elapsed_label.setText(format_elapsed(0))
         if self._remaining_label is not None:
-            self._remaining_label.setText(
-                f"{lang.getstr('remaining_time')} {TIME_UNKNOWN}"
-            )
+            self._remaining_label.setText(TIME_UNKNOWN)
 
     def set_message(self, message: str) -> None:
         """Set the status message.
@@ -243,9 +306,7 @@ class ProgressDialog(QDialog):
             self._indeterminate = True
             self._gauge.setRange(0, 0)
             if self._remaining_label is not None:
-                self._remaining_label.setText(
-                    f"{lang.getstr('remaining_time')} {TIME_UNKNOWN}"
-                )
+                self._remaining_label.setText(TIME_UNKNOWN)
         return self._keep_going
 
     def set_progress(self, value: float, message: str | None = None) -> bool:
@@ -314,23 +375,113 @@ class ProgressDialog(QDialog):
         self.set_message(lang.getstr("please_wait"))
         self.cancelled.emit()
 
+    # -- sound ----------------------------------------------------------------
+
+    def _sound_icon(self) -> QIcon:
+        """The speaker icon matching the current ``measurement.play_sound`` state."""
+        name = (
+            "sound_volume_full"
+            if config.getcfg("measurement.play_sound")
+            else "sound_off"
+        )
+        path = config.get_data_path(f"theme/icons/16x16/{name}.png")
+        return QIcon(path) if path else QIcon()
+
+    def _on_sound_toggle(self) -> None:
+        """Toggle ``measurement.play_sound``, mirroring wx ``play_sound_handler``.
+
+        This only flips the shared config flag and the button icon: the
+        actual per-patch ``commit_sound`` / ``measurement_sound`` playback
+        lives in the toolkit-neutral ``Worker.audio_visual_feedback``
+        (``DisplayCAL/worker.py``), which reads this same config value fresh
+        on every patch read.
+        """
+        config.setcfg(
+            "measurement.play_sound",
+            int(not config.getcfg("measurement.play_sound")),
+        )
+        self.sound_on_off_btn.setIcon(self._sound_icon())
+
     # -- clock --------------------------------------------------------------
 
     def start_clock(self) -> None:
-        """Start the one-second elapsed / remaining clock."""
+        """Start the one-second elapsed / remaining clock and the throbber."""
         if not self._clock.isActive():
             self._clock.start()
+        self.anim_fadein()
 
     def stop_clock(self) -> None:
-        """Stop the elapsed / remaining clock."""
+        """Stop the elapsed / remaining clock and the throbber."""
         self._clock.stop()
+        self.animbmp.stop()
+
+    # -- throbber animation ---------------------------------------------------
+
+    def anim_fadein(self) -> None:
+        """(Re)start the throbber animation for the current progress type.
+
+        Ports wx ``ProgressDialog.anim_fadein``: each progress type loops a
+        different frame range of its animation (see :mod:`.progress_widgets`).
+        """
+        bitmaps = get_progress_bitmaps(self.progress_type)
+        if self.progress_type == 1:
+            frame_range, loop = (0, 9), False  # Measuring: shutter open/close.
+        elif self.progress_type == 2:
+            frame_range, loop = (27, 36), True  # Generating test patches.
+        else:
+            frame_range, loop = (60, 68), True  # Processing (no assets; blank).
+        self.animbmp.set_bitmaps(bitmaps, range_=frame_range, loop=loop)
+        if self.progress_type == 1:
+            self.animbmp.frame = 4
+        QTimer.singleShot(50, self._play_animbmp)
+
+    def _play_animbmp(self) -> None:
+        """Start playback if the dialog is still shown (wx ``CallLater`` guard)."""
+        if self.isVisible():
+            self.animbmp.play(24)
+
+    def anim_fadeout(self) -> None:
+        """Let the throbber play out to its last frame instead of looping."""
+        self.animbmp.loop = False
+        self.animbmp.range = (self.animbmp.range[0], -1)
+
+    def on_patch_read(self) -> None:
+        """Replay the shutter's open/close blink for a newly read patch.
+
+        Ports wx's ``Worker.audio_visual_feedback`` resetting
+        ``progress_wnd.animbmp.frame = 0`` on every "Patch N of M" line: the
+        throbber's 24fps timer keeps running for the whole "measuring" phase
+        (``anim_fadein`` never loops it, but never stops it either), so
+        resetting the frame index here is what makes it blink once per patch
+        instead of only once when measuring starts. See
+        :class:`DisplayCAL.ui.worker_runner.ProgressAdapter` for how this
+        reaches the GUI thread from the worker thread.
+        """
+        self.animbmp.frame = 0
+
+    def set_progress_type(self, progress_type: int) -> None:
+        """Switch the throbber animation (and eventually sound) type.
+
+        Args:
+            progress_type (int): 0 (processing), 1 (measuring) or 2
+                (generating test patches).
+        """
+        if progress_type == self.progress_type:
+            return
+        delay = _FADE_DELAY_MS.get(self.progress_type, 2000)
+        self.anim_fadeout()
+        self.progress_type = progress_type
+
+        def _maybe_fade_in() -> None:
+            if self.isVisible() and self.progress_type == progress_type:
+                self.anim_fadein()
+
+        QTimer.singleShot(delay, _maybe_fade_in)
 
     def _update_times(self) -> None:
         """Refresh the elapsed and estimated-remaining read-outs."""
         elapsed = time() - self._start_time
-        self._elapsed_label.setText(
-            f"{lang.getstr('elapsed_time')} {format_elapsed(elapsed)}"
-        )
+        self._elapsed_label.setText(format_elapsed(elapsed))
         if self._remaining_label is None or self._indeterminate or self._paused:
             return
         if self._progress_start_time is None:
@@ -339,9 +490,7 @@ class ProgressDialog(QDialog):
             time() - self._progress_start_time, self._progress, self._maximum
         )
         if remaining is not None:
-            self._remaining_label.setText(
-                f"{lang.getstr('remaining_time')} {format_elapsed(remaining)}"
-            )
+            self._remaining_label.setText(format_elapsed(remaining))
 
     # -- geometry -----------------------------------------------------------
 

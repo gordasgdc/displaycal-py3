@@ -122,6 +122,11 @@ class FakeWorker:
     def abort_subprocess(self, confirm=False):
         self.abort_calls.append(confirm)
 
+    def pause_continue(self):
+        # Stand-in for Worker.pause_continue: the real one is a no-op unless
+        # pauseable_now is set, which these tests never reach.
+        pass
+
     def _init_run_state(self, **kwargs):
         # Stand-in for Worker._init_run_state: record what a real worker
         # would set so tests can assert on it, without pulling in the real
@@ -548,6 +553,10 @@ class FakeCalibrateWorker:
         self.abort_calls.append(confirm)
         if self._block is not None:
             self._block.set()
+
+    def pause_continue(self):
+        # Stand-in for Worker.pause_continue (see FakeWorker's copy).
+        pass
 
     def log(self, *args, **kwargs):
         pass

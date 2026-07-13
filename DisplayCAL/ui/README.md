@@ -1,6 +1,6 @@
 # DisplayCAL Qt UI (`DisplayCAL.ui`)
 
-This package is the **Qt** user interface for DisplayCAL 4.0. It is the
+This package is the **Qt** user interface for DisplayCAL. It is the
 successor to the legacy `wx_*` modules, which are being phased out gradually.
 
 ## Coexistence strategy

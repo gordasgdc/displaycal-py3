@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Callable
 from qtpy.QtCore import QObject, QThread, QTimer, Signal
 
 from DisplayCAL import localization as lang
+from DisplayCAL.argyll import get_argyll_utilname
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.ui.progress_dialog import ProgressDialog
 
@@ -48,6 +49,30 @@ _ITERATION_RE = re.compile(r"It (\d+):")
 
 # targen refines over at most this many iterations.
 _TARGEN_ITERATIONS = 20.0
+
+
+def _resolve_progress_type(worker: Worker, pauseable: bool) -> int:  # noqa: FBT001
+    """Pick the throbber animation type, mirroring wx ``Worker.set_progress_type``.
+
+    Args:
+        worker (Worker): The worker whose current command / interactive state
+            decides the type.
+        pauseable (bool): Whether the run is pauseable (implies a measurement,
+            same shortcut wx takes).
+
+    Returns:
+        int: 0 (processing), 1 (measuring) or 2 (generating test patches),
+        forwarded to
+        :meth:`DisplayCAL.ui.progress_dialog.ProgressDialog.set_progress_type`.
+    """
+    if pauseable or getattr(worker, "interactive_frame", "") in (
+        "ambient",
+        "luminance",
+    ):
+        return 1
+    if getattr(worker, "cmdname", None) == get_argyll_utilname("targen"):
+        return 2
+    return 0
 
 
 def parse_progress(msg: str, lastmsg: str) -> tuple[float | None, str]:
@@ -291,6 +316,32 @@ class _ProducerThread(QThread):
         self.finished_with_result.emit(result)
 
 
+class _AnimBmpProxy:
+    """Thread-safe stand-in for ``ProgressDialog.animbmp.frame`` assignment.
+
+    ``Worker.audio_visual_feedback`` (``DisplayCAL/worker.py``) is
+    toolkit-neutral and, when there is no wx ``App`` running, is called
+    directly on the measurement thread (see ``FilteredStream._write``). On
+    every "Patch N of M" line it does ``self.progress_wnd.animbmp.frame = 0``
+    to replay the shutter's open/close blink -- but a real ``AnimatedBitmap``
+    is a ``QWidget`` and can't be touched off the GUI thread. This proxy
+    stands in for ``progress_wnd.animbmp`` and re-emits that assignment as a
+    queued signal instead.
+    """
+
+    def __init__(self, adapter: ProgressAdapter) -> None:
+        self._adapter = adapter
+
+    @property
+    def frame(self) -> int:
+        """Unused by the worker (write-only from its side); always 0."""
+        return 0
+
+    @frame.setter
+    def frame(self, value: int) -> None:
+        self._adapter._patch_read.emit(value)  # noqa: SLF001 - cooperating class
+
+
 class ProgressAdapter(QObject):
     """Thread-safe stand-in for the wx ``progress_wnd`` the worker drives.
 
@@ -300,6 +351,12 @@ class ProgressAdapter(QObject):
     synchronously from plain flags (safe to read from any thread), and marshals
     the actual GUI update onto the GUI thread through queued signals. The
     adapter must be created on the GUI thread so its signal deliveries queue.
+
+    It also duck-types the ``animbmp`` / ``sound_on_off_btn`` attributes
+    ``Worker.audio_visual_feedback`` probes via ``hasattr`` to decide whether
+    to replay the shutter blink and play the (toolkit-neutral)
+    ``commit_sound`` / ``measurement_sound`` on each patch read -- without
+    them, that method silently no-ops for the Qt dialog.
 
     Only the surface the non-interactive measurement path touches is
     implemented; the mid-measurement instrument prompts (``self.dlg = ...``) are
@@ -315,6 +372,7 @@ class ProgressAdapter(QObject):
     _title = Signal(str)
     _confirm_requested = Signal(object)
     _confirm3_requested = Signal(object)
+    _patch_read = Signal(int)
 
     def __init__(self, dialog: ProgressDialog, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -326,6 +384,10 @@ class ProgressAdapter(QObject):
         self.original_msg = ""
         self.progress_type = 0
         self.dlg = None
+        # Duck-typed for Worker.audio_visual_feedback's hasattr() checks; see
+        # _AnimBmpProxy and _on_patch_read.
+        self.animbmp = _AnimBmpProxy(self)
+        self.sound_on_off_btn = True
         self._message.connect(self._apply_message)
         self._progress.connect(self._apply_progress)
         self._title.connect(self._apply_title)
@@ -333,6 +395,7 @@ class ProgressAdapter(QObject):
         # GUI thread; the worker thread blocks until the request is answered.
         self._confirm_requested.connect(self._on_confirm_requested)
         self._confirm3_requested.connect(self._on_confirm3_requested)
+        self._patch_read.connect(self._on_patch_read)
 
     # -- wx progress_wnd interface (may run on the worker thread) -----------
 
@@ -543,6 +606,10 @@ class ProgressAdapter(QObject):
         """Apply a title change on the GUI thread."""
         self._dialog.setWindowTitle(title)
 
+    def _on_patch_read(self, value: int) -> None:  # noqa: ARG002 - wx sets 0 only
+        """Replay the shutter blink on the GUI thread (see _AnimBmpProxy)."""
+        self._dialog.on_patch_read()
+
 
 class WorkerRunController(QObject):
     """Drive a :class:`DisplayCAL.worker.Worker` operation under Qt.
@@ -573,6 +640,7 @@ class WorkerRunController(QObject):
         self._adapter: ProgressAdapter | None = None
         self._thread: _ProducerThread | None = None
         self._consumer: Callable | None = None
+        self._pauseable = False
         self._poll = QTimer(self)
         self._poll.setInterval(POLL_INTERVAL_MS)
         self._poll.timeout.connect(self._on_poll)
@@ -616,11 +684,16 @@ class WorkerRunController(QObject):
         self._adapter = ProgressAdapter(self._dialog)
         self._worker.progress_wnd = self._adapter
         self._consumer = consumer
+        self._pauseable = pauseable
 
         self._dialog.reset()
         self._dialog.setWindowTitle(progress_title)
         self._dialog.set_message(progress_msg or lang.getstr("please_wait"))
         self._dialog.pause_button.setVisible(pauseable)
+        # Prime the throbber type synchronously (no fade delay) before
+        # start_clock() below plays it; only later mid-run switches (in
+        # _on_poll) go through the fade transition.
+        self._dialog.progress_type = _resolve_progress_type(self._worker, pauseable)
         self._dialog.place()
         self._dialog.show()
         self._dialog.start_clock()
@@ -647,6 +720,14 @@ class WorkerRunController(QObject):
         """Read the worker buffers and advance the dialog (GUI thread)."""
         from DisplayCAL.worker import FilteredStream
 
+        self._dialog.set_progress_type(
+            _resolve_progress_type(self._worker, self._pauseable)
+        )
+        # Mirrors the wx ``progress_handler``'s per-tick ``self.pause_continue()``
+        # call: this is what actually reads the dialog's pause button state and
+        # sends the Argyll pause/continue keystroke. Without it, toggling
+        # "Pause" only updates the dialog UI and never reaches the subprocess.
+        self._worker.pause_continue()
         try:
             msg = self._worker.recent.read(FilteredStream.triggers)
             lastmsg = self._worker.lastmsg.read(FilteredStream.triggers).strip()
@@ -1054,6 +1135,11 @@ class AdjustmentController(QObject):
         """
         from DisplayCAL.worker import FilteredStream
 
+        # See WorkerRunController._on_poll: this is what actually applies the
+        # dialog's pause button state to the running subprocess. A no-op
+        # before dispcal reaches unattended measurement (worker.pauseable_now
+        # is still False), so it's safe to call on every tick.
+        self._worker.pause_continue()
         try:
             msg = self._worker.recent.read(FilteredStream.triggers)
             lastmsg = self._worker.lastmsg.read(FilteredStream.triggers).strip()
@@ -1089,6 +1175,8 @@ class AdjustmentController(QObject):
         dialog.reset()
         dialog.setWindowTitle(lang.getstr("calibration"))
         dialog.pause_button.setVisible(True)
+        # Always a measurement from here on (dispcal patch reads).
+        dialog.progress_type = 1
         dialog.place()
         dialog.show()
         dialog.start_clock()
