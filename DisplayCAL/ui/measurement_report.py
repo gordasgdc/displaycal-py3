@@ -1319,15 +1319,16 @@ class ReportPanel(QWidget):
                 )
                 or (which == "devlink" and profile.profileClass != b"link")
             ):
-                self._error(
-                    lang.getstr(
-                        "profile.unsupported",
-                        (
-                            profile.profileClass.decode("utf-8"),
-                            profile.colorSpace.decode("utf-8"),
-                        ),
+                if not silent:
+                    self._error(
+                        lang.getstr(
+                            "profile.unsupported",
+                            (
+                                profile.profileClass.decode("utf-8"),
+                                profile.colorSpace.decode("utf-8"),
+                            ),
+                        )
                     )
-                )
             else:
                 result = self._apply_valid_profile(
                     which, profile, XYZbpout if which == "output" else None, silent

@@ -640,18 +640,19 @@ class ReportFrame(BaseFrame):
                 )
                 or (which == "devlink" and profile.profileClass != b"link")
             ):
-                show_result_dialog(
-                    NotImplementedError(
-                        lang.getstr(
-                            "profile.unsupported",
-                            (
-                                profile.profileClass.decode("utf-8"),
-                                profile.colorSpace.decode("utf-8"),
-                            ),
-                        )
-                    ),
-                    parent=self,
-                )
+                if not silent:
+                    show_result_dialog(
+                        NotImplementedError(
+                            lang.getstr(
+                                "profile.unsupported",
+                                (
+                                    profile.profileClass.decode("utf-8"),
+                                    profile.colorSpace.decode("utf-8"),
+                                ),
+                            )
+                        ),
+                        parent=self,
+                    )
             else:
                 if (
                     not getattr(self, f"{which}_profile", None)

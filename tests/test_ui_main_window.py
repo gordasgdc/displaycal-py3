@@ -733,7 +733,11 @@ def test_profile_type_ctrl_resets_testchart_within_same_category_too(
     # default names, and every ``TESTCHART_DEFAULTS`` entry resolves to
     # "auto" today, which short-circuits before ``force`` is ever consulted.
     monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.Ok)
-    setcfg("profile.type", "s")
+    # "S" (index 4) is profile.type's default, so the combo already sits
+    # there at construction -- drive it through the widget (not a bare
+    # setcfg) so the starting index is really 3 ("s") and the later
+    # setCurrentIndex(4) is a genuine transition that fires the signal.
+    window.profile_type_ctrl.setCurrentIndex(3)  # 3xCurve+MTX ("s")
     window._set_testchart(window._testchart_paths[1])
     assert getcfg("testchart.file") != "auto"
     window.profile_type_ctrl.setCurrentIndex(4)  # 1xCurve+MTX ("S"), same category
