@@ -343,6 +343,36 @@ def test_writecfg_blocks_while_lock_held(monkeypatch, tmp_path):
     assert "lang = en" in cfgfile.read_text()
 
 
+def test_initcfg_reads_ini_as_utf8(monkeypatch, tmp_path):
+    """initcfg() must decode the ini file as UTF-8 regardless of OS locale.
+
+    writecfg() always encodes as UTF-8 (str.encode() defaults to it
+    regardless of locale). If initcfg()'s cfg.read() ever again omits an
+    explicit encoding, Python falls back to the OS locale's preferred
+    encoding, which on Windows without the "Beta: UTF-8" system-locale
+    option is a legacy codepage (e.g. cp1252). That mismatch mis-decodes
+    non-ASCII option values on every read, and since writecfg() re-encodes
+    the already-garbled string as UTF-8 again, the mojibake compounds on
+    every read/write cycle (issue #828).
+    """
+    monkeypatch.setattr(config, "CONFIG_HOME", str(tmp_path))
+    monkeypatch.setattr(config, "CONFIG_SYS", str(tmp_path))
+
+    value = "C:\\Users\\Foo\\target 110cdm² gamma 2.2.cal"
+    ini = tmp_path / "DisplayCAL.ini"
+    ini.write_bytes(f"[Default]\nlast_cal_path = {value}\n".encode())
+
+    fresh_cfg = config.CaseSensitiveConfigParser()
+    with patch.object(fresh_cfg, "read", wraps=fresh_cfg.read) as mock_read:
+        config.initcfg(cfg=fresh_cfg)
+        assert mock_read.call_args.kwargs.get("encoding") == "utf-8"
+
+    assert (
+        fresh_cfg.get(configparser.DEFAULTSECT, "last_cal_path", fallback=None)
+        == value
+    )
+
+
 def test_fetch_config_files_quarantines_oversized_file(monkeypatch, tmp_path):
     """A pathologically large config file must be quarantined, not parsed."""
     monkeypatch.setattr(config, "MAX_CFG_FILE_SIZE", 64)
