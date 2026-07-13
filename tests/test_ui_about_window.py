@@ -61,6 +61,13 @@ def test_body_lines_include_icon_credits(qapp):
 
 
 def test_translator_credits_group_by_author():
+    # ``lang.init()`` only loads a language file if its key isn't already
+    # present in ``LDICT`` (a shared, process-wide dict), so re-running it in
+    # a ``finally`` does *not* undo the stubbing below -- "en"/"de"/"fr" would
+    # stay pinned to these two-entry fakes for every other test in this
+    # worker, silently turning every later ``lang.getstr()`` call into a
+    # raw-id fallback. Save/restore the real entries instead.
+    orig_ldict = dict(aw.lang.LDICT)
     aw.lang.LDICT.clear()
     aw.lang.LDICT["en"] = {"!author": "A. Author", "!language": "English"}
     aw.lang.LDICT["de"] = {"!author": "A. Author", "!language": "Deutsch"}
@@ -68,7 +75,8 @@ def test_translator_credits_group_by_author():
     try:
         credits = aw._translator_credits()
     finally:
-        lang.init()
+        aw.lang.LDICT.clear()
+        aw.lang.LDICT.update(orig_ldict)
     assert "English, Deutsch - A. Author" in credits
     assert "Français - F. Other" in credits
 

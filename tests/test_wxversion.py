@@ -34,7 +34,7 @@ def setup_ensure_debug(scope="function"):
 
 @pytest.fixture(scope="function")
 def setup_tests(setup_sys_path, setup_selected):
-    sys.modules.pop("wx", None)
+    orig_wx = sys.modules.pop("wx", None)
     # make some test dirs
     names = [
         "wx-2.4-gtk-ansi",
@@ -61,6 +61,8 @@ def setup_tests(setup_sys_path, setup_selected):
         os.rmdir(os.path.join(d, "wx"))
         os.rmdir(d)
     os.rmdir(temp_dir)
+    if orig_wx is not None:
+        sys.modules["wx"] = orig_wx
 
 
 def test_get_installed(setup_tests):

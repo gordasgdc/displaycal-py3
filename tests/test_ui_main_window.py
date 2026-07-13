@@ -27,6 +27,8 @@ os.environ.setdefault("QT_API", "pyside6")
 # Skip the whole module cleanly if Qt is unavailable in the environment.
 pytest.importorskip("qtpy")
 
+from qtpy.QtCore import QThread  # noqa: E402
+
 from DisplayCAL.ui import main_window as mw  # noqa: E402
 from DisplayCAL.ui import measurement_flow as mf  # noqa: E402
 
@@ -47,17 +49,49 @@ def _init_config():
     ``initcfg()`` only fills in missing keys -- it does not clear ones a
     prior test already set in the shared in-memory ``config.CFG`` (the
     "config leaks between tests" trap this file's history already warns
-    about). ``3dlut.create`` / ``profile.black_point_compensation`` are
-    explicitly reset here: either being left ``1`` by an earlier test used
+    about). ``3dlut.create`` / ``profile.black_point_compensation`` /
+    ``calibration.black_point_correction.auto`` are explicitly reset here:
+    either being left ``1`` by an earlier test (this file's own
+    ``test_trc_typed_gamma_row_needs_advanced_options`` and
+    ``tests/test_calibration_file.py`` both do, and never restore it) used
     to be harmless, but now drives ``_check_handler`` into showing a real,
     usually-unmocked ``QMessageBox`` via ``_check_lut3d_bpc`` whenever a
     later test flips either checkbox through the UI -- hanging the whole run
-    (the "Qt test modal-hang gotcha").
+    (the "Qt test modal-hang gotcha") -- or silently hides the black-point
+    "manual" slider/spinbox a later test expects visible. Unlike
+    ``argyll.version`` below, no other test file has a legitimate reason to
+    want a non-default ambient value here, so these are pinned outright
+    rather than saved/restored. ``argyll.version`` is pinned to "0.0.0" for
+    the same underlying reason (several tests pin it, e.g. to "1.9.0", to
+    exercise version-gated UI and never restore it, and this file's tests
+    otherwise assume a fresh ``Worker()`` sees "no Argyll" by default) but,
+    unlike the others, its *original* value is saved and put back on
+    teardown instead of leaving "0.0.0" behind: on a machine with a real
+    ArgyllCMS install, ``tests/test_worker.py``'s session-scoped
+    ``setup_argyll`` fixture sets it once to the real detected version for
+    the whole run, and pytest-xdist may interleave that file's tests with
+    this one in the same worker, so this file must not leak its own
+    "no Argyll" baseline back out to them.
+
+    ``3dlut.format`` is pinned for the same reason as the pinned-outright
+    keys above: several tests (e.g. the install-offer chain) set it via a
+    bare ``setcfg()`` and never restore it. Left at a non-default value,
+    a later test that constructs a fresh ``MainWindow`` gets a format combo
+    whose *initial* selected index already matches the leaked format, so a
+    ``setCurrentIndex()`` to that same index is a silent Qt no-op (the
+    "Qt widget/config desync test gotcha") -- ``currentIndexChanged`` never
+    fires and the format's cascading side effects (encoding/size overrides)
+    never run.
     """
     config.initcfg()
     setcfg("3dlut.create", 0)
+    setcfg("3dlut.format", "cube")
     setcfg("profile.black_point_compensation", 0)
+    setcfg("calibration.black_point_correction.auto", 0)
+    orig_argyll_version = getcfg("argyll.version")
+    setcfg("argyll.version", "0.0.0")
     yield
+    setcfg("argyll.version", orig_argyll_version)
 
 
 @pytest.fixture
@@ -196,6 +230,21 @@ def window(qapp, stub_worker):
     lang.init()
     win = mw.MainWindow()
     yield win
+    # Several handlers (session-archive create/import, measure-frame
+    # subprocess, update check, ...) start a QThread parented to the window
+    # and only drop/replace the Python-side reference once its "done"/
+    # "finished" signal is delivered -- but that queued cross-thread signal
+    # can be processed on the GUI thread a hair before the background thread
+    # has actually fully unwound and Qt marks it finished. A test that starts
+    # one of these and doesn't itself pump the event loop long enough can
+    # reach this point with the thread still ``isRunning()``; destroying its
+    # QObject parent (below) or dropping the last Python ref then hits Qt's
+    # "QThread: Destroyed while thread is still running" fatal abort, which
+    # crashes the whole (pytest-xdist) worker process rather than failing
+    # just this test. Wait out any stragglers first so ``close()`` is safe.
+    for thread in win.findChildren(QThread):
+        if thread.isRunning():
+            thread.wait(5000)
     win.close()
 
 

@@ -33,6 +33,7 @@ import shutil
 import subprocess
 import tarfile
 import time
+import webbrowser
 import zipfile
 
 from urllib.error import URLError
@@ -56,6 +57,32 @@ from DisplayCAL.argyll import (
 from DisplayCAL.colormath import get_rgb_space
 from DisplayCAL.config import setcfg, writecfg
 from DisplayCAL.icc_profile import ICCProfile
+from DisplayCAL import util_os
+
+# Never let a test pop a real browser tab or hand a URL/file to the OS's
+# default-app opener. Help-menu / update-check / donate handlers across both
+# the wx and Qt UIs call ``util_os.launch_file`` (which shells out to macOS's
+# ``open``) or ``webbrowser.open`` directly, and several of those handlers
+# aren't mocked by the tests that exercise them. Patching ``util_os`` here,
+# before any other DisplayCAL module has a chance to do
+# ``from DisplayCAL.util_os import launch_file`` (which binds a separate name
+# into that module's own namespace), means every such import picks up this
+# no-op instead of the real one. Tests that assert on the call args still
+# work: their own ``monkeypatch.setattr(some_module, "launch_file", ...)``
+# overrides this for the duration of that test and reverts back to this
+# no-op afterwards, never to the real, OS-shelling-out function.
+util_os.launch_file = lambda *args, **kwargs: None
+webbrowser.open = lambda *args, **kwargs: True
+webbrowser.open_new = lambda *args, **kwargs: True
+webbrowser.open_new_tab = lambda *args, **kwargs: True
+try:
+    # Same reasoning for the Qt side: about_window.py / tooltip_window.py
+    # call QDesktopServices.openUrl() directly on link/button activation.
+    from qtpy.QtGui import QDesktopServices
+
+    QDesktopServices.openUrl = staticmethod(lambda *args, **kwargs: True)
+except ImportError:
+    pass
 
 
 @pytest.fixture(scope="module")
