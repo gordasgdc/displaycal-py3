@@ -2681,7 +2681,15 @@ def initcfg(
         # Make most recent file take precedence
         cfgfiles.sort(key=lambda cfgfile: CFGINITED.get(cfgfile))
     try:
-        cfg.read(cfgfiles)
+        # writecfg() always writes UTF-8 (str.encode() defaults to it
+        # regardless of locale). Without an explicit encoding here, read()
+        # falls back to the OS locale's preferred encoding, which on
+        # Windows without the "Beta: UTF-8" system-locale option is the
+        # legacy ANSI codepage (e.g. cp1252). That mismatch mis-decodes
+        # any non-ASCII option value on every read, and since writecfg()
+        # then re-encodes the already-garbled string as UTF-8, the mojibake
+        # compounds on every read/write cycle (issue #828).
+        cfg.read(cfgfiles, encoding="utf-8")
         # This won't raise an exception if the file does not exist,
         # only if it can't be parsed
     except Exception:
