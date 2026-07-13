@@ -1031,9 +1031,21 @@ def main_curve_viewer() -> None:
     main("curve-viewer")
 
 
+def main_eecolor_to_madvr_converter() -> None:
+    """Launch the eeColor to madVR 3D LUT converter (CLI tool)."""
+    from DisplayCAL.eecolor_to_madvr import main as eecolor_to_madvr_main
+
+    eecolor_to_madvr_main()
+
+
 def main_profile_info() -> None:
     """Launch the profile info editor."""
     main("profile-info")
+
+
+def main_scripting_client() -> None:
+    """Launch the scripting client."""
+    main("scripting-client")
 
 
 def main_synthprofile() -> None:
@@ -1044,6 +1056,26 @@ def main_synthprofile() -> None:
 def main_testchart_editor() -> None:
     """Launch the testchart editor."""
     main("testchart-editor")
+
+
+def main_vrml_to_x3d_converter() -> None:
+    """Launch the VRML to X3D converter.
+
+    Uses the GUI by default; falls back to console mode for --help/--no-gui.
+    """
+    if "--help" in sys.argv[1:] or "--no-gui" in sys.argv[1:]:
+        from DisplayCAL.wx_vrml_2_x3d import main as vrml_to_x3d_main
+
+        vrml_to_x3d_main()
+    else:
+        main("VRML-to-X3D-converter")
+
+
+def main_vrml_to_x3d_converter_console() -> None:
+    """Launch the VRML to X3D converter in console-only mode (no GUI)."""
+    from DisplayCAL.wx_vrml_2_x3d import main as vrml_to_x3d_main
+
+    vrml_to_x3d_main()
 
 
 class AppLock:

@@ -1,0 +1,205 @@
+"""Convert eeColor 65^3 3D LUTs to madVR 256^3 3D LUTs (video levels in/out).
+
+Command-line tool. Author of the original conversion algorithm: Florian
+Hoech, licensed under the GPL version 3.
+"""
+
+from __future__ import annotations
+
+import multiprocessing as mp
+import os
+import signal
+import sys
+
+from DisplayCAL import config
+from DisplayCAL.icc_profile import (
+    ICCProfile,
+    LUT16Type,
+    TextDescriptionType,
+    TextType,
+)
+from DisplayCAL.madvr import icc_device_link_to_madvr
+from DisplayCAL.safe_print import safe_print
+
+
+def _sigbreak_handler(sig, frame) -> None:
+    sys._sigbreak = True
+
+
+def eecolor_to_icc_devicelink(eecolor_3dlut_filename: str, unity: bool = False) -> str:
+    """Convert an eeColor 3D LUT text file to an ICC device link profile.
+
+    Args:
+        eecolor_3dlut_filename (str): Filename of the eeColor 3D LUT file.
+        unity (bool, optional): Skip conversion, only compute the output
+            filename. Default is False.
+
+    Returns:
+        str: Filename of the (written) ICC device link profile.
+    """
+    filename, ext = os.path.splitext(eecolor_3dlut_filename)
+    icc_filename = filename + ".icc"
+
+    if not unity:
+        # Read in eeColor 3D LUT data
+        safe_print("Reading in eeColor 3D LUT", '"%s"' % eecolor_3dlut_filename)
+        eecolor_3dlut_data = []
+        with open(eecolor_3dlut_filename, "rb") as eecolor_3dlut:
+            for line in eecolor_3dlut:
+                line = line.strip().decode()
+                if not line or line.startswith("#"):
+                    continue
+                values = [float(v) for v in line.split()]
+                eecolor_3dlut_data.append(values)
+
+        clutres = int(round(len(eecolor_3dlut_data) ** (1.0 / 3.0)))
+        clutmax = clutres - 1.0
+
+        # Fix input values (eeColor BRG) so sorting produces correct result
+        n = 0
+        for B in range(clutres):
+            for R in range(clutres):
+                for G in range(clutres):
+                    eecolor_3dlut_data[n][:3] = (v / clutmax for v in (R, G, B))
+                    n += 1
+
+        # Sort eeColor 3D LUT data
+        # (fastest increasing column from right to left: B -> G -> R)
+        eecolor_3dlut_data.sort()
+
+        # Create ICC device link profile from eeColor 3D LUT data
+        safe_print("Creating device link from eeColor 3D LUT data...")
+        link = ICCProfile()
+        link.connectionColorSpace = b"RGB"
+        link.profileClass = b"link"
+        link.tags.desc = TextDescriptionType()
+        link.tags.desc.ASCII = os.path.basename(filename)
+        link.tags.cprt = TextType(b"text\0\0\0\0No copyright", b"cprt")
+        link.tags.A2B0 = LUT16Type()
+        link.tags.A2B0.input = link.tags.A2B0.output = [[0, 65535]] * 3
+        link.tags.A2B0.matrix = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+        link.tags.A2B0.clut = []
+
+        # Fill cLUT
+        row = 0
+        for _a in range(clutres):
+            for _b in range(clutres):
+                link.tags.A2B0.clut.append([])
+                for _c in range(clutres):
+                    values = [v * 65535 for v in eecolor_3dlut_data[row][3:]]
+                    link.tags.A2B0.clut[-1].append(values)
+                    row += 1
+
+        # Write device link
+        link.write(icc_filename)
+
+    return icc_filename
+
+
+def eecolor_to_madvr(
+    eecolor_3dlut_filename,
+    unity=False,
+    colorspace=None,
+    hdr=None,
+    logfile=sys.stdout,
+    convert_video_rgb_to_clut65=False,
+    append_linear_cal=True,
+):
+    """Convert eeColor 65^3 3D LUT to madVR 256^3 3D LUT using interpolation.
+
+    madVR 3D LUT will be written to:
+    <eeColor 3D LUT filename without extension> + '.3dlut'
+    """
+    icc_filename = eecolor_to_icc_devicelink(eecolor_3dlut_filename, unity)
+
+    return icc_device_link_to_madvr(
+        icc_filename,
+        unity=unity,
+        colorspace=colorspace,
+        hdr=hdr,
+        logfile=logfile,
+        convert_video_rgb_to_clut65=convert_video_rgb_to_clut65,
+        append_linear_cal=append_linear_cal,
+    )
+
+
+def main() -> None:
+    """Entry point for the eeColor to madVR 3D LUT converter CLI."""
+    mp.freeze_support()
+    # SIGBREAK is Windows only. Use SIGINT as fallback
+    signal.signal(getattr(signal, "SIGBREAK", signal.SIGINT), _sigbreak_handler)
+
+    result = None
+    if sys.argv[1:] and "--help" not in sys.argv[1:]:
+        config.initcfg()
+        colorspace = None
+        hdr = None
+        for arg in sys.argv[1:]:
+            if arg.lower().endswith(".txt"):
+                fn = eecolor_to_madvr
+            elif arg.lower().endswith(".icc") or arg.lower().endswith(".icm"):
+                fn = icc_device_link_to_madvr
+            else:
+                if arg.startswith("--colorspace="):
+                    colorspace = [float(v) for v in arg[13:].split(",")]
+                if arg.startswith("--hdr="):
+                    hdr = int(arg[6:])
+                continue
+            if not os.path.isabs(arg):
+                arg = os.path.abspath(arg)
+            if not os.path.isfile(arg) and "--unity" not in sys.argv[1:]:
+                safe_print("Error: File not found:", arg)
+                result = False
+                break
+            if result is not None:
+                # Already processed some input file(s)
+                safe_print("")
+            try:
+                result = fn(
+                    arg,
+                    unity="--unity" in sys.argv[1:],
+                    colorspace=colorspace,
+                    hdr=hdr,
+                    convert_video_rgb_to_clut65="--convert-video-rgb-to-clut65"
+                    in sys.argv[1:],
+                    append_linear_cal="--append-linear-cal" in sys.argv[1:],
+                )
+            except Exception as exception:
+                safe_print(exception)
+                result = exception
+        if result is None:
+            safe_print("No filename given.")
+    else:
+        safe_print(
+            "Convert eeColor 65^3 to madVR 256^3 3D LUT (video levels in, video levels out)"
+        )
+        safe_print("Author: Florian Hoech, licensed under the GPL version 3")
+        safe_print(
+            "Usage: %s [--unity] [--batch] <name>.<target color space>.txt"
+            % os.path.basename(sys.argv[0])
+        )
+        safe_print(
+            "Possible target color spaces: BT709, SMPTE_C, EBU_PAL, BT2020, DCI_P3"
+        )
+        safe_print("Write output to <name>.<target color space>.3dlut")
+        safe_print("")
+        safe_print("  --unity                  Create unity (in = out) 3D LUT")
+        safe_print("  --append-linear-cal      Append linear calibration")
+        safe_print("  --batch                  Don't pause after processing")
+        safe_print("")
+        safe_print("Examples:")
+        safe_print("  Convert SDR BT709 eeColor 3D LUT")
+        safe_print("  %s eeColor.BT709.txt" % os.path.basename(sys.argv[0]))
+        safe_print("")
+        safe_print("  Convert HDR BT2020 eeColor 3D LUT")
+        safe_print("  %s eeColor.BT2020.HDR.txt" % os.path.basename(sys.argv[0]))
+        safe_print("")
+        safe_print("  Convert HDR to SDR BT2020 eeColor 3D LUT")
+        safe_print("  %s eeColor.BT2020.HDR2SDR.txt" % os.path.basename(sys.argv[0]))
+    if sys.stdout.isatty() and "--batch" not in sys.argv[1:]:
+        input("Press RETURN to exit")
+    sys.exit(int(not result))
+
+
+if __name__ == "__main__":
+    main()
