@@ -1274,11 +1274,10 @@ def finalize_measurement_report(
                     desc = lang.getstr(
                         ext[1:] + "." + filename, default=desc.decode("utf-8")
                     )
-                    argyll_compatible_path = make_argyll_compatible_path(desc)
-                    if (
-                        re.sub(r"[\\/:;*?\"<>|]+", "_", argyll_compatible_path)
-                        != filename
-                    ):
+                    argyll_compatible_path = make_argyll_compatible_path(
+                        desc, is_name=True
+                    )
+                    if argyll_compatible_path != filename:
                         ccmx = "{} &amp;lt;{}&amp;gt;".format(
                             desc, ellipsis_(ccmx, 31, "m")
                         )

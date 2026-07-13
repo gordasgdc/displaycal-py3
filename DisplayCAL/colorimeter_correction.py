@@ -1344,9 +1344,7 @@ def resolve_colorimeter_correction_selection(
             # is processed must be the same.
             if (
                 add_basename_to_desc_on_mismatch
-                and re.sub(
-                    r"[\\/:;*?\"<>|]+", "_", make_argyll_compatible_path(desc)
-                )
+                and make_argyll_compatible_path(desc, is_name=True)
                 != os.path.splitext(os.path.basename(path))[0]
             ):
                 desc = "{} <{}>".format(
@@ -1467,9 +1465,7 @@ def resolve_colorimeter_correction_selection(
                 # filename is processed must be the same.
                 if (
                     add_basename_to_desc_on_mismatch
-                    and re.sub(
-                        r"[\\/:;*?\"<>|]+", "_", make_argyll_compatible_path(desc)
-                    )
+                    and make_argyll_compatible_path(desc, is_name=True)
                     != os.path.splitext(os.path.basename(ccmx_cfg[1]))[0]
                 ):
                     desc = "{} <{}>".format(

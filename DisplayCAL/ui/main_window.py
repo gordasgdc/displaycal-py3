@@ -1193,7 +1193,9 @@ class MainWindow(BaseWindow):
         if not save_path:
             return
         save_dir, save_name = os.path.split(save_path)
-        profile_save_path = os.path.join(save_dir, make_argyll_compatible_path(save_name))
+        profile_save_path = os.path.join(
+            save_dir, make_argyll_compatible_path(save_name, is_name=True)
+        )
 
         if not waccess(profile_save_path, os.W_OK):
             QMessageBox.critical(
@@ -1220,7 +1222,8 @@ class MainWindow(BaseWindow):
             QMessageBox.critical(self, APPNAME, str(tmp_working_dir))
             return
         ti3_tmp_path = os.path.join(
-            tmp_working_dir, make_argyll_compatible_path(f"{profile_name}.ti3")
+            tmp_working_dir,
+            make_argyll_compatible_path(f"{profile_name}.ti3", is_name=True),
         )
 
         source_path = first_path
@@ -1327,7 +1330,7 @@ class MainWindow(BaseWindow):
             return
         dirname, basename = os.path.split(path)
         profile_save_path = os.path.join(
-            dirname, make_argyll_compatible_path(basename)
+            dirname, make_argyll_compatible_path(basename, is_name=True)
         )
         if not waccess(profile_save_path, os.W_OK):
             QMessageBox.critical(
@@ -6198,6 +6201,7 @@ class MainWindow(BaseWindow):
         the same way :meth:`_begin_report_measurement` is.
         """
         writecfg()
+        self._preinit_measurement_sounds()
         plan = self.flow.plan_measurement(
             self._drive_testchart_measurement,
             use_patternwindow=getattr(self.worker, "_use_patternwindow", False),
@@ -6531,6 +6535,7 @@ class MainWindow(BaseWindow):
         since the report flow doesn't fit that enum.
         """
         writecfg()
+        self._preinit_measurement_sounds()
         plan = self.flow.plan_measurement(
             self._drive_report_measurement,
             use_patternwindow=getattr(self.worker, "_use_patternwindow", False),
@@ -6924,7 +6929,7 @@ class MainWindow(BaseWindow):
                 profile_name = profile_name_mod.expand_profile_name(
                     self.profile_name_textctrl.text(), self._profile_name_context()
                 )
-        profile_name = make_argyll_compatible_path(profile_name)
+        profile_name = make_argyll_compatible_path(profile_name, is_name=True)
         if profile_name != self.profile_name_label.text():
             setcfg("profile.name", self.profile_name_textctrl.text())
             self.profile_name_label.setToolTip(profile_name)
@@ -7681,6 +7686,17 @@ class MainWindow(BaseWindow):
             return
         self._report_vcgt_result(self._reset_video_lut())
 
+    def _preinit_measurement_sounds(self) -> None:
+        """Pre-create worker measurement sounds on the main thread.
+
+        On macOS, first-time sound/backend setup from the worker thread can
+        trigger Cocoa initialization via ctypes and crash. Mirrors wx's
+        ``MainFrame.setup_measurement``.
+        """
+        if sys.platform == "darwin":
+            with contextlib.suppress(Exception):
+                self.worker._init_sounds(dummy=False)
+
     def begin_measurement(
         self, action: MeasurementAction, *, wrapup: bool = True
     ) -> None:
@@ -7705,6 +7721,7 @@ class MainWindow(BaseWindow):
                 presenting (passed through on the plan).
         """
         writecfg()
+        self._preinit_measurement_sounds()
         plan = self.flow.plan_measurement(
             self._drive_measurement,
             action,

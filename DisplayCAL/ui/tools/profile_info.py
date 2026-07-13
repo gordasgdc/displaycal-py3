@@ -930,7 +930,7 @@ class ProfileInfoWindow(BaseWindow):
         desc = profile.getDescription()
         path = os.path.join(
             self.worker.tempdir,
-            f"{make_argyll_compatible_path(desc)}{config.PROFILE_EXT}",
+            f"{make_argyll_compatible_path(desc, is_name=True)}{config.PROFILE_EXT}",
         )
         profile.write(path)
         return path
