@@ -429,7 +429,7 @@ class ProgressDialog(QDialog):
         elif self.progress_type == 2:
             frame_range, loop = (27, 36), True  # Generating test patches.
         else:
-            frame_range, loop = (60, 68), True  # Processing (no assets; blank).
+            frame_range, loop = (60, 68), True  # Processing (shutter + jet).
         self.animbmp.set_bitmaps(bitmaps, range_=frame_range, loop=loop)
         if self.progress_type == 1:
             self.animbmp.frame = 4

@@ -121,13 +121,155 @@ def _shutter_frames() -> list[QPixmap]:
         list[QPixmap]: The 15 animation frames, or an empty list if the
         expected assets are missing.
     """
-    paths = sorted(get_data_path("theme/shutter_anim", r"\.png$") or [])[:5]
+    # get_data_path() already sorts by basename; re-sorting by full path would
+    # let a same-named file from a lower-priority search dir (e.g. a stale
+    # site-packages install) jump ahead of the real one.
+    paths = (get_data_path("theme/shutter_anim", r"\.png$") or [])[:5]
     if len(paths) != 5:
         return []
     frames = [QPixmap(p) for p in reversed(paths)]  # [5,4,3,2,1]
     frames.extend(reversed(frames))  # + [1,2,3,4,5]
     frames.extend(frames[:5])  # + [5,4,3,2,1]
     return frames
+
+
+def _adjust_channels(
+    img: Image, red: float = 1.0, green: float = 1.0, blue: float = 1.0
+) -> Image:
+    """Scale an RGBA image's R/G/B channels, leaving alpha untouched.
+
+    Qt/Pillow equivalent of wx ``Image.AdjustChannels(red, green, blue)``.
+
+    Args:
+        img: A Pillow RGBA image.
+        red (float): The red channel multiplier.
+        green (float): The green channel multiplier.
+        blue (float): The blue channel multiplier.
+
+    Returns:
+        Image: A new image with the scaled RGB channels.
+    """
+    from PIL import Image as PILImage
+
+    img = img.convert("RGBA")
+    r, g, b, a = img.split()
+    r = r.point(lambda v, f=red: min(255, round(v * f)))
+    g = g.point(lambda v, f=green: min(255, round(v * f)))
+    b = b.point(lambda v, f=blue: min(255, round(v * f)))
+    return PILImage.merge("RGBA", (r, g, b, a))
+
+
+def _adjust_min_max(img: Image, minvalue: float = 0.0, maxvalue: float = 1.0) -> Image:
+    """Remap an RGBA image's R/G/B channels into ``[minvalue, maxvalue]``.
+
+    Qt/Pillow equivalent of wx ``Image.AdjustMinMax``, used by the wx dialog
+    to lift the jet animation's blacks to match the dialog's dark background
+    instead of pure black.
+
+    Args:
+        img: A Pillow RGBA image.
+        minvalue (float): The output value (0..1) for an input of 0.
+        maxvalue (float): The output value (0..1) for an input of 255.
+
+    Returns:
+        Image: A new image with the remapped RGB channels.
+    """
+    from PIL import Image as PILImage
+
+    img = img.convert("RGBA")
+    r, g, b, a = img.split()
+
+    def _f(v: int) -> int:
+        return min(round(minvalue * 255 + v * (maxvalue - minvalue)), 255)
+
+    r = r.point(_f)
+    g = g.point(_f)
+    b = b.point(_f)
+    return PILImage.merge("RGBA", (r, g, b, a))
+
+
+def _rotate_hue(img: Image, fraction: float) -> Image:
+    """Rotate an RGBA image's hue by ``fraction`` of a full turn.
+
+    Qt/Pillow equivalent of wx ``Image.RotateHue``, whose ``angle`` argument
+    is likewise a fraction of 360 degrees.
+
+    Args:
+        img: A Pillow RGBA image.
+        fraction (float): The hue rotation, as a fraction of 360 degrees.
+
+    Returns:
+        Image: A new image with the rotated hue.
+    """
+    from PIL import Image as PILImage
+
+    img = img.convert("RGBA")
+    r, g, b, a = img.split()
+    h, s, v = PILImage.merge("RGB", (r, g, b)).convert("HSV").split()
+    shift = round(fraction * 255) % 256
+    if shift:
+        h = h.point(lambda x, shift=shift: (x + shift) % 256)
+    rgb = PILImage.merge("HSV", (h, s, v)).convert("RGB")
+    r2, g2, b2 = rgb.split()
+    return PILImage.merge("RGBA", (r2, g2, b2, a))
+
+
+def _processing_frames() -> list[QPixmap]:
+    """Build the 137-frame "processing" (shutter + jet) animation for progress_type 0.
+
+    Port of the ``progress_type == 0`` branch of
+    ``DisplayCAL.wx_windows.ProgressDialog.get_bitmaps``: the first 9
+    ``shutter_anim`` frames plus the 8 tinted ``jet_anim`` frames, cross-faded
+    and hue-cycled. Only the first 9 shutter frames are used (not all 10) --
+    the 10th, anti-stutter frame added by fadd0800 (fixing #45) doesn't fit
+    this animation's 9+8=17 frame layout, and including it silently breaks
+    ``get_bitmaps``'s own sanity check in the wx dialog too, which is why
+    this animation has never actually played there since 2022.
+
+    Returns:
+        list[QPixmap]: The 137 animation frames, or an empty list if the
+        expected assets are missing.
+    """
+    from PIL import Image
+
+    # get_data_path() already sorts by basename; re-sorting by full path would
+    # let a same-named file from a lower-priority search dir (e.g. a stale
+    # site-packages install) jump ahead of the real one.
+    shutter_paths = (get_data_path("theme/shutter_anim", r"\.png$") or [])[:9]
+    jet_paths = get_data_path("theme/jet_anim", r"\.png$") or []
+    if len(shutter_paths) != 9 or len(jet_paths) != 8:
+        return []
+
+    frames: list[Image] = [Image.open(p).convert("RGBA") for p in shutter_paths]
+    for path in jet_paths:
+        im = Image.open(path).convert("RGBA")
+        im = _adjust_channels(im, green=0.25, blue=0.0)  # Blend red.
+        im = _adjust_min_max(im, minvalue=1.0 / 255 * 0x14)  # Adjust for background.
+        frames.append(im)
+
+    for _ in range(7):
+        frames.extend(frames[9:17])
+    frames.extend(frames[9:13])
+
+    # Fade the jet loop in over the last (static) shutter frame.
+    background = frames[8]
+    for i in range(10):
+        idx = 9 + i
+        faded = _scale_alpha(frames[idx], i / 10.0)
+        frames[idx] = Image.alpha_composite(background, faded)
+
+    # Steady state: hue-cycle the jet frames, ramping up then holding.
+    for i in range(41):
+        idx = 19 + i
+        frames[idx] = _rotate_hue(frames[idx], 0.05 * (i / 50.0))
+    for i in range(len(frames) - 60):
+        idx = 60 + i
+        frames[idx] = _rotate_hue(frames[idx], 0.05)
+
+    # Fade out by playing the fade-in/steady frames back in reverse.
+    frames.extend(reversed(frames[:60]))
+
+    return [_pil_to_qpixmap(frame) for frame in frames]
 
 
 def _patch_frames() -> list[QPixmap]:
@@ -144,7 +286,10 @@ def _patch_frames() -> list[QPixmap]:
     """
     from PIL import Image
 
-    paths = sorted(get_data_path("theme/patch_anim", r"\.png$") or [])
+    # get_data_path() already sorts by basename; re-sorting by full path would
+    # let a same-named file from a lower-priority search dir (e.g. a stale
+    # site-packages install) jump ahead of the real one.
+    paths = get_data_path("theme/patch_anim", r"\.png$") or []
     if len(paths) != 9:
         return []
     base = [Image.open(p).convert("RGBA") for p in paths]
@@ -175,10 +320,7 @@ def get_progress_bitmaps(progress_type: int) -> list[QPixmap]:
             test patches).
 
     Returns:
-        list[QPixmap]: The animation frames. Empty for progress_type 0 --
-        this mirrors the wx dialog, where the "processing" animation
-        (shutter + jet frames) never actually assembles because the combined
-        frame count fails its own sanity check, so it silently shows nothing.
+        list[QPixmap]: The animation frames.
     """
     if progress_type not in _BITMAP_CACHE:
         if progress_type == 1:
@@ -186,7 +328,7 @@ def get_progress_bitmaps(progress_type: int) -> list[QPixmap]:
         elif progress_type == 2:
             frames = _patch_frames()
         else:
-            frames = []
+            frames = _processing_frames()
         _BITMAP_CACHE[progress_type] = frames
     return _BITMAP_CACHE[progress_type]
 
