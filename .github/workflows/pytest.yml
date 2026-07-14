@@ -15,6 +15,11 @@ env:
   # Pinned wxPython release, available as a pre-built wheel for every
   # supported Python version.
   WX_VERSION: "4.2.5"
+  # Belt-and-suspenders: the Qt test files already set this via
+  # os.environ.setdefault() before importing Qt, but setting it here too
+  # means any future test or code path that imports Qt earlier can't
+  # accidentally try to open a real (nonexistent on these runners) display.
+  QT_QPA_PLATFORM: "offscreen"
 
 jobs:
   linux:
