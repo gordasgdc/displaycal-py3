@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from DisplayCAL import audio
 from DisplayCAL import config
 from DisplayCAL import gamap_settings
 from DisplayCAL import localization as lang
@@ -148,6 +149,22 @@ def stub_worker(monkeypatch):
     # tests/test_ui_colorimeter_correction_window.py; stub it outright so
     # this file never depends on that always resolving cleanly.
     monkeypatch.setattr(Worker, "get_instrument_measurement_modes", lambda self, *a, **k: {})
+    # begin_measurement()/_begin_report_measurement()/_begin_testchart_measurement()
+    # all unconditionally call self._preinit_measurement_sounds() first thing,
+    # which on macOS (sys.platform == "darwin") does a real, non-dummy
+    # Worker._init_sounds() -> audio.Sound(...) -> audio.init(), initializing
+    # a real pyglet/SDL/pyo audio backend/device. That's a module-level
+    # singleton (only the first call in a worker process actually probes a
+    # backend), and on a headless macOS CI runner with no real audio device
+    # it can hang indefinitely instead of failing fast. Stub it to always take
+    # the dummy branch (still setting measurement_sound/commit_sound, since
+    # other code paths access them unconditionally), same "real OS/hardware
+    # call" trap as the Argyll stubs above.
+    def fake_init_sounds(self, dummy=False):
+        self.measurement_sound = audio.DummySound()
+        self.commit_sound = audio.DummySound()
+
+    monkeypatch.setattr(Worker, "_init_sounds", fake_init_sounds)
 
 
 # --- pure marshalling helpers ----------------------------------------------
