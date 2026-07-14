@@ -1015,8 +1015,11 @@ def test_get_technology_strings_without_argyll_returns_from_argyll_17():
     }
 
 @pytest.mark.skipif(
-    os.getenv("GITHUB_ACTIONS") == "true" and sys.platform == "linux",
-    reason="Not working properly on GitHub on Linux machines.",
+    os.getenv("GITHUB_ACTIONS") == "true" and sys.platform in ("linux", "win32"),
+    reason="Not working properly on GitHub on Linux and Windows machines: the "
+    "real (unmocked) get_argyll_version_string() subprocess call doesn't "
+    "reliably report a version on hosted CI runners, same underlying issue as "
+    "test_get_argyll_version_string_returns_a_proper_value's unconditional skip.",
 )
 def test_get_technology_strings_with_argyll_returns_expected_data(setup_argyll):
     """Test get_technology_strings() returns a dict with correct data."""
