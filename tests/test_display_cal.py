@@ -377,7 +377,7 @@ def test_init_gamap_frame(mainframe: MainFrame) -> None:
     sys.platform == "darwin" and os.getenv("GITHUB_ACTIONS") == "true",
     reason="StartupFrame is failing on CI macOS machines, skipping test.",
 )
-def test_init_startup_frame() -> None:
+def test_init_startup_frame(monkeypatch) -> None:
     """Test if StartupFrame is initialized properly."""
     show_func_name = "Show"
     if (
@@ -385,6 +385,25 @@ def test_init_startup_frame() -> None:
         and intlist(platform.mac_ver()[0].split(".")) >= [10, 10]
     ) or os.getenv("XDG_SESSION_TYPE") == "wayland":
         show_func_name = "ShowModal"
+
+    # StartupFrame.__init__() schedules wx.CallLater(1, self.startup), which
+    # self-reschedules every tick to drive the splash animation and, once the
+    # animation finishes, calls delayedresult.startWorker() to enumerate
+    # displays/ports on a real background thread, delivering the result via
+    # setup_frame() -> a real MainFrame() -> a real (unmocked)
+    # Worker.get_instrument_measurement_modes() subprocess call. Nothing in
+    # this test ever pumps the module-scoped wx.App()'s event loop, so none
+    # of that fires *during* this test -- but the CallLater outlives it (it
+    # holds a strong reference to self.startup, keeping the frame alive) and
+    # fires whenever the shared wx.App's event loop is next pumped, which can
+    # be arbitrarily far into an unrelated later test. On Linux CI this
+    # showed up as a hang deep inside tests/test_ui_startup.py's Qt-based
+    # qapp.processEvents() calls, minutes and files away, because Qt's GLib
+    # event-dispatcher integration also services wx's GTK-backed timers.
+    # Stub out the whole chain at its root before construction (the CallLater
+    # captures the bound method at __init__ time, so this must be patched
+    # first) so this test only checks Show()/ShowModal() as intended.
+    monkeypatch.setattr(StartupFrame, "startup", lambda self: None)
 
     with check_call(StartupFrame, show_func_name):
         StartupFrame()
