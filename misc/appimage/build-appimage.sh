@@ -88,6 +88,23 @@ if [ -d "$QT_DIR" ]; then
   # depends on it back, so it's safe to drop outright rather than add to
   # the per-module denylist loop below.
   rm -f "$PYSIDE_DIR"/libpyside6qml.abi3.so*
+  # Standalone Qt dev-tool/GUI executables PySide6 ships loose under its
+  # top level (not Python extension modules, DisplayCAL never invokes any
+  # of them): the Quick3D asset importer (balsam/balsamui), Designer/
+  # Assistant/Linguist GUI apps and their CLI companions
+  # (designer/assistant/linguist/lupdate/lrelease), and QML tooling
+  # (qmlformat/qmllint/qmlls/qsb/svgtoqml). linuxdeploy walks these too and
+  # aborts on their dependencies on now-pruned libraries, e.g.:
+  #   Could not find dependency: libQt6Quick3DAssetImport.so.6
+  #   Could not find dependency: libQt6DesignerComponents.so.6
+  # Verified exhaustively (not just reactively) by actually running
+  # linuxdeploy against a real pruned PySide6 install in a Docker
+  # container until it reported zero missing dependencies, rather than
+  # fixing one reported error at a time.
+  rm -f "$PYSIDE_DIR"/balsam "$PYSIDE_DIR"/balsamui "$PYSIDE_DIR"/lupdate \
+    "$PYSIDE_DIR"/lrelease "$PYSIDE_DIR"/qmlformat "$PYSIDE_DIR"/qmllint \
+    "$PYSIDE_DIR"/qmlls "$PYSIDE_DIR"/qsb "$PYSIDE_DIR"/svgtoqml \
+    "$PYSIDE_DIR"/designer "$PYSIDE_DIR"/assistant "$PYSIDE_DIR"/linguist
   UNUSED_QT_MODULES="3DAnimation 3DCore 3DExtras 3DInput 3DLogic \
     3DQuick 3DQuickAnimation 3DQuickExtras 3DQuickInput \
     3DQuickLogic 3DQuickRender 3DQuickScene2D 3DQuickScene3D \
@@ -120,29 +137,71 @@ if [ -d "$QT_DIR" ]; then
     VirtualKeyboard VirtualKeyboardQml VirtualKeyboardSettings WebChannel \
     WebChannelQuick WebEngineCore WebEngineQuick \
     WebEngineQuickDelegatesQml WebEngineWidgets WebSockets WebView \
-    WebViewQuick"
+    WebViewQuick WaylandClient WaylandCompositor \
+    WaylandEglCompositorHwIntegration WlShellIntegration \
+    EglFSDeviceIntegration EglFsKmsSupport"
   for module in $UNUSED_QT_MODULES; do
     rm -f "$QT_DIR/lib/libQt6${module}.so"*
   done
-  # Multimedia's bundled ffmpeg codec libraries.
+  # Multimedia's bundled ffmpeg codec libraries and hardware-decode helper
+  # stubs (crypto/ssl/va/va-drm/va-x11) -- named libQt6FFmpegStub-*, not
+  # libQt6Multimedia*, so the module denylist loop above never touches
+  # them; left alone they still depend on the just-pruned Multimedia:
+  #   Could not find dependency: libQt6Multimedia.so.6
   rm -f "$QT_DIR/lib"/libavcodec.so* "$QT_DIR/lib"/libavformat.so* \
     "$QT_DIR/lib"/libavutil.so* "$QT_DIR/lib"/libswresample.so* \
-    "$QT_DIR/lib"/libswscale.so*
+    "$QT_DIR/lib"/libswscale.so* "$QT_DIR/lib"/libQt6FFmpegStub-*.so*
+  # Build-time-only Qt tool executables (uic/rcc/qmlcachegen/etc.) -- never
+  # invoked at runtime, DisplayCAL's UI is built entirely in Python rather
+  # than loaded from .ui/.qrc files, and several of them (qmltyperegistrar,
+  # qmlimportscanner, qmlcachegen) directly depend on the pruned Qml module.
+  rm -rf "$QT_DIR/libexec"
 
   # Same idea for the plugin tree: keep only the plugin kinds our own Qt
   # bundling config for the frozen Windows/macOS builds also keeps (see
   # DisplayCAL/setup.py's py2app qt_plugins option and
   # DisplayCAL/freeze.py's copy_qt_plugins()), plus a few small always-safe
-  # ones.
+  # ones. NOT sqldrivers: DisplayCAL never uses QtSql (already pruned
+  # above), and libqsqlodbc.so still depends on the system's ODBC driver
+  # manager:
+  #   Could not find dependency: libodbc.so.2
   if [ -d "$QT_DIR/plugins" ]; then
     for d in "$QT_DIR/plugins"/*/; do
       name="$(basename "$d")"
       case "$name" in
-        platforms|styles|imageformats|iconengines|platforminputcontexts|generic|networkinformation|tls|sqldrivers) ;;
+        platforms|styles|imageformats|iconengines|platforminputcontexts|generic|networkinformation|tls) ;;
         *) rm -rf "$d" ;;
       esac
     done
   fi
+  # Within platforms/, keep only the backends a normal desktop AppImage
+  # needs (xcb -- also handles Wayland desktops via XWayland -- plus the
+  # minimal/offscreen fallbacks used by our own headless Qt tests) and drop
+  # the embedded/kiosk/remote-display ones (eglfs, linuxfb, vkkhrdisplay,
+  # vnc) along with the native Wayland backend. libqwayland.so pulls in
+  # libQt6WaylandClient.so.6 -> libQt6WaylandCompositor.so.6, which itself
+  # depends on the pruned Quick module (see WaylandClient/WaylandCompositor
+  # in the denylist above) -- keeping native Wayland support would mean
+  # keeping the entire Quick stack too, defeating the point of pruning it.
+  if [ -d "$QT_DIR/plugins/platforms" ]; then
+    for p in "$QT_DIR/plugins/platforms"/*; do
+      case "$(basename "$p")" in
+        libqxcb.so|libqminimal.so|libqminimalegl.so|libqoffscreen.so) ;;
+        *) rm -f "$p" ;;
+      esac
+    done
+  fi
+  # imageformats/libqpdf.so renders PDFs as an image format and depends on
+  # the pruned Pdf module; every other imageformats plugin (gif/jpeg/tiff/
+  # webp/svg/icns/ico/tga/wbmp) is a real image codec DisplayCAL may
+  # actually load an icon/preview through, so only this one is dropped:
+  #   Could not find dependency: libQt6Pdf.so.6
+  rm -f "$QT_DIR/plugins/imageformats/libqpdf.so"
+  # Same idea for platforminputcontexts/libqtvirtualkeyboardplugin.so,
+  # which depends on the pruned VirtualKeyboard module; ibus and compose
+  # (the actual input methods DisplayCAL's text fields need) are unaffected:
+  #   Could not find dependency: libQt6VirtualKeyboard.so.6
+  rm -f "$QT_DIR/plugins/platforminputcontexts/libqtvirtualkeyboardplugin.so"
 
   # Each pruned Qt module also has its own shiboken Python-extension wrapper
   # one level up (e.g. PySide6/QtBluetooth.abi3.so, distinct from
