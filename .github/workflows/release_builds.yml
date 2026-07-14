@@ -445,11 +445,12 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Install runtime libraries needed by wxPython, dbus-python build deps, and Qt's xcb platform plugin
+      - name: Install runtime libraries needed by wxPython, dbus-python build deps, and Qt's xcb/OpenGL plugins
         run: |
           sudo apt-get update -q
           sudo apt-get install -y libgtk-3-0 libnotify4 libsdl2-2.0-0 libwebkit2gtk-4.1-0 libdbus-1-dev libglib2.0-dev gdk-pixbuf2.0-dev librsvg2-common shared-mime-info \
-            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libxkbcommon-x11-0 libsm6
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libxkbcommon-x11-0 libsm6 \
+            libegl1 libgl1 libglx0 libopengl0 libxkbcommon0
 
       - name: Install Python build dependencies
         run: uv pip install --system wheel

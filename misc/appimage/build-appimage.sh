@@ -197,6 +197,14 @@ if [ -d "$QT_DIR" ]; then
   # actually load an icon/preview through, so only this one is dropped:
   #   Could not find dependency: libQt6Pdf.so.6
   rm -f "$QT_DIR/plugins/imageformats/libqpdf.so"
+  # imageformats/libqtiff.so needs the system's libtiff.so.5, but Ubuntu
+  # dropped that SONAME in favor of libtiff.so.6 (libtiff6) long ago -- there
+  # is no libtiff5 package left to apt-get install on noble. DisplayCAL never
+  # loads TIFF files through Qt's QImage/QPixmap (the .tif files it deals
+  # with are Argyll gamut-mapping temp files, read/written by Argyll itself,
+  # not through Qt), so drop the plugin rather than chase a nonexistent dep:
+  #   Could not find dependency: libtiff.so.5
+  rm -f "$QT_DIR/plugins/imageformats/libqtiff.so"
   # Same idea for platforminputcontexts/libqtvirtualkeyboardplugin.so,
   # which depends on the pruned VirtualKeyboard module; ibus and compose
   # (the actual input methods DisplayCAL's text fields need) are unaffected:
