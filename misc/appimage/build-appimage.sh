@@ -134,6 +134,17 @@ if [ -d "$QT_DIR" ]; then
       esac
     done
   fi
+
+  # Each pruned Qt module also has its own shiboken Python-extension wrapper
+  # one level up (e.g. PySide6/QtBluetooth.abi3.so, distinct from
+  # Qt/lib/libQt6Bluetooth.so.6 above); linuxdeploy walks every .so under the
+  # whole AppDir, so leaving these behind makes it try to resolve the
+  # libQt6*.so.6 dependency we just deleted, e.g.:
+  #   Could not find dependency: libQt6Bluetooth.so.6
+  PYSIDE_DIR="$(dirname "$QT_DIR")"
+  for module in $UNUSED_QT_MODULES; do
+    rm -f "$PYSIDE_DIR/Qt${module}.abi3.so"
+  done
 fi
 
 # 3. Desktop integration files.
