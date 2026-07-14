@@ -1865,10 +1865,15 @@ class MainWindow(BaseWindow):
         """Add a Help menu matching wx's ``menu.help`` (``mainmenu.xrc``).
 
         Order mirrors wx's actual menu (readme/license, separator, website/
-        support/bug-report, separator, the update-check pair, then About --
-        wx appends its About item last too, except on macOS where
-        ``QAction.AboutRole`` relocates it into the app menu automatically,
-        same as wx's ``SetMacAboutMenuItemId``).
+        support/bug-report, separator, the update-check pair, then About).
+        wx appends its About item last, and it stays a real item in the
+        Help menu even on macOS: wx's ``SetMacAboutMenuItemId`` only
+        registers the item's id for OS-level conventions, it does not
+        relocate it. ``QAction.AboutRole`` (or Qt's own text-based role
+        heuristics) would relocate our About action into the native app
+        menu instead, and lose its label there (observed live as generic
+        "About Python" instead of "About DisplayCAL" when unbundled), so
+        it is explicitly disabled via ``QAction.NoRole`` to match wx.
         """
         help_menu = self._help_menu = self.menuBar().addMenu(
             f"&{lang.getstr('menu.help')}"
@@ -1907,10 +1912,6 @@ class MainWindow(BaseWindow):
         )
 
         help_menu.addSeparator()
-        self.update_check_action = help_menu.addAction(lang.getstr("update_check"))
-        self.update_check_action.triggered.connect(
-            self._check_for_updates_action_handler
-        )
         self.update_check_onstartup_action = help_menu.addAction(
             lang.getstr("update_check.onstartup")
         )
@@ -1919,10 +1920,14 @@ class MainWindow(BaseWindow):
         self.update_check_onstartup_action.toggled.connect(
             self._update_check_onstartup_toggled
         )
+        self.update_check_action = help_menu.addAction(lang.getstr("update_check"))
+        self.update_check_action.triggered.connect(
+            self._check_for_updates_action_handler
+        )
 
         help_menu.addSeparator()
         about_action = help_menu.addAction(lang.getstr("menu.about"))
-        about_action.setMenuRole(QAction.AboutRole)
+        about_action.setMenuRole(QAction.NoRole)
         about_action.triggered.connect(self._about_action_handler)
 
     def _about_action_handler(self) -> None:

@@ -6150,6 +6150,8 @@ def test_help_menu_actions_present(window):
 def test_help_menu_matches_wx_xrc_order(window):
     # mainmenu.xrc's wxID_HELP order: readme, license, separator, website,
     # support, bug-report, separator, the update-check pair, separator, About.
+    # Live wx menu order for the update-check pair is onstartup checkbox
+    # first, then the check-now action (confirmed via a live macOS wx run).
     expected = [
         "readme",
         "license",
@@ -6158,8 +6160,8 @@ def test_help_menu_matches_wx_xrc_order(window):
         "help_support",
         "bug_report",
         "",  # separator
-        "update_check",
         "update_check.onstartup",
+        "update_check",
         "",  # separator
         "menu.about",
     ]
