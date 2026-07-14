@@ -26,6 +26,7 @@ if sys.platform == "win32":
     os.environ.setdefault("APPDATA", os.path.join(_TEST_HOME, "AppData", "Roaming"))
     os.environ.setdefault("LOCALAPPDATA", os.path.join(_TEST_HOME, "AppData", "Local"))
 
+import faulthandler
 import glob
 import platform
 import pathlib
@@ -35,6 +36,18 @@ import tarfile
 import time
 import webbrowser
 import zipfile
+
+# Diagnostic-only: CI hangs (see issue #7's Qt-migration test-suite work) have
+# repeatedly turned out to be real, un-mocked blocking calls (subprocesses,
+# modal dialogs, QThread signal delivery) that are invisible from the outside
+# -- a cancelled GitHub Actions job's log shows only the last test that
+# *finished*, never what the process was actually doing when it stalled.
+# Periodically dumping every thread's real Python-level stack trace to
+# stderr turns that blind spot into a two-minute wait at most. Gated to CI
+# only so local runs stay quiet.
+if os.environ.get("GITHUB_ACTIONS") == "true":
+    faulthandler.enable()
+    faulthandler.dump_traceback_later(90, repeat=True)
 
 from urllib.error import URLError
 
