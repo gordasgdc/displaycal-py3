@@ -272,10 +272,6 @@ convention = "google"
 pythonpath = [
     ".",
 ]
-# A single stuck test (e.g. a real Argyll subprocess call left unmocked, with
-# no instrument attached in CI) can otherwise hang a whole xdist worker, and
-# therefore the whole job, for hours with no diagnostic output.
-timeout = 300
 
 [tool.tox]
 requires = ["tox>=4.23.2"]
