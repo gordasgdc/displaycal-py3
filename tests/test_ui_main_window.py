@@ -134,6 +134,19 @@ def stub_worker(monkeypatch):
         self.instruments = ["i1 DisplayPro, ColorMunki Display", "Spyder5"]
 
     monkeypatch.setattr(Worker, "enumerate_displays_and_ports", fake)
+    # MainWindow embeds a measurement_report panel whose __init__ (via
+    # mr_update_controls -> set_profile) unconditionally calls
+    # config.get_current_profile(True), which falls through to
+    # config.get_display_profile() whenever "calibration.file" isn't set (the
+    # default in a fresh test config). On macOS that shells out to a real
+    # `osascript` call querying the "Image Events" scripting bridge for the
+    # display's ICC profile (DisplayCAL/icc_profile.py's
+    # get_display_profile_macos()), which has no real display to query on a
+    # headless CI runner and can hang indefinitely rather than failing fast.
+    # Confirmed via a live faulthandler thread dump of a hung CI job pointing
+    # straight at this call chain. Stub it outright, every test constructs a
+    # fresh MainWindow() via the window fixture below.
+    monkeypatch.setattr(config, "get_display_profile", lambda *a, **k: None)
     # MainWindow embeds a measurement_report panel (verification/report tab),
     # whose __init__ unconditionally calls self.worker.set_argyll_version
     # ("xicclu"). The real implementation shells out to `xicclu -?` with a
