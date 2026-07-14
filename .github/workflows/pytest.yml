@@ -122,6 +122,10 @@ jobs:
       run: |
         python -m pytest --verbose -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html  --durations=50
 
+    - name: Dump thread stacks (diagnostic, see conftest.py)
+      if: always()
+      run: cat faulthandler_dump.log || true
+
     - name: Archive code coverage results
       uses: actions/upload-artifact@v6
       with:
@@ -265,6 +269,10 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         python -m pytest --verbose -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html --durations=50
+
+    - name: Dump thread stacks (diagnostic, see conftest.py)
+      if: always()
+      run: cat faulthandler_dump.log || true
 
     - name: Archive code coverage results
       uses: actions/upload-artifact@v6

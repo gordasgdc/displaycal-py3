@@ -42,12 +42,19 @@ import zipfile
 # modal dialogs, QThread signal delivery) that are invisible from the outside
 # -- a cancelled GitHub Actions job's log shows only the last test that
 # *finished*, never what the process was actually doing when it stalled.
-# Periodically dumping every thread's real Python-level stack trace to
-# stderr turns that blind spot into a two-minute wait at most. Gated to CI
-# only so local runs stay quiet.
+# Periodically dumping every thread's real Python-level stack trace turns
+# that blind spot into a two-minute wait at most. Written to its own file
+# rather than stderr: pytest's default per-test fd-level capturing would
+# otherwise trap the dump in a buffer that's only flushed when the test
+# finishes -- exactly what never happens on a hang. The workflow's
+# "Dump thread stacks" step (if: always()) prints this file even when the
+# job gets cancelled mid-test. Gated to CI only so local runs stay quiet.
 if os.environ.get("GITHUB_ACTIONS") == "true":
     faulthandler.enable()
-    faulthandler.dump_traceback_later(90, repeat=True)
+    _faulthandler_dump_file = open("faulthandler_dump.log", "a", buffering=1)
+    faulthandler.dump_traceback_later(
+        90, repeat=True, file=_faulthandler_dump_file
+    )
 
 from urllib.error import URLError
 
