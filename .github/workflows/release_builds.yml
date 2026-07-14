@@ -171,14 +171,36 @@ jobs:
             find -L "$APP_PATH" -type f -name "*.so" -exec codesign --remove-signature {} +
             find -L "$APP_PATH" -type d -name "*.framework" -exec codesign --remove-signature {} +
             find -L "$APP_PATH/Contents" -type d -name "*.app" -exec codesign --remove-signature {} +
-            # PySide6's Qt6 .framework bundles have no .dylib/.so extension
-            # on their actual Mach-O binary (e.g.
-            # QtCore.framework/Versions/A/QtCore), so codesign must target
-            # the .framework directory itself, otherwise the final --deep
-            # sign below leaves it stale and the kernel kills the process
-            # with "Invalid Page" on launch (enforced even for ad-hoc
-            # signatures on Apple Silicon).
+            # PySide6 ships its Qt6 .framework bundles *without* the usual
+            # macOS framework symlinks (no Versions/Current, no top-level
+            # <Name>/Resources symlinks) -- Versions/A/<Name> sits there as
+            # a bare, non-symlinked Mach-O binary. codesign's bundle
+            # executable-discovery relies on those symlinks (plus
+            # Info.plist's CFBundleExecutable) to find the real binary, so
+            # pointing codesign at the .framework directory itself only
+            # touches Resources/Info.plist and never reaches
+            # Versions/A/<Name> at all -- confirmed locally: after signing
+            # every *.framework directory below, `codesign --verify --strict`
+            # on QtCore.framework/Versions/A/QtCore still failed with "code
+            # or signature have been modified", and dlopen'ing
+            # PySide6/QtCore.abi3.so reproduced the exact crash users saw
+            # ("Invalid Page" SIGKILL). Must strip and re-sign each
+            # framework's real binary directly, in addition to the
+            # .framework directory itself.
+            find -L "$APP_PATH/Contents" -type d -name "*.framework" | while read -r FW; do
+              NAME=$(basename "$FW" .framework)
+              find -L "$FW/Versions" -mindepth 2 -maxdepth 2 -type f -name "$NAME" -exec codesign --remove-signature {} +
+            done
             find -L "$APP_PATH/Contents" -type f \( -name "*.dylib" -o -name "*.so" \) -exec codesign -s - -f -o linker-signed {} +
+            # Sign each Qt framework's real binary directly -- see the
+            # matching comment in the strip-signatures pass above for why
+            # the .framework-directory pass below can't reach it. Must run
+            # before that pass (same "sign the inner code object first"
+            # ordering as the QtWebEngineProcess.app fix below).
+            find -L "$APP_PATH/Contents" -type d -name "*.framework" | while read -r FW; do
+              NAME=$(basename "$FW" .framework)
+              find -L "$FW/Versions" -mindepth 2 -maxdepth 2 -type f -name "$NAME" -exec codesign -s - -f -o linker-signed {} +
+            done
             # QtWebEngineCore.framework bundles its own nested Helper .app
             # (Helpers/QtWebEngineProcess.app, duplicated again under
             # Versions/A/Helpers/), a separate code object that codesign
