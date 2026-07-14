@@ -34,7 +34,7 @@ def qapp():
 
 
 @pytest.fixture
-def window(qapp):
+def window(qapp, monkeypatch):
     """Create a fresh ReportWindow with config isolated per test.
 
     Constructing the window and exercising its handlers writes to the global
@@ -42,6 +42,14 @@ def window(qapp):
     the rest of the suite (e.g. ``test_worker``).
     """
     from DisplayCAL.ui.measurement_report import ReportWindow
+    from DisplayCAL.worker import Worker
+
+    # ReportPanel.__init__() (built with no worker passed here) constructs
+    # its own Worker() and unconditionally calls set_argyll_version("xicclu"),
+    # which shells out to `xicclu -?` with a 30s timeout -- reliably eats
+    # the full 30s on CI instead of returning fast (no real Argyll/hardware
+    # to probe).
+    monkeypatch.setattr(Worker, "set_argyll_version", lambda self, *a, **k: None)
 
     saved = dict(config.CFG["Default"])
     win = ReportWindow()

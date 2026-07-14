@@ -134,6 +134,13 @@ class TestMainWindowHandler:
             self.instruments = ["i1 DisplayPro, ColorMunki Display"]
 
         monkeypatch.setattr(Worker, "enumerate_displays_and_ports", fake_enumerate)
+        # MainWindow embeds a measurement_report panel (verification/report
+        # tab), whose __init__ unconditionally calls
+        # self.worker.set_argyll_version("xicclu"). The real implementation
+        # shells out to `xicclu -?` with a 30s timeout, which reliably eats
+        # the full 30s on CI instead of returning fast (no real
+        # instrument/hardware to probe).
+        monkeypatch.setattr(Worker, "set_argyll_version", lambda self, *a, **k: None)
         saved = dict(config.CFG["Default"])
         win = MainWindow()
         try:

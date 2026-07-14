@@ -22,6 +22,7 @@ from DisplayCAL import config  # noqa: E402
 from DisplayCAL import localization as lang  # noqa: E402
 from DisplayCAL.argyll import get_argyll_util  # noqa: E402
 from DisplayCAL.cgats import CGATSError  # noqa: E402
+from DisplayCAL.ui import colorimeter_correction_window as ccxx_window  # noqa: E402
 from DisplayCAL.worker import Worker  # noqa: E402
 
 REFERENCE_TI3 = """CTI3
@@ -117,6 +118,24 @@ def stub_worker(monkeypatch):
     monkeypatch.setattr(
         Worker, "get_instrument_measurement_modes", lambda self, *a, **k: {}
     )
+    # CreateCorrectionWindow.__init__() also unconditionally calls this on
+    # every window construction. The real implementation shells out to
+    # `ccxxmake -?` with a 30s timeout, which reliably eats the full 30s on
+    # CI (same "no real hardware" cause as above) instead of returning fast.
+    # Set a realistic modern version via the string parser (no subprocess)
+    # rather than a bare no-op: TestBuildCorrectionEndToEnd's two tests run
+    # the real ccxxmake pipeline below, and modern ccxxmake (matching the
+    # 3.5.0 CI pins in .github/workflows/pytest.yml) has dropped the old
+    # "-T <tech>" flag in favor of "-t <dtech-id>", which is only selected
+    # when self.worker.argyll_version reads as >= [1, 7].
+    def fake_set_argyll_version(self, name, silent=False, cfg=False):
+        self.set_argyll_version_from_string("3.5.0", cfg=cfg)
+
+    monkeypatch.setattr(Worker, "set_argyll_version", fake_set_argyll_version)
+    # _build_correction() separately calls the module-level get_argyll_version()
+    # (not via self.worker), which shells out the same way. Stub it to the
+    # same version so both stay on the modern "-t" branch together.
+    monkeypatch.setattr(ccxx_window, "get_argyll_version", lambda *a, **k: [3, 5, 0])
 
 
 @pytest.fixture
