@@ -64,6 +64,78 @@ LIBPYTHON="$(ldd "$(command -v "python${PYVER}")" | awk '/libpython/{print $3}')
   --find-links "https://extras.wxpython.org/wxPython4/extras/linux/gtk3/ubuntu-${UBUNTU_RELEASE}/" \
   "$WHEEL_PATH"
 
+# 2b. Prune Qt subsystems DisplayCAL/pyqtgraph/qtpy never import (verified via
+# grep: only QtCore/QtGui/QtWidgets, plus a handful of small supporting
+# modules, are ever touched). The full PySide6 wheel bundles dozens of
+# unrelated Qt subsystems (Quick/Qml, Multimedia with a bundled ffmpeg,
+# WebEngine, Bluetooth, 3D, ...), and linuxdeploy below walks every .so it
+# finds anywhere under the AppDir (not just ones reachable from
+# --executable), so it aborts on incomplete/broken dependency chains inside
+# those unused subsystems, e.g. a QtQuick VirtualKeyboard QML plugin needing
+# libQt6QuickShapesDesignHelpers.so.6, which the wheel doesn't even ship.
+# This is a denylist, not an allowlist: anything not named below (including
+# Linux-specific internals like libQt6XcbQpa.so, invisible when checking
+# against a macOS/Windows PySide6 install) is left alone.
+QT_DIR="$APPDIR/usr/lib/python${PYVER}/site-packages/PySide6/Qt"
+if [ -d "$QT_DIR" ]; then
+  rm -rf "$QT_DIR/qml"
+  UNUSED_QT_MODULES="3DAnimation 3DCore 3DExtras 3DInput 3DLogic \
+    3DQuick 3DQuickAnimation 3DQuickExtras 3DQuickInput \
+    3DQuickLogic 3DQuickRender 3DQuickScene2D 3DQuickScene3D \
+    3DRender Bluetooth CanvasPainter Charts ChartsQml DataVisualization \
+    DataVisualizationQml Designer DesignerComponents Graphs GraphsWidgets \
+    Help HttpServer LabsAnimation LabsFolderListModel LabsPlatform \
+    LabsQmlModels LabsSettings LabsSharedImage LabsStyleKit \
+    LabsStyleKitImpl LabsSynchronizer LabsWavefrontMesh Location Lottie \
+    LottieVectorImageGenerator LottieVectorImageHelpers Multimedia \
+    MultimediaQuick MultimediaWidgets NetworkAuth Nfc Pdf PdfQuick \
+    PdfWidgets Positioning PositioningQuick Qml QmlCompiler QmlCore \
+    QmlLocalStorage QmlMeta QmlModels QmlNetwork QmlWorkerScript \
+    QmlXmlListModel Quick Quick3D Quick3DAssetImport Quick3DAssetUtils \
+    Quick3DEffects Quick3DGlslParser Quick3DHelpers Quick3DHelpersImpl \
+    Quick3DIblBaker Quick3DParticleEffects Quick3DParticles \
+    Quick3DRuntimeRender Quick3DSpatialAudio Quick3DUtils Quick3DXr \
+    QuickControls2 QuickControls2Basic QuickControls2BasicStyleImpl \
+    QuickControls2FluentWinUI3StyleImpl QuickControls2Fusion \
+    QuickControls2FusionStyleImpl QuickControls2IOSStyleImpl \
+    QuickControls2Imagine QuickControls2ImagineStyleImpl \
+    QuickControls2Impl QuickControls2MacOSStyleImpl QuickControls2Material \
+    QuickControls2MaterialStyleImpl QuickControls2Universal \
+    QuickControls2UniversalStyleImpl QuickDialogs2 QuickDialogs2QuickImpl \
+    QuickDialogs2Utils QuickEffects QuickLayouts QuickParticles \
+    QuickShapes QuickTemplates2 QuickTest QuickTimeline \
+    QuickTimelineBlendTrees QuickVectorImage QuickVectorImageGenerator \
+    QuickVectorImageHelpers QuickWidgets RemoteObjects RemoteObjectsQml \
+    Scxml ScxmlQml Sensors SensorsQuick SerialBus SerialPort ShaderTools \
+    SpatialAudio Sql StateMachine StateMachineQml TextToSpeech UiTools \
+    VirtualKeyboard VirtualKeyboardQml VirtualKeyboardSettings WebChannel \
+    WebChannelQuick WebEngineCore WebEngineQuick \
+    WebEngineQuickDelegatesQml WebEngineWidgets WebSockets WebView \
+    WebViewQuick"
+  for module in $UNUSED_QT_MODULES; do
+    rm -f "$QT_DIR/lib/libQt6${module}.so"*
+  done
+  # Multimedia's bundled ffmpeg codec libraries.
+  rm -f "$QT_DIR/lib"/libavcodec.so* "$QT_DIR/lib"/libavformat.so* \
+    "$QT_DIR/lib"/libavutil.so* "$QT_DIR/lib"/libswresample.so* \
+    "$QT_DIR/lib"/libswscale.so*
+
+  # Same idea for the plugin tree: keep only the plugin kinds our own Qt
+  # bundling config for the frozen Windows/macOS builds also keeps (see
+  # DisplayCAL/setup.py's py2app qt_plugins option and
+  # DisplayCAL/freeze.py's copy_qt_plugins()), plus a few small always-safe
+  # ones.
+  if [ -d "$QT_DIR/plugins" ]; then
+    for d in "$QT_DIR/plugins"/*/; do
+      name="$(basename "$d")"
+      case "$name" in
+        platforms|styles|imageformats|iconengines|platforminputcontexts|generic|networkinformation|tls|sqldrivers) ;;
+        *) rm -rf "$d" ;;
+      esac
+    done
+  fi
+fi
+
 # 3. Desktop integration files.
 cp "$REPO_ROOT/misc/displaycal.desktop" "$APPDIR/displaycal.desktop"
 cp "$REPO_ROOT/misc/net.displaycal.DisplayCAL.appdata.xml" \

@@ -169,7 +169,16 @@ jobs:
             echo "Signing $APP_PATH..."
             find -L "$APP_PATH" -type f -name "*.dylib" -exec codesign --remove-signature {} +
             find -L "$APP_PATH" -type f -name "*.so" -exec codesign --remove-signature {} +
+            find -L "$APP_PATH" -type d -name "*.framework" -exec codesign --remove-signature {} +
+            # PySide6's Qt6 .framework bundles have no .dylib/.so extension
+            # on their actual Mach-O binary (e.g.
+            # QtCore.framework/Versions/A/QtCore), so codesign must target
+            # the .framework directory itself, otherwise the final --deep
+            # sign below leaves it stale and the kernel kills the process
+            # with "Invalid Page" on launch (enforced even for ad-hoc
+            # signatures on Apple Silicon).
             find -L "$APP_PATH/Contents" -type f \( -name "*.dylib" -o -name "*.so" \) -exec codesign -s - -f -o linker-signed {} +
+            find -L "$APP_PATH/Contents" -type d -name "*.framework" -exec codesign -s - -f -o linker-signed {} +
             codesign --force --deep --options runtime --entitlements misc/entitlements.plist --sign - "$APP_PATH"
           done
 

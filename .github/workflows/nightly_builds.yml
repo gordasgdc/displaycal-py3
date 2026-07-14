@@ -211,10 +211,21 @@ jobs:
             # 1. Strip all signatures
             find -L "$APP_PATH" -type f -name "*.dylib" -exec codesign --remove-signature {} +
             find -L "$APP_PATH" -type f -name "*.so" -exec codesign --remove-signature {} +
+            find -L "$APP_PATH" -type d -name "*.framework" -exec codesign --remove-signature {} +
 
             # 2. Sign EVERY binary subcomponent in the bundle
-            # This includes the deep .dylibs folders inside Pillow
+            # This includes the deep .dylibs folders inside Pillow, and
+            # PySide6's Qt6 .framework bundles. A framework's actual Mach-O
+            # binary has no .dylib/.so extension at all (e.g.
+            # QtCore.framework/Versions/A/QtCore), so the patterns above
+            # never touch it directly; codesign must be pointed at the
+            # .framework directory itself for the signature to land where
+            # Apple's bundle format expects it, otherwise `codesign --deep`
+            # below leaves it with a stale/mismatched signature and the
+            # kernel kills the process with "Invalid Page" on launch
+            # (enforced even for ad-hoc signatures on Apple Silicon).
             find -L "$APP_PATH/Contents" -type f \( -name "*.dylib" -o -name "*.so" \) -exec codesign -s - -f -o linker-signed {} +
+            find -L "$APP_PATH/Contents" -type d -name "*.framework" -exec codesign -s - -f -o linker-signed {} +
 
             # 3. Final Deep Sign
             codesign --force --deep --options runtime --entitlements misc/entitlements.plist --sign - "$APP_PATH"
