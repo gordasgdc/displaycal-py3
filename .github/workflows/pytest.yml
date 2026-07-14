@@ -120,18 +120,11 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        python -m pytest --verbose -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html  --durations=50
+        python -m pytest --verbose -W ignore --color=yes -m "not network" --durations=50
 
     - name: Dump thread stacks (diagnostic, see conftest.py)
       if: always()
       run: cat faulthandler_dump.log || true
-
-    - name: Archive code coverage results
-      uses: actions/upload-artifact@v6
-      with:
-        name: code-coverage-report-${{ matrix.python-version }}-${{ env.WX_VERSION }}-linux
-        path: htmlcov
-        retention-days: 10
 
   windows:
     name: Windows + Python ${{ matrix.python-version }}
@@ -199,14 +192,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html  --durations=50
-
-    - name: Archive code coverage results
-      uses: actions/upload-artifact@v6
-      with:
-        name: code-coverage-report-${{ matrix.python-version }}-${{ env.WX_VERSION }}-windows
-        path: htmlcov
-        retention-days: 10
+        python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --durations=50
 
   macos:
     name: macOS + Python ${{ matrix.python-version }}
@@ -268,15 +254,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        python -m pytest --verbose -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html --durations=50
+        python -m pytest --verbose -W ignore --color=yes -m "not network" --durations=50
 
     - name: Dump thread stacks (diagnostic, see conftest.py)
       if: always()
       run: cat faulthandler_dump.log || true
-
-    - name: Archive code coverage results
-      uses: actions/upload-artifact@v6
-      with:
-        name: code-coverage-report-${{ matrix.python-version }}-${{ env.WX_VERSION }}-macos
-        path: htmlcov
-        retention-days: 10
