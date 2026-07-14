@@ -1149,6 +1149,16 @@ def setup() -> None:
                 "no_strip": True,
                 "optimize": 0,
                 "plist": plist_dict,
+                # py2app's pyside6 recipe only copies Qt's plugin binaries
+                # (e.g. platforms/libqcocoa.dylib, needed for QApplication to
+                # start at all) when this is set; it defaults to empty and
+                # silently bundles none of them otherwise.
+                "qt_plugins": [
+                    "iconengines/*",
+                    "imageformats/*",
+                    "platforms/*",
+                    "styles/*",
+                ],
             }
         }
         if use_sdl:
