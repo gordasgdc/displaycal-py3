@@ -313,7 +313,11 @@ class TestGetArgyllDataFiles:
         ccmx_file = color_dir / "test.ccmx"
         ccmx_file.write_text("CCMX\n")
         monkeypatch.setattr(cfg, "APPDATA", str(tmp_path))
-        monkeypatch.setattr(cfg, "LIBRARY_HOME", str(tmp_path))
+        # LIBRARY_HOME is only ever imported into `config` on macOS (see
+        # config.py's platform-gated defaultpaths import), so it doesn't
+        # exist as an attribute to override on other platforms unless we
+        # tell monkeypatch not to require that.
+        monkeypatch.setattr(cfg, "LIBRARY_HOME", str(tmp_path), raising=False)
         worker = MagicMock()
         worker.argyll_version = [1, 2]
         result = cc.get_argyll_data_files(worker, "u", "*.ccmx", include_lastmod=True)

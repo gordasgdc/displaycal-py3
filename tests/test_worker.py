@@ -403,6 +403,11 @@ def test_detected_levels_issue_confirm_prefers_progress_wnd_confirm3():
     assert worker._detected_levels_issue_confirm_wait is False
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Worker.authenticate() returns None on Windows without touching "
+    "Sudo at all (sudo/password-prompt auth is POSIX-only).",
+)
 def test_worker_authenticate_threads_password_prompt(monkeypatch):
     """Worker.authenticate() passes Worker.password_prompt to Sudo.authenticate()."""
     worker = Worker()

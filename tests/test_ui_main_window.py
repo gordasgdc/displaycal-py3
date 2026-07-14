@@ -5184,7 +5184,8 @@ def test_run_create_profile_overwrite_declined_aborts(
     # No .icc/.icm extension typed, so PROFILE_EXT is appended after the save
     # dialog's own overwrite prompt already ran -- the extra confirm is the
     # only thing standing between this and silently clobbering an existing file.
-    existing_final = tmp_path / "out.icc"
+    # PROFILE_EXT is platform-dependent (".icm" on Windows, ".icc" elsewhere).
+    existing_final = tmp_path / f"out{mw.PROFILE_EXT}"
     existing_final.write_bytes(b"existing")
     typed_path = str(tmp_path / "out")
     monkeypatch.setattr(

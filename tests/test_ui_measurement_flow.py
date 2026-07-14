@@ -8,6 +8,7 @@ state machine. None of it needs a GUI toolkit or a display.
 """
 
 import subprocess as sp
+import sys
 
 import pytest
 
@@ -139,7 +140,9 @@ def test_run_measureframe_subprocess_reports_exit_code():
 
 def test_run_measureframe_subprocess_success_and_on_start(tmp_path):
     seen = []
-    args = ["python3", "-c", "import sys; sys.exit(255)"]
+    # sys.executable, not a hardcoded "python3": Windows has no python3.exe
+    # on PATH by default, which made Popen fail to launch at all.
+    args = [sys.executable, "-c", "import sys; sys.exit(255)"]
     returncode, _stderr = mf.run_measureframe_subprocess(
         args, env={}, on_start=seen.append
     )

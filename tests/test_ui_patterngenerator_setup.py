@@ -11,6 +11,7 @@ fakes. See ``DisplayCAL/ui/MAINFRAME_PORT_PLAN.md``.
 
 import os
 import socket
+import sys
 import time
 
 import pytest
@@ -116,10 +117,13 @@ class TestPrismaHostDialog:
         fake_pg = _FakePatternGenerator()
         worker.patterngenerator = fake_pg
         dialog = pgs.PrismaHostDialog(worker, "title", upload=False, parent=None)
+        # The ".local" mDNS suffix is only appended off Windows (see
+        # PrismaHostDialog's on_client_added: `sys.platform != "win32"`).
+        expected = "myhost" if sys.platform == "win32" else "myhost.local"
         try:
             fake_pg.emit_client_added("myhost")
-            assert dialog.host_ctrl.findText("myhost.local") >= 0
-            assert dialog.host_ctrl.currentText() == "myhost.local"
+            assert dialog.host_ctrl.findText(expected) >= 0
+            assert dialog.host_ctrl.currentText() == expected
         finally:
             fake_pg.listening = False
 
