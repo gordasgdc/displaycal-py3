@@ -11,12 +11,13 @@ a DisplayCAL-specific constant, whatever AppKit's ``NSColor
 .windowBackgroundColor`` resolves to). The Qt UI keeps the DisplayCAL look
 but **selects it from the OS light/dark preference**: :func:`apply_theme`
 detects the scheme (:func:`is_dark`) and installs a matching
-:class:`QPalette` (via the Fusion style, so the palette is honoured
-consistently on every platform — the native macOS/Windows styles ignore
-custom palette colours), tuned to match that real native window background
-rather than the plot canvases' brighter fixed grey. Plot colours
-(:func:`plot_colors`) are then derived from that palette, so the plots match
-the surrounding chrome exactly.
+:class:`QPalette`, tuned to match that real native window background rather
+than the plot canvases' brighter fixed grey. On Windows this also means
+switching to the Fusion style, since the native ``windowsvista`` style
+ignores custom palette colours for several controls (combo-box popups in
+particular); macOS and Linux native styles honour the palette as-is. Plot
+colours (:func:`plot_colors`) are then derived from that palette, so the
+plots match the surrounding chrome exactly.
 
 The per-datum plot colours (RGB curve pens, gamut-hull vertex colours) are
 inherent to the data, not the theme, and stay constant in both schemes.
@@ -24,11 +25,12 @@ inherent to the data, not the theme, and stay constant in both schemes.
 
 from __future__ import annotations
 
+import sys
 from typing import TYPE_CHECKING, NamedTuple
 
 from qtpy.QtCore import Qt
 from qtpy.QtGui import QColor, QPalette
-from qtpy.QtWidgets import QApplication
+from qtpy.QtWidgets import QApplication, QStyleFactory
 
 if TYPE_CHECKING:
     from qtpy.QtWidgets import QWidget
@@ -137,17 +139,25 @@ def apply_theme(app: QApplication) -> None:
     """Apply the DisplayCAL theme (palette + font) to ``app``.
 
     Selects the dark or light palette from the OS colour scheme and sets the
-    base font to wx's 11-point size. Deliberately keeps the **native** platform
-    style (does not force Fusion) so that combo boxes and buttons keep their
-    native look — rounded corners, the up/down chevron, native control heights —
-    exactly as the wx UI's native widgets do. Container backgrounds are painted
-    with the palette ``Window`` colour by the windows themselves (via
+    base font to wx's 11-point size. On Windows, also switches the style to
+    **Fusion**: the native ``windowsvista`` style renders combo-box popups and
+    several other controls via the OS's own (always-light, unless the OS is
+    told otherwise through undocumented dark-mode APIs) theme engine and
+    ignores the application :class:`QPalette` entirely, which left combo boxes
+    white in dark mode regardless of the palette set here. Fusion is the only
+    built-in style that honours a custom palette consistently, so it is used
+    to keep Windows dark mode faithful even though it costs the native
+    chevron/corner rendering. macOS and Linux native styles already honour the
+    palette and keep their native look. Container backgrounds are painted with
+    the palette ``Window`` colour by the windows themselves (via
     ``setAutoFillBackground``), so the themed grey shows through while the
-    native controls draw over it.
+    controls draw over it.
 
     Args:
         app (QApplication): The application to theme.
     """
+    if sys.platform == "win32":
+        app.setStyle(QStyleFactory.create("Fusion"))
     app.setPalette(build_palette(is_dark()))
     font = app.font()
     font.setPointSize(FONT_POINT_SIZE)
