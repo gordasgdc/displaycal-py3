@@ -478,6 +478,7 @@ jobs:
 
       - name: Create Flatpak bundle
         run: |
+          mkdir -p dist
           flatpak build-bundle \
             --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo \
             repo "dist/DisplayCAL-${{ github.ref_name }}-Linux-x86_64.flatpak" net.displaycal.DisplayCAL
