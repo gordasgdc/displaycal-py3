@@ -107,6 +107,16 @@ def stub_worker(monkeypatch):
         self.instruments = ["i1 DisplayPro, ColorMunki Display"]
 
     monkeypatch.setattr(Worker, "enumerate_displays_and_ports", fake)
+    # CreateCorrectionWindow._populate_instruments() -> _instrument_handler()
+    # calls this for the stubbed instrument above on every window construction
+    # (i.e. every test in this file). The real implementation shells out to
+    # `spotread -?` and `ccxxmake -??` to enumerate modes/technologies, which
+    # has caused CI to hang indefinitely with orphaned Argyll subprocesses
+    # (seemingly stuck probing for real instrument hardware that doesn't
+    # exist in CI), rather than just failing fast.
+    monkeypatch.setattr(
+        Worker, "get_instrument_measurement_modes", lambda self, *a, **k: {}
+    )
 
 
 @pytest.fixture

@@ -302,6 +302,39 @@ def test_iccprofile_from_xyz():
     assert isinstance(mtx, ICCProfile)
 
 
+def test_iccprofile_missing_relative_path_searches_by_basename(monkeypatch, tmp_path):
+    """A missing, non-absolute path must be searched for by its basename only.
+
+    Regression test for a Windows-only crash: passing the whole path
+    (rather than just its filename) to ``Path.glob()`` blew up with
+    ``NotImplementedError: Non-relative patterns are unsupported`` for
+    values like "/nonexistent/path/profile.icc". ``pathlib`` only
+    considers a leading "/" absolute on POSIX; on Windows (no drive
+    letter) it's not, so the search branch was entered there and passed
+    the full path straight through as a glob pattern.
+    """
+    from DisplayCAL import icc_profile
+
+    search_dir = tmp_path / "profiles"
+    search_dir.mkdir()
+    monkeypatch.setattr(icc_profile, "ICCPROFILES_HOME", [str(search_dir)])
+    monkeypatch.setattr(icc_profile, "ICCPROFILES", [])
+
+    calls = []
+    real_glob = Path.glob
+
+    def fake_glob(self, pattern):
+        calls.append(pattern)
+        return real_glob(self, pattern)
+
+    monkeypatch.setattr(Path, "glob", fake_glob)
+
+    with pytest.raises(FileNotFoundError):
+        ICCProfile("sub/dir/profile.icc")
+
+    assert calls == ["profile.icc"]
+
+
 def test_uInt8Number_tohex_is_working_properly():
     """Testing if uInt8Number_tohex is working properly."""
     test_value = 1321

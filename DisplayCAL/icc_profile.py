@@ -8365,7 +8365,7 @@ class ICCProfile:
                     search_path = pathlib.Path(search_paths.pop(0))
                     if not search_path.is_dir():  # only look in to directories
                         continue
-                    for entry in search_path.glob(profile):
+                    for entry in search_path.glob(p.name):
                         if not entry.is_file():
                             continue
                         profile = str(entry)
