@@ -293,7 +293,25 @@ jobs:
           xattr -cr "$STAGING_DIR/DisplayCAL"
 
           ln -s /Applications "$STAGING_DIR/Applications"
-          create-dmg --volname DisplayCAL-${version} dist/DisplayCAL-macOS-${TARGET_ARCH}.dmg "$STAGING_DIR"
+
+          # create-dmg's internal `hdiutil detach` occasionally times out
+          # ("timeout for DiskArbitration expired") on GitHub-hosted macOS
+          # runners while something (Spotlight/mds, Finder) still holds the
+          # freshly-mounted volume open. Retry the whole command a few
+          # times, force-detaching any leftover mount first so the next
+          # attempt starts clean.
+          for attempt in 1 2 3; do
+            if create-dmg --volname DisplayCAL-${version} dist/DisplayCAL-macOS-${TARGET_ARCH}.dmg "$STAGING_DIR"; then
+              break
+            fi
+            echo "create-dmg failed (attempt ${attempt}), cleaning up and retrying..."
+            rm -f dist/DisplayCAL-macOS-${TARGET_ARCH}.dmg
+            hdiutil info | awk '/\/Volumes\/dmg\./{print $1}' | xargs -I{} hdiutil detach {} -force || true
+            if [ "${attempt}" -eq 3 ]; then
+              exit 1
+            fi
+            sleep 10
+          done
 
       - name: Delete old nightly macOS assets (${{ matrix.architecture }})
         env:
