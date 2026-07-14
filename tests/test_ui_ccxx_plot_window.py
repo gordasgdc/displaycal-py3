@@ -141,6 +141,16 @@ class TestMainWindowHandler:
         # the full 30s on CI instead of returning fast (no real
         # instrument/hardware to probe).
         monkeypatch.setattr(Worker, "set_argyll_version", lambda self, *a, **k: None)
+        # update_measurement_mode_ctrl() -> compute_measurement_modes() falls
+        # through to the real Worker.get_instrument_measurement_modes() (a
+        # real `spotread`/`ccxxmake` subprocess call) whenever
+        # get_instrument_name() can't resolve a known instrument. Same
+        # "unmocked hardware call" trap as tests/test_ui_main_window.py;
+        # stub it outright so this fixture never depends on that always
+        # resolving cleanly.
+        monkeypatch.setattr(
+            Worker, "get_instrument_measurement_modes", lambda self, *a, **k: {}
+        )
         saved = dict(config.CFG["Default"])
         win = MainWindow()
         try:
