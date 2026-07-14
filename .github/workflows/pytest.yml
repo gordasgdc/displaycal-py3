@@ -23,6 +23,7 @@ jobs:
       DISPLAY: :0
       DEBIAN_FRONTEND: noninteractive
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
 
     strategy:
       fail-fast: false
@@ -126,6 +127,7 @@ jobs:
   windows:
     name: Windows + Python ${{ matrix.python-version }}
     runs-on: windows-latest
+    timeout-minutes: 30
 
     strategy:
       fail-fast: false
@@ -200,6 +202,7 @@ jobs:
   macos:
     name: macOS + Python ${{ matrix.python-version }}
     runs-on: macos-14
+    timeout-minutes: 30
 
     strategy:
       fail-fast: false
