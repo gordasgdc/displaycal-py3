@@ -23,7 +23,7 @@ jobs:
       DISPLAY: :0
       DEBIAN_FRONTEND: noninteractive
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 15
 
     strategy:
       fail-fast: false
@@ -115,7 +115,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html  --durations=50
+        python -m pytest --verbose -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html  --durations=50
 
     - name: Archive code coverage results
       uses: actions/upload-artifact@v6
@@ -127,7 +127,7 @@ jobs:
   windows:
     name: Windows + Python ${{ matrix.python-version }}
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
 
     strategy:
       fail-fast: false
@@ -202,7 +202,7 @@ jobs:
   macos:
     name: macOS + Python ${{ matrix.python-version }}
     runs-on: macos-14
-    timeout-minutes: 30
+    timeout-minutes: 15
 
     strategy:
       fail-fast: false
@@ -259,7 +259,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html --durations=50
+        python -m pytest --verbose -W ignore --color=yes -m "not network" --cov=./DisplayCAL --cov-report html --durations=50
 
     - name: Archive code coverage results
       uses: actions/upload-artifact@v6
