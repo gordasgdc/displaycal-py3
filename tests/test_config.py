@@ -444,3 +444,88 @@ def test_fetch_config_files_loads_normal_sized_file(monkeypatch, tmp_path):
     assert cfgfiles == [str(cfgfile)]
     assert cfgfile.exists()
 
+
+def test_get_ui_toolkit_reads_persisted_preference(monkeypatch):
+    """Without an override flag/env var, the persisted ui.toolkit config wins."""
+    monkeypatch.setattr(sys, "argv", ["DisplayCAL"])
+    monkeypatch.delenv("DISPLAYCAL_UI", raising=False)
+    monkeypatch.setattr(
+        config, "getcfg", lambda name: "qt" if name == "ui.toolkit" else None
+    )
+
+    assert config.get_ui_toolkit() == "qt"
+
+
+def test_get_ui_toolkit_defaults_to_wx(monkeypatch):
+    """With no flag, env var, or persisted preference, wx is the default."""
+    monkeypatch.setattr(sys, "argv", ["DisplayCAL"])
+    monkeypatch.delenv("DISPLAYCAL_UI", raising=False)
+    monkeypatch.setattr(
+        config, "getcfg", lambda name: "wx" if name == "ui.toolkit" else None
+    )
+
+    assert config.get_ui_toolkit() == "wx"
+
+
+def test_get_ui_toolkit_qt_flag_overrides_persisted_wx(monkeypatch):
+    """The --qt flag forces Qt for this process regardless of the saved pref."""
+    monkeypatch.setattr(sys, "argv", ["DisplayCAL", "--qt"])
+    monkeypatch.delenv("DISPLAYCAL_UI", raising=False)
+    monkeypatch.setattr(
+        config, "getcfg", lambda name: "wx" if name == "ui.toolkit" else None
+    )
+
+    assert config.get_ui_toolkit() == "qt"
+
+
+def test_get_ui_toolkit_wx_flag_overrides_persisted_qt(monkeypatch):
+    """The --wx flag forces wx for this process regardless of the saved pref."""
+    monkeypatch.setattr(sys, "argv", ["DisplayCAL", "--wx"])
+    monkeypatch.delenv("DISPLAYCAL_UI", raising=False)
+    monkeypatch.setattr(
+        config, "getcfg", lambda name: "qt" if name == "ui.toolkit" else None
+    )
+
+    assert config.get_ui_toolkit() == "wx"
+
+
+def test_get_ui_toolkit_env_var_overrides_persisted_preference(monkeypatch):
+    """DISPLAYCAL_UI takes precedence over the persisted ui.toolkit config."""
+    monkeypatch.setattr(sys, "argv", ["DisplayCAL"])
+    monkeypatch.setenv("DISPLAYCAL_UI", "qt")
+    monkeypatch.setattr(
+        config, "getcfg", lambda name: "wx" if name == "ui.toolkit" else None
+    )
+
+    assert config.get_ui_toolkit() == "qt"
+
+
+def test_restart_application_reexecs_process(monkeypatch):
+    """restart_application() re-execs via os.execv, stripping --qt/--wx flags."""
+    monkeypatch.setattr(sys, "argv", ["DisplayCAL", "--qt", "--verbose"])
+    monkeypatch.setattr(sys, "executable", "/usr/bin/python3")
+    monkeypatch.delattr(sys, "frozen", raising=False)
+    calls = []
+    monkeypatch.setattr(config.os, "execv", lambda *args: calls.append(args))
+
+    config.restart_application()
+
+    assert calls == [
+        ("/usr/bin/python3", ["/usr/bin/python3", "DisplayCAL", "--verbose"])
+    ]
+
+
+def test_restart_application_frozen_omits_script_arg(monkeypatch):
+    """A frozen (py2exe/PyInstaller) build re-execs its own exe, not a script."""
+    monkeypatch.setattr(sys, "argv", ["/Applications/DisplayCAL.app", "--wx"])
+    monkeypatch.setattr(sys, "executable", "/Applications/DisplayCAL.app")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    calls = []
+    monkeypatch.setattr(config.os, "execv", lambda *args: calls.append(args))
+
+    config.restart_application()
+
+    assert calls == [
+        ("/Applications/DisplayCAL.app", ["/Applications/DisplayCAL.app"])
+    ]
+

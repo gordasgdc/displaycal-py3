@@ -3668,6 +3668,12 @@
 "udev_hotplug.unavailable": |-
   节点和热插拔设备都未检测到。
 
+"ui.use_qt": |-
+  使用 Qt 用户界面(实验性)
+
+"ui.use_qt.confirm_restart": |-
+  用户界面工具包将在 DisplayCAL 下次启动时更改。是否立即重新启动 DisplayCAL?
+
 "unassigned": |-
   未分配
 

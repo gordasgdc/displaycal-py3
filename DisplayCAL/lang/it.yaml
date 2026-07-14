@@ -2463,6 +2463,10 @@
   Tipo
 "udev_hotplug.unavailable": |-
   Né udev né hotplug rilevati.
+"ui.use_qt": |-
+  Usa l'interfaccia utente Qt (sperimentale)
+"ui.use_qt.confirm_restart": |-
+  Il toolkit dell'interfaccia utente cambierà al prossimo avvio di DisplayCAL. Vuoi riavviare DisplayCAL ora?
 "unassigned": |-
   Non assegnato
 "uninstall": |-

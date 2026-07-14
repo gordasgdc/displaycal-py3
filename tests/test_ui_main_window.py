@@ -6530,6 +6530,33 @@ class TestDonationDialog:
         dialog.reject()
         assert getcfg("show_donation_message") == 1
 
+
+def test_use_qt_ui_toggled_persists_config(window, monkeypatch):
+    monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.No)
+    window.use_qt_ui_action.setChecked(False)
+    window.use_qt_ui_action.setChecked(True)
+    assert getcfg("ui.toolkit") == "qt"
+    window.use_qt_ui_action.setChecked(False)
+    assert getcfg("ui.toolkit") == "wx"
+
+
+def test_use_qt_ui_toggled_restarts_when_confirmed(window, monkeypatch):
+    monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.Yes)
+    restarted = []
+    monkeypatch.setattr(mw, "restart_application", lambda: restarted.append(True))
+    window.use_qt_ui_action.setChecked(False)
+    window.use_qt_ui_action.setChecked(True)
+    assert restarted == [True]
+
+
+def test_use_qt_ui_toggled_skips_restart_when_declined(window, monkeypatch):
+    monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.No)
+    restarted = []
+    monkeypatch.setattr(mw, "restart_application", lambda: restarted.append(True))
+    window.use_qt_ui_action.setChecked(False)
+    window.use_qt_ui_action.setChecked(True)
+    assert restarted == []
+
     def test_reject_with_do_not_show_again_clears_flag(self, window):
         setcfg("show_donation_message", 1)
         dialog = mw._DonationDialog(window)

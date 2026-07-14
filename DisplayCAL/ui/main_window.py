@@ -187,8 +187,10 @@ from DisplayCAL.config import (
     EXE_EXT,
     PROFILE_EXT,
     get_data_path,
+    get_ui_toolkit,
     get_verified_path,
     getcfg,
+    restart_application,
     setcfg,
     setcfg_cond,
     writecfg,
@@ -1600,6 +1602,13 @@ class MainWindow(BaseWindow):
         self.enable_dry_run_action.setChecked(bool(getcfg("dry_run")))
         self.enable_dry_run_action.toggled.connect(self._enable_dry_run_toggled)
 
+        advanced_menu.addSeparator()
+
+        self.use_qt_ui_action = advanced_menu.addAction(lang.getstr("ui.use_qt"))
+        self.use_qt_ui_action.setCheckable(True)
+        self.use_qt_ui_action.setChecked(get_ui_toolkit() == "qt")
+        self.use_qt_ui_action.toggled.connect(self._use_qt_ui_toggled)
+
         options_menu.addSeparator()
 
         restore_defaults_action = options_menu.addAction(
@@ -1668,6 +1677,25 @@ class MainWindow(BaseWindow):
         """
         setcfg("dry_run", int(checked))
         self.enable_argyll_debug_action.setEnabled(not checked)
+
+    def _use_qt_ui_toggled(self, checked: bool) -> None:
+        """Options > Advanced > "Use Qt user interface".
+
+        Persists the chosen UI toolkit (wx and Qt can't coexist in the same
+        running process) and offers to restart the app now so it takes
+        effect immediately.
+        """
+        setcfg("ui.toolkit", "qt" if checked else "wx")
+        writecfg()
+        answer = QMessageBox.question(
+            self,
+            APPNAME,
+            lang.getstr("ui.use_qt.confirm_restart"),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer == QMessageBox.Yes:
+            restart_application()
 
     def _restore_defaults_handler(self) -> None:
         """Options menu "Restore defaults" handler.

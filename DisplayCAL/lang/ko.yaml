@@ -3650,6 +3650,12 @@
 "udev_hotplug.unavailable": |-
   udev 또는 hotplug가 감지되지 않았습니다.
 
+"ui.use_qt": |-
+  Qt 사용자 인터페이스 사용 (실험적)
+
+"ui.use_qt.confirm_restart": |-
+  사용자 인터페이스 툴킷은 DisplayCAL을 다음에 시작할 때 변경됩니다. 지금 DisplayCAL을 다시 시작하시겠습니까?
+
 "unassigned": |-
   Unassigned
 

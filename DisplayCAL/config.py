@@ -1547,6 +1547,7 @@ VALID_VALUES = {
     ],
     "trc": ["240", "709", "l", "s", ""],
     "trc.type": ["g", "G"],
+    "ui.toolkit": ["wx", "qt"],
     "uniformity.cols": [3, 5, 7, 9],
     "uniformity.rows": [3, 5, 7, 9],
     "whitepoint.colortemp.locus": ["t", "T"],
@@ -1990,6 +1991,7 @@ DEFAULTS = {
     "trc.should_use_viewcond_adjust.show_msg": 1,
     "trc.type": "g",
     "trc.type.backup": "g",
+    "ui.toolkit": "wx",
     "uniformity.cols": 5,
     "uniformity.measure.continuous": 0,
     "uniformity.rows": 5,
@@ -2540,16 +2542,40 @@ def get_ui_toolkit() -> str:
     """Return the UI toolkit to use: ``"qt"`` or ``"wx"``.
 
     During the wx-to-Qt migration for DisplayCAL 4.0 both UI code paths coexist.
-    Qt is opted into via the ``DISPLAYCAL_UI=qt`` environment variable or the
-    ``--qt`` command line flag; otherwise wx (the default) is used. Entry points
-    consult this and dispatch to the Qt implementation only where one exists.
+    The ``DISPLAYCAL_UI=qt``/``DISPLAYCAL_UI=wx`` environment variable or the
+    ``--qt``/``--wx`` command line flags take precedence and force a toolkit
+    for this process; otherwise the persisted ``ui.toolkit`` preference (set via
+    the UI's own toolkit-switch menu action, default ``"wx"``) is used. Entry
+    points consult this and dispatch to the Qt implementation only where one
+    exists.
 
     Returns:
         str: ``"qt"`` if Qt was requested, ``"wx"`` otherwise.
     """
-    if "--qt" in sys.argv[1:] or os.getenv("DISPLAYCAL_UI", "").lower() == "qt":
+    if "--qt" in sys.argv[1:]:
         return "qt"
-    return "wx"
+    if "--wx" in sys.argv[1:]:
+        return "wx"
+    env = os.getenv("DISPLAYCAL_UI", "").lower()
+    if env in ("qt", "wx"):
+        return env
+    return getcfg("ui.toolkit") or "wx"
+
+
+def restart_application() -> None:
+    """Restart the application in a new process.
+
+    Used after switching the ``ui.toolkit`` preference, since wx and Qt can't
+    coexist in the same running process -- the new toolkit only takes effect
+    on the next launch. Any ``--qt``/``--wx`` override flag is stripped from
+    the relaunched argv so the just-persisted preference (not a stale flag)
+    determines which toolkit the new process picks up.
+    """
+    args = [arg for arg in sys.argv[1:] if arg not in ("--qt", "--wx")]
+    if getattr(sys, "frozen", False):
+        os.execv(sys.executable, [sys.executable] + args)
+    else:
+        os.execv(sys.executable, [sys.executable, sys.argv[0]] + args)
 
 
 def is_ccxx_testchart(testchart: None | str = None) -> bool:

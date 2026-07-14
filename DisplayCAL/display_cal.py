@@ -137,6 +137,7 @@ from DisplayCAL.config import (
     initcfg,
     is_ccxx_testchart,
     is_profile,
+    restart_application,
     setcfg,
     setcfg_cond,
     writecfg,
@@ -3086,6 +3087,10 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self.Bind(
             wx.EVT_MENU, self.enable_dry_run_handler, self.menuitem_enable_dry_run
         )
+        self.menuitem_use_qt_ui = options_advanced.FindItemById(
+            options_advanced.FindItem("ui.use_qt")
+        )
+        self.Bind(wx.EVT_MENU, self.use_qt_ui_handler, self.menuitem_use_qt_ui)
         self.menuitem_startup_sound = options.FindItemById(
             options.FindItem("startup_sound.enable")
         )
@@ -3481,6 +3486,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self.menuitem_enable_3dlut_tab.Check(bool(getcfg("3dlut.tab.enable")))
         self.menuitem_enable_argyll_debug.Check(bool(getcfg("argyll.debug")))
         self.menuitem_enable_dry_run.Check(bool(getcfg("dry_run")))
+        self.menuitem_use_qt_ui.Check(getcfg("ui.toolkit") == "qt")
         self.menuitem_startup_sound.Check(bool(getcfg("startup_sound.enable")))
         if self.menuitem_use_simple_splash:
             self.menuitem_use_simple_splash.Check(bool(getcfg("splash.simple")))
@@ -6211,6 +6217,32 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             "skip_legacy_serial_ports",
             int(self.menuitem_skip_legacy_serial_ports.IsChecked()),
         )
+
+    def use_qt_ui_handler(self, event: wx.Event) -> None:
+        """Handle the "Use Qt user interface" menu item.
+
+        Persists the chosen UI toolkit (wx and Qt can't coexist in the same
+        running process) and offers to restart the app now so it takes
+        effect immediately.
+
+        Args:
+            event (wx.Event): The event triggered by the menu item.
+        """
+        use_qt = self.menuitem_use_qt_ui.IsChecked()
+        setcfg("ui.toolkit", "qt" if use_qt else "wx")
+        writecfg()
+        dlg = ConfirmDialog(
+            self,
+            msg=lang.getstr("ui.use_qt.confirm_restart"),
+            ok=lang.getstr("yes"),
+            cancel=lang.getstr("no"),
+            bitmap=get_icon(32, "dialog-information"),
+            log=False,
+        )
+        result = dlg.ShowModal()
+        dlg.Destroy()
+        if result == wx.ID_OK:
+            restart_application()
 
     def calibrate_instrument_handler(self, event: wx.Event) -> None:
         """Handle the calibrate instrument menu item.

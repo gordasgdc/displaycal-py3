@@ -3679,6 +3679,12 @@
 "udev_hotplug.unavailable": |-
   無論是 udev 或熱插拔裝置都偵測不到。
 
+"ui.use_qt": |-
+  使用 Qt 使用者介面(實驗性)
+
+"ui.use_qt.confirm_restart": |-
+  使用者介面工具包將在 DisplayCAL 下次啟動時變更。是否要立即重新啟動 DisplayCAL?
+
 "unassigned": |-
   未指定
 
