@@ -439,13 +439,28 @@ class StartupController(QObject):
         self.worker = worker if worker is not None else Worker()
         self._on_ready = on_ready
         self.splash = QSplashScreen(
-            splash_pixmap(), Qt.WindowStaysOnTopHint | Qt.SplashScreen
+            splash_pixmap(),
+            Qt.WindowStaysOnTopHint | Qt.SplashScreen | Qt.NoDropShadowWindowHint,
         )
         # Requires the splash/anim/version PNGs to carry a correctly
         # premultiplied alpha channel (no baked-in matte on the antialiased
         # edges); otherwise the edge pixels' matte color shows through as a
         # fringe against the real desktop.
         self.splash.setAttribute(Qt.WA_TranslucentBackground)
+        # NoDropShadowWindowHint above is the actual fix for the visible
+        # fringe around the splash silhouette: the fringe wasn't in this
+        # pixmap's own pixel data at all (confirmed by diffing a live-shown
+        # QPixmap against an unshown offscreen render of the same frame --
+        # byte-identical), it was the OS window server's own automatic drop
+        # shadow, computed by thresholding this window's alpha channel into
+        # a hard, non-antialiased silhouette and drawn *around* the window
+        # independent of Qt's own (correctly antialiased) compositing. That
+        # threshold pass is what produced the jagged, harder-edged fringe
+        # riding the outer alpha falloff -- confirmed by disabling the
+        # native shadow via this flag and diffing two otherwise-identical
+        # live screen captures (with/without the flag): the fringe vanished
+        # completely along with the window's whole native drop shadow.
+
         self._animator = _SplashAnimator(self.splash, welcome_message())
         self._thread: _EnumerateThread | None = None
         self._enum_done = False
