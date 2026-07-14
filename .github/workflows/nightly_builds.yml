@@ -246,27 +246,30 @@ jobs:
             # kernel kills the process with "Invalid Page" on launch
             # (enforced even for ad-hoc signatures on Apple Silicon).
             find -L "$APP_PATH/Contents" -type f \( -name "*.dylib" -o -name "*.so" \) -exec codesign -s - -f -o linker-signed {} +
-            # Sign each Qt framework's real binary directly -- see the
-            # matching comment in the strip-signatures pass above for why
-            # the .framework-directory pass below can't reach it. Must run
-            # before that pass (same "sign the inner code object first"
-            # ordering as the QtWebEngineProcess.app fix below).
-            find -L "$APP_PATH/Contents" -type d -name "*.framework" | while read -r FW; do
-              NAME=$(basename "$FW" .framework)
-              find -L "$FW/Versions" -mindepth 2 -maxdepth 2 -type f -name "$NAME" -exec codesign -s - -f -o linker-signed {} +
-            done
             # QtWebEngineCore.framework bundles its own nested Helper .app
             # (Helpers/QtWebEngineProcess.app, duplicated again under
             # Versions/A/Helpers/), a separate code object that codesign
             # requires to already be signed before it will accept signing
-            # the *containing* .framework -- even without --deep, signing
-            # a framework whose Resources include an inadequately-signed
-            # nested bundle fails outright with "code object is not signed
-            # at all" for that nested bundle. Must run BEFORE the
-            # .framework pass below (verified by reproducing this exact
-            # failure locally against a real QtWebEngineCore.framework and
-            # confirming the fix with `codesign --verify --deep --strict`).
+            # anything that references it -- this applies not just to the
+            # containing .framework directory (as originally found) but
+            # also to the framework's own real Versions/A/<Name> binary
+            # sitting right next to Helpers/: codesign treats that as
+            # bundle-adjacent too and refuses to sign it with "code object
+            # is not signed at all, in subcomponent: .../QtWebEngineProcess.app"
+            # if the Helper isn't already signed (reproduced locally by
+            # stripping a real QtWebEngineCore.framework and running these
+            # passes in isolation). So .app dirs must be signed first, then
+            # each framework's real binary, then the .framework directory
+            # pass -- confirmed with `codesign --verify --deep --strict`
+            # against a real QtWebEngineCore.framework in this exact order.
             find -L "$APP_PATH/Contents" -type d -name "*.app" -exec codesign -s - -f -o linker-signed {} +
+            # Sign each Qt framework's real binary directly -- see the
+            # matching comment in the strip-signatures pass above for why
+            # the .framework-directory pass below can't reach it.
+            find -L "$APP_PATH/Contents" -type d -name "*.framework" | while read -r FW; do
+              NAME=$(basename "$FW" .framework)
+              find -L "$FW/Versions" -mindepth 2 -maxdepth 2 -type f -name "$NAME" -exec codesign -s - -f -o linker-signed {} +
+            done
             find -L "$APP_PATH/Contents" -type d -name "*.framework" -exec codesign -s - -f -o linker-signed {} +
 
             # 3. Final Deep Sign
