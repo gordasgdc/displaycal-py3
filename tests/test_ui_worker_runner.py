@@ -454,17 +454,24 @@ def test_password_prompt_adapter_dialog_round_trip_accept(qapp):
     # Exercise the real _ask() dialog construction (no mocked _ask): type a
     # password and accept via the line edit's returnPressed -> accept().
     from qtpy.QtCore import QTimer
-    from qtpy.QtWidgets import QApplication, QDialog, QLineEdit
+    from qtpy.QtWidgets import QApplication, QLineEdit
 
     adapter = wr.PasswordPromptAdapter()
 
     def fill_and_accept():
-        for widget in QApplication.topLevelWidgets():
-            if isinstance(widget, QDialog) and widget.isVisible():
-                line_edit = widget.findChild(QLineEdit)
-                line_edit.setText("typed-pwd")
-                line_edit.returnPressed.emit()
-                return
+        # Scanning topLevelWidgets() for "the" visible QDialog is ambiguous
+        # deep into a long, single-process test run: leftover QDialog
+        # instances from earlier tests that were never deleteLater()'d stay
+        # in that list, and if isVisible() ever matches one of those instead
+        # of (or as well as) this test's own dialog, the real dialog here
+        # never gets its returnPressed/accept, and QDialog.exec() blocks the
+        # GUI thread forever. activeModalWidget() is Qt's own pointer to
+        # whichever dialog is actually running its modal loop right now, so
+        # it can't pick a stale one.
+        widget = QApplication.activeModalWidget()
+        line_edit = widget.findChild(QLineEdit)
+        line_edit.setText("typed-pwd")
+        line_edit.returnPressed.emit()
 
     QTimer.singleShot(0, fill_and_accept)
     assert adapter("Enter password:") == "typed-pwd"
@@ -472,15 +479,16 @@ def test_password_prompt_adapter_dialog_round_trip_accept(qapp):
 
 def test_password_prompt_adapter_dialog_round_trip_cancel(qapp):
     from qtpy.QtCore import QTimer
-    from qtpy.QtWidgets import QApplication, QDialog
+    from qtpy.QtWidgets import QApplication
 
     adapter = wr.PasswordPromptAdapter()
 
     def reject_dialog():
-        for widget in QApplication.topLevelWidgets():
-            if isinstance(widget, QDialog) and widget.isVisible():
-                widget.reject()
-                return
+        # See test_password_prompt_adapter_dialog_round_trip_accept: use
+        # activeModalWidget() rather than scanning topLevelWidgets(), which
+        # can find a stale leftover QDialog instead of this test's own and
+        # leave the real one un-rejected, hanging QDialog.exec() forever.
+        QApplication.activeModalWidget().reject()
 
     QTimer.singleShot(0, reject_dialog)
     assert adapter("Enter password:") is None
