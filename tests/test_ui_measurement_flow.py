@@ -7,6 +7,7 @@ command / result contract, the observer item derivation and the pending-function
 state machine. None of it needs a GUI toolkit or a display.
 """
 
+import os
 import subprocess as sp
 import sys
 
@@ -143,8 +144,11 @@ def test_run_measureframe_subprocess_success_and_on_start(tmp_path):
     # sys.executable, not a hardcoded "python3": Windows has no python3.exe
     # on PATH by default, which made Popen fail to launch at all.
     args = [sys.executable, "-c", "import sys; sys.exit(255)"]
+    # A real environment, not {}: on Windows, spawning a child with a fully
+    # empty environment (no SystemRoot etc.) makes Popen itself raise, which
+    # this test isn't meant to exercise.
     returncode, _stderr = mf.run_measureframe_subprocess(
-        args, env={}, on_start=seen.append
+        args, env=os.environ.copy(), on_start=seen.append
     )
     assert returncode == mf.MEASUREFRAME_EXITCODE_MEASURE
     assert len(seen) == 1
