@@ -77,8 +77,17 @@ LIBPYTHON="$(ldd "$(command -v "python${PYVER}")" | awk '/libpython/{print $3}')
 # Linux-specific internals like libQt6XcbQpa.so, invisible when checking
 # against a macOS/Windows PySide6 install) is left alone.
 QT_DIR="$APPDIR/usr/lib/python${PYVER}/site-packages/PySide6/Qt"
+PYSIDE_DIR="$(dirname "$QT_DIR")"
 if [ -d "$QT_DIR" ]; then
   rm -rf "$QT_DIR/qml"
+  # PySide6's generic Qml binding-support library (distinct from both
+  # Qt/lib/libQt6Qml.so.6 and the per-module PySide6/QtQml.abi3.so wrapper
+  # above) still depends on libQt6Qml.so.6 once pruned:
+  #   Could not find dependency: libQt6Qml.so.6
+  # Verified (via otool on the equivalent macOS install) that nothing kept
+  # depends on it back, so it's safe to drop outright rather than add to
+  # the per-module denylist loop below.
+  rm -f "$PYSIDE_DIR"/libpyside6qml.abi3.so*
   UNUSED_QT_MODULES="3DAnimation 3DCore 3DExtras 3DInput 3DLogic \
     3DQuick 3DQuickAnimation 3DQuickExtras 3DQuickInput \
     3DQuickLogic 3DQuickRender 3DQuickScene2D 3DQuickScene3D \
@@ -141,7 +150,6 @@ if [ -d "$QT_DIR" ]; then
   # whole AppDir, so leaving these behind makes it try to resolve the
   # libQt6*.so.6 dependency we just deleted, e.g.:
   #   Could not find dependency: libQt6Bluetooth.so.6
-  PYSIDE_DIR="$(dirname "$QT_DIR")"
   for module in $UNUSED_QT_MODULES; do
     rm -f "$PYSIDE_DIR/Qt${module}.abi3.so"
   done

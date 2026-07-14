@@ -212,6 +212,7 @@ jobs:
             find -L "$APP_PATH" -type f -name "*.dylib" -exec codesign --remove-signature {} +
             find -L "$APP_PATH" -type f -name "*.so" -exec codesign --remove-signature {} +
             find -L "$APP_PATH" -type d -name "*.framework" -exec codesign --remove-signature {} +
+            find -L "$APP_PATH/Contents" -type d -name "*.app" -exec codesign --remove-signature {} +
 
             # 2. Sign EVERY binary subcomponent in the bundle
             # This includes the deep .dylibs folders inside Pillow, and
@@ -226,6 +227,14 @@ jobs:
             # (enforced even for ad-hoc signatures on Apple Silicon).
             find -L "$APP_PATH/Contents" -type f \( -name "*.dylib" -o -name "*.so" \) -exec codesign -s - -f -o linker-signed {} +
             find -L "$APP_PATH/Contents" -type d -name "*.framework" -exec codesign -s - -f -o linker-signed {} +
+            # QtWebEngineCore.framework bundles its own nested Helper .app
+            # (Helpers/QtWebEngineProcess.app), a separate code object that
+            # neither pass above touches (it's not a .framework, and its
+            # executable has no .dylib/.so extension); left alone, the
+            # final --deep sign below fails with "code object is not
+            # signed at all" for it. Runs after the dylib/so pass so any
+            # libraries nested inside the Helper app are already resigned.
+            find -L "$APP_PATH/Contents" -type d -name "*.app" -exec codesign -s - -f -o linker-signed {} +
 
             # 3. Final Deep Sign
             codesign --force --deep --options runtime --entitlements misc/entitlements.plist --sign - "$APP_PATH"
