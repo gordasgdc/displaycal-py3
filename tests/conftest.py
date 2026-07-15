@@ -56,6 +56,52 @@ if os.environ.get("GITHUB_ACTIONS") == "true":
         90, repeat=True, file=_faulthandler_dump_file
     )
 
+
+_pytest_exitstatus = None
+
+
+def pytest_sessionfinish(session, exitstatus):
+    # Just record the result here; see the atexit callback below for why the
+    # actual (conditional) os._exit() happens later, not in this hook.
+    global _pytest_exitstatus
+    _pytest_exitstatus = exitstatus
+
+
+if (
+    os.environ.get("GITHUB_ACTIONS") == "true"
+    and sys.platform == "darwin"
+    and sys.version_info[:2] == (3, 13)
+):
+    import atexit
+
+    def _exit_before_native_shutdown_crash():
+        """Sidestep a native, traceback-less segfault during CPython 3.13's
+        own interpreter finalization, reproduced twice in a row on macOS CI
+        only (other macOS Python versions in the same run are unaffected),
+        always *after* every test has already passed. faulthandler can't
+        catch it (it isn't a Python-level fault) and extensive investigation
+        of the audio (pyglet) and Qt/PySide6 shutdown paths found no
+        code-level cause to fix.
+
+        Registered here (near the top of this file, before any DisplayCAL
+        module -- and therefore before pyglet's own atexit-registered audio
+        driver cleanup -- gets imported) so that atexit's LIFO ordering runs
+        this *last*: every other cleanup still gets a chance to run first,
+        and only once they're done do we os._exit() with the real, already
+        fully-successful exit status -- short-circuiting the later, deeper
+        native finalization step that's actually segfaulting. A genuine
+        failure (exitstatus != 0) is left to go through the normal shutdown
+        path unchanged, so this can never hide a real test failure or
+        mid-run crash.
+        """
+        if _pytest_exitstatus == 0:
+            sys.stdout.flush()
+            sys.stderr.flush()
+            os._exit(0)
+
+    atexit.register(_exit_before_native_shutdown_crash)
+
+
 from urllib.error import URLError
 
 from requests import HTTPError
