@@ -119,6 +119,27 @@ def test_make_argyll_compatible_path_is_name_strips_all_invalid_chars():
         assert char not in result
 
 
+def test_clear_cmd_output_tolerates_cleared_thread_attribute():
+    """``clear_cmd_output`` must not crash when ``worker.thread`` is ``None``.
+
+    The Qt ``WorkerRunController`` sets ``worker.thread = None`` right before
+    calling its consumer (``ui/worker_runner.py``'s ``_ProducerThread``), so a
+    consumer that itself calls ``exec_cmd`` (and thus ``clear_cmd_output``)
+    hits this exact state -- confirmed via a live crash where
+    ``ui/main_window.py``'s ``_on_profile_build_finished`` called
+    ``self._load_cal(...)`` -> ``worker.exec_cmd`` ->
+    ``clear_cmd_output`` with ``self.thread`` already ``None``.
+    ``hasattr(self, "thread")`` is True in that state (the attribute exists,
+    just set to ``None``), so the old ``hasattr(...) and
+    self.thread.is_alive()`` guard still called ``.is_alive()`` on ``None``.
+    """
+    worker = Worker()
+    worker.thread = None
+    worker.interactive = True
+    # Must not raise AttributeError: 'NoneType' object has no attribute 'is_alive'.
+    worker.clear_cmd_output()
+
+
 def test_worker_get_instrument_name_1():
     """Worker.get_instrument_name() is working properly."""
     worker = Worker()

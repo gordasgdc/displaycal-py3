@@ -4565,7 +4565,7 @@ END_DATA
                 self.logger = DummyLogger()
             else:
                 self.logger = get_file_logger("interact")
-        if hasattr(self, "thread") and self.thread.is_alive() and self.interactive:
+        if getattr(self, "thread", None) and self.thread.is_alive() and self.interactive:
             self.logger.info("-" * 80)
         self.sessionlogfile = None
         self.madtpg_bw_lvl = None
@@ -7478,7 +7478,7 @@ BEGIN_DATA
                 pass
             else:
                 if not self.auth_timestamp:
-                    if hasattr(self, "thread") and self.thread.is_alive():
+                    if getattr(self, "thread", None) and self.thread.is_alive():
                         # Careful: We can only show the auth dialog if running
                         # in the main GUI thread!
                         if use_madnet:
@@ -7767,7 +7767,7 @@ BEGIN_DATA
                 stdout = EncodedWriter(StringIO(), None, data_encoding)
                 logfiles = []
                 if (
-                    hasattr(self, "thread")
+                    getattr(self, "thread", None)
                     and self.thread.is_alive()
                     and self.interactive
                     and getattr(self, "terminal", None)
@@ -7801,7 +7801,7 @@ BEGIN_DATA
                         )
                     )
                 logfiles.append(stdout)
-                if hasattr(self, "thread") and self.thread.is_alive():
+                if getattr(self, "thread", None) and self.thread.is_alive():
                     logfiles.extend([self.recent, self.lastmsg, self])
                 logfiles = Files(logfiles)
                 if self.use_patterngenerator:
