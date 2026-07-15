@@ -159,7 +159,7 @@ def test_producer_thread_emits_result(qapp):
     thread.start()
     assert _spin_until(qapp, lambda: results)
     assert results == [42]
-    thread.wait()
+    thread.wait(5000)
 
 
 def test_producer_thread_emits_exception_as_result(qapp):
@@ -174,7 +174,7 @@ def test_producer_thread_emits_exception_as_result(qapp):
     thread.start()
     assert _spin_until(qapp, lambda: results)
     assert results == [boom]
-    thread.wait()
+    thread.wait(5000)
 
 
 def test_adapter_pulse_returns_flags_and_updates_dialog(qapp):
@@ -325,7 +325,7 @@ def test_adapter_confirm_blocks_worker_until_gui_answers(qapp):
         assert seen["cancel"] == "Cancel"
         assert seen["icon"] == "dialog-warning"
     finally:
-        thread.wait()
+        thread.wait(5000)
         dlg.deleteLater()
 
 
@@ -341,7 +341,7 @@ def test_adapter_confirm_returns_false_on_cancel(qapp):
         assert _spin_until(qapp, lambda: results)
         assert results == [False]
     finally:
-        thread.wait()
+        thread.wait(5000)
         dlg.deleteLater()
 
 
@@ -385,7 +385,7 @@ def test_adapter_confirm3_blocks_worker_until_gui_answers(qapp):
         assert seen["alt"] == "Fix"
         assert seen["cancel"] == "Cancel"
     finally:
-        thread.wait()
+        thread.wait(5000)
         dlg.deleteLater()
 
 
@@ -419,7 +419,7 @@ def test_password_prompt_adapter_blocks_caller_until_gui_answers(qapp):
         assert results == ["s3cr3t"]
         assert seen["msg"] == "Enter your password:"
     finally:
-        thread.wait()
+        thread.wait(5000)
 
 
 def test_password_prompt_adapter_returns_none_on_cancel(qapp):
@@ -433,22 +433,25 @@ def test_password_prompt_adapter_returns_none_on_cancel(qapp):
         assert _spin_until(qapp, lambda: results)
         assert results == [None]
     finally:
-        thread.wait()
+        thread.wait(5000)
 
 
 _password_prompt_windows_crash_skip = pytest.mark.skipif(
-    sys.platform == "win32",
+    sys.platform in ("win32", "darwin"),
     reason=(
-        "Native access violation inside PySide6's offscreen-platform QDialog.exec() "
-        "on Windows CI when accept()/reject() runs from a QTimer.singleShot "
+        "Native segfault/access violation inside PySide6's offscreen-platform "
+        "QDialog.exec() when accept()/reject() runs from a QTimer.singleShot "
         "callback firing inside the dialog's own nested event loop (faulthandler "
-        "pinpointed the crash at worker_runner.py's _ask()). Originally only the "
-        "*_accept test (which emits returnPressed -> accept()) reproduced this; "
-        "after switching from a topLevelWidgets() scan to activeModalWidget() "
-        "(see the comment below), the *_cancel test -> reject() started crashing "
-        "the worker too. Same PySide6 6.11.1 build passes on Linux/macOS CI in "
-        "the same run, so this is a Qt/PySide6 reentrancy bug, not product code; "
-        "full coverage remains on Linux/macOS CI."
+        "pinpointed the crash at worker_runner.py's _ask()). Originally only "
+        "reproduced on Windows CI (both the *_accept and, after switching from a "
+        "topLevelWidgets() scan to activeModalWidget(), the *_cancel test too), "
+        "then also reproduced on macOS CI (Python 3.13, `Fatal Python error: "
+        "Segmentation fault` at the same _ask() -> dialog.exec() call, other "
+        "macOS Python versions in the same run were unaffected) once the test "
+        "suite started running sequentially instead of under -n auto -- more "
+        "QObject churn accumulates in one process before this test runs. Same "
+        "PySide6 build passes on Linux CI, so this is a Qt/PySide6 offscreen-QPA "
+        "reentrancy bug, not product code; full coverage remains on Linux CI."
     ),
 )
 
@@ -611,7 +614,7 @@ def test_producer_thread_is_alive_reflects_running(qapp):
         assert _spin_until(qapp, thread.is_alive)
     finally:
         block.set()
-        thread.wait()
+        thread.wait(5000)
     assert thread.is_alive() is False
 
 

@@ -149,8 +149,14 @@ def data_path():
     return displaycal_parent_dir.parent / "tests" / "data"
 
 
+# Populated by _setup_argyll_session the first (and only) time it runs, and
+# re-applied to config.CFG on every setup_argyll request below -- see that
+# fixture's docstring for why.
+_ARGYLL_CFG: dict[str, str] = {}
+
+
 @pytest.fixture(scope="session")
-def setup_argyll():
+def _setup_argyll_session():
     """Setup ArgyllCMS.
 
     This will search for ArgyllCMS binaries under ``.local/bin/Argyll*/bin`` and if it
@@ -167,6 +173,8 @@ def setup_argyll():
         print(f"argyll_version_string: {argyll_version_string}")
         print(f"argyll_version: {argyll_version}")
         setcfg("argyll.version", argyll_version_string)
+        _ARGYLL_CFG["dir"] = str(argyll_path.absolute())
+        _ARGYLL_CFG["version"] = argyll_version_string
         writecfg()
         yield argyll_path
         return
@@ -188,6 +196,8 @@ def setup_argyll():
             print(f"argyll_version_string: {argyll_version_string}")
             print(f"argyll_version: {argyll_version}")
             setcfg("argyll.version", argyll_version_string)
+            _ARGYLL_CFG["dir"] = str(argyll_path.absolute())
+            _ARGYLL_CFG["version"] = argyll_version_string
             writecfg()
             break
 
@@ -288,6 +298,8 @@ def setup_argyll():
         print(f"argyll_version_string: {argyll_version_string}")
         print(f"argyll_version: {argyll_version}")
         setcfg("argyll.version", argyll_version_string)
+        _ARGYLL_CFG["dir"] = str(argyll_path.absolute())
+        _ARGYLL_CFG["version"] = argyll_version_string
         writecfg()
         os.environ["PATH"] = f"{argyll_path}{os.pathsep}{os.environ['PATH']}"
         yield argyll_path
@@ -298,6 +310,30 @@ def setup_argyll():
         print("argyll_path is invalid!")
         cleanup()
         pytest.skip("ArgyllCMS can not be setup!")
+
+
+@pytest.fixture
+def setup_argyll(_setup_argyll_session):
+    """Re-apply the session-detected ArgyllCMS config on every test.
+
+    ``_setup_argyll_session`` above only runs its (potentially expensive:
+    subprocess version probe, or a real download) detection once per test
+    session, relying on its ``setcfg("argyll.dir"/"argyll.version", ...)``
+    calls to stick around in ``config.CFG`` for the rest of the run. But
+    ``config.initcfg()`` (called by several autouse fixtures across the Qt
+    test files) resets ALL config keys back to defaults, including those
+    two -- so any test that happens to run after an intervening
+    ``initcfg()`` in the same process silently sees "no Argyll" again, even
+    though the real Argyll install is right there. This surfaced as
+    ``test_get_technology_strings_with_argyll_returns_expected_data``
+    failing under sequential (no ``-n auto``) CI runs, where far more tests
+    share one process. Re-apply the cached values on every request instead
+    of trusting they survived.
+    """
+    if _ARGYLL_CFG:
+        setcfg("argyll.dir", _ARGYLL_CFG["dir"])
+        setcfg("argyll.version", _ARGYLL_CFG["version"])
+    yield _setup_argyll_session
 
 
 @pytest.fixture(scope="function")

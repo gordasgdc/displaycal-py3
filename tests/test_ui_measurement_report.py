@@ -33,6 +33,26 @@ def qapp():
     yield app
 
 
+@pytest.fixture(autouse=True)
+def _no_real_display_profile_probe(monkeypatch):
+    """Never let ReportPanel's construction shell out to a real display probe.
+
+    ``ReportPanel.__init__()`` -> ``mr_update_controls()`` -> ``set_profile()``
+    calls ``config.get_current_profile(True)``, which falls through to
+    ``config.get_display_profile()`` whenever "calibration.file" isn't set
+    (the default in a fresh test config). On macOS that shells out to a real
+    `osascript` call querying the "Image Events" scripting bridge for the
+    display's ICC profile (DisplayCAL/icc_profile.py's
+    get_display_profile_macos()), which has no real display to query on a
+    headless CI runner and hangs indefinitely rather than failing fast (see
+    the identical fix in test_ui_main_window.py's stub_worker fixture).
+    Autouse because several tests in this file (e.g. TestEmbeddedPanel)
+    construct ``ReportPanel`` directly rather than through the ``window``
+    fixture below.
+    """
+    monkeypatch.setattr(config, "get_display_profile", lambda *a, **k: None)
+
+
 @pytest.fixture
 def window(qapp, monkeypatch):
     """Create a fresh ReportWindow with config isolated per test.
@@ -50,17 +70,6 @@ def window(qapp, monkeypatch):
     # the full 30s on CI instead of returning fast (no real Argyll/hardware
     # to probe).
     monkeypatch.setattr(Worker, "set_argyll_version", lambda self, *a, **k: None)
-
-    # ReportPanel.__init__() -> mr_update_controls() -> set_profile() calls
-    # config.get_current_profile(True), which falls through to
-    # config.get_display_profile() whenever "calibration.file" isn't set (the
-    # default in a fresh test config). On macOS that shells out to a real
-    # `osascript` call querying the "Image Events" scripting bridge for the
-    # display's ICC profile (DisplayCAL/icc_profile.py's
-    # get_display_profile_macos()), which has no real display to query on a
-    # headless CI runner and hangs indefinitely rather than failing fast (see
-    # the identical fix in test_ui_main_window.py's stub_worker fixture).
-    monkeypatch.setattr(config, "get_display_profile", lambda *a, **k: None)
 
     saved = dict(config.CFG["Default"])
     win = ReportWindow()
