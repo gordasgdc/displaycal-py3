@@ -71,6 +71,7 @@ from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.tools.profile_info import ProfileInfoWindow
 from DisplayCAL.ui.worker_runner import PasswordPromptAdapter
 from DisplayCAL.util_os import is_superuser, which
@@ -251,12 +252,12 @@ class InstallProfileWindow(BaseWindow):
         try:
             profile = pi.load_installable_profile(path)
         except (OSError, ICCProfileInvalidError):
-            QMessageBox.critical(
+            message_box.critical(
                 self, self.windowTitle(), f"{lang.getstr('profile.invalid')}\n{path}"
             )
             return
         except pi.ProfileUnsupportedError as exception:
-            QMessageBox.critical(
+            message_box.critical(
                 self, self.windowTitle(), f"{exception}\n{path}"
             )
             return
@@ -353,7 +354,7 @@ class InstallProfileWindow(BaseWindow):
             self._progress = None
         self.install_btn.setEnabled(True)
         if isinstance(result, Exception):
-            QMessageBox.critical(self, self.windowTitle(), str(result))
+            message_box.critical(self, self.windowTitle(), str(result))
             return
         show_install_summary(self, self.windowTitle(), result)
 

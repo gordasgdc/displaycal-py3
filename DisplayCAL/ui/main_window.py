@@ -230,6 +230,7 @@ from DisplayCAL.ui.header_banner import (
     header_banner_pixmap,
 )
 from DisplayCAL.ui.measure_frame import MeasureFrame
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.measurement_flow import (
     MeasurementFlow,
     PresentationMode,
@@ -1268,12 +1269,12 @@ class MainWindow(BaseWindow):
         collected: list[create_profile.CollectedMeasurement] = []
         for path in paths:
             if not os.path.exists(path):
-                QMessageBox.critical(self, APPNAME, lang.getstr("file.missing", path))
+                message_box.critical(self, APPNAME, lang.getstr("file.missing", path))
                 return
             try:
                 item = create_profile.load_measurement_lines(path)
             except create_profile.CreateProfileError as exception:
-                QMessageBox.critical(self, APPNAME, str(exception))
+                message_box.critical(self, APPNAME, str(exception))
                 return
             if not create_profile.has_calibration_curves(
                 item.ti3_lines
@@ -1308,7 +1309,7 @@ class MainWindow(BaseWindow):
         )
 
         if not waccess(profile_save_path, os.W_OK):
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 APPNAME,
                 lang.getstr("error.access_denied.write", profile_save_path),
@@ -1329,7 +1330,7 @@ class MainWindow(BaseWindow):
         tmp_working_dir = self.worker.create_tempdir()
         if isinstance(tmp_working_dir, Exception):
             self.worker.wrapup(False)
-            QMessageBox.critical(self, APPNAME, str(tmp_working_dir))
+            message_box.critical(self, APPNAME, str(tmp_working_dir))
             return
         ti3_tmp_path = os.path.join(
             tmp_working_dir,
@@ -1344,7 +1345,7 @@ class MainWindow(BaseWindow):
                 )
             except create_profile.CreateProfileError as exception:
                 self.worker.wrapup(False)
-                QMessageBox.critical(self, APPNAME, str(exception))
+                message_box.critical(self, APPNAME, str(exception))
                 return
             source_path = ti3_tmp_path
 
@@ -1354,7 +1355,7 @@ class MainWindow(BaseWindow):
             )
         except create_profile.CreateProfileError as exception:
             self.worker.wrapup(False)
-            QMessageBox.critical(self, APPNAME, str(exception))
+            message_box.critical(self, APPNAME, str(exception))
             return
 
         self.worker.options_dispcal = inputs.options_dispcal
@@ -1394,7 +1395,7 @@ class MainWindow(BaseWindow):
         box.setText(lang.getstr("dialog.ti3_no_cal_info"))
         ok_button = box.addButton(lang.getstr("continue"), QMessageBox.AcceptRole)
         box.addButton(lang.getstr("cancel"), QMessageBox.RejectRole)
-        box.exec_()
+        message_box.exec_box(box)
         return box.clickedButton() is ok_button
 
     def _confirm_overwrite_profile(self, path: str) -> bool:
@@ -1411,7 +1412,7 @@ class MainWindow(BaseWindow):
         box.setText(lang.getstr("dialog.confirm_overwrite", path))
         ok_button = box.addButton(lang.getstr("overwrite"), QMessageBox.AcceptRole)
         box.addButton(lang.getstr("cancel"), QMessageBox.RejectRole)
-        box.exec_()
+        message_box.exec_box(box)
         return box.clickedButton() is ok_button
 
     def _create_profile_from_edid_action_handler(self) -> None:
@@ -1443,7 +1444,7 @@ class MainWindow(BaseWindow):
             dirname, make_argyll_compatible_path(basename, is_name=True)
         )
         if not waccess(profile_save_path, os.W_OK):
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 APPNAME,
                 lang.getstr("error.access_denied.write", profile_save_path),
@@ -1453,7 +1454,7 @@ class MainWindow(BaseWindow):
         try:
             profile.write(profile_save_path)
         except Exception as exception:
-            QMessageBox.critical(self, APPNAME, str(exception))
+            message_box.critical(self, APPNAME, str(exception))
             return
         if getcfg("profile.create_gamut_views"):
             controller = self._ensure_run_controller()
@@ -1482,7 +1483,7 @@ class MainWindow(BaseWindow):
         shared one.
         """
         if isinstance(result, Exception):
-            QMessageBox.critical(self, APPNAME, str(result))
+            message_box.critical(self, APPNAME, str(result))
             return
         if not result:
             return
@@ -1502,7 +1503,7 @@ class MainWindow(BaseWindow):
         try:
             profile.write()
         except Exception as exception:
-            QMessageBox.critical(self, APPNAME, str(exception))
+            message_box.critical(self, APPNAME, str(exception))
             return
         self._on_profile_build_finished(profile.filename)
 
@@ -1567,7 +1568,7 @@ class MainWindow(BaseWindow):
                 for name in ARGYLL_NAMES
                 if not get_argyll_util(name, [path]) and name not in ARGYLL_OPTIONAL
             ]
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 APPNAME,
                 f"{path}\n\n{lang.getstr('argyll.dir.invalid', ', '.join(missing))}",
@@ -1582,7 +1583,7 @@ class MainWindow(BaseWindow):
         since #194) -- this mirrors that same notice rather than porting the
         large, permanently-unreachable body below it.
         """
-        QMessageBox.critical(
+        message_box.critical(
             self,
             APPNAME,
             "icc.opensuse.org is not working anymore\n"
@@ -1742,7 +1743,7 @@ class MainWindow(BaseWindow):
         """
         is_patterngenerator = config.is_patterngenerator()
         if checked != is_patterngenerator:
-            answer = QMessageBox.warning(
+            answer = message_box.warning(
                 self,
                 APPNAME,
                 lang.getstr("calibration.do_not_use_video_lut.warning"),
@@ -1763,7 +1764,7 @@ class MainWindow(BaseWindow):
         output can include sensitive readings) before turning it on.
         """
         if checked:
-            answer = QMessageBox.question(
+            answer = message_box.question(
                 self,
                 APPNAME,
                 lang.getstr("argyll.debug.warning1"),
@@ -1795,7 +1796,7 @@ class MainWindow(BaseWindow):
         """
         setcfg("ui.toolkit", "qt" if checked else "wx")
         writecfg()
-        answer = QMessageBox.question(
+        answer = message_box.question(
             self,
             APPNAME,
             lang.getstr("ui.use_qt.confirm_restart"),
@@ -1813,7 +1814,7 @@ class MainWindow(BaseWindow):
         :func:`~DisplayCAL.calibration_file.restore_defaults`, then
         repopulates every control.
         """
-        answer = QMessageBox.question(
+        answer = message_box.question(
             self,
             APPNAME,
             lang.getstr("app.confirm_restore_defaults"),
@@ -2079,7 +2080,7 @@ class MainWindow(BaseWindow):
 
     def _on_calibrate_instrument_finished(self, result: object) -> None:
         if isinstance(result, Exception):
-            QMessageBox.critical(self, APPNAME, str(result))
+            message_box.critical(self, APPNAME, str(result))
 
     def _show_curves_action_handler(self) -> None:
         """Open the calibration curve viewer (Tools menu).
@@ -2121,7 +2122,7 @@ class MainWindow(BaseWindow):
         try:
             report.update(path, pack=getcfg("report.pack_js"))
         except OSError as exception:
-            QMessageBox.critical(self, APPNAME, str(exception))
+            message_box.critical(self, APPNAME, str(exception))
             return
         launch_file(path)
 
@@ -2156,12 +2157,12 @@ class MainWindow(BaseWindow):
         lines from ``self.worker.output``.
         """
         if isinstance(result, Exception):
-            QMessageBox.critical(self, APPNAME, str(result))
+            message_box.critical(self, APPNAME, str(result))
             if getcfg("dry_run"):
                 return
         for line in self.worker.output:
             if line.startswith("spotread: Warning"):
-                QMessageBox.warning(self, APPNAME, line.strip())
+                message_box.warning(self, APPNAME, line.strip())
 
     def _report_action_handler(self, report_calibrated: bool) -> None:
         """Report on calibrated/uncalibrated display response (Tools > Report menu).
@@ -2208,7 +2209,7 @@ class MainWindow(BaseWindow):
         persistent :attr:`_log_window` singleton).
         """
         if isinstance(result, Exception):
-            QMessageBox.critical(self, APPNAME, str(result))
+            message_box.critical(self, APPNAME, str(result))
             return
         text = "\n".join(line for line in self.worker.output if line.strip())
         window = LogWindow(self, title=self.report_title)
@@ -2320,7 +2321,7 @@ class MainWindow(BaseWindow):
         """
         setcfg("lang", lcode)
         writecfg()
-        answer = QMessageBox.question(
+        answer = message_box.question(
             self,
             APPNAME,
             lang.getstr("lang.confirm_restart"),
@@ -3547,6 +3548,9 @@ class MainWindow(BaseWindow):
         )
         self.black_point_compensation_cb = QCheckBox(
             lang.getstr("black_point_compensation")
+        )
+        self.black_point_compensation_cb.setToolTip(
+            lang.getstr("black_point_compensation.info")
         )
         self._add_check(
             self.black_point_compensation_cb, "profile.black_point_compensation"
@@ -5086,7 +5090,7 @@ class MainWindow(BaseWindow):
         if self._updating or index < 0:
             return
         if index and not getcfg("3dlut.hdr_display"):
-            QMessageBox.information(
+            message_box.information(
                 self, APPNAME, lang.getstr("3dlut.format.madVR.hdr.confirm")
             )
         setcfg("3dlut.hdr_display", index)
@@ -5110,7 +5114,7 @@ class MainWindow(BaseWindow):
             return
         encoding = self._lut3d_encoding_output_values[index]
         if getcfg("3dlut.format") == "madVR" and encoding != "t":
-            result = QMessageBox.question(
+            result = message_box.question(
                 self,
                 APPNAME,
                 lang.getstr(
@@ -5457,7 +5461,7 @@ class MainWindow(BaseWindow):
             self.update_measurement_mode_ctrl()
         self._update_observer_visibility()
         if result.mismatch_warning:
-            QMessageBox.warning(
+            message_box.warning(
                 self,
                 lang.getstr("colorimeter_correction_matrix_file"),
                 result.mismatch_warning,
@@ -5592,7 +5596,7 @@ class MainWindow(BaseWindow):
         try:
             index = self.worker.instruments.index(instrument)
         except ValueError:
-            QMessageBox.critical(
+            message_box.critical(
                 self, APPNAME, lang.getstr("not_found", instrument)
             )
             return
@@ -5644,7 +5648,7 @@ class MainWindow(BaseWindow):
         try:
             cgats = CGATS(ccmx[1])
         except CGATSError as exception:
-            QMessageBox.critical(
+            message_box.critical(
                 self, lang.getstr("colorimeter_correction.info"), str(exception)
             )
             return
@@ -5657,7 +5661,7 @@ class MainWindow(BaseWindow):
             try:
                 window = CCXXPlotWindow(cgats, self.worker)
             except Exception as exception:  # noqa: BLE001 (report on GUI thread)
-                QMessageBox.critical(
+                message_box.critical(
                     self, lang.getstr("colorimeter_correction.info"), str(exception)
                 )
                 return
@@ -5986,7 +5990,7 @@ class MainWindow(BaseWindow):
         if not check_set_argyll_bin():
             return
         if sys.platform == "win32" and sys.getwindowsversion() < (5, 1):
-            QMessageBox.critical(
+            message_box.critical(
                 self, APPNAME, lang.getstr("windows.version.unsupported")
             )
             return
@@ -6027,7 +6031,7 @@ class MainWindow(BaseWindow):
         """
         if not result or isinstance(result, Exception):
             if isinstance(result, Exception):
-                QMessageBox.critical(self, APPNAME, str(result))
+                message_box.critical(self, APPNAME, str(result))
             return
         text = re.sub(
             r"[^\t\n\r\x20-\x7f]", "", "".join(self.worker.output)
@@ -6045,7 +6049,7 @@ class MainWindow(BaseWindow):
         )
         lux_match = re.search(r"Ambient = (\d+(?:\.\d+)) Lux", text, re.I)
         if not (k_match or yxy_match or lux_match):
-            QMessageBox.critical(self, APPNAME, text + lang.getstr("failure"))
+            message_box.critical(self, APPNAME, text + lang.getstr("failure"))
             return
         k = float(k_match.group(1)) if k_match else None
 
@@ -6058,7 +6062,7 @@ class MainWindow(BaseWindow):
             and getcfg("show_advanced_options")
             and getcfg("trc", False) in ("709", "240")
         ):
-            answer = QMessageBox.question(
+            answer = message_box.question(
                 self,
                 APPNAME,
                 lang.getstr("ambient.set"),
@@ -6072,13 +6076,13 @@ class MainWindow(BaseWindow):
                 self.ambient_adjust_textctrl.setValue(float(lux_match.group(1)))
                 self.ambient_adjust_cb.setChecked(True)
             else:
-                QMessageBox.critical(
+                message_box.critical(
                     self,
                     APPNAME,
                     lang.getstr("ambient.measure.light_level.missing"),
                 )
             if not set_whitepoint and k is not None and 4000 <= k <= 25000:
-                answer = QMessageBox.question(
+                answer = message_box.question(
                     self,
                     APPNAME,
                     lang.getstr("whitepoint.set"),
@@ -6090,7 +6094,7 @@ class MainWindow(BaseWindow):
         if not set_whitepoint:
             return
         if not k and not yxy_match:
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 APPNAME,
                 lang.getstr(
@@ -6272,7 +6276,7 @@ class MainWindow(BaseWindow):
         self.profile_quality_ctrl.setEnabled(False)
         try:
             accepted = (
-                QMessageBox.question(
+                message_box.question(
                     self,
                     APPNAME,
                     lang.getstr("profile.testchart_recommendation"),
@@ -6408,7 +6412,7 @@ class MainWindow(BaseWindow):
                 self.worker, VERSION_STRING, self._report_display_name()
             )
         except measurement_report_pipeline.ReportSetupError as exception:
-            QMessageBox.critical(self, APPNAME, str(exception))
+            message_box.critical(self, APPNAME, str(exception))
             self._report_measurement_done()
             return
 
@@ -6431,7 +6435,7 @@ class MainWindow(BaseWindow):
             return
         path = make_argyll_compatible_path(path)
         if not waccess(path, os.W_OK):
-            QMessageBox.critical(
+            message_box.critical(
                 self, APPNAME, lang.getstr("error.access_denied.write", path)
             )
             self._report_measurement_done()
@@ -6439,7 +6443,7 @@ class MainWindow(BaseWindow):
         save_path = f"{os.path.splitext(path)[0]}.html"
         setcfg("last_filedialog_path", save_path)
         if os.path.exists(save_path):
-            answer = QMessageBox.warning(
+            answer = message_box.warning(
                 self,
                 APPNAME,
                 lang.getstr("dialog.confirm_overwrite", save_path),
@@ -6471,7 +6475,7 @@ class MainWindow(BaseWindow):
         Args:
             profile: The profile whose B2A tables are low-resolution.
         """
-        answer = QMessageBox.question(
+        answer = message_box.question(
             self,
             APPNAME,
             lang.getstr("profile.b2a.lowres.warning"),
@@ -6504,10 +6508,10 @@ class MainWindow(BaseWindow):
         """
         profile = self._pending_hires_b2a_profile
         if isinstance(result, Exception):
-            QMessageBox.critical(self, APPNAME, str(result))
+            message_box.critical(self, APPNAME, str(result))
             return
         if not result:
-            QMessageBox.information(
+            message_box.information(
                 self, APPNAME, lang.getstr("error.profile.file_not_created")
             )
             return
@@ -6528,7 +6532,7 @@ class MainWindow(BaseWindow):
             profile.setDescription(os.path.basename(filename))
             profile_save_path = path
         if not waccess(profile_save_path, os.W_OK):
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 APPNAME,
                 lang.getstr("error.access_denied.write", profile_save_path),
@@ -6592,7 +6596,7 @@ class MainWindow(BaseWindow):
         if profile is None:
             return
         if not ("A2B0" in profile.tags or "A2B1" in profile.tags):
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 APPNAME,
                 lang.getstr(
@@ -6604,14 +6608,14 @@ class MainWindow(BaseWindow):
         if ("A2B0" in profile.tags and not isinstance(profile.tags.A2B0, LUT16Type)) or (
             "A2B1" in profile.tags and not isinstance(profile.tags.A2B1, LUT16Type)
         ):
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 APPNAME,
                 lang.getstr("profile.required_tags_missing", "LUT16Type"),
             )
             return
         if profile.connectionColorSpace not in (b"XYZ", b"Lab"):
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 APPNAME,
                 lang.getstr(
@@ -6661,7 +6665,7 @@ class MainWindow(BaseWindow):
                 lang.getstr("browse"), QMessageBox.ActionRole
             )
             box.addButton(lang.getstr("cancel"), QMessageBox.RejectRole)
-            box.exec_()
+            message_box.exec_box(box)
             clicked = box.clickedButton()
             if clicked is current_button:
                 return profile
@@ -6679,7 +6683,7 @@ class MainWindow(BaseWindow):
         try:
             return ICCProfile(path)
         except (OSError, ICCProfileInvalidError) as exception:
-            QMessageBox.critical(self, APPNAME, str(exception))
+            message_box.critical(self, APPNAME, str(exception))
             return None
 
     def _specplot_action_handler(self) -> None:
@@ -6701,7 +6705,7 @@ class MainWindow(BaseWindow):
         setcfg("last_specplot_path", path)
         cmd = get_argyll_util("specplot")
         if not cmd:
-            QMessageBox.critical(
+            message_box.critical(
                 self, APPNAME, lang.getstr("argyll.util.not_found", "specplot")
             )
             return
@@ -6723,7 +6727,7 @@ class MainWindow(BaseWindow):
     def _on_specplot_finished(self, result: object) -> None:
         """Qt port of ``MainFrame.specplot_consumer``."""
         if isinstance(result, Exception):
-            QMessageBox.critical(self, APPNAME, str(result))
+            message_box.critical(self, APPNAME, str(result))
         self.worker.wrapup(False)
         self.show()
 
@@ -6791,7 +6795,7 @@ class MainWindow(BaseWindow):
         if not path:
             return False
         if not waccess(path, os.W_OK):
-            QMessageBox.critical(
+            message_box.critical(
                 self, APPNAME, lang.getstr("error.access_denied.write", path)
             )
             return False
@@ -6869,7 +6873,7 @@ class MainWindow(BaseWindow):
         self.show()
         self.raise_()
         if isinstance(result, Exception):
-            QMessageBox.critical(self, APPNAME, str(result))
+            message_box.critical(self, APPNAME, str(result))
         elif result and config.is_ccxx_testchart():
             self._record_ccxx_measurement_paths()
         elif result:
@@ -6915,7 +6919,7 @@ class MainWindow(BaseWindow):
         try:
             cgats = CGATS(ti3_path)
         except (OSError, CGATSError) as exception:
-            QMessageBox.critical(self, APPNAME, str(exception))
+            message_box.critical(self, APPNAME, str(exception))
             return
         if cgats.queryv1("INSTRUMENT_TYPE_SPECTRAL") == b"YES":
             setcfg("last_reference_ti3_path", cgats.filename)
@@ -6931,7 +6935,7 @@ class MainWindow(BaseWindow):
             getcfg("profile.name.expanded"),
             getcfg("profile.name.expanded") + ".ti3",
         )
-        answer = QMessageBox.question(
+        answer = message_box.question(
             self,
             APPNAME,
             lang.getstr("measurements.complete"),
@@ -6995,12 +6999,12 @@ class MainWindow(BaseWindow):
         if not path:
             return
         if not os.path.exists(path):
-            QMessageBox.critical(self, APPNAME, lang.getstr("file.missing", path))
+            message_box.critical(self, APPNAME, lang.getstr("file.missing", path))
             return
         try:
             loaded = measurement_report_pipeline.load_measurement_file(path)
         except measurement_report_pipeline.MeasurementFileError as exception:
-            QMessageBox.critical(self, APPNAME, str(exception))
+            message_box.critical(self, APPNAME, str(exception))
             return
         setcfg("last_ti3_path", path)
         ti3 = loaded.ti3
@@ -7008,11 +7012,11 @@ class MainWindow(BaseWindow):
         if not proceed:
             return
         if not ti3.modified:
-            QMessageBox.information(self, APPNAME, lang.getstr("errors.none_found"))
+            message_box.information(self, APPNAME, lang.getstr("errors.none_found"))
             return
 
         if loaded.profile is not None:
-            answer = QMessageBox.question(
+            answer = message_box.question(
                 self,
                 APPNAME,
                 lang.getstr("profile.confirm_regeneration"),
@@ -7024,7 +7028,7 @@ class MainWindow(BaseWindow):
             self.worker.wrapup(False)
             tmp_working_dir = self.worker.create_tempdir()
             if isinstance(tmp_working_dir, Exception):
-                QMessageBox.critical(self, APPNAME, str(tmp_working_dir))
+                message_box.critical(self, APPNAME, str(tmp_working_dir))
                 return
             tag_data = measurement_report_pipeline.build_regenerated_profile_tag_data(
                 ti3
@@ -7045,14 +7049,14 @@ class MainWindow(BaseWindow):
         if not save_path:
             return
         if not waccess(save_path, os.W_OK):
-            QMessageBox.critical(
+            message_box.critical(
                 self, APPNAME, lang.getstr("error.access_denied.write", save_path)
             )
             return
         try:
             ti3.write(save_path)
         except OSError as exception:
-            QMessageBox.critical(self, APPNAME, str(exception))
+            message_box.critical(self, APPNAME, str(exception))
 
     def _measurement_file_check_auto_toggled(self, checked: bool) -> None:
         """Persist the "check automatically" toggle (Tools > Advanced menu).
@@ -7063,7 +7067,7 @@ class MainWindow(BaseWindow):
         back off needs no confirmation.
         """
         if checked and not getcfg("ti3.check_sanity.auto"):
-            answer = QMessageBox.question(
+            answer = message_box.question(
                 self,
                 APPNAME,
                 lang.getstr("measurement_file.check_sanity.auto.warning"),
@@ -7118,7 +7122,7 @@ class MainWindow(BaseWindow):
             try:
                 ti3.write()
             except OSError as exception:
-                QMessageBox.critical(self, APPNAME, str(exception))
+                message_box.critical(self, APPNAME, str(exception))
                 return False, []
         return True, removed_items
 
@@ -7142,7 +7146,7 @@ class MainWindow(BaseWindow):
                 self._pending_report_save_path,
             )
         except Exception as exception:
-            QMessageBox.critical(self, APPNAME, str(exception))
+            message_box.critical(self, APPNAME, str(exception))
             self._report_measurement_done()
             return
         context.oprof = oprof
@@ -7199,7 +7203,7 @@ class MainWindow(BaseWindow):
                 context.devlink,
             )
         except Exception as exception:
-            QMessageBox.critical(self, APPNAME, str(exception))
+            message_box.critical(self, APPNAME, str(exception))
             self.worker.wrapup(False)
             self._report_measurement_done()
             return
@@ -7229,7 +7233,7 @@ class MainWindow(BaseWindow):
         self.raise_()
         self._report_measurement_done()
         if isinstance(result, Exception):
-            QMessageBox.critical(self, APPNAME, str(result))
+            message_box.critical(self, APPNAME, str(result))
             self.worker.wrapup(result)
             return
         if not result:
@@ -7240,7 +7244,7 @@ class MainWindow(BaseWindow):
         try:
             ti3_measured = CGATS(ti3_path)[0]
         except (OSError, CGATSError) as exception:
-            QMessageBox.critical(self, APPNAME, str(exception))
+            message_box.critical(self, APPNAME, str(exception))
             self.worker.wrapup(exception)
             return
         proceed, removed_items = self._check_measurement_sanity(ti3_measured)
@@ -7275,7 +7279,7 @@ class MainWindow(BaseWindow):
                 removed_items=removed_items,
             )
         except Exception as exception:
-            QMessageBox.critical(self, APPNAME, str(exception))
+            message_box.critical(self, APPNAME, str(exception))
 
     def _testchart_ctrl_changed(self, index: int) -> None:
         """Load the newly selected testchart."""
@@ -7295,7 +7299,7 @@ class MainWindow(BaseWindow):
         if not path:
             return
         if not os.path.exists(path):
-            QMessageBox.critical(
+            message_box.critical(
                 self, self.windowTitle(), lang.getstr("file.missing", path)
             )
             return
@@ -7303,14 +7307,14 @@ class MainWindow(BaseWindow):
             try:
                 profile = ICCProfile(path)
             except (OSError, ICCProfileInvalidError):
-                QMessageBox.critical(
+                message_box.critical(
                     self,
                     self.windowTitle(),
                     lang.getstr("profile.invalid") + "\n" + path,
                 )
                 return
             if not profile_name_mod.icc_profile_has_embedded_ti3(profile):
-                QMessageBox.critical(
+                message_box.critical(
                     self,
                     self.windowTitle(),
                     lang.getstr("profile.no_embedded_ti3") + "\n" + path,
@@ -7383,7 +7387,7 @@ class MainWindow(BaseWindow):
         """Load, validate and select a fixed (non-"auto") testchart file."""
         result = check_file_isfile(path)
         if isinstance(result, Exception):
-            QMessageBox.critical(self, self.windowTitle(), str(result))
+            message_box.critical(self, self.windowTitle(), str(result))
             self._set_testchart("auto")
             return
         if getattr(self, "_current_testchart_path", None) == path:
@@ -7391,7 +7395,7 @@ class MainWindow(BaseWindow):
         try:
             ti1 = profile_name_mod.load_testchart_from_file(path)
         except Exception as exception:
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 self.windowTitle(),
                 lang.getstr("error.testchart.read", path) + "\n\n" + str(exception),
@@ -7479,7 +7483,7 @@ class MainWindow(BaseWindow):
 
     def _profile_name_info_btn_handler(self) -> None:
         """Show the profile-name placeholder legend."""
-        QMessageBox.information(
+        message_box.information(
             self,
             lang.getstr("profile.name"),
             profile_name_mod.profile_name_placeholders(),
@@ -7500,7 +7504,7 @@ class MainWindow(BaseWindow):
         if not os.path.isdir(profile_save_dir):
             os.makedirs(profile_save_dir, exist_ok=True)
         if not os.access(os.path.dirname(profile_save_dir), os.W_OK):
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 self.windowTitle(),
                 lang.getstr("error.access_denied.write", path),
@@ -7701,7 +7705,7 @@ class MainWindow(BaseWindow):
             lang.getstr("button.calibrate"), QMessageBox.ActionRole
         )
         box.addButton(lang.getstr("cancel"), QMessageBox.RejectRole)
-        box.exec_()
+        message_box.exec_box(box)
         clicked = box.clickedButton()
         if clicked is ok_button:
             return True
@@ -7774,7 +7778,7 @@ class MainWindow(BaseWindow):
             return
         profile_in_path = getcfg("3dlut.input.profile")
         if not profile_in_path or not os.path.isfile(profile_in_path):
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 APPNAME,
                 lang.getstr("error.profile.file_missing", profile_in_path),
@@ -7783,7 +7787,7 @@ class MainWindow(BaseWindow):
         try:
             profile_in = ICCProfile(profile_in_path)
         except (OSError, ICCProfileInvalidError):
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 APPNAME,
                 lang.getstr("profile.invalid") + "\n" + profile_in_path,
@@ -7791,7 +7795,7 @@ class MainWindow(BaseWindow):
             return
         profile_out = config.get_current_profile()
         if not profile_out:
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 APPNAME,
                 lang.getstr("profile.invalid")
@@ -7799,7 +7803,7 @@ class MainWindow(BaseWindow):
                 + str(getcfg("calibration.file", False)),
             )
             return
-        if profile_in.is_same(profile_out, force_calculation=True) and QMessageBox.question(
+        if profile_in.is_same(profile_out, force_calculation=True) and message_box.question(
             self,
             APPNAME,
             lang.getstr("error.source_dest_same"),
@@ -7809,11 +7813,11 @@ class MainWindow(BaseWindow):
 
         path = self.worker.lut3d_get_filename()
         if not waccess(path, os.W_OK):
-            QMessageBox.critical(
+            message_box.critical(
                 self, APPNAME, lang.getstr("error.access_denied.write", path)
             )
             return
-        if os.path.isfile(path) and QMessageBox.warning(
+        if os.path.isfile(path) and message_box.warning(
             self,
             APPNAME,
             lang.getstr("dialog.confirm_overwrite", path),
@@ -7891,7 +7895,7 @@ class MainWindow(BaseWindow):
         """
         self.worker.wrapup(False)
         if isinstance(result, Exception):
-            QMessageBox.critical(self, APPNAME, str(result))
+            message_box.critical(self, APPNAME, str(result))
             return
         if not result:
             return
@@ -7948,7 +7952,7 @@ class MainWindow(BaseWindow):
         box.setText(text)
         install_button = box.addButton(lang.getstr(ok_key), QMessageBox.AcceptRole)
         box.addButton(lang.getstr("cancel"), QMessageBox.RejectRole)
-        box.exec_()
+        message_box.exec_box(box)
         if box.clickedButton() is not install_button:
             return
         self._install_3dlut(lut3d_path, file_format, is_prisma)
@@ -8001,7 +8005,7 @@ class MainWindow(BaseWindow):
                 dst_path,
             )
         except OSError as exception:
-            QMessageBox.critical(self, APPNAME, str(exception))
+            message_box.critical(self, APPNAME, str(exception))
             return
         setcfg("last_3dlut_path", written[0])
 
@@ -8073,7 +8077,7 @@ class MainWindow(BaseWindow):
             lang.getstr("turn_off"), QMessageBox.AcceptRole
         )
         box.addButton(lang.getstr("setting.keep_current"), QMessageBox.RejectRole)
-        box.exec_()
+        message_box.exec_box(box)
         if box.clickedButton() is turn_off_button:
             setcfg("profile.black_point_compensation", 0)
             self._update_bpc()
@@ -8091,7 +8095,7 @@ class MainWindow(BaseWindow):
         dst_file = preflight_checks.resolve_overwrite_path(ext, filename)
         if not os.path.exists(dst_file):
             return True
-        answer = QMessageBox.warning(
+        answer = message_box.warning(
             self,
             APPNAME,
             lang.getstr("warning.already_exists", os.path.basename(dst_file)),
@@ -8115,7 +8119,7 @@ class MainWindow(BaseWindow):
         if not preflight_checks.macos_bugs_warning_applicable():
             return None
         if cal and preflight_checks.should_warn_calibration_bugs():
-            answer = QMessageBox.warning(
+            answer = message_box.warning(
                 self,
                 APPNAME,
                 lang.getstr("macos.bugs.cal.warning"),
@@ -8131,7 +8135,7 @@ class MainWindow(BaseWindow):
                 self.black_point_correction_ctrl.setValue(0)
         if not profile or not preflight_checks.should_warn_profile_bugs():
             return None
-        answer = QMessageBox.warning(
+        answer = message_box.warning(
             self,
             APPNAME,
             lang.getstr("macos.bugs.profile.warning"),
@@ -8165,7 +8169,7 @@ class MainWindow(BaseWindow):
         try:
             info = preflight_checks.resolve_cal_choice_info(self.worker)
         except preflight_checks.CalChoiceProfileInvalidError:
-            QMessageBox.critical(
+            message_box.critical(
                 self, APPNAME, f"{lang.getstr('profile.invalid')}\n{cal}"
             )
             return CAL_CHOICE_CANCELLED
@@ -8259,11 +8263,11 @@ class MainWindow(BaseWindow):
         same success/failure feedback wx's ``InfoDialog`` gives.
         """
         if isinstance(result, Exception):
-            QMessageBox.critical(self, APPNAME, str(result))
+            message_box.critical(self, APPNAME, str(result))
         elif result:
-            QMessageBox.information(self, APPNAME, lang.getstr("success"))
+            message_box.information(self, APPNAME, lang.getstr("success"))
         else:
-            QMessageBox.critical(self, APPNAME, lang.getstr("failure"))
+            message_box.critical(self, APPNAME, lang.getstr("failure"))
 
     def _load_cal_or_profile_action_handler(self) -> None:
         """Tools menu "Load calibration curves from cal or profile...".
@@ -8282,7 +8286,7 @@ class MainWindow(BaseWindow):
         if not path:
             return
         if not os.path.exists(path):
-            QMessageBox.critical(self, APPNAME, lang.getstr("file.missing", path))
+            message_box.critical(self, APPNAME, lang.getstr("file.missing", path))
             return
         setcfg("last_cal_or_icc_path", path)
         self._report_vcgt_result(self._load_cal(path, silent=False))
@@ -8296,7 +8300,7 @@ class MainWindow(BaseWindow):
             return
         profile = config.get_display_profile()
         if not profile or not profile.filename:
-            QMessageBox.critical(self, APPNAME, lang.getstr("profile.invalid"))
+            message_box.critical(self, APPNAME, lang.getstr("profile.invalid"))
             return
         self._report_vcgt_result(self._load_cal(profile.filename, silent=False))
 
@@ -8426,7 +8430,7 @@ class MainWindow(BaseWindow):
             return
         self._restore_after_measurement()
         if result.error_message:
-            QMessageBox.critical(self, APPNAME, result.error_message)
+            message_box.critical(self, APPNAME, result.error_message)
 
     def _drive_measurement(self, action: MeasurementAction) -> None:
         """Run the staged Argyll measurement for ``action``.
@@ -8527,11 +8531,11 @@ class MainWindow(BaseWindow):
         self.show()
         self.raise_()
         if isinstance(result, Exception):
-            QMessageBox.critical(self, APPNAME, str(result))
+            message_box.critical(self, APPNAME, str(result))
             return
         if not result:
             if not getcfg("dry_run"):
-                QMessageBox.information(
+                message_box.information(
                     self, APPNAME, lang.getstr("profiling.incomplete")
                 )
             return
@@ -8555,14 +8559,14 @@ class MainWindow(BaseWindow):
             try:
                 ti3 = CGATS(ti3_path)
             except (OSError, CGATSError) as exception:
-                QMessageBox.critical(self, APPNAME, str(exception))
+                message_box.critical(self, APPNAME, str(exception))
                 return
             proceed, _removed_items = self._check_measurement_sanity(ti3)
             if not proceed:
                 return
         result = self.worker.wrapup(copy=True, remove=False, ext_filter=[".ti3"])
         if isinstance(result, Exception):
-            QMessageBox.critical(self, APPNAME, str(result))
+            message_box.critical(self, APPNAME, str(result))
             return
         self._apply_lut3d_path(
             profile_finish.resolve_profile_path(), set_mr_sim_profile=False
@@ -8607,11 +8611,11 @@ class MainWindow(BaseWindow):
                 ``profile_finish`` call sites.
         """
         if isinstance(result, Exception):
-            QMessageBox.critical(self, APPNAME, str(result))
+            message_box.critical(self, APPNAME, str(result))
             return
         if not result:
             if not getcfg("dry_run"):
-                QMessageBox.information(
+                message_box.information(
                     self, APPNAME, lang.getstr("profiling.incomplete")
                 )
             return
@@ -8619,10 +8623,10 @@ class MainWindow(BaseWindow):
         try:
             built = profile_finish.validate_built_profile(profile_path)
         except profile_finish.ProfileFinishInvalidError as exception:
-            QMessageBox.critical(self, APPNAME, str(exception))
+            message_box.critical(self, APPNAME, str(exception))
             return
         except profile_finish.ProfileFinishNotDisplayError:
-            QMessageBox.information(self, APPNAME, lang.getstr("profiling.complete"))
+            message_box.information(self, APPNAME, lang.getstr("profiling.complete"))
             return
         if profile_finish.sync_calibration_file_config(profile_path):
             self.update_calibration_file_ctrl()
@@ -8772,7 +8776,7 @@ class MainWindow(BaseWindow):
             self._profile_install_progress.close()
             self._profile_install_progress = None
         if isinstance(result, Exception):
-            QMessageBox.critical(self, APPNAME, str(result))
+            message_box.critical(self, APPNAME, str(result))
             return
         show_install_summary(self, APPNAME, result)
 
@@ -8912,13 +8916,13 @@ class MainWindow(BaseWindow):
         if isinstance(result, Exception):
             self.show()
             self.raise_()
-            QMessageBox.critical(self, APPNAME, str(result))
+            message_box.critical(self, APPNAME, str(result))
             return
         if not result:
             self.show()
             self.raise_()
             if not getcfg("dry_run"):
-                QMessageBox.information(
+                message_box.information(
                     self, APPNAME, lang.getstr("calibration.incomplete")
                 )
             return
@@ -8942,7 +8946,7 @@ class MainWindow(BaseWindow):
             )
         elif getcfg("trc"):
             self._load_cal(silent=True)
-            QMessageBox.information(
+            message_box.information(
                 self, APPNAME, lang.getstr("calibration.complete")
             )
 
@@ -9059,7 +9063,7 @@ class MainWindow(BaseWindow):
         try:
             profile, ti3_lines = calibration_file.parse_calibration_file(path)
         except calibration_file.CalibrationFileError as exception:
-            QMessageBox.critical(self, self.windowTitle(), str(exception))
+            message_box.critical(self, self.windowTitle(), str(exception))
             return
 
         is_preset = path in self.presets
@@ -9088,7 +9092,7 @@ class MainWindow(BaseWindow):
             try:
                 options_dispcal, options_colprof = get_options_from_cal(path)
             except (OSError, CGATSError):
-                QMessageBox.critical(
+                message_box.critical(
                     self,
                     self.windowTitle(),
                     f"{lang.getstr('calibration.file.invalid')}\n{path}",
@@ -9098,7 +9102,7 @@ class MainWindow(BaseWindow):
         if not options_dispcal and not options_colprof:
             if is_profile:
                 if not silent:
-                    QMessageBox.information(
+                    message_box.information(
                         self,
                         self.windowTitle(),
                         f"{lang.getstr('no_settings')}\n{path}",
@@ -9161,7 +9165,7 @@ class MainWindow(BaseWindow):
         )
         legacy = calibration_file.parse_legacy_cal(ti3_lines, self.worker)
         if legacy.invalid:
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 self.windowTitle(),
                 f"{lang.getstr('calibration.file.invalid')}\n{path}",
@@ -9176,7 +9180,7 @@ class MainWindow(BaseWindow):
         self.update_controls()
         self._apply_vcgt(path, silent=True)
         if not silent and not legacy.settings:
-            QMessageBox.information(
+            message_box.information(
                 self,
                 self.windowTitle(),
                 f"{lang.getstr('no_settings')}\n{path}",
@@ -9219,7 +9223,7 @@ class MainWindow(BaseWindow):
             return
         tempdir = self.worker.create_tempdir()
         if isinstance(tempdir, Exception):
-            QMessageBox.critical(self, self.windowTitle(), str(tempdir))
+            message_box.critical(self, self.windowTitle(), str(tempdir))
             return
         sevenzip = get_program_file("7z", "7-zip") if ext.lower() == ".7z" else None
         request = calibration_file.SessionArchiveImportRequest(
@@ -9246,7 +9250,7 @@ class MainWindow(BaseWindow):
             message = str(result) if isinstance(result, Exception) else lang.getstr(
                 "error"
             )
-            QMessageBox.critical(self, self.windowTitle(), message)
+            message_box.critical(self, self.windowTitle(), message)
             self.worker.wrapup(False)
             return
         self.worker.wrapup(dst_path=result)
@@ -9316,7 +9320,7 @@ class MainWindow(BaseWindow):
         )
         exclude_ext = None
         if has_3dlut:
-            result = QMessageBox.question(
+            result = message_box.question(
                 self,
                 self.windowTitle(),
                 lang.getstr("archive.include_3dluts"),
@@ -9372,7 +9376,7 @@ class MainWindow(BaseWindow):
             message = str(result) if isinstance(result, Exception) else lang.getstr(
                 "error"
             )
-            QMessageBox.critical(self, self.windowTitle(), message)
+            message_box.critical(self, self.windowTitle(), message)
 
     def delete_calibration_handler(self) -> None:
         """Delete the current calibration/profile and its related files.
@@ -9389,7 +9393,7 @@ class MainWindow(BaseWindow):
         try:
             dircontents = os.listdir(os.path.dirname(cal))
         except OSError as exception:
-            QMessageBox.critical(self, self.windowTitle(), str(exception))
+            message_box.critical(self, self.windowTitle(), str(exception))
             return
         related_files = calibration_file.related_files_for(cal, dircontents)
         dialog = _DeleteConfirmationDialog(related_files, self)
@@ -9402,7 +9406,7 @@ class MainWindow(BaseWindow):
                 "darwin": "trashcan.mac",
                 "win32": "trashcan.windows",
             }.get(sys.platform, "trashcan.linux")
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 self.windowTitle(),
                 lang.getstr("error.deletion", lang.getstr(trashcan_key))

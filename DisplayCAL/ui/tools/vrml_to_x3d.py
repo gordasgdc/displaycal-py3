@@ -38,6 +38,7 @@ from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import get_theme_pixmap
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
+from DisplayCAL.ui import message_box
 from DisplayCAL.util_os import launch_file, make_win32_compatible_long_path, waccess
 
 #: Suffixes the converter accepts (lowercased), longest first matters for the
@@ -237,7 +238,7 @@ class VRML2X3DWindow(BaseWindow):
         self.setEnabled(True)
         self._thread = None
         if isinstance(result, Exception):
-            QMessageBox.critical(self, self.windowTitle(), str(result))
+            message_box.critical(self, self.windowTitle(), str(result))
         elif result and self.view:
             launch_file(self._finalpath)
 
@@ -247,7 +248,7 @@ class VRML2X3DWindow(BaseWindow):
         Args:
             paths (list[str]): The unsupported dropped file paths.
         """
-        QMessageBox.warning(
+        message_box.warning(
             self,
             self.windowTitle(),
             lang.getstr("error.file_type_unsupported") + "\n\n" + "\n".join(paths),

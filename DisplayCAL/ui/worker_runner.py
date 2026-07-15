@@ -28,6 +28,7 @@ from qtpy.QtCore import QObject, QThread, QTimer, Signal
 from DisplayCAL import localization as lang
 from DisplayCAL.argyll import get_argyll_utilname
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.progress_dialog import ProgressDialog
 
 if TYPE_CHECKING:
@@ -497,7 +498,7 @@ class ProgressAdapter(QObject):
         box.setText(request.msg)
         ok_button = box.addButton(request.ok, QMessageBox.ButtonRole.AcceptRole)
         box.addButton(request.cancel, QMessageBox.ButtonRole.RejectRole)
-        box.exec()
+        message_box.exec_box(box)
         return box.clickedButton() is ok_button
 
     def confirm3(  # noqa: PLR0913
@@ -552,7 +553,7 @@ class ProgressAdapter(QObject):
         retry_button = box.addButton(request.retry, QMessageBox.ButtonRole.AcceptRole)
         alt_button = box.addButton(request.alt, QMessageBox.ButtonRole.ActionRole)
         box.addButton(request.cancel, QMessageBox.ButtonRole.RejectRole)
-        box.exec()
+        message_box.exec_box(box)
         clicked = box.clickedButton()
         if clicked is retry_button:
             return "retry"
@@ -926,7 +927,7 @@ class _AdjustmentTerminal(QObject):
         box.setText(request.msg)
         ok_button = box.addButton(request.ok, QMessageBox.ButtonRole.AcceptRole)
         box.addButton(request.cancel, QMessageBox.ButtonRole.RejectRole)
-        box.exec()
+        message_box.exec_box(box)
         return box.clickedButton() is ok_button
 
     def confirm3(  # noqa: PLR0913
@@ -981,7 +982,7 @@ class _AdjustmentTerminal(QObject):
         retry_button = box.addButton(request.retry, QMessageBox.ButtonRole.AcceptRole)
         alt_button = box.addButton(request.alt, QMessageBox.ButtonRole.ActionRole)
         box.addButton(request.cancel, QMessageBox.ButtonRole.RejectRole)
-        box.exec()
+        message_box.exec_box(box)
         clicked = box.clickedButton()
         if clicked is retry_button:
             return "retry"

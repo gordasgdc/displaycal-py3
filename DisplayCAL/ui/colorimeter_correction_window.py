@@ -92,6 +92,7 @@ from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.ui.assets import get_theme_pixmap
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.measurement_flow import observer_items
 from DisplayCAL.ui.tooltip_window import TooltipWindow, info_text_html
 from DisplayCAL.util_str import safe_str
@@ -1169,7 +1170,7 @@ class CreateCorrectionWindow(BaseWindow):
     def _save(self, cgats_bytes: bytes, is_ccmx: bool) -> None:
         path = ccxx_helpers.get_cgats_path(cgats_bytes)
         if os.path.isfile(path):
-            reply = QMessageBox.question(
+            reply = message_box.question(
                 self,
                 lang.getstr("colorimeter_correction.create"),
                 lang.getstr("dialog.confirm_overwrite", os.path.basename(path)),
@@ -1193,7 +1194,7 @@ class CreateCorrectionWindow(BaseWindow):
 
     def _error(self, message: str) -> None:
         title = lang.getstr("colorimeter_correction.create")
-        QMessageBox.critical(self, title, message)
+        message_box.critical(self, title, message)
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 (Qt override)
         """Persist config on close, matching the other ported windows."""

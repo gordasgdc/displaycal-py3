@@ -73,6 +73,7 @@ from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
+from DisplayCAL.ui import message_box
 from DisplayCAL.util_decimal import stripzeros
 from DisplayCAL.util_os import waccess
 from DisplayCAL.worker import Worker, get_current_profile_path
@@ -2145,7 +2146,7 @@ class LUT3DWindow(BaseWindow):
         Args:
             message (str): The message to display.
         """
-        QMessageBox.critical(self, self.windowTitle(), message)
+        message_box.critical(self, self.windowTitle(), message)
 
     def _confirm(self, message: str, confirm: str | None = None) -> bool:
         """Show a modal confirmation dialog.
@@ -2158,7 +2159,7 @@ class LUT3DWindow(BaseWindow):
             bool: True if the user accepted.
         """
         return (
-            QMessageBox.question(
+            message_box.question(
                 self,
                 self.windowTitle(),
                 message,

@@ -51,6 +51,7 @@ from DisplayCAL import localization as lang
 from DisplayCAL.argyll import check_set_argyll_bin, get_argyll_util
 from DisplayCAL.config import getcfg
 from DisplayCAL.meta import DOMAIN
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.worker_runner import PasswordPromptAdapter
 from DisplayCAL.util_os import getenvu, safe_glob
 from DisplayCAL.worker import Worker
@@ -273,16 +274,16 @@ class Spyder2EnableController(QObject):
             self._progress = None
         title = lang.getstr("enable_spyder2")
         if isinstance(result, Exception):
-            QMessageBox.critical(self._parent, title, str(result))
+            message_box.critical(self._parent, title, str(result))
         elif result:
-            QMessageBox.information(
+            message_box.information(
                 self._parent, title, lang.getstr("enable_spyder2_success")
             )
         elif result is False:
             error = "".join(self._worker.errors) or lang.getstr(
                 "enable_spyder2_failure"
             )
-            QMessageBox.critical(self._parent, title, error)
+            message_box.critical(self._parent, title, error)
         # result is None: cancelled mid-flow (e.g. declined the web download);
         # matches wx, which shows no dialog for that case either.
         self.finished.emit(True)

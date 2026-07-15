@@ -67,6 +67,7 @@ from DisplayCAL.icc_profile import ICCProfile, ICCProfileInvalidError
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.measurement_report import _FileBrowse
 from DisplayCAL.util_list import natsort_key_factory
 
@@ -413,7 +414,7 @@ class GamapWindow(BaseWindow):
             and new_code in gamap_settings.VIEWCONDS_OUT_NONDISPLAY
         ):
             label = self.gamap_out_viewcond_ctrl.itemText(index)
-            result = QMessageBox.question(
+            result = message_box.question(
                 self,
                 APPNAME,
                 lang.getstr("warning.gamap.out_viewcond.nondisplay", label),
@@ -450,7 +451,7 @@ class GamapWindow(BaseWindow):
                 profile = ICCProfile(v)
             except (OSError, ICCProfileInvalidError):
                 p = False
-                QMessageBox.critical(
+                message_box.critical(
                     self,
                     lang.getstr("profile.invalid"),
                     lang.getstr("profile.invalid") + "\n" + v,

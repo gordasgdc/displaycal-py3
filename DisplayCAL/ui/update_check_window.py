@@ -42,6 +42,7 @@ from DisplayCAL import localization as lang
 from DisplayCAL import update_check as uc
 from DisplayCAL.config import getcfg, setcfg
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import message_box
 from DisplayCAL.util_os import launch_file
 from DisplayCAL.worker import Worker
 
@@ -134,7 +135,7 @@ def show_up_to_date_dialog(parent: QWidget | None = None) -> None:
     checkbox = QCheckBox(lang.getstr("update_check.onstartup"))
     checkbox.setChecked(bool(getcfg("update_check")))
     box.setCheckBox(checkbox)
-    box.exec_()
+    message_box.exec_box(box)
     setcfg("update_check", int(checkbox.isChecked()))
 
 

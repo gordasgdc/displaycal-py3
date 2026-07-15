@@ -90,6 +90,7 @@ from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import get_theme_pixmap
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
+from DisplayCAL.ui import message_box
 from DisplayCAL.util_list import natsort_key_factory
 from DisplayCAL.worker import Worker, get_current_profile_path
 
@@ -1760,7 +1761,7 @@ class ReportPanel(QWidget):
         Args:
             message (str): The message to display.
         """
-        QMessageBox.critical(self, lang.getstr("error"), message)
+        message_box.critical(self, lang.getstr("error"), message)
 
 
 class ReportWindow(BaseWindow):

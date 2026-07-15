@@ -83,6 +83,7 @@ from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
+from DisplayCAL.ui import message_box
 from DisplayCAL.util_decimal import stripzeros
 from DisplayCAL.util_dict import dict_sort
 from DisplayCAL.util_io import Files
@@ -896,19 +897,19 @@ class SynthICCWindow(BaseWindow):
         try:
             profile = ICCProfile(path)
         except (OSError, ICCProfileInvalidError):
-            QMessageBox.critical(
+            message_box.critical(
                 self, self.windowTitle(), lang.getstr("profile.invalid") + "\n" + path
             )
             return
         if profile.version >= 4 and not profile.convert_iccv4_tags_to_iccv2():
-            QMessageBox.critical(
+            message_box.critical(
                 self, self.windowTitle(), lang.getstr("profile.iccv4.unsupported")
             )
             return
         if profile.colorSpace not in (b"RGB", b"GRAY") or (
             profile.connectionColorSpace not in (b"Lab", b"XYZ")
         ):
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 self.windowTitle(),
                 lang.getstr(
@@ -925,7 +926,7 @@ class SynthICCWindow(BaseWindow):
         try:
             colors = self.worker.xicclu(profile, rgb, intent="a", pcs="x")
         except Exception as exception:  # noqa: BLE001
-            QMessageBox.critical(self, self.windowTitle(), str(exception))
+            message_box.critical(self, self.windowTitle(), str(exception))
             return
         finally:
             self.worker.wrapup(False)
@@ -946,7 +947,7 @@ class SynthICCWindow(BaseWindow):
         try:
             ti3 = CGATS(path)
         except (OSError, CGATSInvalidError):
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 self.windowTitle(),
                 lang.getstr("error.measurement.file_invalid", path),
@@ -969,7 +970,7 @@ class SynthICCWindow(BaseWindow):
         try:
             _, RGB_XYZ_extracted, _ = extract_device_gray_primaries(ti3)
         except Error as exception:
-            QMessageBox.critical(self, self.windowTitle(), str(exception))
+            message_box.critical(self, self.windowTitle(), str(exception))
             return
         RGB_XYZ_extracted = dict_sort(RGB_XYZ_extracted)
         colors.extend(list(RGB_XYZ_extracted.values()))
@@ -1527,7 +1528,7 @@ class SynthICCWindow(BaseWindow):
         if os.path.splitext(path)[1].lower() not in (".icc", ".icm"):
             path += PROFILE_EXT
         if not waccess(path, os.W_OK):
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 self.windowTitle(),
                 lang.getstr("error.access_denied.write", path),
@@ -1586,7 +1587,7 @@ class SynthICCWindow(BaseWindow):
         self._thread = None
         self.save_as_btn.setEnabled(True)
         if isinstance(result, Exception):
-            QMessageBox.critical(self, self.windowTitle(), str(result))
+            message_box.critical(self, self.windowTitle(), str(result))
 
     def create_profile(
         self,

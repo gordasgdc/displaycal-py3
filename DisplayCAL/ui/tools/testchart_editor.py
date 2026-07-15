@@ -91,6 +91,7 @@ from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
+from DisplayCAL.ui import message_box
 from DisplayCAL.util_dict import swap_dict_keys_values
 from DisplayCAL.util_os import launch_file, waccess
 from DisplayCAL.worker import (
@@ -1083,7 +1084,7 @@ class TestchartEditorWindow(BaseWindow):
         if profile_path:
             self._set_precond_profile(profile_path)
         else:
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 self.windowTitle(),
                 lang.getstr(
@@ -1510,7 +1511,7 @@ class TestchartEditorWindow(BaseWindow):
         if self._gen_thread is not None and self._gen_thread.isRunning():
             return
         if not check_set_argyll_bin():
-            QMessageBox.warning(
+            message_box.warning(
                 self, self.windowTitle(), lang.getstr("argyll.dir.invalid", "")
             )
             return
@@ -1564,7 +1565,7 @@ class TestchartEditorWindow(BaseWindow):
         self._gen_thread = None
         self.preview_btn.setEnabled(True)
         if isinstance(result, Exception):
-            QMessageBox.critical(self, self.windowTitle(), str(result))
+            message_box.critical(self, self.windowTitle(), str(result))
             self.tc_check()
             return
         self.ti1 = result
@@ -1689,7 +1690,7 @@ class TestchartEditorWindow(BaseWindow):
         self._load_thread = None
         if isinstance(result, Exception):
             self.statusBar().clearMessage()
-            QMessageBox.critical(self, self.windowTitle(), str(result))
+            message_box.critical(self, self.windowTitle(), str(result))
             return
         (white, black, single, gray, multi, multi_bcc, _fs, gamma, dark) = result
         algo = None
@@ -1795,11 +1796,11 @@ class TestchartEditorWindow(BaseWindow):
         try:
             profile = ICCProfile(getcfg("tc_precond_profile"))
         except (OSError, ICCProfileInvalidError) as exception:
-            QMessageBox.critical(self, self.windowTitle(), str(exception))
+            message_box.critical(self, self.windowTitle(), str(exception))
             return
         rgb_space = profile.get_rgb_space()
         if not rgb_space:
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 self.windowTitle(),
                 lang.getstr(
@@ -1847,7 +1848,7 @@ class TestchartEditorWindow(BaseWindow):
         elif getcfg("tc_precond_profile"):
             self.tc_add_ti3_handler(path)
         else:
-            QMessageBox.critical(
+            message_box.critical(
                 self, self.windowTitle(), lang.getstr("tc.precond.notset")
             )
 
@@ -1862,7 +1863,7 @@ class TestchartEditorWindow(BaseWindow):
         try:
             profile = ICCProfile(getcfg("tc_precond_profile"))
         except (OSError, ICCProfileInvalidError) as exception:
-            QMessageBox.critical(self, self.windowTitle(), str(exception))
+            message_box.critical(self, self.windowTitle(), str(exception))
             return
         if not chart:
             default_dir, default_file = get_verified_path("testchart.reference")
@@ -1882,7 +1883,7 @@ class TestchartEditorWindow(BaseWindow):
         if ext in IMAGE_SUFFIXES:
             image = QImage(chart)
             if image.isNull():
-                QMessageBox.critical(
+                message_box.critical(
                     self,
                     self.windowTitle(),
                     lang.getstr("error.file_type_unsupported"),
@@ -1892,7 +1893,7 @@ class TestchartEditorWindow(BaseWindow):
             try:
                 chart = self._named_color_chart(chart)
             except Exception as exception:  # noqa: BLE001
-                QMessageBox.critical(self, self.windowTitle(), str(exception))
+                message_box.critical(self, self.windowTitle(), str(exception))
                 return
         self._progress = self._make_progress(
             lang.getstr("testchart.add_ti3_patches")
@@ -2276,12 +2277,12 @@ class TestchartEditorWindow(BaseWindow):
             self.ti1 is not None and bool(getcfg("tc_precond_profile"))
         )
         if isinstance(result, Exception):
-            QMessageBox.critical(self, self.windowTitle(), str(result))
+            message_box.critical(self, self.windowTitle(), str(result))
             return
         try:
             newdata = self._reference_to_patches(result, profile)
         except Exception as exception:  # noqa: BLE001
-            QMessageBox.critical(self, self.windowTitle(), str(exception))
+            message_box.critical(self, self.windowTitle(), str(exception))
             return
         if not newdata:
             return
@@ -2448,7 +2449,7 @@ END_DATA"""
         self._csv_thread = None
         self._close_progress()
         if isinstance(result, Exception):
-            QMessageBox.critical(self, self.windowTitle(), str(result))
+            message_box.critical(self, self.windowTitle(), str(result))
             return
         self.load_file(result.filename)
 
@@ -2489,7 +2490,7 @@ END_DATA"""
             if os.path.splitext(path)[1].lower() != ".ti1":
                 path += ".ti1"
         if not waccess(path, os.W_OK):
-            QMessageBox.critical(
+            message_box.critical(
                 self, self.windowTitle(), lang.getstr("error.access_denied.write", path)
             )
             return False
@@ -2498,7 +2499,7 @@ END_DATA"""
             with open(path, "wb") as handle:
                 handle.write(bytes(self.ti1))
         except Exception as exception:  # noqa: BLE001
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 self.windowTitle(),
                 f"Error - testchart could not be saved: {exception!s}",
@@ -2550,7 +2551,7 @@ END_DATA"""
         if os.path.splitext(path)[1].lower() != ".csv":
             path += ".csv"
         if not waccess(path, os.W_OK):
-            QMessageBox.critical(
+            message_box.critical(
                 self,
                 self.windowTitle(),
                 lang.getstr("error.access_denied.write", path),
@@ -2594,7 +2595,7 @@ END_DATA"""
         self._close_progress()
         self.export_btn.setEnabled(self.ti1 is not None)
         if isinstance(result, Exception):
-            QMessageBox.critical(self, self.windowTitle(), str(result))
+            message_box.critical(self, self.windowTitle(), str(result))
 
     # -- 3D view -----------------------------------------------------------
 
@@ -2710,7 +2711,7 @@ END_DATA"""
         self._close_progress()
         self.tc_vrml_update_enabled()
         if isinstance(result, Exception):
-            QMessageBox.critical(self, self.windowTitle(), str(result))
+            message_box.critical(self, self.windowTitle(), str(result))
             return
         for path in result:
             launch_file(path)

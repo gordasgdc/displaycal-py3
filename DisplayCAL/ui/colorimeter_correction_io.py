@@ -73,6 +73,7 @@ from DisplayCAL.config import get_argyll_data_dir, get_verified_path, getcfg, se
 from DisplayCAL.meta import DOMAIN
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.ui.base_window import BaseWindow
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.measurement_flow import observer_items
 from DisplayCAL.ui.worker_runner import PasswordPromptAdapter
 from DisplayCAL.worker import Worker, check_create_dir, http_request
@@ -145,11 +146,11 @@ def save_correction(cgats_bytes: bytes, parent: QWidget | None = None) -> bool:
     title = lang.getstr("colorimeter_correction.web_check")
     result = check_create_dir(get_argyll_data_dir())
     if isinstance(result, Exception):
-        QMessageBox.critical(parent, title, str(result))
+        message_box.critical(parent, title, str(result))
         return False
     path = ccxx_helpers.get_cgats_path(cgats_bytes)
     if os.path.isfile(path):
-        reply = QMessageBox.question(
+        reply = message_box.question(
             parent, title, lang.getstr("dialog.confirm_overwrite", path)
         )
         if reply != QMessageBox.Yes:
@@ -158,7 +159,7 @@ def save_correction(cgats_bytes: bytes, parent: QWidget | None = None) -> bool:
         with open(path, "wb") as cgatsfile:
             cgatsfile.write(cgats_bytes.rstrip(b"\n") + b"\n")
     except OSError as exception:
-        QMessageBox.critical(parent, title, str(exception))
+        message_box.critical(parent, title, str(exception))
         return False
     if getcfg("colorimeter_correction_matrix_file").split(":")[0] != "AUTO":
         setcfg("colorimeter_correction_matrix_file", ":" + path)
@@ -295,7 +296,7 @@ class WebCheckController(QObject):
             self._progress = None
         title = lang.getstr("colorimeter_correction.web_check")
         if isinstance(result, Exception):
-            QMessageBox.information(self._parent, title, str(result))
+            message_box.information(self._parent, title, str(result))
             self.finished.emit()
             return
         rows = ccxx_helpers.parse_web_check_entries(result, observer_items())
@@ -540,7 +541,7 @@ class ImportController(QObject):
         result, i1d3, spyd4, icd = results
         title = lang.getstr("colorimeter_correction.import")
         if isinstance(result, Exception):
-            QMessageBox.critical(self._parent, title, str(result))
+            message_box.critical(self._parent, title, str(result))
             self.finished.emit()
             return
         imported = []
@@ -556,7 +557,7 @@ class ImportController(QObject):
             elif subresult is not None:
                 failures.append(name)
         if imported:
-            QMessageBox.information(
+            message_box.information(
                 self._parent,
                 title,
                 lang.getstr(
@@ -569,7 +570,7 @@ class ImportController(QObject):
                 + "\n\n"
                 + "\n".join(failures)
             )
-            QMessageBox.critical(self._parent, title, error)
+            message_box.critical(self._parent, title, error)
         self.finished.emit()
 
 
@@ -610,13 +611,13 @@ class UploadController(QObject):
         if not ccxx_helpers.validate_upload_originator(
             cgats.decode("utf-8", "replace"), APPNAME
         ):
-            QMessageBox.critical(
+            message_box.critical(
                 self._parent, title, lang.getstr("colorimeter_correction.upload.deny")
             )
             self.finished.emit()
             return
 
-        reply = QMessageBox.question(
+        reply = message_box.question(
             self._parent, title, lang.getstr("colorimeter_correction.upload.confirm")
         )
         if reply != QMessageBox.Yes:
@@ -671,19 +672,19 @@ class UploadController(QObject):
             self._progress = None
         title = lang.getstr("colorimeter_correction.upload")
         if result == "exists":
-            QMessageBox.information(
+            message_box.information(
                 self._parent,
                 title,
                 lang.getstr("colorimeter_correction.upload.exists"),
             )
         elif result == "success":
-            QMessageBox.information(
+            message_box.information(
                 self._parent,
                 title,
                 lang.getstr("colorimeter_correction.upload.success"),
             )
         else:
-            QMessageBox.critical(self._parent, title, str(result))
+            message_box.critical(self._parent, title, str(result))
         self.finished.emit()
 
 

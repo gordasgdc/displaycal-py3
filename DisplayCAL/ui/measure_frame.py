@@ -63,6 +63,7 @@ from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import get_themed_pixmap
 from DisplayCAL.ui.theme import is_dark
 from DisplayCAL.ui.base_window import BaseWindow
+from DisplayCAL.ui import message_box
 from DisplayCAL.util_list import strlist
 from DisplayCAL.worker import Worker
 
@@ -721,7 +722,7 @@ class MeasureFrame(BaseWindow):
             box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
             do_not_show = QCheckBox(lang.getstr("dialog.do_not_show_again"))
             box.setCheckBox(do_not_show)
-            result = box.exec()
+            result = message_box.exec_box(box)
             if do_not_show.isChecked():
                 setcfg("measure.darken_background.show_warning", 0)
             if result == QMessageBox.Cancel:

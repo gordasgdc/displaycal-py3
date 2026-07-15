@@ -44,6 +44,7 @@ from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.plot.colorspaces import COLORSPACES
 from DisplayCAL.ui.plot.curve_data import CURVE_MODES, available_curve_modes
 from DisplayCAL.ui.plot.gamut import GamutPlot
@@ -657,7 +658,7 @@ class ProfileInfoWindow(BaseWindow):
             try:
                 profile = ICCProfile(path)
             except Exception as exception:  # noqa: BLE001
-                QMessageBox.critical(self, self.windowTitle(), str(exception))
+                message_box.critical(self, self.windowTitle(), str(exception))
                 self.comparison_combo.blockSignals(True)
                 self.comparison_combo.setCurrentIndex(0)
                 self.comparison_combo.blockSignals(False)
@@ -858,7 +859,7 @@ class ProfileInfoWindow(BaseWindow):
 
     def _show_help(self) -> None:
         """Show the plot navigation help (the wx ``?`` tooltip button)."""
-        QMessageBox.information(
+        message_box.information(
             self, self.windowTitle(), lang.getstr("gamut_plot.tooltip")
         )
 
@@ -877,7 +878,7 @@ class ProfileInfoWindow(BaseWindow):
             return
         pixmap = target.grab()
         if not pixmap.save(path):
-            QMessageBox.warning(
+            message_box.warning(
                 self, self.windowTitle(), lang.getstr("error.file.create", path)
             )
 
@@ -905,7 +906,7 @@ class ProfileInfoWindow(BaseWindow):
                     self._writable_profile_path(self._comparison_profile)
                 )
         except OSError as exception:
-            QMessageBox.critical(self, self.windowTitle(), str(exception))
+            message_box.critical(self, self.windowTitle(), str(exception))
             return
 
         intent = self.intent_combo.currentData()
@@ -975,7 +976,7 @@ class ProfileInfoWindow(BaseWindow):
         self.view_3d_button.setEnabled(True)
         self._export_thread = None
         if isinstance(result, Exception):
-            QMessageBox.critical(self, self.windowTitle(), str(result))
+            message_box.critical(self, self.windowTitle(), str(result))
             return
         launch_file(result)
 

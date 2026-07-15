@@ -61,6 +61,7 @@ from DisplayCAL import localization as lang
 from DisplayCAL.config import getcfg, setcfg
 from DisplayCAL.debughelpers import Error, Info
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import message_box
 from DisplayCAL.worker import Worker
 
 
@@ -318,7 +319,7 @@ def connect_madvr(worker: Worker, parent: QWidget | None, title: str) -> bool | 
         return None
     result = thread.result
     if isinstance(result, Exception):
-        QMessageBox.critical(parent, title, str(result))
+        message_box.critical(parent, title, str(result))
         return False
     return bool(result)
 
@@ -418,7 +419,7 @@ class Lut3DAPIInstallController(QObject):
             self._progress = None
         title = lang.getstr("3dlut.install")
         if isinstance(result, Info):
-            QMessageBox.information(self._parent, title, str(result))
+            message_box.information(self._parent, title, str(result))
         elif isinstance(result, Exception):
-            QMessageBox.critical(self._parent, title, str(result))
+            message_box.critical(self._parent, title, str(result))
         self.finished.emit()

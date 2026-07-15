@@ -794,6 +794,12 @@ def test_profile_type_ctrl_locks_quality_for_gamma_types(window, monkeypatch):
     assert window.profile_quality_ctrl.isEnabled()
 
 
+def test_black_point_compensation_cb_has_info_tooltip(window):
+    assert window.black_point_compensation_cb.toolTip() == lang.getstr(
+        "black_point_compensation.info"
+    )
+
+
 def test_profile_type_ctrl_nudges_bpc_default(window, monkeypatch):
     monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.Ok)
     setcfg("profile.type", "s")  # shaper+matrix, not yet a LUT type
