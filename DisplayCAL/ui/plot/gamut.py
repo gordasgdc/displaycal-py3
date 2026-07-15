@@ -267,17 +267,25 @@ class GamutPlot(pg.PlotWidget):
             return
 
         # Gamut hull: colour each segment by its vertex colour, except the
-        # comparison profile which is drawn as a plain grey outline.
+        # comparison profile which is drawn as a plain grey outline. The
+        # comparison outline also only draws every other segment (0,1),
+        # (2,3), (4,5)... matching wx's manual dashing, since a real dash
+        # pen would need to be re-cut on every zoom/pan to keep a constant
+        # on-screen dash length.
         surface = coords[:-1]
         triplets = pcs_triplets[:-1]
         for start in range(0, len(surface) - 1, self.segment_size):
             edge = surface[start : start + self.segment_size]
             edge_triplets = triplets[start : start + self.segment_size]
             for j in range(len(edge) - 1):
-                color = _COMPARISON if is_comparison else _rgb(edge_triplets[j])
-                self._add_curve(
-                    [edge[j], edge[j + 1]], color, 2 if is_comparison else 3
-                )
+                if is_comparison:
+                    if j % 2:
+                        continue
+                    self._add_curve([edge[j], edge[j + 1]], _COMPARISON, 2)
+                else:
+                    self._add_curve(
+                        [edge[j], edge[j + 1]], _rgb(edge_triplets[j]), 3
+                    )
 
         # Whitepoint marker.
         wx_, wy = coords[-1]
