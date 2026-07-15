@@ -15,6 +15,7 @@ import os
 import sys
 
 from qtpy.QtCore import Qt, QThread, Signal
+from qtpy.QtGui import QColor, QPalette
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -70,6 +71,13 @@ _NO_COMPARISON = "calibration.file.none"
 
 #: Trailing combo entry that opens a file dialog for an arbitrary profile.
 _BROWSE_COMPARISON = "browse"
+
+#: This window's fixed background, matching wx's ``BGCOLOUR`` constant
+#: (``wx_profile_info.py``) applied to its ``canvaspanel``/options/status
+#: panels. Like the gamut plot (see ``ui/plot/gamut.py``), wx keeps this
+#: dialog on its own fixed dark-grey scheme rather than following the OS
+#: light/dark theme the rest of the Qt UI uses.
+_BGCOLOUR = "#333333"
 
 
 def _bounded_combo(contents_length: int = 16) -> QComboBox:
@@ -541,13 +549,35 @@ class ProfileInfoWindow(BaseWindow):
         splitter.addWidget(self.info)
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 0)
+        # A default-width handle is nearly invisible against this dialog's
+        # dark background, making the table hard to discover as resizable.
+        # Widen it and give it a distinct colour (plus a hover highlight) so
+        # the divider itself reads as a grabbable splitter.
+        splitter.setHandleWidth(6)
+        splitter.setStyleSheet(
+            "QSplitter::handle {"
+            " background-color: #555555;"
+            " border-left: 1px solid #222222;"
+            " border-right: 1px solid #222222;"
+            "}"
+            "QSplitter::handle:hover {"
+            " background-color: #777777;"
+            "}"
+        )
 
         central = QWidget(self)
-        # Paint the palette Window colour (wx's #333333 grey in dark mode)
-        # behind the native controls, which draw over it. This keeps the
-        # native combo/button look while forcing the wx background — the
-        # native platform style would otherwise use the OS window colour.
+        # Paint this dialog's own fixed background (wx's BGCOLOUR, matching
+        # the gamut canvas) behind the native controls, which draw over it —
+        # not the app-wide themed palette, which is darker and follows the OS
+        # light/dark setting that this dialog doesn't. Setting the colour
+        # directly on the widget's own palette (rather than
+        # ``setAutoFillBackground`` alone, which paints whatever the
+        # inherited/app palette's Window colour is) is what makes it stick
+        # regardless of the app theme.
         central.setAutoFillBackground(True)
+        palette = central.palette()
+        palette.setColor(QPalette.Window, QColor(_BGCOLOUR))
+        central.setPalette(palette)
         layout = QVBoxLayout(central)
         layout.addWidget(splitter, 1)
         return central

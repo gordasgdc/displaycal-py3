@@ -16,14 +16,15 @@ Input data shape (same as the wx canvas):
 
 from __future__ import annotations
 
+import sys
 from typing import TYPE_CHECKING
 
+import numpy as np
 import pyqtgraph as pg
-from qtpy.QtGui import QColor
+from qtpy.QtGui import QColor, QFont
 
 from DisplayCAL import colormath
 from DisplayCAL.ui.plot.colorspaces import COLORSPACES, outline_curves
-from DisplayCAL.ui.theme import plot_colors
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -31,13 +32,72 @@ if TYPE_CHECKING:
     from qtpy.QtCore import QEvent
     from qtpy.QtWidgets import QWidget
 
-#: Neutral greys reused from the wx canvas; legible in both light and dark
-#: themes (the spectral-locus outline and comparison-profile hull/whitepoint).
-#: The colour-temperature locus and canvas/axis colours instead come from
-#: :func:`DisplayCAL.ui.theme.plot_colors` so they follow the OS theme.
+#: Axis tick/label font size, matching wx's ``GamutCanvas`` (which sets its
+#: axis font size to ``FONTSIZE_SMALL`` in ``wx_profile_info.py``).
+_FONTSIZE_SMALL = 10 if sys.platform == "darwin" else 8
+
+#: Fixed dark-grey scheme for this canvas, matching wx's ``BGCOLOUR`` /
+#: ``FGCOLOUR`` constants (``wx_lut_viewer.py``, inherited by
+#: ``GamutCanvas``). Unlike the rest of the Qt UI, wx's LUT/gamut charts keep
+#: this same look in both light and dark OS themes rather than following the
+#: system palette, so this canvas does not use
+#: :func:`DisplayCAL.ui.theme.plot_colors` like the other plot widgets do.
+_BGCOLOUR = QColor("#333333")
+_FGCOLOUR = QColor("#999999")
+
+#: Neutral greys reused from the wx canvas; legible against the fixed
+#: ``_BGCOLOUR`` above (the spectral-locus outline and comparison-profile
+#: hull/whitepoint).
 _OUTLINE = QColor(102, 102, 102, 153)
 _COMPARISON = QColor(102, 102, 102, 255)
 _COMPARISON_WP = QColor(204, 204, 204, 102)
+#: Colour-temperature locus colour (``wx.Colour(255, 255, 255, 204)`` in
+#: ``wx_profile_info.py``'s ``DrawCanvas``), also fixed rather than themed.
+_LOCUS = QColor(255, 255, 255, 204)
+
+#: Colorspaces whose outline's final segment (closing the spectral locus back
+#: to its starting wavelength) is a genuine straight line, not part of the
+#: smoothed boundary curve. Mirrors ``wx_profile_info.py``'s ``DrawCanvas``,
+#: which draws these as a spline plus a separate straight ``PolyLine``.
+_STRAIGHT_CLOSING_EDGE = {"xy", "u'v'"}
+
+
+def _smooth_curve(
+    points: Sequence[tuple[float, float]], samples: int = 8
+) -> list[tuple[float, float]]:
+    """Densify a polyline into a smooth Catmull-Rom spline curve.
+
+    Mirrors wx's ``plot.PolySpline`` (``wx.DC.DrawSpline``), which renders
+    these same colorspace-boundary polylines as a smooth curve; pyqtgraph's
+    ``PlotCurveItem`` otherwise connects points with straight segments, which
+    looks visibly jagged for the spectral-locus/optimal-colour outlines since
+    they only sample a few dozen points.
+
+    Args:
+        points (Sequence[tuple[float, float]]): The polyline vertices.
+        samples (int): Interpolated points generated per input segment.
+
+    Returns:
+        list[tuple[float, float]]: The densified, smoothed polyline.
+    """
+    if len(points) < 3:
+        return list(points)
+    p = np.asarray(points, dtype=float)
+    p = np.vstack([p[0], p, p[-1]])
+    out = []
+    for i in range(1, len(p) - 2):
+        p0, p1, p2, p3 = p[i - 1], p[i], p[i + 1], p[i + 2]
+        t = np.linspace(0.0, 1.0, samples, endpoint=False)[:, None]
+        t2, t3 = t * t, t * t * t
+        segment = 0.5 * (
+            (2 * p1)
+            + (-p0 + p2) * t
+            + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2
+            + (-p0 + 3 * p1 - 3 * p2 + p3) * t3
+        )
+        out.extend(map(tuple, segment))
+    out.append(tuple(p[-2]))
+    return out
 
 
 def _rgb(xyz: tuple[float, float, float]) -> QColor:
@@ -85,14 +145,18 @@ class GamutPlot(pg.PlotWidget):
     # -- theming -----------------------------------------------------------
 
     def _apply_theme(self) -> None:
-        """Recolour the canvas and axes from the current OS theme."""
-        colors = plot_colors(self)
-        self.setBackground(colors.background)
+        """Apply wx's fixed dark-grey gamut-chart colour scheme and fonts."""
+        self.setBackground(_BGCOLOUR)
+        tick_font = QFont(self.font())
+        tick_font.setPointSize(_FONTSIZE_SMALL)
+        tick_font.setBold(False)
         plot_item = self.getPlotItem()
         for name in ("left", "bottom", "right", "top"):
             axis = plot_item.getAxis(name)
-            axis.setPen(colors.foreground)
-            axis.setTextPen(colors.foreground)
+            axis.setPen(_FGCOLOUR)
+            axis.setTextPen(_FGCOLOUR)
+            axis.enableAutoSIPrefix(False)
+            axis.setStyle(tickFont=tick_font)
 
     def changeEvent(self, event: QEvent) -> None:  # noqa: N802 (Qt override)
         """Re-theme and redraw when the application palette changes.
@@ -225,9 +289,13 @@ class GamutPlot(pg.PlotWidget):
         )
 
     def _add_outline(self) -> None:
-        """Draw the colorspace boundary curve(s)."""
+        """Draw the colorspace boundary curve(s), smoothed to match wx."""
         for curve in outline_curves(self.colorspace):
-            self._add_curve(curve, _OUTLINE, 1.75)
+            if self.colorspace in _STRAIGHT_CLOSING_EDGE and len(curve) > 2:
+                self._add_curve(_smooth_curve(curve[:-1]), _OUTLINE, 1.75)
+                self._add_curve(curve[-2:], _OUTLINE, 1.75)
+            else:
+                self._add_curve(_smooth_curve(curve), _OUTLINE, 1.75)
 
     def _add_locus(self, whitepoint: int) -> None:
         """Draw the daylight (1) or Planckian (2) colour-temperature locus.
@@ -242,9 +310,7 @@ class GamutPlot(pg.PlotWidget):
         else:
             kelvins = range(1667, 25001, 38)
             xyz = colormath.planckianCT2XYZ
-        self._add_curve(
-            [cfg.convert(*xyz(k)) for k in kelvins], plot_colors(self).locus, 1.5
-        )
+        self._add_curve([cfg.convert(*xyz(k)) for k in kelvins], _LOCUS, 1.5)
 
     def _add_profile(
         self, index: int, pcs_triplets: Sequence[tuple[float, float, float]]
