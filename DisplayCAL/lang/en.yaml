@@ -1550,6 +1550,8 @@
   Is illuminant
 "is_linear": |-
   Is linear
+"lang.confirm_restart": |-
+  The language will change the next time DisplayCAL is started. Would you like to restart DisplayCAL now?
 "laptop.icc": |-
   Laptop (Gamma 2.2)
 "level": |-

@@ -2290,6 +2290,9 @@
 "is_linear": |-
   Лінійний
 
+"lang.confirm_restart": |-
+  Мова зміниться під час наступного запуску DisplayCAL. Бажаєте перезапустити DisplayCAL зараз?
+
 "laptop.icc": |-
   Ноутбук(Gamma 2.2)
 

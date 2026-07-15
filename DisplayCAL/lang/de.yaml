@@ -2292,6 +2292,8 @@
 "is_linear": |-
   Ist linear
 
+"lang.confirm_restart": |-
+  Die Sprache wird erst beim nächsten Start von DisplayCAL geändert. Möchten Sie DisplayCAL jetzt neu starten?
 "laptop.icc": |-
   Laptop (Gamma 2.2)
 

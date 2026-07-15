@@ -1545,6 +1545,8 @@
   Es iluminante
 "is_linear": |-
   Es lineal
+"lang.confirm_restart": |-
+  El idioma cambiará la próxima vez que se inicie DisplayCAL. ¿Desea reiniciar DisplayCAL ahora?
 "laptop.icc": |-
   Portatil (Gamma 2.2)
 "level": |-

@@ -126,7 +126,7 @@ from hashlib import md5
 from typing import TYPE_CHECKING, Callable
 
 from qtpy.QtCore import QSize, Qt, QThread, QTimer, Signal
-from qtpy.QtGui import QAction, QColor, QPainter, QPixmap
+from qtpy.QtGui import QAction, QActionGroup, QColor, QPainter, QPixmap
 from qtpy.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -168,9 +168,11 @@ from DisplayCAL import (
     preflight_checks,
     profile_finish,
 )
+from DisplayCAL.log import LOGBUFFER
 from DisplayCAL import measurement_report as measurement_report_pipeline
 from DisplayCAL import localization as lang
 from DisplayCAL import profile_name as profile_name_mod
+from DisplayCAL import report
 from DisplayCAL.argyll import (
     check_argyll_bin,
     check_set_argyll_bin,
@@ -246,6 +248,8 @@ from DisplayCAL.ui.profile_install_window import (
 from DisplayCAL.ui.progress_dialog import ProgressDialog
 from DisplayCAL.ui.spyder2_enable import Spyder2EnableController
 from DisplayCAL.ui.tooltip_window import TooltipWindow
+from DisplayCAL.ui.tools.curve_viewer import CurveViewerWindow
+from DisplayCAL.ui.tools.log_window import LogWindow
 from DisplayCAL.ui.tools.lut3d import LUT3DWindow
 from DisplayCAL.ui.tools.profile_info import ProfileInfoWindow
 from DisplayCAL.ui.tools.synth_profile import SynthICCWindow
@@ -636,6 +640,51 @@ class _DonationDialog(QDialog):
         super().reject()
 
 
+class _UniformityLayoutDialog(QDialog):
+    """Qt port of ``measure_uniformity_handler``'s patch-layout confirm dialog.
+
+    Lets the user pick the cols x rows patch grid before starting a
+    uniformity measurement, seeded from ``uniformity.cols``/``.rows``.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(APPNAME)
+        layout = QVBoxLayout(self)
+
+        label = QLabel(lang.getstr("patch.layout.select"), self)
+        layout.addWidget(label)
+
+        row = QHBoxLayout()
+        self._cols_combo = QComboBox(self)
+        self._cols_combo.addItems(
+            [str(value) for value in config.VALID_VALUES["uniformity.cols"]]
+        )
+        self._cols_combo.setCurrentText(str(getcfg("uniformity.cols")))
+        row.addWidget(self._cols_combo)
+        row.addWidget(QLabel("x", self))
+        self._rows_combo = QComboBox(self)
+        self._rows_combo.addItems(
+            [str(value) for value in config.VALID_VALUES["uniformity.rows"]]
+        )
+        self._rows_combo.setCurrentText(str(getcfg("uniformity.rows")))
+        row.addWidget(self._rows_combo)
+        layout.addLayout(row)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.button(QDialogButtonBox.Ok).setText(lang.getstr("ok"))
+        buttons.button(QDialogButtonBox.Cancel).setText(lang.getstr("cancel"))
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def cols(self) -> int:
+        return int(self._cols_combo.currentText())
+
+    def rows(self) -> int:
+        return int(self._rows_combo.currentText())
+
+
 def _as_float(value: object) -> float | None:
     """Best-effort float coercion (``None`` when not numeric)."""
     try:
@@ -946,7 +995,17 @@ class MainWindow(BaseWindow):
         self._testchart_editor_window: TestchartEditorWindow | None = None
         self._synthicc_window: SynthICCWindow | None = None
         self._lut3d_window: LUT3DWindow | None = None
+        self._curve_viewer_window: CurveViewerWindow | None = None
+        #: Persistent log window singleton, matching wx's unconditionally
+        #: constructed ``self.infoframe`` (see ``init_infoframe``) -- created
+        #: once up front (hidden) rather than lazily, so log output drained
+        #: into it before the user ever opens it isn't lost.
+        self._log_window = LogWindow(self)
         self._about_window: AboutWindow | None = None
+        #: Title for the plain-text report/verify popup, set by
+        #: :meth:`_report_action_handler`/:meth:`_verify_calibration_action_handler`
+        #: before the run starts, mirroring wx's ``self.report_title``.
+        self.report_title: str | None = None
         self._lut3d_api_install_controller: Lut3DAPIInstallController | None = None
         #: Staged by :meth:`_on_report_measure_requested`, consumed by
         #: :meth:`_run_report_measurement` / :meth:`_on_report_measurement_finished`
@@ -982,6 +1041,7 @@ class MainWindow(BaseWindow):
         self._build_file_menu()
         self._build_options_menu()
         self._build_tools_menu()
+        self._build_language_menu()
         self._build_help_menu()
         self.setup_language()
         # Run the committed Argyll measurement when a run is requested.
@@ -1767,20 +1827,21 @@ class MainWindow(BaseWindow):
         self.update_controls()
 
     def _build_tools_menu(self) -> None:
-        """Add a Tools menu with the colorimeter-correction and Advanced actions.
+        """Add a Tools menu matching wx's ``menu.tools`` order (``mainmenu.xrc``).
 
-        Toolkit-neutral scope note: wx's ``menu.tools`` is a large menu (display
-        detection, video-card-gamma-table reset, instrument-driver install,
-        reports, advanced debug tools, ...); only the colorimeter-correction
-        import/upload entries and part of the ``menu.tools.advanced`` submenu
-        are reproduced here. The other three entries of wx's
-        ``colorimeter_correction_matrix_file`` submenu are already reachable
-        elsewhere on this window: "choose" is the CCMX/CCSS combo on the
-        Display & Instrument tab, "web check" is
-        :meth:`colorimeter_correction_web_btn_handler` (same tab), and "create"
-        is :meth:`colorimeter_correction_create_btn_handler` (same tab).
+        Toolkit-neutral scope note: wx's ``menu.tools`` is a large menu
+        (display detection, video-card-gamma-table reset, instrument-driver
+        install, reports, advanced debug tools, ...). Most of it is now
+        reproduced, reusing already-ported handlers with no new backend code.
 
-        All six entries of ``menu.tools.advanced`` are now reproduced:
+        Of wx's ``colorimeter_correction_matrix_file`` submenu, all five
+        entries are here: "choose" and "web check" reuse the same handlers
+        the Display & Instrument tab's own controls already call
+        (:meth:`colorimeter_correction_matrix_btn_handler` /
+        :meth:`colorimeter_correction_web_btn_handler`), as does "create"
+        (:meth:`colorimeter_correction_create_btn_handler`).
+
+        All six entries of ``menu.tools.advanced`` are reproduced:
         "synthicc.create" (:meth:`_synthicc_create_action_handler`, a
         cross-link to the already-ported standalone tool,
         ``ui/tools/synth_profile.py``), plus one entry with no wx
@@ -1795,23 +1856,64 @@ class MainWindow(BaseWindow):
         "measurement_file.check_sanity.auto"
         (:meth:`_measurement_file_check_auto_toggled`).
 
-        Of wx's ``instrument`` submenu, only "enable_spyder2" is reproduced
+        Of wx's ``instrument`` submenu, "enable_spyder2"
         (:meth:`_enable_spyder2`, backed by
-        :mod:`DisplayCAL.ui.spyder2_enable`); the Argyll instrument
-        configuration-file / driver install-uninstall entries and
-        "calibrate_instrument" are not (they need the still-unported
-        driver-installer / `oeminst` plumbing wx's own handlers wrap).
+        :mod:`DisplayCAL.ui.spyder2_enable`) and "calibrate_instrument"
+        (:meth:`_calibrate_instrument_action_handler`, running
+        ``Worker.calibrate_instrument_producer`` through the shared
+        :class:`WorkerRunController`) are reproduced; the Argyll instrument
+        configuration-file / driver install-uninstall entries are not (they
+        need the still-unported driver-installer / `oeminst` plumbing wx's
+        own handlers wrap).
 
         wx's ``video_card_gamma_table`` submenu (load/reset the display's
         video card gamma table directly, independent of a full calibrate
-        run) is now reproduced too, reusing the already-ported
-        :meth:`_load_cal` / :meth:`_reset_video_lut`. Not reproduced:
-        ``calibration.show_lut`` (the LUT curve-viewer toggle) and
-        ``infoframe.toggle``/``log.autoshow`` (the log window) -- both need a
-        whole new window this Qt port doesn't have yet, unlike the
-        self-contained VCGT actions.
+        run) is reproduced too, reusing the already-ported :meth:`_load_cal`
+        / :meth:`_reset_video_lut`. "calibration.show_lut" (the LUT
+        curve-viewer toggle) cross-links the already-complete
+        :class:`~DisplayCAL.ui.tools.curve_viewer.CurveViewerWindow`.
+
+        The ``menu.tools.report`` submenu ("report") is reproduced:
+        "measurement_report" reuses the shared action-bar
+        :meth:`measurement_report_btn_handler` (identical to wx's own
+        ``self.Bind(wx.EVT_MENU, self.measurement_report_handler, ...)``),
+        "report.uniformity" runs the new
+        ``Worker.measure_uniformity_producer`` after a small patch-layout
+        confirm dialog (:class:`_UniformityLayoutDialog`, port of
+        ``measure_uniformity_handler``'s dialog) -- note the live per-patch
+        grid visualization wx shows during this measurement
+        (``DisplayUniformityFrame``) isn't ported, only the measurement
+        itself and its post-run warnings, "measurement_report.update" is a
+        direct port of ``update_measurement_report`` (pick an existing HTML
+        report, regenerate it via :func:`DisplayCAL.report.update`), and
+        "report.uncalibrated"/"report.calibrated"/"calibration.verify" run
+        ``Worker.report``/``Worker.verify_calibration`` through the shared
+        :class:`WorkerRunController`. Their result text (``self.worker
+        .output``) is shown via a fresh, disposable
+        :class:`~DisplayCAL.ui.tools.log_window.LogWindow` instance, matching
+        wx's own ``result_consumer``/``show_additional_infoframe`` pair.
+
+        ``infoframe.toggle`` / ``log.autoshow`` are reproduced too, backed by
+        the same :class:`~DisplayCAL.ui.tools.log_window.LogWindow`, but as a
+        persistent singleton (:attr:`_log_window`, constructed up front in
+        :meth:`__init__`, matching wx's unconditionally constructed ``self
+        .infoframe``): toggling "Show log window" on drains
+        :data:`DisplayCAL.log.LOGBUFFER` into it (matching wx's ``self
+        .log()``/``infoframe_toggle_handler`` pair), toggling it off discards
+        the buffer. Unlike wx, there's no live tee of new log calls while the
+        window stays open (wx's own ``wx.CallAfter(wx_log, ...)`` hook) --
+        only a drain-on-toggle.
         """
-        tools_menu = self.menuBar().addMenu(f"&{lang.getstr('menu.tools')}")
+        tools_menu = self._tools_menu = self.menuBar().addMenu(
+            f"&{lang.getstr('menu.tools')}"
+        )
+
+        detect_action = tools_menu.addAction(
+            lang.getstr("detect_displays_and_ports")
+        )
+        detect_action.triggered.connect(self.detect_displays_and_ports_btn_handler)
+
+        tools_menu.addSeparator()
 
         vcgt_menu = tools_menu.addMenu(lang.getstr("video_card_gamma_table"))
         load_cal_or_profile_action = vcgt_menu.addAction(
@@ -1829,20 +1931,6 @@ class MainWindow(BaseWindow):
         reset_cal_action = vcgt_menu.addAction(lang.getstr("calibration.reset"))
         reset_cal_action.triggered.connect(self._reset_video_lut_action_handler)
 
-        tools_menu.addSeparator()
-
-        ccxx_menu = tools_menu.addMenu(
-            lang.getstr("colorimeter_correction_matrix_file")
-        )
-        import_action = ccxx_menu.addAction(
-            lang.getstr("colorimeter_correction.import")
-        )
-        import_action.triggered.connect(self._ccxx_import_action_handler)
-        upload_action = ccxx_menu.addAction(
-            lang.getstr("colorimeter_correction.upload")
-        )
-        upload_action.triggered.connect(self._ccxx_upload_action_handler)
-
         instrument_menu = tools_menu.addMenu(lang.getstr("instrument"))
         self.enable_spyder2_action = instrument_menu.addAction(
             lang.getstr("enable_spyder2")
@@ -1852,6 +1940,91 @@ class MainWindow(BaseWindow):
             lambda: self._enable_spyder2(recheck=False)
         )
         self._update_spyder2_menu_state()
+        instrument_menu.addSeparator()
+        calibrate_instrument_action = instrument_menu.addAction(
+            lang.getstr("calibrate_instrument")
+        )
+        calibrate_instrument_action.triggered.connect(
+            self._calibrate_instrument_action_handler
+        )
+
+        ccxx_menu = tools_menu.addMenu(
+            lang.getstr("colorimeter_correction_matrix_file")
+        )
+        choose_action = ccxx_menu.addAction(
+            lang.getstr("colorimeter_correction_matrix_file.choose")
+        )
+        choose_action.triggered.connect(self.colorimeter_correction_matrix_btn_handler)
+        web_check_action = ccxx_menu.addAction(
+            lang.getstr("colorimeter_correction.web_check")
+        )
+        web_check_action.triggered.connect(self.colorimeter_correction_web_btn_handler)
+        import_action = ccxx_menu.addAction(
+            lang.getstr("colorimeter_correction.import")
+        )
+        import_action.triggered.connect(self._ccxx_import_action_handler)
+        create_action = ccxx_menu.addAction(
+            lang.getstr("colorimeter_correction.create")
+        )
+        create_action.triggered.connect(
+            self.colorimeter_correction_create_btn_handler
+        )
+        upload_action = ccxx_menu.addAction(
+            lang.getstr("colorimeter_correction.upload")
+        )
+        upload_action.triggered.connect(self._ccxx_upload_action_handler)
+
+        report_menu = tools_menu.addMenu(lang.getstr("report"))
+        measurement_report_action = report_menu.addAction(
+            lang.getstr("measurement_report")
+        )
+        measurement_report_action.triggered.connect(
+            self.measurement_report_btn_handler
+        )
+        uniformity_action = report_menu.addAction(lang.getstr("report.uniformity"))
+        uniformity_action.triggered.connect(self._report_uniformity_action_handler)
+        update_report_action = report_menu.addAction(
+            lang.getstr("measurement_report.update")
+        )
+        update_report_action.triggered.connect(
+            self._update_measurement_report_action_handler
+        )
+        report_menu.addSeparator()
+        report_uncalibrated_action = report_menu.addAction(
+            lang.getstr("report.uncalibrated")
+        )
+        report_uncalibrated_action.triggered.connect(
+            lambda: self._report_action_handler(False)
+        )
+        report_calibrated_action = report_menu.addAction(
+            lang.getstr("report.calibrated")
+        )
+        report_calibrated_action.triggered.connect(
+            lambda: self._report_action_handler(True)
+        )
+        verify_calibration_action = report_menu.addAction(
+            lang.getstr("calibration.verify")
+        )
+        verify_calibration_action.triggered.connect(
+            self._verify_calibration_action_handler
+        )
+
+        tools_menu.addSeparator()
+        show_curves_action = tools_menu.addAction(lang.getstr("calibration.show_lut"))
+        show_curves_action.triggered.connect(self._show_curves_action_handler)
+
+        tools_menu.addSeparator()
+        self.show_log_window_action = tools_menu.addAction(
+            lang.getstr("infoframe.toggle")
+        )
+        self.show_log_window_action.setCheckable(True)
+        self.show_log_window_action.toggled.connect(
+            self._toggle_log_window_action_handler
+        )
+        self.log_autoshow_action = tools_menu.addAction(lang.getstr("log.autoshow"))
+        self.log_autoshow_action.setCheckable(True)
+        self.log_autoshow_action.setChecked(bool(getcfg("log.autoshow")))
+        self.log_autoshow_action.toggled.connect(self._log_autoshow_toggled)
 
         advanced_menu = tools_menu.addMenu(lang.getstr("advanced"))
         synthicc_action = advanced_menu.addAction(lang.getstr("synthicc.create"))
@@ -1887,6 +2060,198 @@ class MainWindow(BaseWindow):
             self._measurement_file_check_auto_toggled
         )
 
+    def _calibrate_instrument_action_handler(self) -> None:
+        """Run the instrument's own self-calibration (Tools > Instrument menu).
+
+        Qt port of ``calibrate_instrument_handler``: runs
+        ``Worker.calibrate_instrument_producer`` (``spotread -v -e``) through
+        the shared :class:`WorkerRunController`. Matches wx's own handler,
+        which has no special success UI -- only failures are surfaced.
+        """
+        controller = self._ensure_run_controller()
+        controller.run(
+            self.worker.calibrate_instrument_producer,
+            self._on_calibrate_instrument_finished,
+            progress_msg=lang.getstr("calibrate_instrument"),
+            pauseable=False,
+        )
+
+    def _on_calibrate_instrument_finished(self, result: object) -> None:
+        if isinstance(result, Exception):
+            QMessageBox.critical(self, APPNAME, str(result))
+
+    def _show_curves_action_handler(self) -> None:
+        """Open the calibration curve viewer (Tools menu).
+
+        Qt port of ``show_lut_handler``/``init_lut_viewer``: reuses a single
+        :class:`~DisplayCAL.ui.tools.curve_viewer.CurveViewerWindow` instance
+        across opens (matching wx's ``self.lut_viewer`` singleton), seeded
+        with the current calibration file the same way wx's
+        ``init_lut_viewer`` resolves its default profile/``.cal`` argument.
+        """
+        window = self._curve_viewer_window
+        if window is None:
+            window = CurveViewerWindow()
+            self._curve_viewer_window = window
+        cal_path = getcfg("calibration.file", False)
+        if cal_path:
+            window.load_profile(cal_path)
+        window.show()
+        window.raise_()
+        window.activateWindow()
+
+    def _update_measurement_report_action_handler(self) -> None:
+        """Regenerate an existing HTML measurement report (Tools > Report menu).
+
+        Direct port of ``update_measurement_report``: pick an existing HTML
+        report file, regenerate it via :func:`DisplayCAL.report.update`, then
+        open it.
+        """
+        default_dir, default_file = get_verified_path("last_filedialog_path")
+        path, _filter = QFileDialog.getOpenFileName(
+            self,
+            lang.getstr("measurement_report.update"),
+            default_dir if default_file else "",
+            f"{lang.getstr('filetype.html')} (*.html *.htm)",
+        )
+        if not path:
+            return
+        setcfg("last_filedialog_path", path)
+        try:
+            report.update(path, pack=getcfg("report.pack_js"))
+        except OSError as exception:
+            QMessageBox.critical(self, APPNAME, str(exception))
+            return
+        launch_file(path)
+
+    def _report_uniformity_action_handler(self) -> None:
+        """Measure display device uniformity (Tools > Report menu).
+
+        Port of ``measure_uniformity_handler``: confirms the patch layout via
+        :class:`_UniformityLayoutDialog`, then runs
+        ``Worker.measure_uniformity_producer`` through the shared
+        :class:`WorkerRunController`. The live per-patch grid visualization
+        wx shows during this measurement (``DisplayUniformityFrame``) is not
+        ported -- only the measurement itself and its post-run warnings.
+        """
+        dialog = _UniformityLayoutDialog(self)
+        if dialog.exec_() != QDialog.Accepted:
+            return
+        setcfg("uniformity.cols", dialog.cols())
+        setcfg("uniformity.rows", dialog.rows())
+        controller = self._ensure_run_controller()
+        controller.run(
+            self.worker.measure_uniformity_producer,
+            self._on_uniformity_measurement_finished,
+            progress_msg=lang.getstr("report.uniformity"),
+            pauseable=True,
+        )
+
+    def _on_uniformity_measurement_finished(self, result: object) -> None:
+        """Report the outcome of a uniformity measurement.
+
+        Mirrors wx's ``measure_uniformity_consumer``: shows an error on
+        failure, then (unless a dry run) surfaces any "spotread: Warning"
+        lines from ``self.worker.output``.
+        """
+        if isinstance(result, Exception):
+            QMessageBox.critical(self, APPNAME, str(result))
+            if getcfg("dry_run"):
+                return
+        for line in self.worker.output:
+            if line.startswith("spotread: Warning"):
+                QMessageBox.warning(self, APPNAME, line.strip())
+
+    def _report_action_handler(self, report_calibrated: bool) -> None:
+        """Report on calibrated/uncalibrated display response (Tools > Report menu).
+
+        Direct port of wx's ``report()``: runs ``Worker.report`` through the
+        shared :class:`WorkerRunController`.
+        """
+        self.report_title = lang.getstr(
+            "report.calibrated" if report_calibrated else "report.uncalibrated"
+        )
+        controller = self._ensure_run_controller()
+        controller.run(
+            self.worker.report,
+            self._on_report_finished,
+            wkwargs={"report_calibrated": report_calibrated},
+            progress_msg=self.report_title,
+            pauseable=True,
+        )
+
+    def _verify_calibration_action_handler(self) -> None:
+        """Verify the current calibration (Tools > Report menu).
+
+        Direct port of wx's ``verify_calibration()``: runs
+        ``Worker.verify_calibration`` through the shared
+        :class:`WorkerRunController`.
+        """
+        self.report_title = lang.getstr("calibration.verify")
+        controller = self._ensure_run_controller()
+        controller.run(
+            self.worker.verify_calibration,
+            self._on_report_finished,
+            progress_msg=self.report_title,
+            pauseable=True,
+        )
+
+    def _on_report_finished(self, result: object) -> None:
+        """Show the outcome of a report/verify run.
+
+        Direct port of wx's ``result_consumer``: shows an error dialog on
+        failure, otherwise opens a fresh, disposable
+        :class:`~DisplayCAL.ui.tools.log_window.LogWindow` instance with the
+        captured ``self.worker.output`` text, matching wx's own
+        ``show_additional_infoframe`` (a new instance per call, not the
+        persistent :attr:`_log_window` singleton).
+        """
+        if isinstance(result, Exception):
+            QMessageBox.critical(self, APPNAME, str(result))
+            return
+        text = "\n".join(line for line in self.worker.output if line.strip())
+        window = LogWindow(self, title=self.report_title)
+        window.Log(text)
+        window.show()
+        self.show()
+
+    def _toggle_log_window_action_handler(self, checked: bool) -> None:
+        """Show/hide the persistent log window (Tools menu).
+
+        Direct port of wx's ``infoframe_toggle_handler``: drains
+        :data:`DisplayCAL.log.LOGBUFFER` into :attr:`_log_window` before
+        showing it, or discards the buffer when hiding it. Disables "Show
+        log window automatically" while shown, matching wx.
+        """
+        setcfg("log.show", int(checked))
+        if checked:
+            self._drain_log_buffer()
+        else:
+            LOGBUFFER.truncate(0)
+        self._log_window.setVisible(checked)
+        self.log_autoshow_action.setEnabled(not checked)
+
+    def _drain_log_buffer(self) -> None:
+        """Drain the global log buffer into the persistent log window.
+
+        Toolkit-neutral port of wx's ``MainFrame.log()``: the root logger
+        writes to :data:`DisplayCAL.log.LOGBUFFER` regardless of UI toolkit.
+        """
+        LOGBUFFER.seek(0)
+        msg = "".join(
+            line.decode("UTF-8", "replace") for line in LOGBUFFER
+        ).rstrip()
+        LOGBUFFER.truncate(0)
+        if msg:
+            self._log_window.Log(msg)
+
+    def _log_autoshow_toggled(self, checked: bool) -> None:
+        """"Show log window automatically" toggle (Tools menu).
+
+        Direct port of wx's ``infoframe_autoshow_handler``.
+        """
+        setcfg("log.autoshow", int(checked))
+
     def _ccxx_import_action_handler(self) -> None:
         """Auto-discover and import colorimeter corrections from disk."""
         controller = ImportController(self.worker, self)
@@ -1907,6 +2272,62 @@ class MainWindow(BaseWindow):
 
     def _on_ccxx_upload_finished(self) -> None:
         self._ccxx_upload_controller = None
+
+    def _build_language_menu(self) -> None:
+        """Add a top-level Language menu, matching wx's dynamic ``menu.language``.
+
+        Direct port of wx's language-menu construction (``display_cal.py``'s
+        ``__init__``, iterating ``lang.LDICT``): one checkable action per
+        available language, added to a :class:`QActionGroup` for mutual
+        exclusivity (Qt's analogue of wx's ``wx.ITEM_RADIO`` menu items),
+        checked to match :func:`~DisplayCAL.localization.getcode`. Unlike wx
+        (which retranslates the running window live via ``set_language
+        _handler``), switching here is restart-to-apply, reusing the same
+        confirm+restart flow as the "Use Qt user interface" toggle
+        (:meth:`_use_qt_ui_toggled`) -- ``MainWindow.setup_language`` is a
+        no-op (see its docstring), so there is no live-retranslation path to
+        hook into yet.
+
+        wx additionally shows a per-language country-flag icon (a hardcoded
+        language-code -> ISO-3166 map plus bitmaps); that's cosmetic-only and
+        deliberately not reproduced here.
+        """
+        language_menu = self._language_menu = self.menuBar().addMenu(
+            f"&{lang.getstr('menu.language')}"
+        )
+        group = QActionGroup(self)
+        group.setExclusive(True)
+        current = lang.getcode()
+        languages = sorted(
+            (lang.LDICT[lcode].get("!language", ""), lcode) for lcode in lang.LDICT
+        )
+        for name, lcode in languages:
+            action = language_menu.addAction(name)
+            action.setCheckable(True)
+            group.addAction(action)
+            if lcode == current:
+                action.setChecked(True)
+            action.triggered.connect(
+                lambda checked, lcode=lcode: self._set_language_action_handler(lcode)
+            )
+
+    def _set_language_action_handler(self, lcode: str) -> None:
+        """Persist the chosen language and offer to restart (Language menu).
+
+        Reuses the exact confirm+restart flow :meth:`_use_qt_ui_toggled`
+        already uses for the wx/Qt toolkit switch.
+        """
+        setcfg("lang", lcode)
+        writecfg()
+        answer = QMessageBox.question(
+            self,
+            APPNAME,
+            lang.getstr("lang.confirm_restart"),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer == QMessageBox.Yes:
+            restart_application()
 
     def _build_help_menu(self) -> None:
         """Add a Help menu matching wx's ``menu.help`` (``mainmenu.xrc``).

@@ -2317,6 +2317,9 @@
 "is_linear": |-
   線性的
 
+"lang.confirm_restart": |-
+  語言將在 DisplayCAL 下次啟動時更改。是否立即重新啟動 DisplayCAL?
+
 "laptop.icc": |-
   手提電腦 (伽瑪2.2)
 

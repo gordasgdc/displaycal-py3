@@ -18,6 +18,7 @@ from DisplayCAL import config
 from DisplayCAL import gamap_settings
 from DisplayCAL import localization as lang
 from DisplayCAL import lut3d_settings as l3d
+from DisplayCAL import report
 from DisplayCAL.config import getcfg, setcfg
 from DisplayCAL.worker import Worker
 
@@ -6710,6 +6711,507 @@ def test_use_qt_ui_toggled_skips_restart_when_declined(window, monkeypatch):
     window.use_qt_ui_action.setChecked(False)
     window.use_qt_ui_action.setChecked(True)
     assert restarted == []
+
+
+def test_build_tools_menu_matches_wx_xrc_order(window):
+    # mainmenu.xrc's menu.tools order: detect, separator,
+    # VCGT/Instrument/Correction/Report submenus, separator, Show curves,
+    # separator, Show log window, Show log window automatically, Advanced.
+    expected = [
+        "detect_displays_and_ports",
+        "",  # separator
+        "video_card_gamma_table",
+        "instrument",
+        "colorimeter_correction_matrix_file",
+        "report",
+        "",  # separator
+        "calibration.show_lut",
+        "",  # separator
+        "infoframe.toggle",
+        "log.autoshow",
+        "advanced",
+    ]
+    actual = [lang.getstr(key) if key else "" for key in expected]
+    texts = [action.text() for action in window._tools_menu.actions()]
+    assert texts == actual
+
+
+def test_report_menu_matches_wx_xrc_order(window):
+    expected = [
+        "measurement_report",
+        "report.uniformity",
+        "measurement_report.update",
+        "",  # separator
+        "report.uncalibrated",
+        "report.calibrated",
+        "calibration.verify",
+    ]
+    actual = [lang.getstr(key) if key else "" for key in expected]
+    for action in window._tools_menu.actions():
+        if action.text() == lang.getstr("report"):
+            report_menu = action.menu()
+            break
+    else:
+        pytest.fail("report submenu not found")
+    texts = [action.text() for action in report_menu.actions()]
+    assert texts == actual
+
+
+def test_instrument_menu_matches_wx_xrc_order(window):
+    expected = ["enable_spyder2", "", "calibrate_instrument"]
+    actual = [lang.getstr(key) if key else "" for key in expected]
+    for action in window._tools_menu.actions():
+        if action.text() == lang.getstr("instrument"):
+            instrument_menu = action.menu()
+            break
+    else:
+        pytest.fail("instrument submenu not found")
+    texts = [action.text() for action in instrument_menu.actions()]
+    assert texts == actual
+
+
+def test_ccxx_menu_matches_wx_xrc_order(window):
+    expected = [
+        "colorimeter_correction_matrix_file.choose",
+        "colorimeter_correction.web_check",
+        "colorimeter_correction.import",
+        "colorimeter_correction.create",
+        "colorimeter_correction.upload",
+    ]
+    actual = [lang.getstr(key) for key in expected]
+    for action in window._tools_menu.actions():
+        if action.text() == lang.getstr("colorimeter_correction_matrix_file"):
+            ccxx_menu = action.menu()
+            break
+    else:
+        pytest.fail("colorimeter_correction_matrix_file submenu not found")
+    texts = [action.text() for action in ccxx_menu.actions()]
+    assert texts == actual
+
+
+def test_detect_displays_and_ports_action_calls_handler(window, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        window,
+        "detect_displays_and_ports_btn_handler",
+        lambda: calls.append(True),
+    )
+    action = window._tools_menu.actions()[0]
+    assert action.text() == lang.getstr("detect_displays_and_ports")
+    action.trigger()
+    assert calls == [True]
+
+
+def test_ccxx_menu_choose_action_calls_matrix_btn_handler(window, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        window,
+        "colorimeter_correction_matrix_btn_handler",
+        lambda: calls.append(True),
+    )
+    for action in window._tools_menu.actions():
+        if action.text() == lang.getstr("colorimeter_correction_matrix_file"):
+            ccxx_menu = action.menu()
+            break
+    ccxx_menu.actions()[0].trigger()
+    assert calls == [True]
+
+
+def test_ccxx_menu_web_check_action_calls_web_btn_handler(window, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        window,
+        "colorimeter_correction_web_btn_handler",
+        lambda: calls.append(True),
+    )
+    for action in window._tools_menu.actions():
+        if action.text() == lang.getstr("colorimeter_correction_matrix_file"):
+            ccxx_menu = action.menu()
+            break
+    ccxx_menu.actions()[1].trigger()
+    assert calls == [True]
+
+
+def test_ccxx_menu_create_action_calls_create_btn_handler(window, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        window,
+        "colorimeter_correction_create_btn_handler",
+        lambda: calls.append(True),
+    )
+    for action in window._tools_menu.actions():
+        if action.text() == lang.getstr("colorimeter_correction_matrix_file"):
+            ccxx_menu = action.menu()
+            break
+    ccxx_menu.actions()[3].trigger()
+    assert calls == [True]
+
+
+def test_calibrate_instrument_action_handler_runs_producer(window, monkeypatch):
+    run_calls = []
+
+    class _FakeController:
+        def run(self, *a, **k):
+            run_calls.append((a, k))
+
+    monkeypatch.setattr(window, "_ensure_run_controller", lambda: _FakeController())
+    window._calibrate_instrument_action_handler()
+    assert run_calls
+    args, kwargs = run_calls[0]
+    assert args[0] == window.worker.calibrate_instrument_producer
+    assert args[1] == window._on_calibrate_instrument_finished
+    assert kwargs["pauseable"] is False
+
+
+def test_calibrate_instrument_action_handler_shows_error_on_exception(
+    window, monkeypatch
+):
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    window._on_calibrate_instrument_finished(RuntimeError("boom"))
+    assert errors
+
+
+def test_calibrate_instrument_finished_noop_on_success(window, monkeypatch):
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    window._on_calibrate_instrument_finished("some spotread output")
+    assert errors == []
+
+
+def test_show_curves_action_handler_creates_and_shows_window(window):
+    assert window._curve_viewer_window is None
+    window._show_curves_action_handler()
+    assert window._curve_viewer_window is not None
+    assert window._curve_viewer_window.isVisible()
+
+
+def test_show_curves_action_handler_reuses_existing_window(window):
+    window._show_curves_action_handler()
+    first = window._curve_viewer_window
+    window._show_curves_action_handler()
+    assert window._curve_viewer_window is first
+
+
+def test_show_curves_action_handler_seeds_current_calibration_file(
+    window, monkeypatch, srgb_profile_path
+):
+    original = getcfg("calibration.file", False)
+    setcfg("calibration.file", srgb_profile_path)
+    try:
+        loaded = []
+        monkeypatch.setattr(
+            mw.CurveViewerWindow,
+            "load_profile",
+            lambda self, path: loaded.append(path),
+        )
+        window._show_curves_action_handler()
+        assert loaded == [srgb_profile_path]
+    finally:
+        setcfg("calibration.file", original)
+
+
+def test_show_log_window_action_toggled_on_drains_buffer_and_shows(
+    window, monkeypatch
+):
+    mw.LOGBUFFER.truncate(0)
+    mw.LOGBUFFER.write(b"hello from the log buffer")
+    logged = []
+    monkeypatch.setattr(window._log_window, "Log", lambda txt: logged.append(txt))
+    window.show_log_window_action.setChecked(True)
+    assert logged == ["hello from the log buffer"]
+    assert window._log_window.isVisible()
+    assert getcfg("log.show") == 1
+    assert window.log_autoshow_action.isEnabled() is False
+
+
+def test_show_log_window_action_toggled_off_hides_and_truncates_buffer(window):
+    window.show_log_window_action.setChecked(True)
+    mw.LOGBUFFER.write(b"more content")
+    window.show_log_window_action.setChecked(False)
+    assert not window._log_window.isVisible()
+    assert getcfg("log.show") == 0
+    assert window.log_autoshow_action.isEnabled() is True
+    mw.LOGBUFFER.seek(0)
+    assert mw.LOGBUFFER.read() == b""
+
+
+def test_log_autoshow_toggled_persists_config(window):
+    window.log_autoshow_action.setChecked(False)
+    window.log_autoshow_action.setChecked(True)
+    assert getcfg("log.autoshow") == 1
+    window.log_autoshow_action.setChecked(False)
+    assert getcfg("log.autoshow") == 0
+
+
+def test_measurement_report_action_calls_btn_handler(window, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        window, "measurement_report_btn_handler", lambda: calls.append(True)
+    )
+    for action in window._tools_menu.actions():
+        if action.text() == lang.getstr("report"):
+            report_menu = action.menu()
+            break
+    report_menu.actions()[0].trigger()
+    assert calls == [True]
+
+
+def test_uniformity_action_calls_dialog_handler(window, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        window, "_report_uniformity_action_handler", lambda: calls.append(True)
+    )
+    for action in window._tools_menu.actions():
+        if action.text() == lang.getstr("report"):
+            report_menu = action.menu()
+            break
+    report_menu.actions()[1].trigger()
+    assert calls == [True]
+
+
+def test_report_uniformity_action_handler_cancelled_dialog_is_noop(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw.QDialog, "exec_", lambda self: mw.QDialog.Rejected)
+    controller_calls = []
+    monkeypatch.setattr(
+        window, "_ensure_run_controller", lambda: controller_calls.append(True)
+    )
+    window._report_uniformity_action_handler()
+    assert controller_calls == []
+
+
+def test_report_uniformity_action_handler_confirmed_runs_measurement(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw.QDialog, "exec_", lambda self: mw.QDialog.Accepted)
+    run_calls = []
+
+    class _FakeController:
+        def run(self, *a, **k):
+            run_calls.append((a, k))
+
+    monkeypatch.setattr(window, "_ensure_run_controller", lambda: _FakeController())
+    window._report_uniformity_action_handler()
+    assert run_calls
+    args, kwargs = run_calls[0]
+    assert args[0] == window.worker.measure_uniformity_producer
+    assert args[1] == window._on_uniformity_measurement_finished
+    assert kwargs["pauseable"] is True
+    assert getcfg("uniformity.cols") in config.VALID_VALUES["uniformity.cols"]
+    assert getcfg("uniformity.rows") in config.VALID_VALUES["uniformity.rows"]
+
+
+def test_uniformity_measurement_finished_shows_warning_lines(window, monkeypatch):
+    warnings = []
+    monkeypatch.setattr(mw.QMessageBox, "warning", lambda *a, **k: warnings.append(a))
+    window.worker.output = ["spotread: Warning: something", "normal line"]
+    window._on_uniformity_measurement_finished("ok")
+    assert len(warnings) == 1
+
+
+def test_uniformity_measurement_finished_shows_error_on_exception(window, monkeypatch):
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    setcfg("dry_run", 0)
+    window.worker.output = []
+    window._on_uniformity_measurement_finished(RuntimeError("boom"))
+    assert errors
+
+
+def test_report_calibrated_action_handler_runs_worker_report(window, monkeypatch):
+    run_calls = []
+
+    class _FakeController:
+        def run(self, *a, **k):
+            run_calls.append((a, k))
+
+    monkeypatch.setattr(window, "_ensure_run_controller", lambda: _FakeController())
+    window._report_action_handler(True)
+    assert run_calls
+    args, kwargs = run_calls[0]
+    assert args[0] == window.worker.report
+    assert args[1] == window._on_report_finished
+    assert kwargs["wkwargs"] == {"report_calibrated": True}
+    assert window.report_title == lang.getstr("report.calibrated")
+
+
+def test_report_uncalibrated_action_handler_runs_worker_report(window, monkeypatch):
+    run_calls = []
+
+    class _FakeController:
+        def run(self, *a, **k):
+            run_calls.append((a, k))
+
+    monkeypatch.setattr(window, "_ensure_run_controller", lambda: _FakeController())
+    window._report_action_handler(False)
+    assert run_calls
+    args, kwargs = run_calls[0]
+    assert kwargs["wkwargs"] == {"report_calibrated": False}
+    assert window.report_title == lang.getstr("report.uncalibrated")
+
+
+def test_verify_calibration_action_handler_runs_worker_verify(window, monkeypatch):
+    run_calls = []
+
+    class _FakeController:
+        def run(self, *a, **k):
+            run_calls.append((a, k))
+
+    monkeypatch.setattr(window, "_ensure_run_controller", lambda: _FakeController())
+    window._verify_calibration_action_handler()
+    assert run_calls
+    args, kwargs = run_calls[0]
+    assert args[0] == window.worker.verify_calibration
+    assert args[1] == window._on_report_finished
+    assert window.report_title == lang.getstr("calibration.verify")
+
+
+def test_on_report_finished_shows_error_on_exception(window, monkeypatch):
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    opened = []
+    monkeypatch.setattr(
+        mw.LogWindow, "__init__", lambda self, *a, **k: opened.append(True)
+    )
+    window._on_report_finished(RuntimeError("boom"))
+    assert errors
+    assert opened == []
+
+
+def test_on_report_finished_shows_output_text(window, monkeypatch):
+    logged = []
+    shown = []
+    monkeypatch.setattr(
+        mw.LogWindow,
+        "__init__",
+        lambda self, parent=None, title=None: setattr(self, "_title", title),
+    )
+    monkeypatch.setattr(mw.LogWindow, "Log", lambda self, txt: logged.append(txt))
+    monkeypatch.setattr(mw.LogWindow, "show", lambda self: shown.append(True))
+    window.report_title = "Some report"
+    window.worker.output = ["line one", "", "line two"]
+    window._on_report_finished("ok")
+    assert logged == ["line one\nline two"]
+    assert shown == [True]
+
+
+def test_update_measurement_report_action_cancelled_dialog_is_noop(
+    window, monkeypatch
+):
+    monkeypatch.setattr(
+        mw.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: ("", ""))
+    )
+    update_calls = []
+    monkeypatch.setattr(report, "update", lambda *a, **k: update_calls.append(True))
+    window._update_measurement_report_action_handler()
+    assert update_calls == []
+
+
+def test_update_measurement_report_action_updates_and_launches(
+    window, monkeypatch, tmp_path
+):
+    report_path = str(tmp_path / "report.html")
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *a, **k: (report_path, "")),
+    )
+    update_calls = []
+    monkeypatch.setattr(
+        report, "update", lambda path, pack=True: update_calls.append((path, pack))
+    )
+    launched = []
+    monkeypatch.setattr(mw, "launch_file", lambda path: launched.append(path))
+    window._update_measurement_report_action_handler()
+    assert update_calls == [(report_path, getcfg("report.pack_js"))]
+    assert launched == [report_path]
+
+
+def test_update_measurement_report_action_shows_error_on_failure(
+    window, monkeypatch, tmp_path
+):
+    report_path = str(tmp_path / "report.html")
+    monkeypatch.setattr(
+        mw.QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *a, **k: (report_path, "")),
+    )
+
+    def fake_update(path, pack=True):
+        raise OSError("boom")
+
+    monkeypatch.setattr(report, "update", fake_update)
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    launched = []
+    monkeypatch.setattr(mw, "launch_file", lambda path: launched.append(path))
+    window._update_measurement_report_action_handler()
+    assert errors
+    assert launched == []
+
+
+def test_language_menu_lists_all_ldict_languages_sorted(window):
+    expected = sorted(
+        lang.LDICT[lcode].get("!language", "") for lcode in lang.LDICT
+    )
+    actual = [action.text() for action in window._language_menu.actions()]
+    assert actual == expected
+
+
+def test_language_menu_checks_current_language(window):
+    checked = [
+        action for action in window._language_menu.actions() if action.isChecked()
+    ]
+    assert len(checked) == 1
+    current_name = lang.LDICT[lang.getcode()].get("!language", "")
+    assert checked[0].text() == current_name
+
+
+def test_language_menu_actions_are_mutually_exclusive(window):
+    actions = window._language_menu.actions()
+    actions[0].setChecked(True)
+    actions[1].setChecked(True)
+    assert actions[0].isChecked() is False
+    assert actions[1].isChecked() is True
+
+
+def test_language_menu_positioned_between_tools_and_help(window):
+    actions = window.menuBar().actions()
+    tools_index = actions.index(window._tools_menu.menuAction())
+    help_index = actions.index(window._help_menu.menuAction())
+    lang_index = actions.index(window._language_menu.menuAction())
+    assert tools_index < lang_index < help_index
+
+
+def test_set_language_action_handler_persists_and_offers_restart_when_confirmed(
+    window, monkeypatch
+):
+    original = getcfg("lang")
+    monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.Yes)
+    restarted = []
+    monkeypatch.setattr(mw, "restart_application", lambda: restarted.append(True))
+    try:
+        window._set_language_action_handler("de")
+        assert getcfg("lang") == "de"
+        assert restarted == [True]
+    finally:
+        setcfg("lang", original)
+
+
+def test_set_language_action_handler_skips_restart_when_declined(window, monkeypatch):
+    original = getcfg("lang")
+    monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.No)
+    restarted = []
+    monkeypatch.setattr(mw, "restart_application", lambda: restarted.append(True))
+    try:
+        window._set_language_action_handler("fr")
+        assert getcfg("lang") == "fr"
+        assert restarted == []
+    finally:
+        setcfg("lang", original)
+
 
     def test_reject_with_do_not_show_again_clears_flag(self, window):
         setcfg("show_donation_message", 1)

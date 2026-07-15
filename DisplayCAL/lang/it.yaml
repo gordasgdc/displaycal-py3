@@ -1545,6 +1545,8 @@
   È illuminante
 "is_linear": |-
   È lineare
+"lang.confirm_restart": |-
+  La lingua cambierà al prossimo avvio di DisplayCAL. Vuoi riavviare DisplayCAL ora?
 "laptop.icc": |-
   Laptop (D65, 120 cd/m², gamma 2.2)
 "level": |-

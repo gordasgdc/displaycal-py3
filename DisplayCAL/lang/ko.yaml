@@ -2290,6 +2290,9 @@
 "is_linear": |-
   Is linear
 
+"lang.confirm_restart": |-
+  언어는 DisplayCAL을 다음에 시작할 때 변경됩니다. 지금 DisplayCAL을 다시 시작하시겠습니까?
+
 "laptop.icc": |-
   노트북 (감마 2.2)
 

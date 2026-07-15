@@ -3394,6 +3394,24 @@ class Worker(WorkerBase):
             return result
         return Error(lang.getstr("argyll.util.not_found", "spotread"))
 
+    def measure_uniformity_producer(self):
+        """Measure display device uniformity using spotread.
+
+        Toolkit-neutral extraction of wx's ``MainFrame
+        .measure_uniformity_producer``, so both bindings can share it.
+
+        Returns:
+            None | str | Exception: The result of the command execution, or
+                None if the command could not be found.
+        """
+        cmd, args = get_argyll_util("spotread"), ["-v", "-e", "-T"]
+        if cmd:
+            result = self.add_measurement_features(args, display=False, cmd=cmd)
+            if isinstance(result, Exception):
+                return result
+            return self.exec_cmd(cmd, args, skip_scripts=True)
+        return Error(lang.getstr("argyll.util.not_found", "spotread"))
+
     def instrument_can_use_ccxx(
         self, check_measurement_mode=True, instrument_name=None
     ):

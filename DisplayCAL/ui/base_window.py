@@ -99,6 +99,45 @@ class BaseWindow(ScriptingHostMixin, QMainWindow):
         config.setcfg(f"{self._pos_prefix}.x", pos.x())
         config.setcfg(f"{self._pos_prefix}.y", pos.y())
 
+    @property
+    def _size_prefix(self) -> str:
+        """Config key prefix for this window's saved size.
+
+        Returns:
+            str: The ``size.<name>`` config key prefix (only meaningful when
+            ``name`` was given; there is no bare ``size`` fallback, unlike
+            :attr:`_pos_prefix`, since no legacy window used one).
+        """
+        return f"size.{self._config_name}"
+
+    def restore_size(self) -> bool:
+        """Restore the window size from config if one is stored.
+
+        Opt-in (unlike :meth:`restore_position`, which some callers invoke
+        unconditionally): subclasses that want size persistence must call
+        this themselves, matching wx's per-window ``size.<name>.w``/``.h``
+        usage rather than making it implicit for every window.
+
+        Returns:
+            bool: True if a stored size was applied, False otherwise.
+        """
+        if not self._config_name:
+            return False
+        width = config.getcfg(f"{self._size_prefix}.w", False)
+        height = config.getcfg(f"{self._size_prefix}.h", False)
+        if width is None or height is None:
+            return False
+        self.resize(int(width), int(height))
+        return True
+
+    def save_size(self) -> None:
+        """Persist the current window size to config."""
+        if not self._config_name:
+            return
+        size = self.size()
+        config.setcfg(f"{self._size_prefix}.w", size.width())
+        config.setcfg(f"{self._size_prefix}.h", size.height())
+
     # -- menu --------------------------------------------------------------
 
     def init_menubar(self) -> None:
