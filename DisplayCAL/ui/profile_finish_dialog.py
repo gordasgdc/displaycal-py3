@@ -105,6 +105,12 @@ class ProfileFinishDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(APPNAME)
+        # Window-modal (not the exec()-implied application-modal default):
+        # the "Show Profile Information" checkbox opens a separate top-level
+        # ProfileInfoWindow that the user must be able to interact with while
+        # this dialog is still open. Application-modal would block input to
+        # every other window in the app, including that one.
+        self.setWindowModality(Qt.WindowModal)
         self._scope_buttons: dict[str, QRadioButton] = {}
         self.load_on_login_check: QCheckBox | None = None
         self.load_by_os_check: QCheckBox | None = None

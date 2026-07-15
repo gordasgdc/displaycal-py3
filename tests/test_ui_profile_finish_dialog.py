@@ -63,6 +63,26 @@ def _make_dialog(qapp, worker, **overrides):
     kwargs.update(overrides)
     return pfd.ProfileFinishDialog(**kwargs)
 
+
+# --- modality -----------------------------------------------------------------
+
+
+def test_dialog_is_window_modal_not_application_modal(qapp, worker):
+    """Must not block the separate ProfileInfoWindow the checkbox can open.
+
+    ``exec()`` implicitly makes a QDialog application-modal unless a weaker
+    modality was set beforehand -- application-modal blocks input to every
+    other top-level window in the app, including the non-modal
+    ``ProfileInfoWindow`` the "Show Profile Information" checkbox opens via
+    ``main_window.py``'s ``_toggle_profile_info_window``. Window-modal only
+    blocks the dialog's own parent window chain, leaving that window usable.
+    """
+    from qtpy.QtCore import Qt
+
+    dialog = _make_dialog(qapp, worker)
+    assert dialog.windowModality() == Qt.WindowModal
+
+
 # --- gamut grid --------------------------------------------------------------
 
 
