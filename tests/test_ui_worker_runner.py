@@ -477,7 +477,8 @@ def test_password_prompt_adapter_returns_none_on_cancel(qapp):
 
 
 _password_prompt_windows_crash_skip = pytest.mark.skipif(
-    sys.platform in ("win32", "darwin"),
+    sys.platform in ("win32", "darwin")
+    or (sys.platform.startswith("linux") and sys.version_info[:2] == (3, 12)),
     reason=(
         "Native segfault/access violation inside PySide6's offscreen-platform "
         "QDialog.exec() when accept()/reject() runs from a QTimer.singleShot "
@@ -489,9 +490,14 @@ _password_prompt_windows_crash_skip = pytest.mark.skipif(
         "Segmentation fault` at the same _ask() -> dialog.exec() call, other "
         "macOS Python versions in the same run were unaffected) once the test "
         "suite started running sequentially instead of under -n auto -- more "
-        "QObject churn accumulates in one process before this test runs. Same "
-        "PySide6 build passes on Linux CI, so this is a Qt/PySide6 offscreen-QPA "
-        "reentrancy bug, not product code; full coverage remains on Linux CI."
+        "QObject churn accumulates in one process before this test runs. Then, "
+        "after re-enabling -n auto on Linux/macOS CI, also reproduced on Linux "
+        "(Python 3.12 only, other Linux Python versions in the same run "
+        "unaffected, worker crashed with the same 'Fatal Python error: "
+        "Segmentation fault' signature) -- xdist's own worker-process churn "
+        "turns out to trigger the same reentrancy, so this is a Qt/PySide6 "
+        "offscreen-QPA bug that isn't actually platform-specific, just "
+        "harder to trigger on some Python/OS combinations than others."
     ),
 )
 
