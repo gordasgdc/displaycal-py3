@@ -25,16 +25,15 @@ Deliberately dropped / simplified versus the wx handler:
   .MeasureFrame` and :class:`DisplayCAL.ui.measurement_report.ReportWindow`
   made for their own Measure buttons — they only emit
   :attr:`CreateCorrectionWindow.measure_reference_requested` /
-  :attr:`.measure_colorimeter_requested` here.
+  :attr:`.measure_colorimeter_requested` here; the actual instrument switch
+  and measurement run live in :meth:`DisplayCAL.ui.main_window.MainWindow
+  ._ccxx_measure_requested`, which reuses the same "characterize only, no
+  colprof" pipeline as the standalone "Measure testchart..." tool
+  (:meth:`~DisplayCAL.ui.main_window.MainWindow
+  ._measure_testchart_action_handler`).
 * TI3 controls only accept ``.ti3`` files (the wx path also accepted
   ``.icc``/``.icm`` and derived a synthetic EDID-based measurement via
   ``ti1_lookup_to_ti3``; that alternate input path is dropped).
-* Measurement-mode choices come from the generic
-  :meth:`DisplayCAL.worker.Worker.get_instrument_measurement_modes` (the same
-  data Argyll reports via ``spotread -?``) rather than the wx handler's
-  hard-coded per-instrument label overrides (Spyder4/5 CCFL wording, ColorHug
-  factory/raw modes, etc.) — the underlying mode selectors are unaffected, only
-  the prettified labels.
 * The web-check / import / upload entry points, and the ``CCXXPlot``
   spectral/matrix visualization, are separate features left for future slices
   (the plan already tracked import/upload as their own items).
@@ -73,8 +72,10 @@ from qtpy.QtWidgets import (
     QProgressDialog,
     QPushButton,
     QRadioButton,
+    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -85,12 +86,14 @@ from DisplayCAL import localization as lang
 from DisplayCAL.argyll import get_argyll_version
 from DisplayCAL.argyll_instruments import get_canonical_instrument_name
 from DisplayCAL.cgats import CGATS, CGATSError
-from DisplayCAL.config import get_argyll_data_dir, getcfg, setcfg
+from DisplayCAL.config import DEFAULTS, get_argyll_data_dir, getcfg, setcfg
 from DisplayCAL.edid import PNP_ID_CACHE, get_manufacturer_name
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui.assets import get_theme_pixmap
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
 from DisplayCAL.ui.measurement_flow import observer_items
+from DisplayCAL.ui.tooltip_window import TooltipWindow, info_text_html
 from DisplayCAL.util_str import safe_str
 from DisplayCAL.worker import Worker, check_create_dir, get_options_from_ti3
 
@@ -258,6 +261,11 @@ class CreateCorrectionWindow(BaseWindow):
     measure_reference_requested = Signal()
     #: Emitted when the user wants to measure the colorimeter.
     measure_colorimeter_requested = Signal()
+    #: Emitted with ``(path, is_ccmx)`` once a correction file has been
+    #: written to disk, so the main window can refresh its instrument /
+    #: correction-matrix selection the way wx's
+    #: ``colorimeter_correction_check_overwrite`` does after a save.
+    correction_created = Signal(str, bool)
 
     def __init__(self) -> None:
         super().__init__(
@@ -276,6 +284,10 @@ class CreateCorrectionWindow(BaseWindow):
         self._build_ui()
         self._populate_instruments()
         self.update_controls()
+        # update_controls (via _maybe_reveal_details) may have left the
+        # details box hidden, unlike _build_ui's initial resize() which
+        # assumed it visible; snap to whatever's actually showing.
+        self._sync_window_size()
         self.restore_position()
 
     # -- UI construction ----------------------------------------------------
@@ -284,18 +296,52 @@ class CreateCorrectionWindow(BaseWindow):
         central = QWidget(self)
         layout = QVBoxLayout(central)
 
-        layout.addWidget(
-            QLabel(lang.getstr("colorimeter_correction.create.warning"))
-        )
+        info_row = QHBoxLayout()
+        info_icon = QLabel()
+        info_pixmap = get_theme_pixmap(32, "dialog-information")
+        if not info_pixmap.isNull():
+            info_icon.setPixmap(info_pixmap)
+        info_icon.setAlignment(Qt.AlignTop)
+        info_icon.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        info_row.addWidget(info_icon)
+        info_label = QLabel(lang.getstr("colorimeter_correction.create.info"))
+        info_label.setWordWrap(True)
+        info_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        info_row.addWidget(info_label, 1)
+        layout.addLayout(info_row)
+
+        warning_row = QHBoxLayout()
+        warning_icon = QLabel()
+        warning_pixmap = get_theme_pixmap(16, "dialog-warning")
+        if not warning_pixmap.isNull():
+            warning_icon.setPixmap(warning_pixmap)
+        warning_icon.setAlignment(Qt.AlignTop)
+        warning_icon.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        warning_row.addWidget(warning_icon)
+        warning_label = QLabel(lang.getstr("colorimeter_correction.create.warning"))
+        warning_label.setWordWrap(True)
+        warning_label.setStyleSheet("color: #F07F00;")
+        warning_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        warning_row.addWidget(warning_label, 1)
+        layout.addLayout(warning_row)
 
         layout.addWidget(self._build_type_box())
         layout.addWidget(self._build_instrument_box("reference"))
         self.colorimeter_box = self._build_instrument_box("colorimeter")
         layout.addWidget(self.colorimeter_box)
-        layout.addWidget(self._build_details_box())
+        self.details_box = self._build_details_box()
+        # wx only shows these fields in a second confirmation dialog once
+        # the user has picked/measured real TI3 files; this single-window
+        # port keeps them inline but hidden until there's something real to
+        # review (see _maybe_reveal_details).
+        self.details_box.setVisible(False)
+        layout.addWidget(self.details_box)
 
         button_row = QHBoxLayout()
         button_row.addStretch(1)
+        self.cancel_btn = QPushButton(lang.getstr("cancel"))
+        self.cancel_btn.clicked.connect(self.close)
+        button_row.addWidget(self.cancel_btn)
         self.create_btn = QPushButton(lang.getstr("colorimeter_correction.create"))
         self.create_btn.setEnabled(False)
         self.create_btn.setDefault(True)
@@ -304,14 +350,24 @@ class CreateCorrectionWindow(BaseWindow):
         layout.addLayout(button_row)
 
         self.setCentralWidget(central)
-        self.resize(560, 640)
+        layout.setSizeConstraint(QVBoxLayout.SetMinimumSize)
+        self.resize(650, 760)
+        # Floor the width: the instrument rows (combo + mode combo + Measure
+        # button) technically survive narrower via Qt's own text elision, but
+        # wx never let this dialog get that cramped.
+        min_size = central.minimumSizeHint()
+        min_size.setWidth(max(min_size.width(), 620))
+        self.setMinimumSize(min_size)
 
     def _build_type_box(self) -> QGroupBox:
         box = QGroupBox(lang.getstr("type"))
         v = QVBoxLayout(box)
         row = QHBoxLayout()
         self.correction_type_matrix = QRadioButton(lang.getstr("matrix"))
-        self.correction_type_spectral = QRadioButton(lang.getstr("spectral"))
+        self.correction_type_spectral = QRadioButton(
+            lang.getstr("spectral")
+            + " (i1 DisplayPro, ColorMunki Display, Spyder4/5)"
+        )
         group = QButtonGroup(self)
         group.addButton(self.correction_type_matrix)
         group.addButton(self.correction_type_spectral)
@@ -324,11 +380,17 @@ class CreateCorrectionWindow(BaseWindow):
         row.addWidget(self.four_color_matrix)
         v.addLayout(row)
         v.addWidget(self.correction_type_spectral)
+        # Without a stretch elsewhere to absorb extra vertical space, a plain
+        # QGroupBox is happy to grow past its content; pin it to its natural
+        # height instead of stretching when the window's taller than needed.
+        box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         return box
 
     def _build_instrument_box(self, which: str) -> QGroupBox:
-        title = lang.getstr(
-            "instrument.reference" if which == "reference" else "instrument"
+        title = (
+            f"{lang.getstr('instrument')} ({lang.getstr('reference')})"
+            if which == "reference"
+            else lang.getstr("instrument")
         )
         box = QGroupBox(title)
         v = QVBoxLayout(box)
@@ -344,7 +406,8 @@ class CreateCorrectionWindow(BaseWindow):
         v.addLayout(row)
 
         observer_row = QHBoxLayout()
-        observer_row.addWidget(QLabel(lang.getstr("observer")))
+        observer_label = QLabel(lang.getstr("observer"))
+        observer_row.addWidget(observer_label)
         observer_ctrl = QComboBox()
         observer_row.addWidget(observer_ctrl)
         observer_row.addStretch(1)
@@ -356,6 +419,7 @@ class CreateCorrectionWindow(BaseWindow):
         setattr(self, f"{which}_instrument", instrument_ctrl)
         setattr(self, f"{which}_measurement_mode", mode_ctrl)
         setattr(self, f"{which}_observer", observer_ctrl)
+        setattr(self, f"{which}_observer_label", observer_label)
         setattr(self, f"{which}_ti3", ti3_ctrl)
         setattr(self, f"measure_{which}_btn", measure_btn)
 
@@ -375,10 +439,23 @@ class CreateCorrectionWindow(BaseWindow):
         else:
             measure_btn.clicked.connect(self.measure_colorimeter_requested.emit)
 
+        # See _build_type_box: without a stretch to absorb leftover vertical
+        # space, plain QGroupBoxes grow to fill it instead of staying put.
+        box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         return box
 
-    def _build_details_box(self) -> QGroupBox:
-        box = QGroupBox(lang.getstr("colorimeter_correction.create.details"))
+    def _build_details_box(self) -> QWidget:
+        container = QWidget()
+        outer = QVBoxLayout(container)
+        outer.setContentsMargins(0, 0, 0, 0)
+        # A wrapped label rather than the box's own title: a QGroupBox title
+        # doesn't wrap, and this sentence is long enough to force the window
+        # to an unreasonably wide natural size if used as one.
+        details_label = QLabel(lang.getstr("colorimeter_correction.create.details"))
+        details_label.setWordWrap(True)
+        outer.addWidget(details_label)
+        box = QGroupBox()
+        outer.addWidget(box)
         grid = QGridLayout(box)
         self.description_ctrl = QLineEdit()
         grid.addWidget(QLabel(lang.getstr("description")), 0, 0)
@@ -393,7 +470,20 @@ class CreateCorrectionWindow(BaseWindow):
         self.technology_ctrl = QComboBox()
         grid.addWidget(QLabel(lang.getstr("display.tech")), 3, 0)
         grid.addWidget(self.technology_ctrl, 3, 1)
-        return box
+        tech_info_btn = QToolButton()
+        tech_info_btn.setAutoRaise(True)
+        tech_info_btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        tech_info_pixmap = get_theme_pixmap(16, "info")
+        if not tech_info_pixmap.isNull():
+            tech_info_btn.setIcon(tech_info_pixmap)
+        tech_info_btn.setText(lang.getstr("info.display_tech.show"))
+        tech_info_btn.clicked.connect(self._display_tech_info_show_btn_handler)
+        grid.addWidget(tech_info_btn, 4, 1)
+        # See _build_type_box: without a stretch to absorb leftover vertical
+        # space, plain QGroupBoxes grow to fill it instead of staying put.
+        box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        container.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        return container
 
     # -- instrument / mode / observer population -----------------------------
 
@@ -427,31 +517,55 @@ class CreateCorrectionWindow(BaseWindow):
             self._instrument_handler("reference")
         if colorimeters:
             self._instrument_handler("colorimeter")
+        # Matches wx locking the combo when there's nothing to switch between.
+        self.reference_instrument.setEnabled(len(reference_instruments) >= 2)
+        self.colorimeter_instrument.setEnabled(len(colorimeters) >= 2)
 
     def _instrument_handler(self, which: str) -> None:
         combo = getattr(self, f"{which}_instrument")
         name = combo.currentText()
         mode_ctrl = getattr(self, f"{which}_measurement_mode")
-        modes: dict[str, str] = {}
-        if name:
-            features = self.worker.get_instrument_features(name)
-            instrument_id = features.get("id", name)
-            try:
-                modes = self.worker.get_instrument_measurement_modes(instrument_id)
-            except Exception:  # noqa: BLE001 - keep the wizard usable if Argyll fails
-                modes = {}
-        self._mode_keys[which] = list(modes.keys())
-        mode_ctrl.clear()
-        mode_ctrl.addItems(list(modes.values()))
-        mode_ctrl.setEnabled(bool(modes))
-
         cfgname = (
             "colorimeter_correction.measurement_mode.reference"
             if which == "reference"
             else "colorimeter_correction.measurement_mode"
         )
+        keys: list[str] = []
+        labels: list[str] = []
+        if name:
+            if which == "reference":
+                # Matches wx's ``get_measurement_modes(..., "spect", ...)``:
+                # spectrometers have no Argyll ``-y`` modes of their own (see
+                # ``Worker.get_instrument_measurement_modes``), so the
+                # reference role uses the same generic
+                # Refresh/LCD(+adaptive/high-res/projector) mode set the main
+                # window's own measurement-mode combo does.
+                features = self.worker.get_instrument_features(name)
+                instrument_type = "spect" if features.get("spectral") else "color"
+                try:
+                    result = ccxx_helpers.compute_measurement_modes(
+                        self.worker, name, instrument_type, cfgname
+                    )
+                except Exception:  # noqa: BLE001 - keep the wizard usable
+                    result = None
+                if result is not None:
+                    labels = result.measurement_modes.get(instrument_type, [])
+                    ab = result.measurement_modes_ab.get(instrument_type, {})
+                    keys = [ab[i] for i in range(len(labels))]
+            else:
+                # Matches wx's ``get_ccxx_measurement_modes``: a pure
+                # per-instrument-name lookup, not the live Argyll ``-y`` mode
+                # list (which needs a connected colorimeter instrument to
+                # answer at all).
+                modes = ccxx_helpers.get_ccxx_measurement_modes(name)
+                keys = list(modes.keys())
+                labels = list(modes.values())
+        self._mode_keys[which] = keys
+        mode_ctrl.clear()
+        mode_ctrl.addItems(labels)
+        mode_ctrl.setEnabled(bool(labels))
+
         current_mode = getcfg(cfgname)
-        keys = self._mode_keys[which]
         if current_mode in keys:
             mode_ctrl.setCurrentIndex(keys.index(current_mode))
 
@@ -459,8 +573,6 @@ class CreateCorrectionWindow(BaseWindow):
         can_observe = bool(name) and self.worker.instrument_can_use_nondefault_observer(
             name
         )
-        show_observer = bool(getcfg("show_advanced_options")) and can_observe
-        observer_ctrl.setVisible(show_observer)
         observer_ctrl.setEnabled(can_observe)
         if can_observe and observer_ctrl.count() == 0:
             items = observer_items()
@@ -483,7 +595,62 @@ class CreateCorrectionWindow(BaseWindow):
                     observer_ctrl.setCurrentIndex(i)
                     break
 
+        self._update_observer_visibility(which, can_observe)
         self._update_ok_state()
+
+    def _update_observer_visibility(self, which: str, can_observe: bool) -> None:
+        """Show the observer row, mirroring wx's stickier per-role rules.
+
+        The reference observer is only relevant when building a CCMX (it
+        feeds ``spec2cie``), so it's gated on the matrix radio button too.
+        The colorimeter observer is left hidden unless it was already set to
+        something other than the default, matching wx's
+        ``show_observer_ctrl`` (avoids surfacing a rarely-needed control for
+        the common case).
+        """
+        advanced = bool(getcfg("show_advanced_options"))
+        if which == "reference":
+            show_observer = (
+                advanced and can_observe and self.correction_type_matrix.isChecked()
+            )
+        else:
+            current_observer = getcfg("colorimeter_correction.observer")
+            show_observer = (
+                advanced
+                and can_observe
+                and current_observer != DEFAULTS["colorimeter_correction.observer"]
+            )
+        observer_ctrl = getattr(self, f"{which}_observer")
+        observer_label = getattr(self, f"{which}_observer_label")
+        observer_ctrl.setVisible(show_observer)
+        observer_label.setVisible(show_observer)
+
+    def selection_for_measurement(
+        self, which: str
+    ) -> tuple[str, str | None, str | None] | None:
+        """Return ``(instrument, mode_key, observer_key)`` for a Measure click.
+
+        Read by :meth:`DisplayCAL.ui.main_window.MainWindow
+        ._ccxx_measure_requested`, the Qt port of wx's
+        ``id_measure_reference``/``id_measure_colorimeter`` branch, to know
+        which live instrument/mode/observer to switch the main window to
+        before running the measurement. Returns ``None`` if no instrument is
+        selected for ``which``.
+        """
+        instrument_ctrl = getattr(self, f"{which}_instrument")
+        instrument = instrument_ctrl.currentText()
+        if not instrument:
+            return None
+        mode_ctrl = getattr(self, f"{which}_measurement_mode")
+        keys = self._mode_keys.get(which, [])
+        index = mode_ctrl.currentIndex()
+        mode_key = keys[index] if 0 <= index < len(keys) else None
+        observer_key = None
+        observer_ctrl = getattr(self, f"{which}_observer")
+        if observer_ctrl.isVisible():
+            observer_keys = getattr(self, f"_observer_keys_{which}", {})
+            observer_key = observer_keys.get(observer_ctrl.currentIndex())
+        return instrument, mode_key, observer_key
 
     # -- TI3 handling ---------------------------------------------------------
 
@@ -495,6 +662,7 @@ class CreateCorrectionWindow(BaseWindow):
         )
         setcfg(cfgname, getattr(self, f"{which}_ti3").path())
         self._update_ok_state()
+        self._maybe_reveal_details()
 
     def _ti3_dropped(self, which: str, path: str) -> None:
         getattr(self, f"{which}_ti3").set_path(path)
@@ -509,6 +677,45 @@ class CreateCorrectionWindow(BaseWindow):
         )
         self.create_btn.setEnabled(ok)
 
+    def _maybe_reveal_details(self) -> None:
+        """Populate and reveal the details box once there's a real TI3 to describe.
+
+        wx only shows these fields ("please check the fields below...") in a
+        second confirmation dialog once the user has selected/measured
+        actual TI3 file(s), not from the moment the window opens. This
+        single-window port keeps the same fields hidden until the currently
+        selected TI3(s) load and validate cleanly, then reveals and
+        populates them from that data (re-populated on every subsequent TI3
+        change, and again right before the actual Argyll run in
+        :meth:`create_handler` for freshness).
+        """
+        try:
+            self._reference_cgats, self._colorimeter_cgats = self._load_ti3_files()
+        except Exception:  # noqa: BLE001 - just means "nothing to show yet"
+            was_visible = self.details_box.isVisible()
+            self.details_box.setVisible(False)
+            if was_visible:
+                self._sync_window_size()
+            return
+        self._populate_details()
+        was_visible = self.details_box.isVisible()
+        self.details_box.setVisible(True)
+        if not was_visible:
+            self._sync_window_size()
+
+    def _sync_window_size(self) -> None:
+        """Shrink/grow the window to fit the currently visible content.
+
+        Qt's layout system happily leaves behind blank space where a widget
+        used to be when it's hidden (unlike wx, which rebuilds each dialog
+        step from scratch already sized to fit); call this after toggling a
+        section's visibility so the window follows suit, matching
+        ``dlg.sizer0.SetSizeHints(dlg)`` + ``Layout()`` calls sprinkled
+        through the wx handler's own show/hide branches. Never shrinks below
+        :meth:`_build_ui`'s floor (``setMinimumSize``).
+        """
+        self.adjustSize()
+
     def correction_type_handler(self, _checked: bool = False) -> None:
         """Show/hide the colorimeter box and four-color-matrix checkbox."""
         matrix = self.correction_type_matrix.isChecked()
@@ -516,8 +723,17 @@ class CreateCorrectionWindow(BaseWindow):
         self.four_color_matrix.setEnabled(matrix)
         if not matrix:
             self.four_color_matrix.setChecked(False)
+        colorimeter_was_visible = self.colorimeter_box.isVisible()
         self.colorimeter_box.setVisible(matrix)
+        name = self.reference_instrument.currentText()
+        can_observe = bool(name) and self.worker.instrument_can_use_nondefault_observer(
+            name
+        )
+        self._update_observer_visibility("reference", can_observe)
         self._update_ok_state()
+        self._maybe_reveal_details()
+        if colorimeter_was_visible != matrix:
+            self._sync_window_size()
 
     def four_color_matrix_handler(self, checked: bool = False) -> None:
         """Persist the four-color-matrix checkbox (``Worker.create_ccxx`` reads it)."""
@@ -534,9 +750,26 @@ class CreateCorrectionWindow(BaseWindow):
         self.four_color_matrix.setChecked(
             bool(getcfg("ccmx.use_four_color_matrix_method"))
         )
-        self.reference_ti3.set_path(getcfg("last_reference_ti3_path"))
-        self.colorimeter_ti3.set_path(getcfg("last_colorimeter_ti3_path"))
+        # Matches wx calling correction_type_handler(None) once right after
+        # binding it: without this, the colorimeter box's initial visibility
+        # never reflects a config-loaded "spectral" selection, since
+        # setChecked() only emits toggled() on an actual state change and
+        # correction_type_matrix starts out unchecked by default anyway.
+        self.correction_type_handler()
+        # Matches wx's get_verified_path(): only pre-fill a remembered path if
+        # it still exists on disk (the config default is an "~/Unnamed"
+        # placeholder used purely as a browse-dialog starting point, never
+        # meant to appear as a real selection).
+        reference_path = getcfg("last_reference_ti3_path")
+        self.reference_ti3.set_path(
+            reference_path if os.path.isfile(reference_path) else ""
+        )
+        colorimeter_path = getcfg("last_colorimeter_ti3_path")
+        self.colorimeter_ti3.set_path(
+            colorimeter_path if os.path.isfile(colorimeter_path) else ""
+        )
         self._update_ok_state()
+        self._maybe_reveal_details()
 
     # -- create pipeline ------------------------------------------------------
 
@@ -700,6 +933,37 @@ class CreateCorrectionWindow(BaseWindow):
         )
         if tech in self._technology_keys:
             self.technology_ctrl.setCurrentIndex(self._technology_keys.index(tech))
+
+    def _display_tech_info_show_btn_handler(self) -> None:
+        """Show (or raise) the display-technology info popup.
+
+        Matches wx's ``display_tech_info_show_handler``, reused here from
+        the same button placed next to the Technology combo; shares its
+        popup content/markup translation with
+        :meth:`DisplayCAL.ui.main_window.MainWindow
+        ._display_tech_info_show_btn_handler` via
+        :func:`DisplayCAL.ui.tooltip_window.info_text_html`.
+        """
+        if getattr(self, "_display_tech_info_window", None) is None:
+            self._display_tech_info_window = TooltipWindow(
+                self,
+                lang.getstr("display.tech"),
+                info_text_html("info.display_tech"),
+                bitmap=get_theme_pixmap(32, "dialog-information"),
+                links=[
+                    (
+                        lang.getstr(
+                            "info.display_tech.linklabel.displayspecifications.com"
+                        ),
+                        "https://www.displayspecifications.com/",
+                    ),
+                    (
+                        lang.getstr("info.display_tech.linklabel.everymac.com"),
+                        "https://everymac.com/",
+                    ),
+                ],
+            )
+        self._display_tech_info_window.show_and_raise()
 
     def _build_correction(self) -> dict:
         """Run the Argyll pipeline. Executed on :class:`_CreateThread`."""
@@ -895,13 +1159,14 @@ class CreateCorrectionWindow(BaseWindow):
             self._error(str(result))
             return
         cgats_bytes = result["cgats"]
-        if result["is_ccmx"]:
+        is_ccmx = result["is_ccmx"]
+        if is_ccmx:
             dlg = _PreviewDialog(result["preview_rows"], self)
             if dlg.exec_() != QDialog.Accepted:
                 return
-        self._save(cgats_bytes)
+        self._save(cgats_bytes, is_ccmx)
 
-    def _save(self, cgats_bytes: bytes) -> None:
+    def _save(self, cgats_bytes: bytes, is_ccmx: bool) -> None:
         path = ccxx_helpers.get_cgats_path(cgats_bytes)
         if os.path.isfile(path):
             reply = QMessageBox.question(
@@ -918,6 +1183,13 @@ class CreateCorrectionWindow(BaseWindow):
             self._error(str(exception))
             return
         setcfg("colorimeter_correction_matrix_file", ":" + path)
+        # wx's dialog is already gone by the time the Argyll run even
+        # starts (it's a blocking modal that returns before processing);
+        # this single-window port keeps it open through the run/preview, so
+        # close it here once there's a finished file, matching wx's "the
+        # wizard is done" end state instead of leaving a stale window up.
+        self.correction_created.emit(path, is_ccmx)
+        self.close()
 
     def _error(self, message: str) -> None:
         title = lang.getstr("colorimeter_correction.create")

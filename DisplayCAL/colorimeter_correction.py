@@ -895,6 +895,75 @@ def get_cgats_measurement_mode(cgats: CGATS, instrument: str) -> str | None:
     return mode
 
 
+def get_ccxx_measurement_modes(instrument_name: str, swap: bool = False) -> dict:
+    """Return the measurement modes suitable for colorimeter-correction creation.
+
+    Toolkit-neutral port of ``MainFrame.get_ccxx_measurement_modes``: a pure
+    per-instrument-name lookup (unlike :func:`compute_measurement_modes`, it
+    needs no live ``worker``/``argyll_version`` state, and never adds the
+    adaptive/high-res/projector variants that helper does), used for the
+    colorimeter side of a CCMX/CCSS creation dialog.
+
+    Args:
+        instrument_name: The instrument's display name.
+        swap: If True, swap the keys and values of the returned dict.
+    """
+    # IMPORTANT: Make changes aswell in the following locations:
+    # - DisplayCAL.MainFrame.create_colorimeter_correction_handler
+    # - DisplayCAL.MainFrame.set_ccxx_measurement_mode
+    # - DisplayCAL.MainFrame.update_colorimeter_correction_matrix_ctrl_items
+    # - worker.Worker.check_add_display_type_base_id
+    # - worker.Worker.instrument_can_use_ccxx
+    modes = {
+        "ColorHug": {
+            "F": lang.getstr("measurement_mode.factory"),
+            "R": lang.getstr("measurement_mode.raw"),
+        },
+        "ColorHug2": {
+            "F": lang.getstr("measurement_mode.factory"),
+            "R": lang.getstr("measurement_mode.raw"),
+        },
+        "ColorMunki Smile": {"f": lang.getstr("measurement_mode.lcd.ccfl")},
+        "Colorimtre HCFR": {"R": lang.getstr("measurement_mode.raw")},
+        "K-10": {"F": lang.getstr("measurement_mode.factory")},
+        "SpyderX": {
+            "l": lang.getstr("measurement_mode.lcd"),
+            "e": lang.getstr("measurement_mode.lcd.white_led"),
+            "b": lang.getstr("measurement_mode.lcd.wide_gamut.led"),
+            "i": lang.getstr("measurement_mode.lcd.wide_gamut.gb_led"),
+        },
+        "SpyderX2": {
+            "l": lang.getstr("measurement_mode.lcd"),
+            "e": lang.getstr("measurement_mode.lcd.white_led"),
+            "b": lang.getstr("measurement_mode.lcd.wide_gamut.led"),
+            "i": lang.getstr("measurement_mode.lcd.wide_gamut.gb_led"),
+            "h": lang.getstr(
+                "measurement_mode.lcd.high_brightness", "High brightness"
+            ),
+        },
+        "Spyder 2024": {
+            "l": lang.getstr("measurement_mode.lcd"),
+            "e": lang.getstr("measurement_mode.lcd.white_led"),
+            "b": lang.getstr("measurement_mode.lcd.wide_gamut.led"),
+            "i": lang.getstr("measurement_mode.lcd.wide_gamut.gb_led"),
+            "h": lang.getstr(
+                "measurement_mode.lcd.high_brightness", "High brightness"
+            ),
+            "o": lang.getstr("measurement_mode.lcd.oled", "OLED"),
+            "m": lang.getstr("measurement_mode.lcd.mini_led", "Mini-LED"),
+        },
+    }.get(
+        instrument_name,
+        {
+            "c": lang.getstr("measurement_mode.refresh"),
+            "l": lang.getstr("measurement_mode.lcd"),
+        },
+    )
+    if swap:
+        modes = swap_dict_keys_values(modes)
+    return modes
+
+
 @dataclass
 class MeasurementModes:
     """Result of :func:`compute_measurement_modes`."""

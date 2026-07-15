@@ -179,6 +179,7 @@ from DisplayCAL.argyll import (
     get_argyll_util,
     make_argyll_compatible_path,
 )
+from DisplayCAL.argyll_instruments import get_canonical_instrument_name
 from DisplayCAL.argyll_names import ALTNAMES as ARGYLL_ALTNAMES
 from DisplayCAL.argyll_names import NAMES as ARGYLL_NAMES
 from DisplayCAL.argyll_names import OPTIONAL as ARGYLL_OPTIONAL
@@ -247,7 +248,7 @@ from DisplayCAL.ui.profile_install_window import (
 )
 from DisplayCAL.ui.progress_dialog import ProgressDialog
 from DisplayCAL.ui.spyder2_enable import Spyder2EnableController
-from DisplayCAL.ui.tooltip_window import TooltipWindow
+from DisplayCAL.ui.tooltip_window import TooltipWindow, info_text_html
 from DisplayCAL.ui.tools.curve_viewer import CurveViewerWindow
 from DisplayCAL.ui.tools.log_window import LogWindow
 from DisplayCAL.ui.tools.lut3d import LUT3DWindow
@@ -2830,19 +2831,9 @@ class MainWindow(BaseWindow):
     def _info_text_html(label_key: str) -> str:
         """Convert a wx ``StaticFancyText`` markup string to Qt rich text.
 
-        wx's markup (``<font weight='bold'>...</font>``, blank-line
-        paragraph breaks) isn't valid Qt rich text; translate it rather
-        than re-authoring the (long, translated) ``info.*`` strings.
+        See :func:`DisplayCAL.ui.tooltip_window.info_text_html`.
         """
-        text = lang.getstr(label_key)
-        text = text.replace("<font weight='bold'>", "<b>").replace(
-            "</font>", "</b>"
-        )
-        paragraphs = text.split("\n\n")
-        return "".join(
-            f"<p style='margin:0 0 8px 0'>{paragraph.replace(chr(10), '<br>')}</p>"
-            for paragraph in paragraphs
-        )
+        return info_text_html(label_key)
 
     @staticmethod
     def _build_settings_header(label_key: str) -> QLabel:
@@ -4257,15 +4248,24 @@ class MainWindow(BaseWindow):
 
     def update_comports(self) -> None:
         """Populate the instrument selector from ``worker.instruments``."""
-        self.comport_ctrl.clear()
-        self.comport_ctrl.addItems(instrument_items(self.worker.instruments))
-        self.comport_ctrl.setEnabled(bool(self.worker.instruments))
-        if self.worker.instruments:
-            index = min(
-                max(0, len(self.worker.instruments) - 1),
-                max(0, int(getcfg("comport.number")) - 1),
-            )
-            self.comport_ctrl.setCurrentIndex(index)
+        # Without this guard, clear()/addItems() below auto-selects index 0
+        # and fires comport_ctrl_handler synchronously, which overwrites
+        # comport.number with that transient index before the real one
+        # (computed from config further down) is ever applied.
+        was_updating = self._updating
+        self._updating = True
+        try:
+            self.comport_ctrl.clear()
+            self.comport_ctrl.addItems(instrument_items(self.worker.instruments))
+            self.comport_ctrl.setEnabled(bool(self.worker.instruments))
+            if self.worker.instruments:
+                index = min(
+                    max(0, len(self.worker.instruments) - 1),
+                    max(0, int(getcfg("comport.number")) - 1),
+                )
+                self.comport_ctrl.setCurrentIndex(index)
+        finally:
+            self._updating = was_updating
 
     def update_observers(self) -> None:
         """Populate the observer selector from the Argyll-supported observers."""
@@ -5519,8 +5519,122 @@ class MainWindow(BaseWindow):
     def colorimeter_correction_create_btn_handler(self) -> None:
         """Launch the standalone CCMX/CCSS creation window."""
         window = CreateCorrectionWindow()
+        window.measure_reference_requested.connect(
+            lambda: self._ccxx_measure_requested("reference")
+        )
+        window.measure_colorimeter_requested.connect(
+            lambda: self._ccxx_measure_requested("colorimeter")
+        )
+        window.correction_created.connect(self._on_ccxx_correction_created)
         window.show()
         self._ccxx_create_window = window
+
+    def _on_ccxx_correction_created(self, path: str, is_ccmx: bool) -> None:
+        """Refresh instrument / correction-matrix selection after a save.
+
+        Qt port of the post-write half of wx's
+        ``colorimeter_correction_check_overwrite``: for a CCMX (colorimeter
+        + reference pair) switch the main window's active instrument to the
+        one the matrix corrects, since that's the instrument the user is
+        presumably about to use; otherwise (CCSS, or no matching known
+        instrument) just refresh the correction-matrix combo so the new
+        file shows up as a selectable option.
+
+        Args:
+            path: Path to the just-written CCMX/CCSS file.
+            is_ccmx: Whether the file is a CCMX (as opposed to a CCSS).
+        """
+        instrument = None
+        if is_ccmx:
+            try:
+                instrument = CGATS(path).queryv1("INSTRUMENT") or getcfg(
+                    "colorimeter_correction.instrument"
+                )
+            except (OSError, CGATSError):
+                instrument = None
+            if instrument:
+                instrument = get_canonical_instrument_name(instrument)
+                if isinstance(instrument, bytes):
+                    instrument = instrument.decode("utf-8")
+        if instrument and instrument in self.worker.instruments:
+            setcfg("comport.number", self.worker.instruments.index(instrument) + 1)
+            self.update_comports()
+        else:
+            self.update_colorimeter_correction_matrix_ctrl_items(True)
+
+    def _ccxx_measure_requested(self, which: str) -> None:
+        """Handle the CCXX creation window's "Measure reference/colorimeter".
+
+        Qt port of the ``id_measure_reference``/``id_measure_colorimeter``
+        branch of ``MainFrame.create_colorimeter_correction_handler``:
+        persists the chosen instrument/mode/observer as the
+        ``colorimeter_correction.*`` settings the create window will reuse
+        next time it opens, backs up the main window's current
+        instrument/mode/observer/testchart selection, switches to the CCXX
+        testchart and the chosen instrument, then closes the create window
+        and runs the same "characterize only, no colprof" measurement
+        :meth:`_measure_testchart_action_handler` uses. On completion,
+        :meth:`_record_ccxx_measurement_paths` reopens the create window
+        with the new TI3 pre-filled (gated on ``comport.number.backup``,
+        set below) before :meth:`_restore_measurement_mode_and_testchart`
+        restores the backed-up state.
+
+        Args:
+            which: ``"reference"`` or ``"colorimeter"``.
+        """
+        window = self._ccxx_create_window
+        if window is None:
+            return
+        selection = window.selection_for_measurement(which)
+        if selection is None:
+            return
+        instrument, mode_key, observer_key = selection
+        try:
+            index = self.worker.instruments.index(instrument)
+        except ValueError:
+            QMessageBox.critical(
+                self, APPNAME, lang.getstr("not_found", instrument)
+            )
+            return
+
+        instrument_cfgname = (
+            "colorimeter_correction.instrument.reference"
+            if which == "reference"
+            else "colorimeter_correction.instrument"
+        )
+        mode_cfgname = (
+            "colorimeter_correction.measurement_mode.reference"
+            if which == "reference"
+            else "colorimeter_correction.measurement_mode"
+        )
+        observer_cfgname = (
+            "colorimeter_correction.observer.reference"
+            if which == "reference"
+            else "colorimeter_correction.observer"
+        )
+        setcfg(instrument_cfgname, instrument)
+        setcfg(mode_cfgname, mode_key)
+        if observer_key:
+            setcfg(observer_cfgname, observer_key)
+
+        setcfg("comport.number.backup", getcfg("comport.number"))
+        setcfg("measurement_mode.backup", getcfg("measurement_mode"))
+        setcfg("observer.backup", getcfg("observer"))
+        if not config.is_ccxx_testchart():
+            setcfg("testchart.file.backup", getcfg("testchart.file"))
+
+        setcfg("comport.number", index + 1)
+        setcfg("measurement_mode", mode_key)
+        if observer_key:
+            setcfg("observer", observer_key)
+        self.update_comports()
+        self.update_measurement_mode_ctrl()
+        self.update_observers()
+        self._set_testchart(config.get_ccxx_testchart())
+
+        window.close()
+        self._ccxx_create_window = None
+        self._measure_testchart_action_handler()
 
     def colorimeter_correction_info_btn_handler(self) -> None:
         """Plot the selected CCMX/CCSS's spectra or matrix."""
@@ -6625,15 +6739,12 @@ class MainWindow(BaseWindow):
         colorimeter chart -- to gather the raw measurement a colorimeter-
         correction matrix is built from.
 
-        Not reproduced: wx chains a successful CCXX measurement started
-        *from* the correction-creation dialog (``comport.number.backup`` is
-        set) back into ``create_colorimeter_correction_handler`` with the
-        new TI3 paths pre-filled. The Qt ``CreateCorrectionWindow`` doesn't
-        have a matching "measure now" entry point that would set that
-        backup, so the chain is unreachable here too --
-        :meth:`_restore_measurement_mode_and_testchart` is still ported
-        (a cheap no-op today) so a future session wiring that entry point
-        doesn't also have to add this half.
+        Also reached from the CCXX creation window's Measure buttons via
+        :meth:`_ccxx_measure_requested`, which sets ``comport.number.backup``
+        before calling this; :meth:`_record_ccxx_measurement_paths` checks
+        that flag to reopen the creation window with the new TI3 pre-filled,
+        matching wx chaining a Measure-triggered CCXX measurement back into
+        ``create_colorimeter_correction_handler``.
         """
         if not self._setup_ccxx_measurement():
             self._restore_measurement_mode_and_testchart()
@@ -6707,6 +6818,10 @@ class MainWindow(BaseWindow):
             self._drive_testchart_measurement,
             use_patternwindow=getattr(self.worker, "_use_patternwindow", False),
         )
+        # Mirror begin_measurement's self.hide(): the main window shouldn't
+        # stay on screen competing with the patch/measure frame. Restored by
+        # _on_measure_testchart_finished's self.show()/self.raise_().
+        self.hide()
         if plan.mode is PresentationMode.CALL_PENDING:
             self.call_pending_function()
         elif plan.mode is PresentationMode.SHOW_FRAME:
@@ -6785,8 +6900,12 @@ class MainWindow(BaseWindow):
         """Record the just-measured CCXX TI3 for correction-matrix creation.
 
         Qt port of the ``is_ccxx_testchart()`` branch of
-        ``just_measure_finish`` (minus the ``comport.number.backup`` chain,
-        see :meth:`_measure_testchart_action_handler`'s docstring).
+        ``just_measure_finish``, including the ``comport.number.backup``
+        chain: when the measurement was started from the CCXX
+        creation window's Measure button (:meth:`_ccxx_measure_requested`
+        sets that backup key), reopen the window so it can pick up the new
+        TI3 path from config (``update_controls`` runs in its
+        ``__init__``).
         """
         ti3_path = os.path.join(
             getcfg("measurement.save_path"),
@@ -6802,6 +6921,8 @@ class MainWindow(BaseWindow):
             setcfg("last_reference_ti3_path", cgats.filename)
         else:
             setcfg("last_colorimeter_ti3_path", cgats.filename)
+        if getcfg("comport.number.backup", False):
+            self.colorimeter_correction_create_btn_handler()
 
     def _offer_open_measurement_folder(self) -> None:
         """Qt port of ``MainFrame.just_measure_show_result``."""
@@ -6823,10 +6944,11 @@ class MainWindow(BaseWindow):
     def _restore_measurement_mode_and_testchart(self) -> None:
         """Qt port of ``MainFrame.restore_measurement_mode`` + ``restore_testchart``.
 
-        Currently a no-op in practice: the backup keys these restore
-        (``measurement_mode.backup`` etc.) are only ever set by the
-        correction-creation dialog's "measure now" flow, which isn't wired
-        up in this port yet (see :meth:`_measure_testchart_action_handler`).
+        The backup keys this restores (``measurement_mode.backup`` etc.) are
+        set by :meth:`_ccxx_measure_requested` (the CCXX creation window's
+        Measure buttons) before it switches the live instrument/testchart;
+        this always runs afterward, win or lose, to put the main window's
+        selection back.
         """
         if getcfg("measurement_mode.backup", False):
             setcfg("measurement_mode", getcfg("measurement_mode.backup"))

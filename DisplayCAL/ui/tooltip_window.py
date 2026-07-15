@@ -21,6 +21,28 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+from DisplayCAL import localization as lang
+
+
+def info_text_html(label_key: str) -> str:
+    """Convert a wx ``StaticFancyText`` markup string to Qt rich text.
+
+    wx's markup (``<font weight='bold'>...</font>``, blank-line paragraph
+    breaks) isn't valid Qt rich text; translate it rather than re-authoring
+    the (long, translated) ``info.*`` strings. Shared between
+    :class:`DisplayCAL.ui.main_window.MainWindow` (its settings-tab info
+    panels) and :class:`DisplayCAL.ui.colorimeter_correction_window
+    .CreateCorrectionWindow` (its display-technology info popup) so the
+    markup translation lives in one place.
+    """
+    text = lang.getstr(label_key)
+    text = text.replace("<font weight='bold'>", "<b>").replace("</font>", "</b>")
+    paragraphs = text.split("\n\n")
+    return "".join(
+        f"<p style='margin:0 0 8px 0'>{paragraph.replace(chr(10), '<br>')}</p>"
+        for paragraph in paragraphs
+    )
+
 
 class TooltipWindow(QDialog):
     """Non-modal icon + rich-text popup, optionally with link buttons."""
