@@ -115,25 +115,23 @@ _GAMUTS = (
 )
 
 
-def format_completion_extra(profile: ICCProfile) -> str:
-    """Build the self-check / gamut coverage summary for a completion message.
+def format_self_check(profile: ICCProfile) -> str:
+    """Build just the self-check delta-E summary line (no gamut info).
 
-    Ports the ``meta`` tag readout in ``profile_finish`` (the ``extra`` self-
-    check lines plus the ``cinfo``/``vinfo`` gamut coverage/volume figures,
-    which wx renders in a separate bold-labelled grid rather than folded into
-    the message text -- simplified here into one plain-text block since the
-    Qt port uses a single ``QMessageBox`` rather than reproducing that grid).
+    Ports the ``extra`` self-check lines (``ACCURACY_dE76_*`` meta keys) out
+    of ``profile_finish``, kept separate from :func:`compute_gamut_info` so
+    the Qt result dialog can render the gamut coverage/volume figures in a
+    bold-labelled grid (matching wx) instead of folding everything into one
+    plain-text block.
 
     Args:
         profile: The validated built profile.
 
     Returns:
-        A summary string, or ``""`` if the profile carries no ``meta`` tag.
+        A summary string, or ``""`` if the profile carries no self-check data.
     """
     if "meta" not in profile.tags:
         return ""
-    lines = []
-
     self_check = []
     for key in ("avg", "max", "rms"):
         try:
@@ -141,8 +139,28 @@ def format_completion_extra(profile: ICCProfile) -> str:
         except (TypeError, ValueError):
             continue
         self_check.append(f"{lang.getstr(f'profile.self_check.{key}')} {delta_e:.2f}")
-    if self_check:
-        lines.append(f"{lang.getstr('profile.self_check')}: {', '.join(self_check)}")
+    if not self_check:
+        return ""
+    return f"{lang.getstr('profile.self_check')}: {', '.join(self_check)}"
+
+
+def compute_gamut_info(profile: ICCProfile) -> tuple[list[str], list[str]]:
+    """Build the gamut coverage/volume summary lines from a profile's ``meta`` tag.
+
+    Ports the ``cinfo``/``vinfo`` loop in ``profile_finish``, which wx renders
+    in a separate bold-labelled 2-column grid rather than folded into the
+    message text.
+
+    Args:
+        profile: The validated built profile.
+
+    Returns:
+        A ``(cinfo, vinfo)`` pair: one formatted line per reference gamut the
+        profile carries coverage/volume metadata for (e.g.
+        ``["99.9% sRGB", "78.4% Adobe RGB"]``), each possibly empty.
+    """
+    if "meta" not in profile.tags:
+        return [], []
 
     cinfo = []
     for key, name, _volume in _GAMUTS:
@@ -153,8 +171,6 @@ def format_completion_extra(profile: ICCProfile) -> str:
             coverage = None
         if coverage:
             cinfo.append(f"{coverage:.1%} {name}")
-    if cinfo:
-        lines.append(f"{lang.getstr('gamut.coverage')}: {', '.join(cinfo)}")
 
     vinfo = []
     try:
@@ -166,6 +182,34 @@ def format_completion_extra(profile: ICCProfile) -> str:
             vinfo.append(f"{gamut_volume * GAMUT_VOLUME_SRGB / volume:.1%} {name}")
             if len(vinfo) == len(cinfo):
                 break
+
+    return cinfo, vinfo
+
+
+def format_completion_extra(profile: ICCProfile) -> str:
+    """Build the self-check / gamut coverage summary for a completion message.
+
+    Folds :func:`format_self_check` and :func:`compute_gamut_info` into one
+    plain-text block, for callers that show a plain message rather than
+    reproducing wx's bold-labelled grid (e.g. the Qt 3D-LUT install offer).
+
+    Args:
+        profile: The validated built profile.
+
+    Returns:
+        A summary string, or ``""`` if the profile carries no ``meta`` tag.
+    """
+    if "meta" not in profile.tags:
+        return ""
+    lines = []
+
+    self_check = format_self_check(profile)
+    if self_check:
+        lines.append(self_check)
+
+    cinfo, vinfo = compute_gamut_info(profile)
+    if cinfo:
+        lines.append(f"{lang.getstr('gamut.coverage')}: {', '.join(cinfo)}")
     if vinfo:
         lines.append(f"{lang.getstr('gamut.volume')}: {', '.join(vinfo)}")
 

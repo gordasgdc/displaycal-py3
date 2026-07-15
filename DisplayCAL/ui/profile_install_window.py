@@ -355,18 +355,38 @@ class InstallProfileWindow(BaseWindow):
         if isinstance(result, Exception):
             QMessageBox.critical(self, self.windowTitle(), str(result))
             return
-        summary = pi.summarize_install_result(*result)
-        text = lang.getstr(f"profile.install.{summary.message_key}")
-        if summary.details:
-            text += "\n\n" + "\n".join(
-                f"{name}: {detail_text}" for name, _ok, detail_text in summary.details
-            )
-        box = {
-            "success": QMessageBox.information,
-            "warning": QMessageBox.warning,
-            "error": QMessageBox.critical,
-        }[summary.message_key]
-        box(self, self.windowTitle(), text)
+        show_install_summary(self, self.windowTitle(), result)
+
+
+def show_install_summary(
+    parent: QWidget | None, title: str, result: tuple
+) -> None:
+    """Show the outcome of a completed :meth:`Worker.install_profile` call.
+
+    Ports the per-backend (ArgyllCMS/colord/Oyranos/profile-loader) success
+    breakdown in ``MainFrame.profile_finish_consumer``. Shared with
+    :mod:`DisplayCAL.ui.main_window`'s post-calibration/profiling completion
+    dialog, which installs directly rather than going through
+    :class:`InstallProfileWindow`.
+
+    Args:
+        parent (QWidget | None): Parent window for the message box.
+        title (str): Message box title.
+        result (tuple): The ``(argyll, colord, oyranos, loader)`` result tuple
+            from :meth:`Worker.install_profile`.
+    """
+    summary = pi.summarize_install_result(*result)
+    text = lang.getstr(f"profile.install.{summary.message_key}")
+    if summary.details:
+        text += "\n\n" + "\n".join(
+            f"{name}: {detail_text}" for name, _ok, detail_text in summary.details
+        )
+    box = {
+        "success": QMessageBox.information,
+        "warning": QMessageBox.warning,
+        "error": QMessageBox.critical,
+    }[summary.message_key]
+    box(parent, title, text)
 
 
 def main() -> int:

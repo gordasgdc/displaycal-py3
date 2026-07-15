@@ -238,7 +238,11 @@ from DisplayCAL.ui.measurement_flow import (
 from DisplayCAL.ui.measurement_report import ReportPanel
 from DisplayCAL.ui.measurement_sanity_dialog import MeasurementSanityDialog
 from DisplayCAL.ui.patterngenerator_setup import Lut3DAPIInstallController
-from DisplayCAL.ui.profile_install_window import InstallProfileWindow
+from DisplayCAL.ui.profile_finish_dialog import ProfileFinishDialog
+from DisplayCAL.ui.profile_install_window import (
+    InstallProfileWindow,
+    show_install_summary,
+)
 from DisplayCAL.ui.progress_dialog import ProgressDialog
 from DisplayCAL.ui.spyder2_enable import Spyder2EnableController
 from DisplayCAL.ui.tooltip_window import TooltipWindow
@@ -248,7 +252,11 @@ from DisplayCAL.ui.tools.synth_profile import SynthICCWindow
 from DisplayCAL.ui.tools.testchart_editor import TestchartEditorWindow
 from DisplayCAL.ui.tools.visual_whitepoint_editor import VisualWhitepointEditorWindow
 from DisplayCAL.ui.update_check_window import UpdateCheckController
-from DisplayCAL.ui.worker_runner import AdjustmentController, WorkerRunController
+from DisplayCAL.ui.worker_runner import (
+    AdjustmentController,
+    PasswordPromptAdapter,
+    WorkerRunController,
+)
 from DisplayCAL.util_decimal import stripzeros
 from DisplayCAL.util_dict import dict_sort
 from DisplayCAL.util_os import get_program_file, launch_file, waccess
@@ -384,6 +392,37 @@ class _MeasureframeSubprocessThread(QThread):
 
     def _store_process(self, process: object) -> None:
         self.process = process
+
+
+class _ProfileInstallThread(QThread):
+    """Run :meth:`Worker.install_profile` off the GUI thread.
+
+    Backs :class:`~DisplayCAL.ui.profile_finish_dialog.ProfileFinishDialog`'s
+    accept path in :meth:`MainWindow._install_profile_direct`: the same
+    one-shot-behind-an-indeterminate-progress-dialog pattern as
+    :class:`~DisplayCAL.ui.profile_install_window._InstallThread`, just driven
+    by the main window's own worker instead of a standalone install window.
+    """
+
+    #: Emitted with the ``(argyll, colord, oyranos, loader)`` result tuple, or
+    #: an ``Exception`` on failure.
+    done = Signal(object)
+
+    def __init__(
+        self, worker: Worker, profile_path: str, parent: QWidget | None = None
+    ) -> None:
+        super().__init__(parent)
+        self._worker = worker
+        self._profile_path = profile_path
+
+    def run(self) -> None:  # noqa: D102 (QThread override)
+        try:
+            result = self._worker.install_profile(
+                self._profile_path, capture_output=True, skip_scripts=False
+            )
+        except Exception as exception:  # noqa: BLE001  (report on GUI thread)
+            result = exception
+        self.done.emit(result)
 
 
 class _SessionArchiveThread(QThread):
@@ -890,6 +929,14 @@ class MainWindow(BaseWindow):
         self._profile_info_window: ProfileInfoWindow | None = None
         self._archive_thread: _SessionArchiveThread | None = None
         self._archive_progress: QProgressDialog | None = None
+        #: Background install driven directly by the post-profiling completion
+        #: dialog (:class:`~DisplayCAL.ui.profile_finish_dialog.ProfileFinishDialog`),
+        #: as opposed to :attr:`_install_profile_window`'s standalone flow.
+        self._profile_install_thread: _ProfileInstallThread | None = None
+        self._profile_install_progress: QProgressDialog | None = None
+        #: Services :meth:`Worker.authenticate`'s sudo password prompt for any
+        #: elevated (local-system/network) install scope chosen in that dialog.
+        self.worker.password_prompt = PasswordPromptAdapter(parent=self)
         #: Testchart combo paths, parallel to its display names (populated by
         #: :meth:`_set_testcharts`; empty until then, mirroring wx's
         #: ``self.testcharts``, so the first :meth:`_set_testchart` call
@@ -7991,12 +8038,17 @@ class MainWindow(BaseWindow):
     ) -> None:
         """Report the outcome of the ``colprof`` run and offer to install it.
 
-        Ports the validation branches of ``profile_finish`` via
-        :mod:`DisplayCAL.profile_finish`. The elaborate install-offer dialog
-        (share-profile button, calibration-preview / show-LUT / show-profile-info
-        checkboxes) is dropped in favour of a plain yes/no confirm that reuses
-        the already-ported :class:`InstallProfileWindow` for the actual install
-        step. When ``3dlut.create`` is checked, this instead chains into
+        Ports ``profile_finish`` in full via :mod:`DisplayCAL.profile_finish`
+        and :class:`~DisplayCAL.ui.profile_finish_dialog.ProfileFinishDialog`:
+        the bold-labelled gamut coverage/volume grid, the calibration-preview
+        and show-profile-info checkboxes, and the profile-load-on-login
+        checkbox(es) / install-scope radio buttons. Accepting installs the
+        profile directly (:meth:`_install_profile_direct`), matching wx's
+        single dialog-covers-everything flow rather than reopening the
+        standalone :class:`InstallProfileWindow`. Dropped versus wx: the
+        share-profile button (dead code upstream) and the "show LUT"
+        checkbox (its curve-viewer window has no Qt port). When
+        ``3dlut.create`` is checked, this instead chains into
         :meth:`_chain_3dlut_after_profile` -- matching wx, which never offers
         to install the *profile* in that case, only the 3D LUT.
 
@@ -8037,22 +8089,149 @@ class MainWindow(BaseWindow):
             self._chain_3dlut_after_profile()
             return
         message = success_msg or lang.getstr("profiling.complete")
-        extra = profile_finish.format_completion_extra(built.profile)
-        if extra:
-            message = f"{message}\n\n{extra}"
+        self_check = profile_finish.format_self_check(built.profile)
+        if self_check:
+            message = f"{message}\n\n{self_check}"
+        cinfo, vinfo = profile_finish.compute_gamut_info(built.profile)
         prompt = lang.getstr(
             "dialog.install_profile",
             (os.path.basename(profile_path), self.display_ctrl.currentText()),
         )
-        answer = QMessageBox.question(
+        # Always load calibration curves, matching wx's unconditional
+        # ``self.load_cal(cal=profile_path, silent=True)`` -- puts the new
+        # profile's calibration on the video LUT up front, so the preview
+        # checkbox's default-checked state matches what's already showing.
+        self._load_cal(profile_path, silent=True)
+        preview_enabled = built.has_cal and self.worker.calibration_loading_supported
+        dialog = ProfileFinishDialog(
             self,
-            APPNAME,
-            f"{message}\n\n{prompt}",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.Yes,
+            message=f"{message}\n\n{prompt}",
+            cinfo=cinfo,
+            vinfo=vinfo,
+            ok_label=lang.getstr("profile.install"),
+            cancel_label=lang.getstr("profile.do_not_install"),
+            installable=True,
+            preview_enabled=preview_enabled,
+            show_profile_info_checked=bool(
+                self._profile_info_window is not None
+                and self._profile_info_window.isVisible()
+            ),
+            worker=self.worker,
         )
-        if answer == QMessageBox.Yes:
-            self.install_profile_btn_handler()
+        dialog.preview_toggled.connect(
+            lambda checked: self._toggle_calibration_preview(checked, profile_path)
+        )
+        dialog.show_profile_info_toggled.connect(
+            lambda checked: self._toggle_profile_info_window(checked, profile_path)
+        )
+        accepted = dialog.exec() == QDialog.Accepted
+        if not accepted:
+            if preview_enabled:
+                # Undo any live preview toggling back to the real config.
+                self._load_cal(silent=True)
+            return
+        writecfg()
+        self._install_profile_direct(profile_path)
+
+    def _toggle_calibration_preview(self, checked: bool, profile_path: str) -> None:
+        """Live-preview (or revert) the just-built profile's calibration.
+
+        Qt port of the video-LUT toggle in ``preview_handler`` (dropped: the
+        curve-viewer refresh, which has no Qt port). Reverting falls back to
+        the previous calibration file, or the display profile's own
+        calibration/a linear reset when there is none, matching wx.
+
+        Args:
+            checked (bool): The calibration-preview checkbox's new state.
+            profile_path (str): Path to the just-built profile.
+        """
+        if not check_set_argyll_bin():
+            return
+        if checked:
+            cal = profile_path
+        else:
+            cal = getcfg("calibration.file.previous")
+            if profile_path == cal:
+                cal = False
+            elif not cal:
+                cal = True
+        cmd, args = self.worker.prepare_dispwin(cal, None, False)
+        if isinstance(cmd, Exception) or cmd is None:
+            return
+        self.worker.exec_cmd(
+            cmd,
+            args,
+            capture_output=True,
+            low_contrast=False,
+            skip_scripts=True,
+            silent=True,
+        )
+
+    def _toggle_profile_info_window(self, checked: bool, profile_path: str) -> None:
+        """Show or hide the profile-information window for ``profile_path``.
+
+        Qt port of ``profile_info_handler``'s use from the completion dialog's
+        "show profile info" checkbox.
+
+        Args:
+            checked (bool): The checkbox's new state.
+            profile_path (str): Path to the profile to show/hide info for.
+        """
+        if checked:
+            if self._profile_info_window is None:
+                self._profile_info_window = ProfileInfoWindow()
+            self._profile_info_window.load_profile(profile_path)
+            self._profile_info_window.show()
+            self._profile_info_window.raise_()
+            self._profile_info_window.activateWindow()
+        elif self._profile_info_window is not None:
+            self._profile_info_window.hide()
+
+    def _install_profile_direct(self, profile_path: str) -> None:
+        """Install ``profile_path`` in the background, per the completion dialog.
+
+        Qt port of the (non-3D-LUT) branch of ``profile_finish_action``: runs
+        :meth:`Worker.install_profile` on a thread behind an indeterminate
+        progress dialog -- the same pattern as
+        :meth:`InstallProfileWindow._install`, just driven directly rather
+        than through that standalone window. Elevated install scopes
+        authenticate transparently inside ``install_profile`` itself (via
+        ``Worker.exec_cmd``'s ``asroot`` handling and the
+        :attr:`Worker.password_prompt` seam), matching
+        :class:`InstallProfileWindow`.
+
+        Args:
+            profile_path (str): Path to the profile to install.
+        """
+        if not check_set_argyll_bin():
+            return
+        self._profile_install_progress = QProgressDialog(
+            lang.getstr("profile.install"), "", 0, 0, self
+        )
+        self._profile_install_progress.setWindowTitle(APPNAME)
+        self._profile_install_progress.setCancelButton(None)
+        self._profile_install_progress.show()
+        self._profile_install_thread = _ProfileInstallThread(
+            self.worker, profile_path, parent=self
+        )
+        self._profile_install_thread.done.connect(self._on_profile_install_direct_done)
+        self._profile_install_thread.start()
+
+    def _on_profile_install_direct_done(self, result: object) -> None:
+        """Handle the background direct-install result on the GUI thread.
+
+        Args:
+            result (object): The ``(argyll, colord, oyranos, loader)`` result
+                tuple, or an ``Exception`` on failure.
+        """
+        self._profile_install_thread = None
+        if self._profile_install_progress is not None:
+            self._profile_install_progress.close()
+            self._profile_install_progress = None
+        if isinstance(result, Exception):
+            QMessageBox.critical(self, APPNAME, str(result))
+            return
+        show_install_summary(self, APPNAME, result)
 
     def _apply_lut3d_path(
         self, path: str | None = None, set_mr_sim_profile: bool = True

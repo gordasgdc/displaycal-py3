@@ -2921,6 +2921,40 @@ def test_profile_build_finished_invalid_profile_shows_error(window, monkeypatch,
     assert str(bogus) in errors[0][2]
 
 
+class _FakeInertSignal:
+    """Stand-in for a Qt signal that just records the connected slot."""
+
+    def __init__(self) -> None:
+        self._slot = None
+
+    def connect(self, slot) -> None:
+        self._slot = slot
+
+
+class _FakeProfileFinishDialog:
+    """Stand-in for ``mw.ProfileFinishDialog``.
+
+    Records the keyword arguments each instance was built with and lets the
+    test control :meth:`exec`'s outcome (``QDialog.Accepted``/``Rejected``)
+    without ever showing a real, blocking modal (the "Qt test modal-hang
+    gotcha" -- see ``tests/test_ui_main_window.py``'s own history / the
+    ``_FakeTwoButtonMessageBox`` precedent below for ``QMessageBox``).
+    """
+
+    result = None  # set per-test to mw.QDialog.Accepted / Rejected
+    instances: list = []
+
+    def __init__(self, parent, **kwargs):
+        self.parent = parent
+        self.kwargs = kwargs
+        self.preview_toggled = _FakeInertSignal()
+        self.show_profile_info_toggled = _FakeInertSignal()
+        _FakeProfileFinishDialog.instances.append(self)
+
+    def exec(self):
+        return _FakeProfileFinishDialog.result
+
+
 def test_profile_build_finished_success_offers_install(
     window, monkeypatch, srgb_profile_path
 ):
@@ -2931,19 +2965,21 @@ def test_profile_build_finished_success_offers_install(
     monkeypatch.setattr(
         window, "update_calibration_file_ctrl", lambda: updated.append(True)
     )
-    monkeypatch.setattr(
-        mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.Yes
-    )
+    _FakeProfileFinishDialog.instances = []
+    _FakeProfileFinishDialog.result = mw.QDialog.Accepted
+    monkeypatch.setattr(mw, "ProfileFinishDialog", _FakeProfileFinishDialog)
+    monkeypatch.setattr(mw, "writecfg", lambda *a, **k: None)
     installed = []
     monkeypatch.setattr(
-        window, "install_profile_btn_handler", lambda: installed.append(True)
+        window, "_install_profile_direct", lambda path: installed.append(path)
     )
 
     window._on_profile_build_finished(srgb_profile_path)
 
     assert updated == [True]
-    assert installed == [True]
+    assert installed == [srgb_profile_path]
     assert getcfg("calibration.file") == srgb_profile_path
+    assert _FakeProfileFinishDialog.instances[0].kwargs["installable"] is True
 
 
 def test_profile_build_finished_success_declines_install(
@@ -2953,15 +2989,82 @@ def test_profile_build_finished_success_declines_install(
     setcfg("3dlut.create", 0)
     monkeypatch.setattr(window.worker, "log", lambda *a, **k: None)
     monkeypatch.setattr(window, "update_calibration_file_ctrl", lambda: None)
-    monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.No)
+    _FakeProfileFinishDialog.instances = []
+    _FakeProfileFinishDialog.result = mw.QDialog.Rejected
+    monkeypatch.setattr(mw, "ProfileFinishDialog", _FakeProfileFinishDialog)
     installed = []
     monkeypatch.setattr(
-        window, "install_profile_btn_handler", lambda: installed.append(True)
+        window, "_install_profile_direct", lambda path: installed.append(path)
     )
 
     window._on_profile_build_finished(srgb_profile_path)
 
     assert installed == []
+
+
+def test_profile_build_finished_gamut_info_passed_to_dialog(
+    window, monkeypatch, srgb_profile_path
+):
+    """The dialog receives the structured ``cinfo``/``vinfo`` gamut lines."""
+    setcfg("calibration.file", None)
+    setcfg("3dlut.create", 0)
+    monkeypatch.setattr(window.worker, "log", lambda *a, **k: None)
+    monkeypatch.setattr(window, "update_calibration_file_ctrl", lambda: None)
+    _FakeProfileFinishDialog.instances = []
+    _FakeProfileFinishDialog.result = mw.QDialog.Rejected
+    monkeypatch.setattr(mw, "ProfileFinishDialog", _FakeProfileFinishDialog)
+    fake_cinfo, fake_vinfo = ["99.9% sRGB"], ["87.3% sRGB"]
+    monkeypatch.setattr(
+        mw.profile_finish,
+        "compute_gamut_info",
+        lambda profile: (fake_cinfo, fake_vinfo),
+    )
+
+    window._on_profile_build_finished(srgb_profile_path)
+
+    kwargs = _FakeProfileFinishDialog.instances[0].kwargs
+    assert kwargs["cinfo"] == fake_cinfo
+    assert kwargs["vinfo"] == fake_vinfo
+
+
+def test_toggle_calibration_preview_loads_new_profile_when_checked(
+    window, monkeypatch, srgb_profile_path
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    calls = []
+    monkeypatch.setattr(
+        window.worker, "prepare_dispwin", lambda cal, *a, **k: calls.append(cal) or ("dispwin", [])
+    )
+    monkeypatch.setattr(window.worker, "exec_cmd", lambda *a, **k: True)
+
+    window._toggle_calibration_preview(True, srgb_profile_path)
+
+    assert calls == [srgb_profile_path]
+
+
+def test_toggle_calibration_preview_reverts_when_unchecked(
+    window, monkeypatch, srgb_profile_path
+):
+    setcfg("calibration.file.previous", "/tmp/previous.cal")
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    calls = []
+    monkeypatch.setattr(
+        window.worker, "prepare_dispwin", lambda cal, *a, **k: calls.append(cal) or ("dispwin", [])
+    )
+    monkeypatch.setattr(window.worker, "exec_cmd", lambda *a, **k: True)
+
+    window._toggle_calibration_preview(False, srgb_profile_path)
+
+    assert calls == ["/tmp/previous.cal"]
+
+
+def test_toggle_profile_info_window_shows_and_hides(window, srgb_profile_path):
+    window._toggle_profile_info_window(True, srgb_profile_path)
+    assert window._profile_info_window is not None
+    assert window._profile_info_window.isVisible()
+
+    window._toggle_profile_info_window(False, srgb_profile_path)
+    assert not window._profile_info_window.isVisible()
 
 
 # --- 3D LUT creation ---------------------------------------------------------
@@ -3595,11 +3698,14 @@ def test_profile_build_finished_3dlut_create_off_shows_profile_offer_as_before(
     monkeypatch.setattr(
         window, "_chain_3dlut_after_profile", lambda: chained.append(True)
     )
-    monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.No)
+    _FakeProfileFinishDialog.instances = []
+    _FakeProfileFinishDialog.result = mw.QDialog.Rejected
+    monkeypatch.setattr(mw, "ProfileFinishDialog", _FakeProfileFinishDialog)
 
     window._on_profile_build_finished(srgb_profile_path)
 
     assert chained == []
+    assert _FakeProfileFinishDialog.instances  # the plain profile-install offer was shown
 
 
 def test_update_action_buttons_shows_lut3d_create_btn_when_manual(window):
