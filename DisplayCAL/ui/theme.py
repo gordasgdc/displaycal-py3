@@ -6,13 +6,15 @@ interactive display-adjustment window) are hard-coded to a fixed dark scheme
 "#444444"``) regardless of the OS -- but the ordinary wx ``MainFrame`` window
 chrome is *not*: it paints with ``wx.SystemSettings.GetColour(wx
 .SYS_COLOUR_WINDOW)``, the real OS window-background colour, which on a
-Mac in Dark Mode is much darker than ``#333333`` (measured ``#171717``, not
-a DisplayCAL-specific constant, whatever AppKit's ``NSColor
-.windowBackgroundColor`` resolves to). The Qt UI keeps the DisplayCAL look
-but **selects it from the OS light/dark preference**: :func:`apply_theme`
-detects the scheme (:func:`is_dark`) and installs a matching
-:class:`QPalette`, tuned to match that real native window background rather
-than the plot canvases' brighter fixed grey. On Windows this also means
+Mac in Dark Mode is much darker than ``#333333`` (the raw ``NSColor
+.windowBackgroundColor`` query reports ``#171717``, but macOS composites a
+vibrancy/tint pass on top of it, so a real on-screen wx window actually
+samples as ``#232323`` -- the query alone understates it). The Qt UI keeps
+the DisplayCAL look but **selects it from the OS light/dark preference**:
+:func:`apply_theme` detects the scheme (:func:`is_dark`) and installs a
+matching :class:`QPalette`, tuned to match that real *on-screen* native
+window background rather than the plot canvases' brighter fixed grey or the
+raw (uncomposited) system colour query. On Windows this also means
 switching to the Fusion style, since the native ``windowsvista`` style
 ignores custom palette colours for several controls (combo-box popups in
 particular); macOS and Linux native styles honour the palette as-is. Plot
@@ -48,17 +50,25 @@ CHANNEL_COLORS = {
 FONT_POINT_SIZE = 11
 
 #: Palette role → colour for the dark scheme, tuned to match wx's actual
-#: native ``SYS_COLOUR_WINDOW`` background (measured ``#171717`` on macOS
-#: Dark Mode) rather than the plot canvases' ``BGCOLOUR = "#333333"``.
+#: *on-screen* native window background. ``wx.SystemSettings.GetColour(wx
+#: .SYS_COLOUR_WINDOW)`` reports ``#171717`` on macOS Dark Mode, but that raw
+#: ``NSColor.windowBackgroundColor`` value is not what's actually painted:
+#: AppKit composites a vibrancy/tint pass on top of it, so a real on-screen
+#: wx window samples as ``#232323`` (confirmed via `screencapture` + pixel
+#: sampling of a live wx frame, not just the colour-query API). Qt's opaque
+#: palette fill has no such compositing step and renders exactly as
+#: specified, so matching the raw query left Qt visibly darker than wx even
+#: though the two hex values looked close. Tuned to ``#232323`` instead, the
+#: same offset from the plot canvases' fixed ``BGCOLOUR = "#333333"``.
 _DARK = {
-    QPalette.Window: "#1a1a1a",
+    QPalette.Window: "#232323",
     QPalette.WindowText: "#999999",
-    QPalette.Base: "#1a1a1a",
-    QPalette.AlternateBase: "#232323",
+    QPalette.Base: "#232323",
+    QPalette.AlternateBase: "#2c2c2c",
     QPalette.Text: "#cccccc",
-    QPalette.Button: "#2b2b2b",
+    QPalette.Button: "#343434",
     QPalette.ButtonText: "#cccccc",
-    QPalette.ToolTipBase: "#1a1a1a",
+    QPalette.ToolTipBase: "#232323",
     QPalette.ToolTipText: "#cccccc",
     QPalette.Highlight: "#4d7ea5",
     QPalette.HighlightedText: "#ffffff",
