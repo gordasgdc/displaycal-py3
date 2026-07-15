@@ -160,7 +160,7 @@ class CCXXPlotWidget(pg.PlotWidget):
         plot_item = self.getPlotItem()
         plot_item.setAspectLocked(True)
         self.setMouseEnabled(x=True, y=True)
-        legend = plot_item.addLegend()
+        legend = plot_item.addLegend(offset=(-10, 10))
 
         locus = [*colormath.cie1931_2_xy, colormath.cie1931_2_xy[0]]
         self.addItem(
