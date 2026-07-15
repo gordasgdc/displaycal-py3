@@ -89,6 +89,27 @@ from DisplayCAL.ui import progress_dialog as pd  # noqa: E402
 from DisplayCAL.ui import worker_runner as wr  # noqa: E402
 
 
+def _new_progress_dialog(**kwargs) -> pd.ProgressDialog:
+    """Construct a ``ProgressDialog`` with its one-second clock stopped.
+
+    ``ProgressDialog.__init__()`` starts a ``QTimer`` (``self._clock``)
+    ticking every second to drive the elapsed/remaining read-outs; none of
+    these tests care about that display. Left running, it fires
+    ``_update_times()`` on the GUI thread concurrently with the
+    ``_ProducerThread``s most of these tests also start, and CI has hit a
+    real (if rare -- one occurrence in many runs) native segfault from that
+    race: a `Fatal Python error: Segmentation fault` inside
+    ``_update_times()``'s ``QLabel.setText()`` call, with faulthandler
+    pinpointing it to this exact test file's producer-thread-driven tests.
+    Stopping the clock removes the concurrent timer firing entirely rather
+    than trying to chase what is very likely a PySide6/Shiboken threading
+    bug we can't fix here.
+    """
+    dlg = pd.ProgressDialog(**kwargs)
+    dlg._clock.stop()
+    return dlg
+
+
 @pytest.fixture(scope="session")
 def qapp():
     """Provide a singleton offscreen QApplication for the test session."""
@@ -178,7 +199,7 @@ def test_producer_thread_emits_exception_as_result(qapp):
 
 
 def test_adapter_pulse_returns_flags_and_updates_dialog(qapp):
-    dlg = pd.ProgressDialog()
+    dlg = _new_progress_dialog()
     adapter = wr.ProgressAdapter(dlg)
     try:
         # Same-thread emit delivers directly, so the dialog updates in place.
@@ -193,7 +214,7 @@ def test_adapter_pulse_returns_flags_and_updates_dialog(qapp):
 
 
 def test_adapter_update_progress_sets_determinate_value(qapp):
-    dlg = pd.ProgressDialog(maximum=100)
+    dlg = _new_progress_dialog(maximum=100)
     adapter = wr.ProgressAdapter(dlg)
     try:
         adapter.UpdateProgress(60, "almost")
@@ -204,7 +225,7 @@ def test_adapter_update_progress_sets_determinate_value(qapp):
 
 
 def test_controller_poll_advances_dialog(qapp):
-    dlg = pd.ProgressDialog(maximum=100)
+    dlg = _new_progress_dialog(maximum=100)
     worker = FakeWorker()
     ctrl = wr.WorkerRunController(worker, dlg)
     try:
@@ -217,7 +238,7 @@ def test_controller_poll_advances_dialog(qapp):
 
 
 def test_controller_run_calls_consumer_and_cleans_up(qapp):
-    dlg = pd.ProgressDialog()
+    dlg = _new_progress_dialog()
     worker = FakeWorker()
     ctrl = wr.WorkerRunController(worker, dlg)
     got = []
@@ -235,7 +256,7 @@ def test_controller_run_calls_consumer_and_cleans_up(qapp):
 
 
 def test_controller_run_ignores_second_start_while_running(qapp):
-    dlg = pd.ProgressDialog()
+    dlg = _new_progress_dialog()
     worker = FakeWorker()
     ctrl = wr.WorkerRunController(worker, dlg)
     release = []
@@ -260,7 +281,7 @@ def test_controller_run_ignores_second_start_while_running(qapp):
 
 
 def test_controller_cancel_aborts_worker(qapp):
-    dlg = pd.ProgressDialog(cancelable=True)
+    dlg = _new_progress_dialog(cancelable=True)
     worker = FakeWorker()
     ctrl = wr.WorkerRunController(worker, dlg)
     try:
@@ -274,7 +295,7 @@ def test_controller_cancel_aborts_worker(qapp):
 
 
 def test_controller_pause_reflects_to_adapter(qapp):
-    dlg = pd.ProgressDialog(pauseable=True)
+    dlg = _new_progress_dialog(pauseable=True)
     worker = FakeWorker()
     ctrl = wr.WorkerRunController(worker, dlg)
     try:
@@ -287,7 +308,7 @@ def test_controller_pause_reflects_to_adapter(qapp):
 
 def test_adapter_confirm_same_thread_shows_directly(qapp):
     # Called on the GUI thread (unusual), confirm() shows directly, no blocking.
-    dlg = pd.ProgressDialog()
+    dlg = _new_progress_dialog()
     adapter = wr.ProgressAdapter(dlg)
     adapter._ask = lambda request: True
     try:
@@ -299,7 +320,7 @@ def test_adapter_confirm_same_thread_shows_directly(qapp):
 def test_adapter_confirm_blocks_worker_until_gui_answers(qapp):
     # A confirm requested from the worker thread is shown on the GUI thread and
     # blocks the worker until the GUI answers; the request carries the prompt.
-    dlg = pd.ProgressDialog()
+    dlg = _new_progress_dialog()
     adapter = wr.ProgressAdapter(dlg)
     seen = {}
 
@@ -330,7 +351,7 @@ def test_adapter_confirm_blocks_worker_until_gui_answers(qapp):
 
 
 def test_adapter_confirm_returns_false_on_cancel(qapp):
-    dlg = pd.ProgressDialog()
+    dlg = _new_progress_dialog()
     adapter = wr.ProgressAdapter(dlg)
     adapter._ask = lambda request: False
     results = []
@@ -347,7 +368,7 @@ def test_adapter_confirm_returns_false_on_cancel(qapp):
 
 def test_adapter_confirm3_same_thread_shows_directly(qapp):
     # Called on the GUI thread (unusual), confirm3() shows directly, no blocking.
-    dlg = pd.ProgressDialog()
+    dlg = _new_progress_dialog()
     adapter = wr.ProgressAdapter(dlg)
     adapter._ask3 = lambda request: "alt"
     try:
@@ -359,7 +380,7 @@ def test_adapter_confirm3_same_thread_shows_directly(qapp):
 def test_adapter_confirm3_blocks_worker_until_gui_answers(qapp):
     # Worker.detected_levels_issue_confirm's three-way prompt: the request is
     # shown on the GUI thread and blocks the worker thread until answered.
-    dlg = pd.ProgressDialog()
+    dlg = _new_progress_dialog()
     adapter = wr.ProgressAdapter(dlg)
     seen = {}
 
