@@ -895,6 +895,27 @@ class _TabStack(QStackedWidget):
     scroll independently, not in lockstep). Each tab manages its own
     ``QScrollArea`` behaviour via the shared wrapper in ``_build_ui``, so
     there is no layout-jump downside to sizing only the visible page here.
+
+    Overriding ``sizeHint()``/``minimumSizeHint()`` on this widget isn't
+    enough by itself: the surrounding ``QScrollArea`` doesn't call these
+    Python overrides for its own auto-resize bookkeeping -- with
+    ``widgetResizable=True`` it instead reads the *internal*
+    ``QStackedLayout``'s own ``sizeHint()``/``minimumSize()`` (which still
+    unions every page) and, worse, only re-measures sporadically, so it tends
+    to permanently pin this widget to whichever tab was ever the biggest (or
+    to a construction-time snapshot of the first tab taken before
+    :meth:`MainWindow.update_controls`/``setup_language`` filled in its final
+    content) -- showing a scrollbar even on a tab that fits fine on its own.
+
+    ``QStackedLayout`` excludes any page whose size policy is
+    ``QSizePolicy.Ignored`` for a given dimension from that union, so every
+    non-current page is marked ``Ignored``/``Ignored`` here (in
+    :meth:`addWidget`/:meth:`setCurrentWidget`) and the current one restored
+    to ``Preferred``/``Preferred``. And ``_build_ui`` sets the scroll area's
+    ``widgetResizable`` to ``False``, handing sizing over entirely to
+    :meth:`MainWindow._pin_stack_size_to_current_tab` (called on every tab
+    switch and window resize), which keeps this widget matched to the
+    *visible* page instead of Qt's own unreliable auto-resize.
     """
 
     def sizeHint(self) -> QSize:  # noqa: N802 (Qt override)
@@ -904,6 +925,45 @@ class _TabStack(QStackedWidget):
     def minimumSizeHint(self) -> QSize:  # noqa: N802 (Qt override)
         widget = self.currentWidget()
         return widget.minimumSizeHint() if widget else super().minimumSizeHint()
+
+    def addWidget(self, widget: QWidget) -> int:  # noqa: N802 (Qt override)
+        index = super().addWidget(widget)
+        if widget is not self.currentWidget():
+            widget.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        return index
+
+    def setCurrentWidget(self, widget: QWidget) -> None:  # noqa: N802 (Qt override)
+        super().setCurrentWidget(widget)
+        for i in range(self.count()):
+            page = self.widget(i)
+            policy = QSizePolicy.Preferred if page is widget else QSizePolicy.Ignored
+            page.setSizePolicy(policy, policy)
+
+
+class _TabScrollArea(QScrollArea):
+    """A ``QScrollArea`` that re-pins its ``_TabStack``'s size on every resize.
+
+    ``widgetResizable=False`` (see :meth:`MainWindow._pin_stack_size_to_current_tab`)
+    means nothing else keeps the contained ``_TabStack`` matched to this
+    scroll area's viewport as the window is resized. Re-pinning from
+    ``MainWindow.resizeEvent`` instead (an earlier version of this fix) read
+    a stale, not-yet-relaid-out viewport size when the *window's* resize
+    hadn't finished cascading down to this widget, and needed a deferred
+    ``QTimer.singleShot`` retry to catch up -- which, firing once per resize
+    tick during an interactive drag, raced with the next tick's own retry and
+    made the scrollbar flicker in and out. Overriding this widget's *own*
+    ``resizeEvent`` instead means ``self.viewport()`` is always already
+    current by the time the callback runs, with no staleness and no need for
+    a second, out-of-order deferred pass.
+    """
+
+    def __init__(self, pin_callback: Callable[[], None]) -> None:
+        super().__init__()
+        self._pin_callback = pin_callback
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        super().resizeEvent(event)
+        self._pin_callback()
 
 
 class MainWindow(BaseWindow):
@@ -1101,8 +1161,13 @@ class MainWindow(BaseWindow):
         # wx wraps the equivalent tab content in a scrolled window
         # (``calpanel``, ``wxHSCROLL|wxVSCROLL``) since the per-tab info
         # panels below can make a tab taller than the window.
-        self._scroll_area = QScrollArea()
-        self._scroll_area.setWidgetResizable(True)
+        # ``widgetResizable`` is deliberately False: Qt's own auto-resize for
+        # a resizable scroll area doesn't reliably track the *current*
+        # ``_TabStack`` page (see its docstring), so sizing is handled
+        # explicitly by ``_pin_stack_size_to_current_tab``, called via
+        # ``_TabScrollArea`` on every resize of this scroll area itself.
+        self._scroll_area = _TabScrollArea(self._pin_stack_size_to_current_tab)
+        self._scroll_area.setWidgetResizable(False)
         self._scroll_area.setFrameShape(QFrame.NoFrame)
         self._scroll_area.setWidget(self.stack)
         layout.addWidget(self._scroll_area, 1)
@@ -1113,28 +1178,30 @@ class MainWindow(BaseWindow):
         self.setCentralWidget(central)
         self._select_tab("display_instrument")
 
-    def _apply_initial_geometry(self) -> None:
-        """Size the window to fit the active tab without scrolling.
+    #: Default startup size (px). Fitting every tab's ``sizeHint()`` without
+    #: ever scrolling (the previous approach) sized the window to the single
+    #: largest tab, which maintainer feedback called too big; this value was
+    #: instead captured by hand-resizing a live window to a comfortable size
+    #: on 2026-07-16. Tabs taller than this at a given platform/font/DPI
+    #: combination scroll instead (see :class:`_TabScrollArea`), rather than
+    #: growing the window to accommodate them.
+    _DEFAULT_SIZE = QSize(766, 836)
 
-        Mirrors wx's ``MainFrame.set_size(True, True)`` startup call: rather
-        than a fixed default size, wx sums the chrome (header/tab bar/button
-        bar) and the currently selected panel's natural size, then clamps to
-        the screen. The window is centered afterwards (see :meth:`showEvent`)
-        when no saved position exists, matching wx's ``self.Center()``.
+    def _apply_initial_geometry(self) -> None:
+        """Size the window to :attr:`_DEFAULT_SIZE`, clamped to the screen.
+
+        Mirrors wx's ``MainFrame.set_size(True, True)`` startup call in
+        spirit (fall back to a sane size, then clamp to the screen). The
+        window is centered afterwards (see :meth:`showEvent`) when no saved
+        position exists, matching wx's ``self.Center()``.
         """
-        chrome_height = (
-            self._header_widget.sizeHint().height()
-            + self._tabbar_widget.sizeHint().height()
-            + self._button_bar_widget.sizeHint().height()
-        )
-        content = self.stack.currentWidget().sizeHint()
-        width = max(
-            self._header_widget.sizeHint().width(),
-            self._tabbar_widget.sizeHint().width(),
-            self._button_bar_widget.sizeHint().width(),
-            max(panel.sizeHint().width() for panel in self._panels.values()),
-        )
-        height = chrome_height + content.height()
+        # Settling controls/language may have changed the active panel's
+        # natural size since ``_build_ui()`` first showed it to the scroll
+        # area (see :meth:`_pin_stack_size_to_current_tab`); refresh the
+        # pinned minimum so the current tab isn't left mid-transition.
+        self._pin_stack_size_to_current_tab()
+        width = self._DEFAULT_SIZE.width()
+        height = self._DEFAULT_SIZE.height()
         screen = self.screen() if self.windowHandle() else QApplication.primaryScreen()
         if screen is not None:
             available = screen.availableGeometry()
@@ -7639,15 +7706,32 @@ class MainWindow(BaseWindow):
             key (str): The tab identifier (see :data:`_TABS`).
         """
         self.stack.setCurrentWidget(self._panels[key])
-        # _TabStack's size hints depend on the current page; poke the layout
-        # chain so the scroll area re-measures instead of keeping whatever
-        # (possibly wider or narrower) size the previous tab cached.
-        self.stack.updateGeometry()
-        self._scroll_area.updateGeometry()
+        self._pin_stack_size_to_current_tab()
         button = self._tab_buttons[key]
         if not button.isChecked():
             button.setChecked(True)
         self._update_action_buttons()
+
+    def _pin_stack_size_to_current_tab(self) -> None:
+        """Size the tab stack to the currently-shown panel, not the widest/tallest.
+
+        ``self._scroll_area`` is deliberately ``widgetResizable=False``: with
+        it ``True``, Qt's internal scroll-area sizing keeps re-asserting
+        whatever size it last measured for ``self.stack`` as a whole rather
+        than re-querying the *current* page, which pins the widget to a
+        permanently oversized floor (a construction-time snapshot taken
+        before :meth:`MainWindow.update_controls`/``setup_language`` filled in
+        the panel's final content, later drifting toward whichever tab was
+        ever the biggest) and shows a scrollbar even on a tab that fits fine
+        on its own. Managing the size here instead -- on every tab switch and
+        window resize -- keeps ``self.stack`` matched to the *visible* page.
+        """
+        widget = self.stack.currentWidget()
+        if widget is None:
+            return
+        hint = widget.sizeHint()
+        self.stack.setMinimumSize(hint)
+        self.stack.resize(self._scroll_area.viewport().size().expandedTo(hint))
 
     def _update_lut3d_tab_enabled(self) -> None:
         """Enable/disable the 3D LUT tab per the ``3dlut.tab.enable`` toggle.
