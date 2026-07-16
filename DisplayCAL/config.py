@@ -1547,6 +1547,7 @@ VALID_VALUES = {
     ],
     "trc": ["240", "709", "l", "s", ""],
     "trc.type": ["g", "G"],
+    "ui.toolkit": ["wx", "qt"],
     "uniformity.cols": [3, 5, 7, 9],
     "uniformity.rows": [3, 5, 7, 9],
     "whitepoint.colortemp.locus": ["t", "T"],
@@ -1763,6 +1764,8 @@ DEFAULTS = {
     "patterngenerator.use_video_levels": 0,
     "position.x": 50,
     "position.y": 50,
+    "position.colorimetercorrectioncreate.x": 50,
+    "position.colorimetercorrectioncreate.y": 50,
     "position.info.x": 50,
     "position.info.y": 50,
     "position.lut_viewer.x": 50,
@@ -1988,6 +1991,7 @@ DEFAULTS = {
     "trc.should_use_viewcond_adjust.show_msg": 1,
     "trc.type": "g",
     "trc.type.backup": "g",
+    "ui.toolkit": "wx",
     "uniformity.cols": 5,
     "uniformity.measure.continuous": 0,
     "uniformity.rows": 5,
@@ -2079,7 +2083,7 @@ def getcfg(
     if (
         value
         and isinstance(value, str)
-        and name.endswith("file")
+        and name.endswith(".file")
         and name != "colorimeter_correction_matrix_file"
         and (name != "testchart.file" or value != "auto")
         and (not os.path.isabs(value) or not os.path.exists(value))
@@ -2398,6 +2402,9 @@ def get_total_patches(
         if (multi_bcc_steps is None and getcfg("argyll.version") >= "1.6")
         else multi_bcc_steps
     )
+    if multi_bcc_steps is None:
+        # Argyll < 1.6 has no multi-BCC-step support.
+        multi_bcc_steps = 0
     fullspread_patches = (
         getcfg("tc_fullspread_patches")
         if fullspread_patches is None
@@ -2529,6 +2536,46 @@ def get_verified_path(cfg_item_name: str, path: None | str = None) -> tuple[str,
         elif os.path.exists(os.path.dirname(default_path)):
             default_dir = os.path.dirname(default_path)
     return default_dir, default_file
+
+
+def get_ui_toolkit() -> str:
+    """Return the UI toolkit to use: ``"qt"`` or ``"wx"``.
+
+    During the wx-to-Qt migration for DisplayCAL 4.0 both UI code paths coexist.
+    The ``DISPLAYCAL_UI=qt``/``DISPLAYCAL_UI=wx`` environment variable or the
+    ``--qt``/``--wx`` command line flags take precedence and force a toolkit
+    for this process; otherwise the persisted ``ui.toolkit`` preference (set via
+    the UI's own toolkit-switch menu action, default ``"wx"``) is used. Entry
+    points consult this and dispatch to the Qt implementation only where one
+    exists.
+
+    Returns:
+        str: ``"qt"`` if Qt was requested, ``"wx"`` otherwise.
+    """
+    if "--qt" in sys.argv[1:]:
+        return "qt"
+    if "--wx" in sys.argv[1:]:
+        return "wx"
+    env = os.getenv("DISPLAYCAL_UI", "").lower()
+    if env in ("qt", "wx"):
+        return env
+    return getcfg("ui.toolkit") or "wx"
+
+
+def restart_application() -> None:
+    """Restart the application in a new process.
+
+    Used after switching the ``ui.toolkit`` preference, since wx and Qt can't
+    coexist in the same running process -- the new toolkit only takes effect
+    on the next launch. Any ``--qt``/``--wx`` override flag is stripped from
+    the relaunched argv so the just-persisted preference (not a stale flag)
+    determines which toolkit the new process picks up.
+    """
+    args = [arg for arg in sys.argv[1:] if arg not in ("--qt", "--wx")]
+    if getattr(sys, "frozen", False):
+        os.execv(sys.executable, [sys.executable] + args)
+    else:
+        os.execv(sys.executable, [sys.executable, sys.argv[0]] + args)
 
 
 def is_ccxx_testchart(testchart: None | str = None) -> bool:

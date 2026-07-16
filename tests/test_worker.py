@@ -119,6 +119,27 @@ def test_make_argyll_compatible_path_is_name_strips_all_invalid_chars():
         assert char not in result
 
 
+def test_clear_cmd_output_tolerates_cleared_thread_attribute():
+    """``clear_cmd_output`` must not crash when ``worker.thread`` is ``None``.
+
+    The Qt ``WorkerRunController`` sets ``worker.thread = None`` right before
+    calling its consumer (``ui/worker_runner.py``'s ``_ProducerThread``), so a
+    consumer that itself calls ``exec_cmd`` (and thus ``clear_cmd_output``)
+    hits this exact state -- confirmed via a live crash where
+    ``ui/main_window.py``'s ``_on_profile_build_finished`` called
+    ``self._load_cal(...)`` -> ``worker.exec_cmd`` ->
+    ``clear_cmd_output`` with ``self.thread`` already ``None``.
+    ``hasattr(self, "thread")`` is True in that state (the attribute exists,
+    just set to ``None``), so the old ``hasattr(...) and
+    self.thread.is_alive()`` guard still called ``.is_alive()`` on ``None``.
+    """
+    worker = Worker()
+    worker.thread = None
+    worker.interactive = True
+    # Must not raise AttributeError: 'NoneType' object has no attribute 'is_alive'.
+    worker.clear_cmd_output()
+
+
 def test_worker_get_instrument_name_1():
     """Worker.get_instrument_name() is working properly."""
     worker = Worker()
@@ -370,6 +391,136 @@ def test_get_pwd():
     assert worker.pwd == test_value
 
 
+def test_worker_password_prompt_defaults_to_none():
+    """A fresh Worker has no password-prompt seam (wx fallback stays default)."""
+    worker = Worker()
+    assert worker.password_prompt is None
+
+
+def test_detected_levels_issue_confirm_prefers_progress_wnd_confirm3():
+    """Under Qt (progress_wnd.confirm3 present), no wx ConfirmDialog is built.
+
+    Worker._detect_video_levels() used to build/show a 3-button wx
+    ConfirmDialog directly, which asserts with "No wx.App created yet" when
+    there is no running wx.App (the Qt UI path). detected_levels_issue_confirm
+    must route through progress_wnd.confirm3() instead when it's available.
+    """
+    worker = Worker()
+    seen = {}
+
+    class FakeProgressWnd:
+        def confirm3(self, msg, retry, alt, cancel):
+            seen["msg"] = msg
+            seen["retry"] = retry
+            seen["alt"] = alt
+            seen["cancel"] = cancel
+            return "alt"
+
+    worker.progress_wnd = FakeProgressWnd()
+    worker._detected_levels_issue_confirm_wait = True
+    worker.detected_levels_issue_confirm()
+    assert seen  # confirm3 was actually called, not the wx dialog
+    assert worker._use_detected_video_levels is True
+    assert worker._detected_levels_issue_confirm_wait is False
+
+
+def test_abort_subprocess_confirm_prefers_progress_wnd_confirm(monkeypatch):
+    """confirm=True routes through progress_wnd.confirm(), never a wx ConfirmDialog.
+
+    abort_subprocess() used to build a wx ConfirmDialog directly whenever
+    confirm=True and progress_wnd was set, which asserts with "No wx.App
+    created yet" under the Qt UI (no running wx.App) -- the same hazard
+    already fixed for detected_levels_issue_confirm() above. It must prefer a
+    callable progress_wnd.confirm() instead, mirroring _prompt_confirm().
+    """
+    import DisplayCAL.worker as worker_module
+    from DisplayCAL import localization as lang
+
+    def _boom(*_args, **_kwargs):
+        raise AssertionError("must not construct a wx ConfirmDialog under Qt")
+
+    monkeypatch.setattr(worker_module, "ConfirmDialog", _boom)
+
+    worker = Worker()
+    seen = {}
+
+    class FakeProgressWnd:
+        def confirm(self, msg, ok, cancel, icon):
+            seen["msg"] = msg
+            seen["ok"] = ok
+            seen["cancel"] = cancel
+            seen["icon"] = icon
+            return False
+
+    worker.progress_wnd = FakeProgressWnd()
+
+    worker.abort_subprocess(confirm=True)
+
+    assert seen  # confirm() was actually called, not the wx dialog
+    assert seen["msg"] == lang.getstr("dialog.confirm_cancel")
+    # Declining leaves the abort request cleared rather than proceeding.
+    assert worker.abort_requested is False
+
+
+def test_abort_subprocess_confirm_true_proceeds_past_guard(monkeypatch):
+    """Confirming via progress_wnd.confirm() proceeds to the actual abort."""
+    import DisplayCAL.worker as worker_module
+
+    started = []
+
+    def _fake_thread(*args, **kwargs):
+        started.append((args, kwargs))
+        return MagicMock()
+
+    monkeypatch.setattr(worker_module.threading, "Thread", _fake_thread)
+    monkeypatch.setattr(worker_module.wx, "GetApp", lambda: None)
+
+    worker = Worker()
+    worker.use_patterngenerator = False
+    worker.use_madnet_tpg = False
+    worker.progress_wnd = type(
+        "FakeProgressWnd", (), {"confirm": lambda self, *a, **k: True}
+    )()
+
+    worker.abort_subprocess(confirm=True)
+
+    assert worker.subprocess_abort is True
+    # The Qt-safe (no wx.App) termination path actually ran.
+    assert started
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Worker.authenticate() returns None on Windows without touching "
+    "Sudo at all (sudo/password-prompt auth is POSIX-only).",
+)
+def test_worker_authenticate_threads_password_prompt(monkeypatch):
+    """Worker.authenticate() passes Worker.password_prompt to Sudo.authenticate()."""
+    import wx
+
+    # authenticate() unconditionally constructs a BetterWindowDisabler(),
+    # which calls wx.GetTopLevelWindows(); under GTK/Linux with no wx.App
+    # running this crashes the process natively (no Python traceback), not
+    # just a normal assertion, taking the whole pytest-xdist worker down.
+    _ = wx.GetApp() or wx.App()
+    worker = Worker()
+    prompt_seam = object()
+    worker.password_prompt = prompt_seam
+    seen = {}
+
+    def fake_sudo_authenticate(self, args, title, parent=None, prompt=None):
+        seen["prompt"] = prompt
+        return "allowed", "s3cr3t"
+
+    monkeypatch.setattr(Sudo, "authenticate", fake_sudo_authenticate)
+
+    result = worker.authenticate(sys.executable, "Title")
+
+    assert seen["prompt"] is prompt_seam
+    assert result is True
+    assert worker.pwd == "s3cr3t"
+
+
 def test_update_profile_1(random_icc_profile):
     """Testing Worker.update_profile() method."""
     from DisplayCAL import worker
@@ -413,6 +564,130 @@ def test_is_allowed_1():
     sudo = Sudo()
     result = sudo.is_allowed()
     assert result != ""
+
+
+class _FakeSudoProcess:
+    """Stand-in for a ``wexpect.spawn`` handle, driven by a scripted sequence.
+
+    Each ``.expect()`` call consumes the next ``(after, before, exitstatus,
+    alive)`` tuple, mirroring how ``Sudo.authenticate``/``_expect_timeout``
+    read ``.after``/``.before``/``.exitstatus``/``.isalive()`` after a real
+    ``wexpect`` expect call.
+    """
+
+    def __init__(self, script):
+        self._script = list(script)
+        self.after = None
+        self.before = b""
+        self.exitstatus = None
+        self._alive = True
+        self.sent = []
+
+    def expect(self, patterns, timeout=None):  # noqa: ARG002
+        self.after, self.before, self.exitstatus, self._alive = self._script.pop(0)
+        return 0
+
+    def isalive(self):
+        return self._alive
+
+    def send(self, data):
+        self.sent.append(data)
+
+    def sendcontrol(self, char):  # noqa: ARG002
+        pass
+
+    def terminate(self, force=False):  # noqa: ARG002
+        return True
+
+
+def test_sudo_authenticate_uses_prompt_seam(monkeypatch):
+    """Sudo.authenticate() calls a given prompt callable instead of the wx dialog."""
+    from DisplayCAL import worker as worker_module
+    from DisplayCAL import wexpect
+
+    sudo = Sudo()
+    sudo.sudo = "/usr/bin/sudo"
+    monkeypatch.setattr(Sudo, "kill", lambda self: None)
+    monkeypatch.setattr(Sudo, "is_allowed", lambda self, args=None, pwd="": "allowed")
+
+    fake_process = _FakeSudoProcess(
+        [
+            ("Password:", b"", None, True),
+            (wexpect.EOF, b"", 0, False),
+        ]
+    )
+    monkeypatch.setattr(
+        worker_module.wexpect, "spawn", lambda *args, **kwargs: fake_process
+    )
+
+    prompts = []
+
+    def fake_prompt(msg):
+        prompts.append(msg)
+        return "hunter2"
+
+    result, pwd = sudo.authenticate(["true"], "Title", prompt=fake_prompt)
+
+    assert result == "allowed"
+    assert pwd == "hunter2"
+    assert len(prompts) == 1
+    assert fake_process.sent == ["hunter2" + os.linesep]
+
+
+def test_sudo_authenticate_prompt_cancel_returns_false(monkeypatch):
+    """Cancelling the prompt (returning None) aborts authentication."""
+    from DisplayCAL import worker as worker_module
+
+    sudo = Sudo()
+    sudo.sudo = "/usr/bin/sudo"
+    monkeypatch.setattr(Sudo, "kill", lambda self: None)
+    monkeypatch.setattr(Sudo, "_terminate", lambda self: None)
+
+    fake_process = _FakeSudoProcess([("Password:", b"", None, True)])
+    monkeypatch.setattr(
+        worker_module.wexpect, "spawn", lambda *args, **kwargs: fake_process
+    )
+
+    result, pwd = sudo.authenticate(["true"], "Title", prompt=lambda msg: None)
+
+    assert result is False
+    assert pwd == ""
+    assert fake_process.sent == []
+
+
+def test_sudo_authenticate_prompt_retries_on_rejected_password(monkeypatch):
+    """A rejected password re-prompts with the sudo error prepended."""
+    from DisplayCAL import worker as worker_module
+    from DisplayCAL import wexpect
+
+    sudo = Sudo()
+    sudo.sudo = "/usr/bin/sudo"
+    monkeypatch.setattr(Sudo, "kill", lambda self: None)
+    monkeypatch.setattr(Sudo, "is_allowed", lambda self, args=None, pwd="": "allowed")
+
+    fake_process = _FakeSudoProcess(
+        [
+            ("Password:", b"", None, True),
+            ("Password:", b"Sorry, try again.", None, True),
+            (wexpect.EOF, b"", 0, False),
+        ]
+    )
+    monkeypatch.setattr(
+        worker_module.wexpect, "spawn", lambda *args, **kwargs: fake_process
+    )
+
+    prompts = []
+
+    def fake_prompt(msg):
+        prompts.append(msg)
+        return "wrong" if len(prompts) == 1 else "right"
+
+    result, pwd = sudo.authenticate(["true"], "Title", prompt=fake_prompt)
+
+    assert result == "allowed"
+    assert pwd == "right"
+    assert len(prompts) == 2
+    assert "Sorry, try again." in prompts[1]
 
 
 def test_ti3_lookup_to_ti1_1(data_files, setup_argyll):
@@ -833,8 +1108,11 @@ def test_get_technology_strings_without_argyll_returns_from_argyll_17():
     }
 
 @pytest.mark.skipif(
-    os.getenv("GITHUB_ACTIONS") == "true" and sys.platform == "linux",
-    reason="Not working properly on GitHub on Linux machines.",
+    os.getenv("GITHUB_ACTIONS") == "true" and sys.platform in ("linux", "win32"),
+    reason="Not working properly on GitHub on Linux and Windows machines: the "
+    "real (unmocked) get_argyll_version_string() subprocess call doesn't "
+    "reliably report a version on hosted CI runners, same underlying issue as "
+    "test_get_argyll_version_string_returns_a_proper_value's unconditional skip.",
 )
 def test_get_technology_strings_with_argyll_returns_expected_data(setup_argyll):
     """Test get_technology_strings() returns a dict with correct data."""

@@ -177,6 +177,7 @@ config = {
             "theme/icons/128x128/*.png",
             "theme/icons/256x256/*.png",
             "theme/icons/512x512/*.png",
+            "theme/icons/flags/*.png",
             "theme/jet_anim/*.png",
             "theme/patch_anim/*.png",
             "theme/splash_anim/*.png",
@@ -1149,6 +1150,16 @@ def setup() -> None:
                 "no_strip": True,
                 "optimize": 0,
                 "plist": plist_dict,
+                # py2app's pyside6 recipe only copies Qt's plugin binaries
+                # (e.g. platforms/libqcocoa.dylib, needed for QApplication to
+                # start at all) when this is set; it defaults to empty and
+                # silently bundles none of them otherwise.
+                "qt_plugins": [
+                    "iconengines/*",
+                    "imageformats/*",
+                    "platforms/*",
+                    "styles/*",
+                ],
             }
         }
         if use_sdl:

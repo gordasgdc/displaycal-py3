@@ -295,6 +295,45 @@ def get_scripts(excludes: None | list[str] = None) -> list[tuple[str, str]]:
     return scripts_with_desc
 
 
+def copy_qt_plugins(dist_dir: str) -> None:
+    """Copy PySide6's Qt plugin binaries into the frozen dist_dir.
+
+    Unlike py2app (which ships a "pyside6" recipe for exactly this), py2exe
+    has no Qt-aware hook: its dependency analysis only follows Python import
+    statements, so the plugin binaries QApplication discovers by scanning a
+    "plugins" directory at runtime (e.g. platforms/qwindows.dll, without
+    which Qt can't even start) are never picked up and would otherwise be
+    silently missing from the frozen build.
+
+    Args:
+        dist_dir (str): The py2exe frozen output directory.
+    """
+    try:
+        from PySide6 import QtCore
+    except ImportError:
+        print("WARNING: PySide6 not found, Qt UI plugins will not be bundled!")
+        return
+
+    plugin_dir = QtCore.QLibraryInfo.path(QtCore.QLibraryInfo.LibraryPath.PluginsPath)
+    for subdir in ("platforms", "styles", "imageformats", "iconengines"):
+        src = os.path.join(plugin_dir, subdir)
+        if not os.path.isdir(src):
+            continue
+        dst = os.path.join(dist_dir, "PySide6", "plugins", subdir)
+        shutil.copytree(src, dst, dirs_exist_ok=True)
+        print(f"Copied Qt plugin dir: {src} -> {dst}")
+
+    # Qt looks for qt.conf next to the running executable and, if found,
+    # resolves plugin paths relative to it. This decouples plugin discovery
+    # from wherever py2exe actually ends up extracting PySide6's own DLLs
+    # (bundle_files=3 doesn't preserve site-packages' package layout), rather
+    # than relying on Qt's default "plugins/ next to Qt6Core.dll" heuristic.
+    qt_conf_path = os.path.join(dist_dir, "qt.conf")
+    with open(qt_conf_path, "w", encoding="utf-8") as qt_conf:
+        qt_conf.write("[Paths]\nPlugins = PySide6/plugins\n")
+    print(f"Wrote {qt_conf_path}")
+
+
 def build_py2exe() -> None:
     """py2exe builder that uses the new freeze API."""
     use_sdl = False
@@ -692,6 +731,12 @@ def build_py2exe() -> None:
                 "mfc90.dll",
             ],
             "excludes": config["excludes"]["all"] + config["excludes"]["win32"],
+            # Force whole-package inclusion for the Qt UI stack: it's only
+            # reached via a runtime `if get_ui_toolkit() == "qt":` branch, and
+            # while py2exe's static import analysis does still discover it
+            # through that branch, this guards against any submodule pulled
+            # in dynamically at runtime rather than via a literal import.
+            "packages": ["PySide6", "shiboken6", "qtpy", f"{NAME}.ui"],
             "bundle_files": 3,  # if wx.VERSION >= (2, 8, 10, 1) else 1,
             "compressed": 1,
             "optimize": 0,  # 0 = don't optimize (generate .pyc)
@@ -800,6 +845,8 @@ def build_py2exe() -> None:
     freeze(**py2exe_kwargs)
     # setup(**attrs)
     print("py2exe.freeze DONE!")
+
+    copy_qt_plugins(dist_dir)
 
     shutil.copy(
         os.path.join(dist_dir, f"python{sys.version_info[0]}{sys.version_info[1]}.dll"),

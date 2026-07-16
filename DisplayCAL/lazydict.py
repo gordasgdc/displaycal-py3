@@ -540,7 +540,10 @@ class LazyDictYAMLUltraLite(LazyDict):
                             safe_str(getattr(fileobj, "name", line)), i
                         )
                     )
-                value.append(line[2:])
+                # A blank line (no 2-space indent) is a paragraph break
+                # within the block scalar and must be kept as "\n", not
+                # collapsed to "" by slicing past a 1-char string.
+                value.append(line[2:] if line.startswith("  ") else line)
         if key:
             self[key] = "".join(value).rstrip("\n")
 

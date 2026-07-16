@@ -135,6 +135,7 @@ from DisplayCAL.config import (
     ISAPP,
     PROFILE_EXT,
     PYDIR,
+    PYNAME,
     SCRIPT_EXT,
     get_data_path,
     get_icon,
@@ -1602,6 +1603,25 @@ def insert_ti_patches_omitting_RGB_duplicates(cgats1, cgats2_path, logfn=print):
     return cgats2
 
 
+class _DirectResult:
+    """Stand-in for a ``wx.lib.delayedresult`` result delivered without wx.
+
+    Mimics the ``.get()`` contract of ``delayedresult``'s result objects
+    (return the value, or raise if it is an exception) so consumers written
+    against that API, such as ``Worker.quit_terminate_consumer``, work
+    unchanged when there is no ``wx.App`` to marshal the callback through.
+    """
+
+    def __init__(self, result):
+        self._result = result
+
+    def get(self):
+        """Return the wrapped result, raising it if it is an exception."""
+        if isinstance(self._result, Exception):
+            raise self._result
+        return self._result
+
+
 class EvalFalse:
     """Evaluate to False in boolean comparisons."""
 
@@ -1937,7 +1957,7 @@ class Sudo:
                 subprocess_before = subprocess_before.decode(ENC, "replace")
             print(subprocess_before)
 
-    def authenticate(self, args, title, parent=None):
+    def authenticate(self, args, title, parent=None, prompt=None):
         """Authenticate for a given command.
 
         The return value will be a tuple (auth_successful, password).
@@ -1946,6 +1966,14 @@ class Sudo:
         authentication was not successful or the command is not allowed (even
         if the actual string length is non-zero), thus allowing for easy
         boolean comparisons.
+
+        Args:
+            prompt (Callable[[str], str | None] | None): Toolkit-neutral
+                password-prompt seam. When given, called with the prompt
+                message in place of building the wx password dialog below,
+                and expected to return the entered password, or None if the
+                user cancelled. Used by the Qt port
+                (``DisplayCAL.ui.worker_runner.PasswordPromptAdapter``).
 
         """
         # Authentication using sudo is pretty convoluted if dealing with
@@ -1960,28 +1988,32 @@ class Sudo:
         # allowed, so we run sudo -l <command> to determine if it is
         # indeed allowed.
         pwd = ""
-        dlg = ConfirmDialog(
-            parent,
-            title=title,
-            msg=lang.getstr("dialog.enter_password"),
-            ok=lang.getstr("ok"),
-            cancel=lang.getstr("cancel"),
-            bitmap=get_icon(32, "lock"),
-        )
-        dlg.pwd_txt_ctrl = wx.TextCtrl(
-            dlg, -1, pwd, size=(320, -1), style=wx.TE_PASSWORD | wx.TE_PROCESS_ENTER
-        )
-        dlg.pwd_txt_ctrl.Bind(wx.EVT_TEXT_ENTER, lambda event: dlg.EndModal(wx.ID_OK))
-        dlg.sizer3.Add(
-            dlg.pwd_txt_ctrl,
-            1,
-            # flag=wx.TOP | wx.ALIGN_LEFT, border=12)
-            flag=wx.TOP,
-            border=12,
-        )
-        dlg.ok.SetDefault()
-        dlg.sizer0.SetSizeHints(dlg)
-        dlg.sizer0.Layout()
+        dlg = None
+        if prompt is None:
+            dlg = ConfirmDialog(
+                parent,
+                title=title,
+                msg=lang.getstr("dialog.enter_password"),
+                ok=lang.getstr("ok"),
+                cancel=lang.getstr("cancel"),
+                bitmap=get_icon(32, "lock"),
+            )
+            dlg.pwd_txt_ctrl = wx.TextCtrl(
+                dlg, -1, pwd, size=(320, -1), style=wx.TE_PASSWORD | wx.TE_PROCESS_ENTER
+            )
+            dlg.pwd_txt_ctrl.Bind(
+                wx.EVT_TEXT_ENTER, lambda event: dlg.EndModal(wx.ID_OK)
+            )
+            dlg.sizer3.Add(
+                dlg.pwd_txt_ctrl,
+                1,
+                # flag=wx.TOP | wx.ALIGN_LEFT, border=12)
+                flag=wx.TOP,
+                border=12,
+            )
+            dlg.ok.SetDefault()
+            dlg.sizer0.SetSizeHints(dlg)
+            dlg.sizer0.Layout()
         # Remove cached credentials
         self.kill()
         sudo_args = ["-p", "Password:", "true"]
@@ -1999,12 +2031,19 @@ class Sudo:
             )
         self._expect_timeout(["Password:", wexpect.EOF], 10)
         # We need to call isalive() to set the exitstatus
+        msg = lang.getstr("dialog.enter_password")
         while p.isalive() and p.after == "Password:":
             # Ask for password
-            dlg.pwd_txt_ctrl.SetFocus()
-            result = dlg.ShowModal()
-            pwd = dlg.pwd_txt_ctrl.GetValue()
-            if result != wx.ID_OK:
+            if dlg is None:
+                entered = prompt(msg)
+                cancelled = entered is None
+                pwd = entered or ""
+            else:
+                dlg.pwd_txt_ctrl.SetFocus()
+                result = dlg.ShowModal()
+                pwd = dlg.pwd_txt_ctrl.GetValue()
+                cancelled = result != wx.ID_OK
+            if cancelled:
                 self._terminate()
                 return False, pwd
             p.send(pwd + os.linesep)
@@ -2015,12 +2054,14 @@ class Sudo:
                 if errstr:
                     print(errstr)
                     msg = f"{errstr}\n\n{msg}"
-                dlg.message.SetLabel(msg)
-                dlg.message.Wrap(dlg.GetSize()[0] - 32 - 12 * 2)
-                dlg.pwd_txt_ctrl.SetValue("")
-                dlg.sizer0.SetSizeHints(dlg)
-                dlg.sizer0.Layout()
-        dlg.Destroy()
+                if dlg is not None:
+                    dlg.message.SetLabel(msg)
+                    dlg.message.Wrap(dlg.GetSize()[0] - 32 - 12 * 2)
+                    dlg.pwd_txt_ctrl.SetValue("")
+                    dlg.sizer0.SetSizeHints(dlg)
+                    dlg.sizer0.Layout()
+        if dlg is not None:
+            dlg.Destroy()
         if p.after is wexpect.TIMEOUT:
             print("Error: sudo timed out")
             if not p.terminate(force=True):
@@ -2640,6 +2681,11 @@ class Worker(WorkerBase):
         self.resume = False
         self.sudo = None
         self.auth_timestamp = 0
+        # Toolkit-neutral seam for the sudo password prompt Worker.authenticate()
+        # shows: None keeps the wx ConfirmDialog built inline in
+        # Sudo.authenticate(); the Qt port assigns a
+        # DisplayCAL.ui.worker_runner.PasswordPromptAdapter instead.
+        self.password_prompt = None
         self.sessionlogfiles = {}
         self.triggers = ["Password:"]
         self.recent = FilteredStream(
@@ -3017,7 +3063,9 @@ class Worker(WorkerBase):
                         parent = progress_dlg
                     else:
                         parent = self.owner
-                result, pwd = self.sudo.authenticate(args, title, parent)
+                result, pwd = self.sudo.authenticate(
+                    args, title, parent, prompt=self.password_prompt
+                )
                 if result:
                     self.pwd = pwd
                     result = True
@@ -3346,6 +3394,24 @@ class Worker(WorkerBase):
             return result
         return Error(lang.getstr("argyll.util.not_found", "spotread"))
 
+    def measure_uniformity_producer(self):
+        """Measure display device uniformity using spotread.
+
+        Toolkit-neutral extraction of wx's ``MainFrame
+        .measure_uniformity_producer``, so both bindings can share it.
+
+        Returns:
+            None | str | Exception: The result of the command execution, or
+                None if the command could not be found.
+        """
+        cmd, args = get_argyll_util("spotread"), ["-v", "-e", "-T"]
+        if cmd:
+            result = self.add_measurement_features(args, display=False, cmd=cmd)
+            if isinstance(result, Exception):
+                return result
+            return self.exec_cmd(cmd, args, skip_scripts=True)
+        return Error(lang.getstr("argyll.util.not_found", "spotread"))
+
     def instrument_can_use_ccxx(
         self, check_measurement_mode=True, instrument_name=None
     ):
@@ -3579,6 +3645,45 @@ class Worker(WorkerBase):
             self.do_single_measurement()
             self.is_ambient_measurement = False
 
+    def _prompt_confirm(self, msg, ok=None, cancel=None, icon="dialog-information"):
+        """Show a modal confirmation and return whether the user confirmed.
+
+        Toolkit-neutral seam for the mid-measurement instrument prompts. A Qt
+        progress adapter (``DisplayCAL.ui.worker_runner.ProgressAdapter``)
+        services this through its ``confirm()`` method; the wx progress windows
+        have no such method, so the fallback builds the same wx ``ConfirmDialog``
+        the prompts used inline, preserving the existing behaviour exactly.
+
+        Args:
+            msg (str): The message to show.
+            ok (str): The confirm button label. Defaults to the localized "ok".
+            cancel (str): The cancel button label. Defaults to localized
+                "cancel".
+            icon (str): The icon name passed to ``get_icon`` for the wx dialog
+                and mapped by the Qt adapter.
+
+        Returns:
+            bool: True if the user confirmed, False otherwise.
+        """
+        if ok is None:
+            ok = lang.getstr("ok")
+        if cancel is None:
+            cancel = lang.getstr("cancel")
+        confirm = getattr(self.progress_wnd, "confirm", None)
+        if callable(confirm):
+            return confirm(msg, ok, cancel, icon)
+        dlg = ConfirmDialog(
+            self.progress_wnd,
+            msg=msg,
+            ok=ok,
+            cancel=cancel,
+            bitmap=get_icon(32, icon),
+        )
+        self.progress_wnd.dlg = dlg
+        dlg_result = dlg.ShowModal()
+        dlg.Destroy()
+        return dlg_result == wx.ID_OK
+
     def do_single_measurement(self):
         """Perform a single measurement, e.g. ambient light measurement."""
         if getattr(self, "subprocess_abort", False) or getattr(
@@ -3589,19 +3694,12 @@ class Worker(WorkerBase):
         self.progress_wnd.Pulse(" " * 4)
         if self.is_ambient_measurement:
             self.is_ambient_measurement = False
-            dlg = ConfirmDialog(
-                self.progress_wnd,
-                msg=lang.getstr("instrument.measure_ambient"),
-                ok=lang.getstr("ok"),
-                cancel=lang.getstr("cancel"),
-                bitmap=get_icon(32, "dialog-information"),
+            confirmed = self._prompt_confirm(
+                lang.getstr("instrument.measure_ambient")
             )
-            self.progress_wnd.dlg = dlg
-            dlg_result = dlg.ShowModal()
-            dlg.Destroy()
             if self.finished:
                 return None
-            if dlg_result != wx.ID_OK:
+            if not confirmed:
                 self.abort_subprocess()
                 return False
         if self.safe_send(" "):
@@ -3805,7 +3903,8 @@ class Worker(WorkerBase):
             ):
                 # On the Mac dispcal's test window
                 # hides the cursor and steals focus
-                start_new_thread(mac_app_activate, (1, wx.GetApp().AppName))
+                app_name = wx.GetApp().AppName if wx.GetApp() is not None else PYNAME
+                start_new_thread(mac_app_activate, (1, app_name))
             # IMPORTANT: When making changes to the instrument on screen
             # detection, also apply them to appropriate part in Worker.exec_cmd
             if self.instrument_calibration_complete or (
@@ -3833,8 +3932,15 @@ class Worker(WorkerBase):
                 # Delay to work-around a problem with i1D2 and Argyll 1.7
                 # to 1.8.3 under Mac OS X 10.11 El Capitan where skipping
                 # interactive display adjustment would botch the first
-                # reading (black)
-                wx.CallLater(1500, self.instrument_on_screen_continue)
+                # reading (black).
+                # threading.Timer (not wx.CallLater) because under Qt this
+                # method runs inline on the measurement thread (no wx.App to
+                # pump a CallLater timer), so a wx.CallLater here would just
+                # never fire and the run would stall forever waiting on a
+                # keypress that's never sent.
+                timer = threading.Timer(1.5, self.instrument_on_screen_continue)
+                timer.daemon = True
+                timer.start()
         elif self.instrument_place_on_spot_msg:
             self.log(f"{APPNAME}: Assuming instrument on screen")
             self.instrument_on_screen = True
@@ -3902,7 +4008,18 @@ class Worker(WorkerBase):
             )
         ):
             # Single spotread reading, we are done
-            wx.CallLater(1000, self.quit_terminate_cmd)
+            if wx.GetApp() is not None:
+                wx.CallLater(1000, self.quit_terminate_cmd)
+            else:
+                # No wx.App (e.g. running under the Qt UI): this method runs
+                # inline on the measurement thread (see the similar comment
+                # in check_instrument_place_on_screen), so wx.CallLater would
+                # just raise "The wx.App object must be created first!"
+                # instead of scheduling anything. Use a plain threading.Timer
+                # instead.
+                timer = threading.Timer(1.0, self.quit_terminate_cmd)
+                timer.daemon = True
+                timer.start()
 
     def get_skip_video_levels_detection(self):
         """Return True if we should skip video levels detection.
@@ -4041,14 +4158,21 @@ END_DATA
                 if not config.is_virtual_display():
                     # Could be a misconfiguration of display or graphics driver.
                     # Make the user aware.
-                    self._detected_levels_issue_confirm_wait = True
-                    wx.CallAfter(self.detected_levels_issue_confirm)
-                    # Wait for call to return
-                    while (
-                        self._detected_levels_issue_confirm_wait
-                        and not self.subprocess_abort
-                    ):
-                        sleep(0.05)
+                    if wx.GetApp() is not None:
+                        self._detected_levels_issue_confirm_wait = True
+                        wx.CallAfter(self.detected_levels_issue_confirm)
+                        # Wait for call to return
+                        while (
+                            self._detected_levels_issue_confirm_wait
+                            and not self.subprocess_abort
+                        ):
+                            sleep(0.05)
+                    else:
+                        # No wx.App (e.g. running under the Qt UI): nothing to
+                        # marshal onto a wx main loop. detected_levels_issue_confirm's
+                        # Qt confirm3() call already blocks this thread until
+                        # the user answers, so call it directly.
+                        self.detected_levels_issue_confirm()
                     if self._use_detected_video_levels is False:
                         return False
                     if self._use_detected_video_levels is None:
@@ -4074,19 +4198,26 @@ END_DATA
 
     def detected_levels_issue_confirm(self):
         """Show a confirmation dialog to the user if a levels issue was detected."""
-        dlg = ConfirmDialog(
-            None,
-            msg=lang.getstr("display.levels_issue_detected"),
-            ok=lang.getstr("retry"),
-            alt=lang.getstr("fix_output_levels_using_vcgt"),
-            wrap=100,
-        )
-        result = dlg.ShowModal()
-        dlg.Destroy()
-        if result == wx.ID_OK:
-            # Retry
+        msg = lang.getstr("display.levels_issue_detected")
+        retry = lang.getstr("retry")
+        alt = lang.getstr("fix_output_levels_using_vcgt")
+        confirm3 = getattr(self.progress_wnd, "confirm3", None)
+        if callable(confirm3):
+            # Qt path: no wx.App to build/show a wx ConfirmDialog against.
+            choice = confirm3(msg, retry, alt, lang.getstr("cancel"))
+        else:
+            dlg = ConfirmDialog(None, msg=msg, ok=retry, alt=alt, wrap=100)
+            result = dlg.ShowModal()
+            dlg.Destroy()
+            if result == wx.ID_OK:
+                choice = "retry"
+            elif result == wx.ID_CANCEL:
+                choice = "cancel"
+            else:
+                choice = "alt"
+        if choice == "retry":
             self._use_detected_video_levels = None
-        elif result == wx.ID_CANCEL:
+        elif choice == "cancel":
             self._use_detected_video_levels = False
         else:
             # Fix output levels using calibration
@@ -4139,9 +4270,8 @@ END_DATA
             self.madtpg_show_osd(
                 msg, sys.platform == "win32" and self.single_real_display()
             )
-        dlg = ConfirmDialog(
-            self.progress_wnd,
-            msg="{}\n\n{}".format(
+        confirmed = self._prompt_confirm(
+            "{}\n\n{}".format(
                 msg,
                 (
                     (
@@ -4161,20 +4291,15 @@ END_DATA
                     or self.get_instrument_name()
                 ),
             ),
-            ok=lang.getstr("ok"),
-            cancel=lang.getstr("cancel"),
-            bitmap=get_icon(32, "dialog-information"),
+            icon="dialog-information",
         )
-        self.progress_wnd.dlg = dlg
-        dlg_result = dlg.ShowModal()
-        dlg.Destroy()
         if self.finished:
             self.log(
                 f"{APPNAME}: Ignoring instrument calibration prompt (worker "
                 "thread finished)"
             )
             return None
-        if dlg_result != wx.ID_OK:
+        if not confirmed:
             self.log(f"{APPNAME}: Canceled instrument calibration prompt")
             self._last_calibration_msg = None
             self.abort_subprocess()
@@ -4231,19 +4356,34 @@ END_DATA
             if pause:
                 self.progress_wnd.pause_continue_handler(True)
                 self.pause_continue()
-            dlg = ConfirmDialog(
-                self.progress_wnd,
-                msg=lang.getstr("dialog.confirm_cancel"),
-                ok=lang.getstr("yes"),
-                cancel=lang.getstr("no"),
-                bitmap=get_icon(32, "dialog-warning"),
-            )
-            self.progress_wnd.dlg = dlg
-            dlg_result = dlg.ShowModal()
-            if isinstance(prev_dlg, DummyDialog):
-                self.progress_wnd.dlg = prev_dlg
-            dlg.Destroy()
-            if dlg_result != wx.ID_OK:
+            # Toolkit-neutral seam (see _prompt_confirm): a Qt progress_wnd
+            # (ProgressAdapter / _AdjustmentTerminal) services this through
+            # its own confirm() round-trip; only construct the wx
+            # ConfirmDialog directly when there's no such hook, otherwise it
+            # asserts (no running wx.App under the Qt UI).
+            confirm_fn = getattr(self.progress_wnd, "confirm", None)
+            if callable(confirm_fn):
+                confirmed = confirm_fn(
+                    lang.getstr("dialog.confirm_cancel"),
+                    lang.getstr("yes"),
+                    lang.getstr("no"),
+                    "dialog-warning",
+                )
+            else:
+                dlg = ConfirmDialog(
+                    self.progress_wnd,
+                    msg=lang.getstr("dialog.confirm_cancel"),
+                    ok=lang.getstr("yes"),
+                    cancel=lang.getstr("no"),
+                    bitmap=get_icon(32, "dialog-warning"),
+                )
+                self.progress_wnd.dlg = dlg
+                dlg_result = dlg.ShowModal()
+                if isinstance(prev_dlg, DummyDialog):
+                    self.progress_wnd.dlg = prev_dlg
+                dlg.Destroy()
+                confirmed = dlg_result == wx.ID_OK
+            if not confirmed:
                 if pause:
                     self.progress_wnd.Resume()
                 else:
@@ -4258,7 +4398,27 @@ END_DATA
         if self.use_patterngenerator or self.use_madnet_tpg:
             abortfilename = os.path.join(self.tempdir, ".abort")
             open(abortfilename, "w").close()
-        delayedresult.startWorker(self.quit_terminate_consumer, self.quit_terminate_cmd)
+        if wx.GetApp() is not None:
+            delayedresult.startWorker(
+                self.quit_terminate_consumer, self.quit_terminate_cmd
+            )
+        else:
+            # No wx.App (e.g. running under the Qt UI): wx.lib.delayedresult
+            # delivers both the result and any exception via wx.CallAfter,
+            # which asserts without a running wx.App. Run the termination on
+            # a plain thread and hand the result to the consumer directly.
+            def _run_quit_terminate_cmd():
+                try:
+                    result = self.quit_terminate_cmd()
+                except Exception as exception:
+                    result = exception
+                self.quit_terminate_consumer(_DirectResult(result))
+
+            threading.Thread(
+                target=_run_quit_terminate_cmd,
+                name="quit_terminate_cmd",
+                daemon=True,
+            ).start()
 
     def quit_terminate_consumer(self, delayedResult):
         """Consumer for delayed result of subprocess termination.
@@ -4276,7 +4436,12 @@ END_DATA
                 self.log(traceback.format_exc(), fn=LOG)
             result = UnloggedError(safe_str(exception))
         if isinstance(result, Exception):
-            show_result_dialog(result, getattr(self, "progress_wnd", None))
+            if wx.GetApp() is not None:
+                show_result_dialog(result, getattr(self, "progress_wnd", None))
+            else:
+                # No Qt equivalent of show_result_dialog yet; at least log the
+                # error instead of crashing on the wx-only dialog.
+                self.log(f"{APPNAME}: {safe_str(result)}", fn=LOG)
             result = False
         self.subprocess_abort = False
         if not result:
@@ -4305,9 +4470,8 @@ END_DATA
                 lang.getstr("instrument.place_on_screen"),
                 sys.platform == "win32" and self.single_real_display(),
             )
-        dlg = ConfirmDialog(
-            self.progress_wnd,
-            msg="{}\n\n{}".format(
+        confirmed = self._prompt_confirm(
+            "{}\n\n{}".format(
                 lang.getstr("instrument.place_on_screen"),
                 (
                     (
@@ -4327,20 +4491,15 @@ END_DATA
                     or self.get_instrument_name()
                 ),
             ),
-            ok=lang.getstr("ok"),
-            cancel=lang.getstr("cancel"),
-            bitmap=get_icon(32, "dialog-information"),
+            icon="dialog-information",
         )
-        self.progress_wnd.dlg = dlg
-        dlg_result = dlg.ShowModal()
-        dlg.Destroy()
         if self.finished:
             self.log(
                 f"{APPNAME}: Ignoring instrument placement prompt (worker thread "
                 "finished)"
             )
             return None
-        if dlg_result != wx.ID_OK:
+        if not confirmed:
             self.log(f"{APPNAME}: Canceled instrument placement prompt")
             self.abort_subprocess()
             return False
@@ -4376,23 +4535,17 @@ END_DATA
                 lang.getstr("instrument.reposition_sensor"),
                 sys.platform == "win32" and self.single_real_display(),
             )
-        dlg = ConfirmDialog(
-            self.progress_wnd,
-            msg=lang.getstr("instrument.reposition_sensor"),
-            ok=lang.getstr("ok"),
-            cancel=lang.getstr("cancel"),
-            bitmap=get_icon(32, "dialog-warning"),
+        confirmed = self._prompt_confirm(
+            lang.getstr("instrument.reposition_sensor"),
+            icon="dialog-warning",
         )
-        self.progress_wnd.dlg = dlg
-        dlg_result = dlg.ShowModal()
-        dlg.Destroy()
         if self.finished:
             self.log(
                 f"{APPNAME}: Ignoring instrument sensor repositioning prompt (worker "
                 "thread finished)"
             )
             return None
-        if dlg_result != wx.ID_OK:
+        if not confirmed:
             self.log(f"{APPNAME}: Canceled instrument sensor repositioning prompt")
             self.abort_subprocess()
             return False
@@ -4445,7 +4598,7 @@ END_DATA
                 self.logger = DummyLogger()
             else:
                 self.logger = get_file_logger("interact")
-        if hasattr(self, "thread") and self.thread.is_alive() and self.interactive:
+        if getattr(self, "thread", None) and self.thread.is_alive() and self.interactive:
             self.logger.info("-" * 80)
         self.sessionlogfile = None
         self.madtpg_bw_lvl = None
@@ -7358,7 +7511,7 @@ BEGIN_DATA
                 pass
             else:
                 if not self.auth_timestamp:
-                    if hasattr(self, "thread") and self.thread.is_alive():
+                    if getattr(self, "thread", None) and self.thread.is_alive():
                         # Careful: We can only show the auth dialog if running
                         # in the main GUI thread!
                         if use_madnet:
@@ -7647,7 +7800,7 @@ BEGIN_DATA
                 stdout = EncodedWriter(StringIO(), None, data_encoding)
                 logfiles = []
                 if (
-                    hasattr(self, "thread")
+                    getattr(self, "thread", None)
                     and self.thread.is_alive()
                     and self.interactive
                     and getattr(self, "terminal", None)
@@ -7681,7 +7834,7 @@ BEGIN_DATA
                         )
                     )
                 logfiles.append(stdout)
-                if hasattr(self, "thread") and self.thread.is_alive():
+                if getattr(self, "thread", None) and self.thread.is_alive():
                     logfiles.extend([self.recent, self.lastmsg, self])
                 logfiles = Files(logfiles)
                 if self.use_patterngenerator:
@@ -12641,6 +12794,7 @@ BEGIN_DATA
         elif not isinstance(result, Exception) and result:
             setcfg("last_cal_or_icc_path", dst_path)
             setcfg("last_icc_path", dst_path)
+            result = dst_path
         return result
 
     def create_RGB_XYZ_cLUT_fwd_profile(
@@ -15508,12 +15662,15 @@ BEGIN_DATA
         # sys.stdout from another thread can fail sporadically with IOError 9
         # 'Bad file descriptor', so don't use sys.stdout
         # Careful: Python 2.5 Producer objects don't have a name attribute
+        # self.thread may be present but None (e.g. the Qt UI clears it once
+        # its producer thread finishes), so check for None, not just presence.
+        thread = getattr(self, "thread", None)
         if (
-            hasattr(self, "thread")
-            and self.thread.is_alive()
+            thread is not None
+            and thread.is_alive()
             and (
                 not hasattr(current_thread(), "name")
-                or current_thread().name != self.thread.name
+                or current_thread().name != thread.name
             )
         ):
             logfn = LOG
@@ -15595,9 +15752,8 @@ BEGIN_DATA
                     fn=logfn,
                 )
         subprocess_isalive = self.isalive(subprocess)
-        if subprocess_isalive or (
-            hasattr(self, "thread") and not self.thread.is_alive()
-        ):
+        thread = getattr(self, "thread", None)
+        if subprocess_isalive or (thread is not None and not thread.is_alive()):
             # We don't normally need this as closing of the progress window is
             # handled by _generic_consumer(), but there are two cases where it
             # is desirable to have this 'safety net':
@@ -15614,19 +15770,27 @@ BEGIN_DATA
             #    happen if we design our result consumer correctly to handle
             #    this particular case, but we need to make sure the user can
             #    close the progress window in case we mess up.
-            if hasattr(self, "thread") and not self.thread.is_alive():
-                wx.CallAfter(self.stop_progress)
+            have_wx_app = wx.GetApp() is not None
+            if thread is not None and not thread.is_alive():
+                if have_wx_app:
+                    wx.CallAfter(self.stop_progress)
+                else:
+                    # No wx.App (e.g. running under the Qt UI): nothing to
+                    # marshal onto a wx main loop, so call directly.
+                    self.stop_progress()
             if subprocess_isalive:
-                wx.CallAfter(
-                    show_result_dialog,
-                    Warning(
-                        f"Couldn't terminate {self.cmd}. Please try to end it manually "
-                        f"before continuing to use {APPNAME}. If you can not terminate "
-                        f"{self.cmd}, restarting {APPNAME} may also help. Apologies "
-                        "for the inconvenience."
-                    ),
-                    self.owner,
+                message = (
+                    f"Couldn't terminate {self.cmd}. Please try to end it manually "
+                    f"before continuing to use {APPNAME}. If you can not terminate "
+                    f"{self.cmd}, restarting {APPNAME} may also help. Apologies "
+                    "for the inconvenience."
                 )
+                if have_wx_app:
+                    wx.CallAfter(show_result_dialog, Warning(message), self.owner)
+                else:
+                    # No Qt equivalent of show_result_dialog yet; at least log
+                    # the warning instead of crashing on the wx-only dialog.
+                    self.log(f"{APPNAME}: {message}", fn=logfn)
         if self.patterngenerator:
             self.patterngenerator.listening = False
         return not subprocess_isalive
@@ -15948,6 +16112,72 @@ BEGIN_DATA
             return False
         return self.argyll_support_file_exists("spyd4cal.bin")
 
+    def _init_run_state(
+        self,
+        *,
+        interactive_frame="",
+        pauseable=False,
+        cancelable=True,
+        show_remaining_time=True,
+        fancy=True,
+        resume=False,
+    ):
+        """Reset the per-run state a worker operation needs before it starts.
+
+        Toolkit-neutral seam shared by the wx ``start()`` entry point and the
+        Qt ``WorkerRunController`` / ``AdjustmentController``
+        (``DisplayCAL.ui.worker_runner``). ``Worker.__init__`` does not set
+        most of this - it's only ever been initialized here - so a caller
+        that skips this method leaves attributes like
+        ``instrument_calibration_complete`` unset. ``parse()`` (called for
+        every line of Argyll output) reads that attribute unconditionally on
+        its first call, so a run started without this raises
+        ``AttributeError`` immediately - silently, since ``Files.write()``
+        treats an ``AttributeError`` from a sink as "not file-like" and
+        swallows it - which stalls the run waiting on a keypress that
+        nothing ever sends.
+
+        Args:
+            interactive_frame (str or wx.TopLevelWindow): Type of
+                interactive window, or a wx.TopLevelWindow instance for wx
+                callers. Qt callers pass "" or "adjust".
+            pauseable (bool): Is the operation pauseable?
+            cancelable (bool): Is the operation cancelable?
+            show_remaining_time (bool): Show remaining time in the progress
+                dialog (wx only).
+            fancy (bool): Use fancy progress dialog with throbber & sound
+                (wx only).
+            resume (bool): Resume previous progress (keeps
+                ``instrument_on_screen`` instead of resetting it).
+        """
+        self.activated = False
+        self.cmdname = None
+        self.cmdrun = False
+        self.finished = False
+        self.instrument_calibration_complete = False
+        self._last_calibration_msg = None
+        if not resume:
+            self.instrument_on_screen = False
+        self.instrument_place_on_screen_msg = False
+        self.instrument_sensor_position_msg = False
+        self.interactive_frame = interactive_frame
+        self.is_single_measurement = interactive_frame in {"ambient", "luminance"} or (
+            isinstance(interactive_frame, wx.TopLevelWindow)
+            and interactive_frame.Name == "VisualWhitepointEditor"
+        )
+        self.is_ambient_measurement = interactive_frame == "ambient"
+        self.lastcmdname = None
+        self.pauseable = pauseable
+        self.paused = False
+        self.cancelable = cancelable
+        self.show_remaining_time = show_remaining_time
+        self.fancy = fancy
+        self.resume = resume
+        self.subprocess_abort = False
+        self.abort_requested = False
+        self.starttime = time()
+        self.thread_abort = False
+
     def start(
         self,
         consumer,
@@ -16041,33 +16271,14 @@ BEGIN_DATA
         if not parent:
             parent = self.owner
         progress_start = max(progress_start, 1)  # Can't be zero!
-        self.activated = False
-        self.cmdname = None
-        self.cmdrun = False
-        self.finished = False
-        self.instrument_calibration_complete = False
-        self._last_calibration_msg = None
-        if not resume:
-            self.instrument_on_screen = False
-        self.instrument_place_on_screen_msg = False
-        self.instrument_sensor_position_msg = False
-        self.interactive_frame = interactive_frame
-        self.is_single_measurement = interactive_frame in {"ambient", "luminance"} or (
-            isinstance(interactive_frame, wx.TopLevelWindow)
-            and interactive_frame.Name == "VisualWhitepointEditor"
+        self._init_run_state(
+            interactive_frame=interactive_frame,
+            pauseable=pauseable,
+            cancelable=cancelable,
+            show_remaining_time=show_remaining_time,
+            fancy=fancy,
+            resume=resume,
         )
-        self.is_ambient_measurement = interactive_frame == "ambient"
-        self.lastcmdname = None
-        self.pauseable = pauseable
-        self.paused = False
-        self.cancelable = cancelable
-        self.show_remaining_time = show_remaining_time
-        self.fancy = fancy
-        self.resume = resume
-        self.subprocess_abort = False
-        self.abort_requested = False
-        self.starttime = time()
-        self.thread_abort = False
         if (
             fancy
             and (
@@ -18763,7 +18974,15 @@ BEGIN_DATA
         if isinstance(txt, bytes):
             txt = txt.decode()
 
-        wx.CallAfter(self.audio_visual_feedback, txt)
+        if wx.GetApp() is not None:
+            wx.CallAfter(self.audio_visual_feedback, txt)
+        else:
+            # No wx.App (e.g. running under the Qt UI): nothing to marshal
+            # onto a wx main loop, so call directly. audio_visual_feedback
+            # only touches progress_wnd via hasattr/getattr and plays sounds
+            # through the toolkit-independent Sound.safe_play(), both safe
+            # off the GUI thread.
+            self.audio_visual_feedback(txt)
         if getattr(self, "measure_cmd", None):
             # i1 Pro, Spyders: Instrument Type
             # i1D3: Product Name
@@ -18921,7 +19140,12 @@ BEGIN_DATA
                 else:
                     self.madtpg.set_progress_bar_pos(start, end)
         # Parse
-        wx.CallAfter(self.parse, txt)
+        if wx.GetApp() is not None:
+            wx.CallAfter(self.parse, txt)
+        else:
+            # No wx.App (e.g. running under the Qt UI): call directly, same
+            # as the audio_visual_feedback dispatch above.
+            self.parse(txt)
 
     @property
     def _use_patternwindow(self):

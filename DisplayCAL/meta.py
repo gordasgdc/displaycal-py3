@@ -28,8 +28,8 @@ if os.path.isfile(VERSION_FILE):
 VERSION_STRING = VERSION_STRING or "0.0.0"
 """str: The version number of DisplayCAL."""
 
-AUTHOR = "Florian Höch, Erkan Özgür Yılmaz, Patrick Zwerschke"  # noqa: RUF001
-AUTHOR_ASCII = "Florian Hoech, Erkan Ozgur Yilmaz, Patrick Zwerschke"
+AUTHOR = "Florian Höch, Erkan Özgür Yılmaz"  # noqa: RUF001
+AUTHOR_ASCII = "Florian Hoech, Erkan Ozgur Yilmaz"
 DESCRIPTION = (
     "Display calibration and profiling with a focus on accuracy and versatility"
 )
@@ -49,7 +49,6 @@ AUTHOR_EMAIL = ", ".join(
     [
         f"florian{chr(0o100)}{DOMAIN}",
         f"eoyilmaz{chr(0o100)}gmail.com",
-        f"patrick{chr(0o100)}p5k.org",
     ]
 )
 NAME = "DisplayCAL"

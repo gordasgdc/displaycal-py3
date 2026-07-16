@@ -974,6 +974,7 @@
 
 "colorimeter_correction.create.info": |-
   要创建色度仪校正文件，首先需要使用光谱仪测量所需的测试色彩，如果要创建校正矩阵而不是光谱校正，还要使用色度仪。
+
   另外可以选择“浏览...”来使用现有的测量值。
 
 "colorimeter_correction.create.success": |-
@@ -1117,7 +1118,7 @@
   从测量数据创建配置文件...
 
 "create_profile_from_edid": |-
-  从扩展显示器标识数据创建配置文件...
+  从 EDID 数据创建配置文件...
 
 "created": |-
   创建于
@@ -1534,6 +1535,7 @@
 "donation_message": |-
   如果您想支持 DisplayCAL 和 ArgyllCMS 的开发、技术帮助和可持续性，请考虑捐赠。
   没有 ArgyllCMS 的基础构建， DisplayCAL 就不会有用，所以 DisplayCAL 收到的捐赠将在两个项目之间分配。
+
   对于个人轻度的非商业用途，一次性捐赠可能合适。
   如果您正在专业地使用 DisplayCAL ，每年或每个月的捐赠将确保两个项目的可持续性。
   
@@ -2308,6 +2310,9 @@
 "is_linear": |-
   线性
 
+"lang.confirm_restart": |-
+  语言将在 DisplayCAL 下次启动时更改。是否立即重新启动 DisplayCAL?
+
 "laptop.icc": |-
   笔记本电脑 (伽玛值  2.2)
 
@@ -2346,12 +2351,14 @@
 
 "macos.bugs.cal.warning": |-
   使用 Apple CMM（色彩管理模块）的应用程序（例如 macOS 预览和 QuickLook）不支持校准黑点色相校正。
+
   使用自身色彩管理的应用程序不受影响（例如使用 Adobe ACE 的 Adobe Creative Suite、使用 littleCMS 的开源图形应用如 GIMP 或 Krita，或使用 3D LUT 进行色彩管理的应用）。
   
   你要禁用校准黑点色相校正吗？
 
 "macos.bugs.profile.warning": |-
   使用 Apple CMM（色彩管理模块）的应用程序（例如 macOS 预览和 QuickLook）不支持除“单曲线 + 矩阵（含黑点补偿）”之外的显示配置文件类型。
+
   使用自身色彩管理的应用程序不受影响（例如使用 Adobe ACE 的 Adobe Creative Suite、使用 littleCMS 的开源图形应用如 GIMP 或 Krita，或使用 3D LUT 进行色彩管理的应用）。
   
   你要将配置文件类型设为“单曲线 + 矩阵”并启用黑点补偿吗？
@@ -2430,6 +2437,7 @@
 
 "measureframe.info": |-
   移动测量窗口到所需的屏幕位置并根据需要调整大小。大约整个窗口区域将用于显示测量色块数，圆圈作为帮助放置测量设备的向导。
+
   将测量设备放在窗口上，然后单击“开始测量”。要取消并返回主窗口，关闭测量窗口。
 
 "measureframe.measurebutton": |-
@@ -2981,6 +2989,7 @@
   通过 OpenSUSE “ICC Profile Taxi” 服务与其他用户共享配置文件。
   
   请提供有意义的说明并输入下面的显示设备属性。从显示设备的菜单调节读取设置并且仅输入从默认值更改的适用于显示设备的设置。
+
   示例: 对于大多数显示设备，这些是所选预设的名称，亮度，对比度，色温或白点 RGB 增益以及伽玛值。在笔记本电脑和笔记本电脑上通常只有亮度。如果在校准显示设备时更改了附加设置，也尽可能输入它们。
 
 "profile.share.meta_missing": |-
@@ -3667,6 +3676,12 @@
 
 "udev_hotplug.unavailable": |-
   节点和热插拔设备都未检测到。
+
+"ui.use_qt": |-
+  使用 Qt 用户界面(实验性)
+
+"ui.use_qt.confirm_restart": |-
+  用户界面工具包将在 DisplayCAL 下次启动时更改。是否立即重新启动 DisplayCAL?
 
 "unassigned": |-
   未分配

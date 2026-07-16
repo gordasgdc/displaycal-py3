@@ -26,6 +26,7 @@ if sys.platform == "win32":
     os.environ.setdefault("APPDATA", os.path.join(_TEST_HOME, "AppData", "Roaming"))
     os.environ.setdefault("LOCALAPPDATA", os.path.join(_TEST_HOME, "AppData", "Local"))
 
+import faulthandler
 import glob
 import platform
 import pathlib
@@ -33,7 +34,73 @@ import shutil
 import subprocess
 import tarfile
 import time
+import webbrowser
 import zipfile
+
+# Diagnostic-only: CI hangs (see issue #7's Qt-migration test-suite work) have
+# repeatedly turned out to be real, un-mocked blocking calls (subprocesses,
+# modal dialogs, QThread signal delivery) that are invisible from the outside
+# -- a cancelled GitHub Actions job's log shows only the last test that
+# *finished*, never what the process was actually doing when it stalled.
+# Periodically dumping every thread's real Python-level stack trace turns
+# that blind spot into a two-minute wait at most. Written to its own file
+# rather than stderr: pytest's default per-test fd-level capturing would
+# otherwise trap the dump in a buffer that's only flushed when the test
+# finishes -- exactly what never happens on a hang. The workflow's
+# "Dump thread stacks" step (if: always()) prints this file even when the
+# job gets cancelled mid-test. Gated to CI only so local runs stay quiet.
+if os.environ.get("GITHUB_ACTIONS") == "true":
+    faulthandler.enable()
+    _faulthandler_dump_file = open("faulthandler_dump.log", "a", buffering=1)
+    faulthandler.dump_traceback_later(
+        90, repeat=True, file=_faulthandler_dump_file
+    )
+
+
+_pytest_exitstatus = None
+
+
+def pytest_sessionfinish(session, exitstatus):
+    # Just record the result here; see the atexit callback below for why the
+    # actual (conditional) os._exit() happens later, not in this hook.
+    global _pytest_exitstatus
+    _pytest_exitstatus = exitstatus
+
+
+if (
+    os.environ.get("GITHUB_ACTIONS") == "true"
+    and sys.platform == "darwin"
+    and sys.version_info[:2] == (3, 13)
+):
+    import atexit
+
+    def _exit_before_native_shutdown_crash():
+        """Sidestep a native, traceback-less segfault during CPython 3.13's
+        own interpreter finalization, reproduced twice in a row on macOS CI
+        only (other macOS Python versions in the same run are unaffected),
+        always *after* every test has already passed. faulthandler can't
+        catch it (it isn't a Python-level fault) and extensive investigation
+        of the audio (pyglet) and Qt/PySide6 shutdown paths found no
+        code-level cause to fix.
+
+        Registered here (near the top of this file, before any DisplayCAL
+        module -- and therefore before pyglet's own atexit-registered audio
+        driver cleanup -- gets imported) so that atexit's LIFO ordering runs
+        this *last*: every other cleanup still gets a chance to run first,
+        and only once they're done do we os._exit() with the real, already
+        fully-successful exit status -- short-circuiting the later, deeper
+        native finalization step that's actually segfaulting. A genuine
+        failure (exitstatus != 0) is left to go through the normal shutdown
+        path unchanged, so this can never hide a real test failure or
+        mid-run crash.
+        """
+        if _pytest_exitstatus == 0:
+            sys.stdout.flush()
+            sys.stderr.flush()
+            os._exit(0)
+
+    atexit.register(_exit_before_native_shutdown_crash)
+
 
 from urllib.error import URLError
 
@@ -56,6 +123,32 @@ from DisplayCAL.argyll import (
 from DisplayCAL.colormath import get_rgb_space
 from DisplayCAL.config import setcfg, writecfg
 from DisplayCAL.icc_profile import ICCProfile
+from DisplayCAL import util_os
+
+# Never let a test pop a real browser tab or hand a URL/file to the OS's
+# default-app opener. Help-menu / update-check / donate handlers across both
+# the wx and Qt UIs call ``util_os.launch_file`` (which shells out to macOS's
+# ``open``) or ``webbrowser.open`` directly, and several of those handlers
+# aren't mocked by the tests that exercise them. Patching ``util_os`` here,
+# before any other DisplayCAL module has a chance to do
+# ``from DisplayCAL.util_os import launch_file`` (which binds a separate name
+# into that module's own namespace), means every such import picks up this
+# no-op instead of the real one. Tests that assert on the call args still
+# work: their own ``monkeypatch.setattr(some_module, "launch_file", ...)``
+# overrides this for the duration of that test and reverts back to this
+# no-op afterwards, never to the real, OS-shelling-out function.
+util_os.launch_file = lambda *args, **kwargs: None
+webbrowser.open = lambda *args, **kwargs: True
+webbrowser.open_new = lambda *args, **kwargs: True
+webbrowser.open_new_tab = lambda *args, **kwargs: True
+try:
+    # Same reasoning for the Qt side: about_window.py / tooltip_window.py
+    # call QDesktopServices.openUrl() directly on link/button activation.
+    from qtpy.QtGui import QDesktopServices
+
+    QDesktopServices.openUrl = staticmethod(lambda *args, **kwargs: True)
+except ImportError:
+    pass
 
 
 @pytest.fixture(scope="module")
@@ -102,8 +195,14 @@ def data_path():
     return displaycal_parent_dir.parent / "tests" / "data"
 
 
+# Populated by _setup_argyll_session the first (and only) time it runs, and
+# re-applied to config.CFG on every setup_argyll request below -- see that
+# fixture's docstring for why.
+_ARGYLL_CFG: dict[str, str] = {}
+
+
 @pytest.fixture(scope="session")
-def setup_argyll():
+def _setup_argyll_session():
     """Setup ArgyllCMS.
 
     This will search for ArgyllCMS binaries under ``.local/bin/Argyll*/bin`` and if it
@@ -120,6 +219,8 @@ def setup_argyll():
         print(f"argyll_version_string: {argyll_version_string}")
         print(f"argyll_version: {argyll_version}")
         setcfg("argyll.version", argyll_version_string)
+        _ARGYLL_CFG["dir"] = str(argyll_path.absolute())
+        _ARGYLL_CFG["version"] = argyll_version_string
         writecfg()
         yield argyll_path
         return
@@ -141,6 +242,8 @@ def setup_argyll():
             print(f"argyll_version_string: {argyll_version_string}")
             print(f"argyll_version: {argyll_version}")
             setcfg("argyll.version", argyll_version_string)
+            _ARGYLL_CFG["dir"] = str(argyll_path.absolute())
+            _ARGYLL_CFG["version"] = argyll_version_string
             writecfg()
             break
 
@@ -241,6 +344,8 @@ def setup_argyll():
         print(f"argyll_version_string: {argyll_version_string}")
         print(f"argyll_version: {argyll_version}")
         setcfg("argyll.version", argyll_version_string)
+        _ARGYLL_CFG["dir"] = str(argyll_path.absolute())
+        _ARGYLL_CFG["version"] = argyll_version_string
         writecfg()
         os.environ["PATH"] = f"{argyll_path}{os.pathsep}{os.environ['PATH']}"
         yield argyll_path
@@ -251,6 +356,30 @@ def setup_argyll():
         print("argyll_path is invalid!")
         cleanup()
         pytest.skip("ArgyllCMS can not be setup!")
+
+
+@pytest.fixture
+def setup_argyll(_setup_argyll_session):
+    """Re-apply the session-detected ArgyllCMS config on every test.
+
+    ``_setup_argyll_session`` above only runs its (potentially expensive:
+    subprocess version probe, or a real download) detection once per test
+    session, relying on its ``setcfg("argyll.dir"/"argyll.version", ...)``
+    calls to stick around in ``config.CFG`` for the rest of the run. But
+    ``config.initcfg()`` (called by several autouse fixtures across the Qt
+    test files) resets ALL config keys back to defaults, including those
+    two -- so any test that happens to run after an intervening
+    ``initcfg()`` in the same process silently sees "no Argyll" again, even
+    though the real Argyll install is right there. This surfaced as
+    ``test_get_technology_strings_with_argyll_returns_expected_data``
+    failing under sequential (no ``-n auto``) CI runs, where far more tests
+    share one process. Re-apply the cached values on every request instead
+    of trusting they survived.
+    """
+    if _ARGYLL_CFG:
+        setcfg("argyll.dir", _ARGYLL_CFG["dir"])
+        setcfg("argyll.version", _ARGYLL_CFG["version"])
+    yield _setup_argyll_session
 
 
 @pytest.fixture(scope="function")

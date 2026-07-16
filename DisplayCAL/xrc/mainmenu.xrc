@@ -86,6 +86,11 @@
           <checkable>1</checkable>
         </object>
         <object class="separator"/>
+        <object class="wxMenuItem" name="ui.use_qt">
+          <label>ui.use_qt</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="separator"/>
         <object class="wxMenuItem" name="extra_args">
           <label>extra_args</label>
         </object>

@@ -5,7 +5,7 @@ import yaml
 
 import pytest
 
-from DisplayCAL.lazydict import LazyDictYAMLLite
+from DisplayCAL.lazydict import LazyDictYAMLLite, LazyDictYAMLUltraLite
 
 
 @pytest.mark.parametrize(
@@ -51,6 +51,29 @@ def test_yaml_lite_to_yaml_conformance(doc, do_assert):
     # print("yaml.YAML         ", b)
     if do_assert:
         assert isinstance(a, dict) and isinstance(b, dict) and a == b
+
+
+def test_yaml_ultra_lite_preserves_blank_lines_in_block_scalar():
+    """A blank line inside a "|-" block scalar is a paragraph break.
+
+    ``lang.init()`` loads every ``lang/*.yaml`` file via
+    ``LazyDictYAMLUltraLite``, and those files spell a paragraph break as a
+    plain blank line (no 2-space indent) inside a ``|-`` value, e.g.::
+
+        "donation_message": |-
+          Paragraph one.
+
+          Paragraph two.
+
+    A blank line is exactly 1 character ("\\n"), so slicing it with
+    ``line[2:]`` (meant to strip the 2-space indent off real content lines)
+    silently returns "" instead of "\\n", collapsing the blank line and
+    running both paragraphs together.
+    """
+    doc = '"TEST": |-\n  Paragraph one.\n\n  Paragraph two.\n'
+    a = LazyDictYAMLUltraLite(debug=True)
+    a.parse(StringIO(doc))
+    assert a["TEST"] == "Paragraph one.\n\nParagraph two."
 
 
 # def test_lazzy_dict():

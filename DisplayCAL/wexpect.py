@@ -71,6 +71,7 @@ import errno
 import os
 import re
 import select
+import selectors
 import signal
 import string
 import struct
@@ -1739,6 +1740,17 @@ class SpawnUnix:
         If select.select raises a select.error exception and errno is an EINTR
         error then it is ignored. Mainly this is used to ignore sigwinch
         (terminal resize).
+
+        Every call site in this module only ever waits on read-readiness
+        (``owtd``/``ewtd`` are always empty), so the read side is done via
+        ``selectors.DefaultSelector`` rather than ``select.select()``
+        directly: ``select.select()`` is capped at ``FD_SETSIZE`` (1024 on
+        POSIX), which a single long-lived process can exceed after enough
+        accumulated subprocess/file-handle churn, raising ``ValueError:
+        filedescriptor out of range in select()``. ``selectors`` picks
+        poll()/epoll()/kqueue() automatically, none of which share that
+        limit. Fall back to raw ``select.select()`` for the (currently
+        unused) write/exceptional-fd case rather than silently dropping it.
         """
         # if select() is interrupted by a signal (errno==EINTR) then
         # we loop back and enter the select() again.
@@ -1747,7 +1759,16 @@ class SpawnUnix:
             end_time = time.time() + timeout
         while True:
             try:
-                return select.select(iwtd, owtd, ewtd, timeout)
+                if owtd or ewtd:
+                    return select.select(iwtd, owtd, ewtd, timeout)
+                sel = selectors.DefaultSelector()
+                try:
+                    for fd in iwtd:
+                        sel.register(fd, selectors.EVENT_READ)
+                    ready = sel.select(timeout)
+                finally:
+                    sel.close()
+                return ([key.fileobj for key, _mask in ready], [], [])
             except OSError as e:
                 if e[0] == errno.EINTR:
                     # if we loop back we have to subtract

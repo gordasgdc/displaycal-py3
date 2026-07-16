@@ -976,6 +976,7 @@
 
 "colorimeter_correction.create.info": |-
   如需建立色度計修正，你必須先使用光譜儀量度必需的顏色，或假設你需要同樣地用色度計建立一個修正矩陣而並光譜修正。
+
   另外你還可以按下 “瀏覽...” 來選擇已有的測量值。.
 
 "colorimeter_correction.create.success": |-
@@ -1119,7 +1120,7 @@
   使用特性描述數據來建立描述檔...
 
 "create_profile_from_edid": |-
-  使用延伸示器辨別數據來建立描述檔...
+  使用 EDID 數據建立描述檔...
 
 "created": |-
   建立於
@@ -2317,6 +2318,9 @@
 "is_linear": |-
   線性的
 
+"lang.confirm_restart": |-
+  語言將在 DisplayCAL 下次啟動時更改。是否立即重新啟動 DisplayCAL?
+
 "laptop.icc": |-
   手提電腦 (伽瑪2.2)
 
@@ -2355,12 +2359,14 @@
 
 "macos.bugs.cal.warning": |-
   使用 Apple CMM（色彩管理模組）的應用程式（例如 macOS 預覽和 QuickLook）不支援校準黑點色相修正。
+
   使用自身色彩管理的應用程式不受影響（例如使用 Adobe ACE 的 Adobe Creative Suite、使用 littleCMS 的開源圖形應用如 GIMP 或 Krita，或使用 3D LUT 進行色彩管理的應用）。
   
   你要停用校準黑點色相修正嗎？
 
 "macos.bugs.profile.warning": |-
   使用 Apple CMM（色彩管理模組）的應用程式（例如 macOS 預覽和 QuickLook）不支援「單曲線 + 矩陣（含黑點補償）」以外的顯示描述檔類型。
+
   使用自身色彩管理的應用程式不受影響（例如使用 Adobe ACE 的 Adobe Creative Suite、使用 littleCMS 的開源圖形應用如 GIMP 或 Krita，或使用 3D LUT 進行色彩管理的應用）。
   
   你要將描述檔類型設為「單曲線 + 矩陣」並啟用黑點補償嗎？
@@ -2441,6 +2447,7 @@
 
 "measureframe.info": |-
   請將測量視窗移到屏幕上你所想的位置，以及在有需要時改變其大小。大概整個視窗範圍都會用來顯示測試的色板，視窗上的圓圈是用來輔助你正確放置測量儀器的導引標示。
+
   請將測量儀器放置在該視窗上然後按 “開始測量”。你可以關閉測量視窗以取消並返回主視窗。
 
 "measureframe.measurebutton": |-
@@ -2992,6 +2999,7 @@
   通過 OpenSUSE “ICC Profile Taxi” 服務與其他用戶共享配置文件。
   
   請提供有意義的說明並輸入下面的顯示設備屬性。從顯示設備的菜單調節讀取設置並且僅輸入從默認值更改的適用於顯示設備的設置。
+
   示例: 對於大多數顯示設備，這些是所選預設的名稱，亮度，對比度，色溫或白點 RGB 增益以及伽瑪值。在筆記本電腦和筆記本電腦上通常只有亮度。如果在校準顯示設備時更改了附加設置，也儘可能輸入它們。
 
 "profile.share.meta_missing": |-
@@ -3678,6 +3686,12 @@
 
 "udev_hotplug.unavailable": |-
   無論是 udev 或熱插拔裝置都偵測不到。
+
+"ui.use_qt": |-
+  使用 Qt 使用者介面(實驗性)
+
+"ui.use_qt.confirm_restart": |-
+  使用者介面工具包將在 DisplayCAL 下次啟動時變更。是否要立即重新啟動 DisplayCAL?
 
 "unassigned": |-
   未指定

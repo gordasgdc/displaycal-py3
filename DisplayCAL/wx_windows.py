@@ -55,6 +55,7 @@ from DisplayCAL.debughelpers import (
     UnloggedWarning,
     getevtobjname,
     getevttype,
+    print_safe,
 )
 from DisplayCAL.icc_profile import (
     ICCProfile,
@@ -2888,7 +2889,7 @@ class BaseInteractiveDialog(wx.Dialog):
         if not getattr(event, "IsShown", getattr(event, "GetShow", bool))():
             return
         if self._log:
-            print(box(self._msg))
+            print_safe(box(self._msg))
         app = wx.GetApp()
         # Make sure taskbar button flashes under Windows
         topwindow = app.GetTopWindow()
@@ -7685,7 +7686,13 @@ class ProgressDialog(wx.Dialog):
         bitmaps = ProgressDialog.bitmaps[progress_type] = []
         if progress_type == 0:
             # Animation for processing
-            for pth in get_data_path("theme/shutter_anim", r"\.png$") or []:
+            # Only the first 9 frames are used here (paired with the 8 jet
+            # frames below for exactly 17), regardless of how many
+            # shutter_anim frames actually exist, so that adding frames for
+            # the "measuring" animation (which uses its own first-5 subset)
+            # can't silently break this one's frame-count sanity check again
+            # (see #45 and the 10th shutter frame it added).
+            for pth in (get_data_path("theme/shutter_anim", r"\.png$") or [])[:9]:
                 im = wx.Image(pth)
                 if im.IsOk():
                     bitmaps.append(im)

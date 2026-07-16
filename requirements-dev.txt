@@ -13,6 +13,7 @@ py2exe; sys_platform == "win32"
 pytest
 pytest-cov
 pytest-github-actions-annotate-failures
+pytest-timeout
 pytest-xdist
 ruff
 snowballstemmer

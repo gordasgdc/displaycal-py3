@@ -45,15 +45,16 @@ from DisplayCAL.config import (
     RES_FILES,
     RUNTYPE,
     get_data_path,
+    get_ui_toolkit,
     getcfg,
     initcfg,
 )
 from DisplayCAL.debughelpers import ResourceError, handle_error
 from DisplayCAL.log import LOG
-from DisplayCAL.meta import VERSION_STRING
 from DisplayCAL.meta import (
     NAME as APPNAME,
 )
+from DisplayCAL.meta import VERSION_STRING
 from DisplayCAL.multiprocess import mp
 from DisplayCAL.options import VERBOSE
 from DisplayCAL.util_os import FileLock, LockingError, UnlockingError
@@ -64,7 +65,7 @@ elif sys.platform == "darwin":
     from platform import mac_ver
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
     from types import TracebackType
     if sys.version_info >= (3, 11):
         from typing import Self
@@ -214,6 +215,32 @@ def initialize_fault_handler() -> None:
             print(exception)
         else:
             print("Faulthandler", getattr(faulthandler, "__version__", ""))
+
+
+def initialize_qt_module() -> None:
+    """Initialize Qt module (qtpy + PySide6)."""
+    try:
+        # Import DisplayCAL.ui first: it pins QT_API=pyside6 before qtpy is
+        # imported anywhere, guaranteeing a consistent binding process-wide.
+        import DisplayCAL.ui  # noqa: F401, I001
+        import qtpy
+        import qtpy.QtCore
+    except ImportError as e:
+        missing = str(e)
+        msg = f"Failed to import Qt bindings: {missing}\n"
+        if "qtpy" in missing:
+            msg += "Install qtpy:   pip install qtpy\n"
+        elif "PySide6" in missing or "pyside6" in missing:
+            msg += "Install PySide6:  pip install PySide6\n"
+        elif ".so" in missing or ".dylib" in missing or ".dll" in missing:
+            msg += (
+                "A Qt shared library could not be loaded. "
+                "Try reinstalling PySide6:\n"
+                "  pip install --force-reinstall PySide6\n"
+            )
+        sys.exit(msg)
+
+    print(f"Qt {qtpy.QtCore.__version__} via {qtpy.API_NAME}")
 
 
 def initialize_wx_module() -> None:
@@ -834,13 +861,67 @@ def create_main_data_dir() -> None:
             )
 
 
+def _get_qt_main(module: str) -> Callable[[], int] | None:
+    """Return the Qt ``main`` callable for ``module``, or ``None``.
+
+    Maps a module name to its Qt port under :mod:`DisplayCAL.ui`. Modules that
+    have not been ported yet return ``None`` so the caller falls back to wx.
+
+    Args:
+        module (str): Module name.
+
+    Returns:
+        Callable | None: The Qt entry point, or ``None`` if not yet ported.
+    """
+    if not module:
+        # The main application window: splash screen (Stage 6) + the Stage 3+
+        # shell it hands off to once display/instrument enumeration finishes.
+        from DisplayCAL.ui.startup import main
+
+        return main
+    if module == "VRML-to-X3D-converter":
+        from DisplayCAL.ui.tools.vrml_to_x3d import main
+
+        return main
+    if module == "3DLUT-maker":
+        from DisplayCAL.ui.tools.lut3d import main
+
+        return main
+    if module == "profile-info":
+        from DisplayCAL.ui.tools.profile_info import main
+
+        return main
+    if module == "curve-viewer":
+        from DisplayCAL.ui.tools.curve_viewer import main
+
+        return main
+    if module == "synthprofile":
+        from DisplayCAL.ui.tools.synth_profile import main
+
+        return main
+    if module == "testchart-editor":
+        from DisplayCAL.ui.tools.testchart_editor import main
+
+        return main
+    return None
+
+
 def run_app(module: str) -> None:
     """Run the application.
 
     Args:
         module (str): Module name.
     """
-    # Initialize & run
+    # Initialize & run.
+    # During the wx-to-Qt migration (DisplayCAL 4.0) the Qt path is opt-in via
+    # DISPLAYCAL_UI=qt / --qt and only used for modules already ported to Qt.
+    if get_ui_toolkit() == "qt":
+        initialize_qt_module()
+        qt_main = _get_qt_main(module)
+        if qt_main is not None:
+            qt_main()
+            return
+
     if module == "3DLUT-maker":
         from DisplayCAL.wx_lut_3d_frame import main
     elif module == "curve-viewer":

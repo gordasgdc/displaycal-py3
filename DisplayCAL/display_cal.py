@@ -42,7 +42,7 @@ import zipfile
 from decimal import Decimal
 from hashlib import md5
 from io import BytesIO, StringIO
-from time import localtime, sleep, strftime, strptime, struct_time
+from time import localtime, sleep, strftime
 from typing import TYPE_CHECKING, Callable
 from zlib import crc32
 
@@ -57,12 +57,16 @@ from wx.lib.scrolledpanel import ScrolledPanel
 # Local Imports
 from DisplayCAL import (
     audio,
-    ccmx,
     colord,
+    colorimeter_correction,
     colormath,
     config,
     floatspin,
+    main_settings,
     madvr,
+    measurement_report as measurement_report_utils,
+    preflight_checks,
+    profile_install,
     report,
     util_x,
     xh_bitmapctrls,
@@ -133,6 +137,7 @@ from DisplayCAL.config import (
     initcfg,
     is_ccxx_testchart,
     is_profile,
+    restart_application,
     setcfg,
     setcfg_cond,
     writecfg,
@@ -989,129 +994,27 @@ def colorimeter_correction_web_check_choose(
     dlg_list_ctrl.SetColumnWidth(int(col), int(135 * scale))  # CCMX self check avg
     dlg_list_ctrl.SetColumnWidth(int(col), int(135 * scale))  # CCMX self check max
     dlg_list_ctrl.SetColumnWidth(int(col), int(150 * scale))  # Date
-    types = {
-        "CCSS": lang.getstr("spectral").replace(":", ""),
-        "CCMX": lang.getstr("matrix").replace(":", ""),
-    }
     cgats = {}
-    rows_data = []
-    for item in json:
-        # CGATS is byte string based, make sure to encode Unicode back to UTF-8
-        # for parsing
-        # CGATS accepts ``bytes`` data only
-        cgats_bytes = item.get("cgats", "").encode("utf-8")
-        try:
-            ccxx = CGATS(cgats_bytes)
-        except CGATSError as exception:
-            print(exception)
-            cgats_bytes = b""
-            ccxx = CGATS()
-        ccxx = ccxx.get(0, ccxx)
-        ccxx_type = item.get("type", "").upper()
-        manufacturer = colord.quirk_manufacturer(
-            item.get("manufacturer") or lang.getstr("unknown")
-        )
-        display = item.get("display") or lang.getstr("unknown")
-        if config.is_virtual_display(display):
-            display = manufacturer
-        if not display.lower().startswith(manufacturer.lower()):
-            display = f"{manufacturer} {display}"
-        spectral = {}
-        for key in ("bands", "start_nm", "end_nm"):
-            try:
-                v = float(item.get(f"spectral_{key}", 0))
-            except (TypeError, ValueError):
-                pass
-            else:
-                if v:
-                    spectral[key] = v
-        if spectral:
-            spectral_res = "{:.1f}nm, {:.0f}-{:.0f}nm".format(
-                (spectral["end_nm"] - spectral["start_nm"]) / (spectral["bands"] - 1),
-                spectral["start_nm"],
-                spectral["end_nm"],
-            )
-        else:
-            spectral_res = lang.getstr("unknown")
-        created = item.get("created")
-        if created:
-            try:
-                created = strptime(created)
-            except ValueError:
-                datetmp = re.search(
-                    r"\w+ (\w{3}) (\d{2}) (\d{2}(?::[0-5][0-9]){2}) (\d{4})", created
-                )
-                if datetmp:
-                    datetmp = "{}-{}-{} {}".format(
-                        datetmp.groups()[3],
-                        {
-                            "Jan": "01",
-                            "Feb": "02",
-                            "Mar": "03",
-                            "Apr": "04",
-                            "May": "05",
-                            "Jun": "06",
-                            "Jul": "07",
-                            "Aug": "08",
-                            "Sep": "09",
-                            "Oct": "10",
-                            "Nov": "11",
-                            "Dec": "12",
-                        }.get(datetmp.groups()[0]),
-                        datetmp.groups()[1],
-                        datetmp.groups()[2],
-                    )
-                    with contextlib.suppress(ValueError):
-                        created = strptime(datetmp, "%Y-%m-%d %H:%M:%S")
-            if isinstance(created, struct_time):
-                created = strftime("%Y-%m-%d %H:%M:%S", created)
-        fit_method = ccxx.queryv1("FIT_METHOD")
-        if fit_method and fit_method != b"xy":
-            fit_method = lang.getstr("perceptual")
-        elif isinstance(fit_method, bytes):
-            # queryv1() returns bytes; decode so it's consistent with the
-            # localized str the "perceptual" branch above produces.
-            fit_method = fit_method.decode("utf-8")
-        reference_observer = ccxx.queryv1("REFERENCE_OBSERVER")
-        if isinstance(reference_observer, bytes):
-            # queryv1() returns bytes, but observers_ab is keyed by str, so
-            # without decoding this lookup never matches and the "observer"
-            # column always fell back to "unknown"/"not_applicable".
-            reference_observer = reference_observer.decode("utf-8")
-        rows_data.append({
-            "cgats": cgats_bytes,
+    rows_data = [
+        {
+            "cgats": row["cgats"],
             "columns": [
-                types.get(ccxx_type, ccxx_type),
-                get_canonical_instrument_name(
-                    item.get("description") or lang.getstr("unknown")
-                ),
-                display,
-                get_canonical_instrument_name(
-                    item.get("reference") or lang.getstr("unknown")
-                ),
-                spectral_res,
-                parent.observers_ab.get(
-                    reference_observer,
-                    lang.getstr("unknown" if ccxx_type == "CCMX" else "not_applicable"),
-                ),
-                (
-                    fit_method or lang.getstr("unknown")
-                    if ccxx_type == "CCMX"
-                    else lang.getstr("not_applicable")
-                ),
-                (
-                    str(ccxx.queryv1("FIT_AVG_DE00") or lang.getstr("unknown"))
-                    if ccxx_type == "CCMX"
-                    else lang.getstr("not_applicable")
-                ),
-                (
-                    str(ccxx.queryv1("FIT_MAX_DE00") or lang.getstr("unknown"))
-                    if ccxx_type == "CCMX"
-                    else lang.getstr("not_applicable")
-                ),
-                created or lang.getstr("unknown"),
+                row["type"],
+                row["description"],
+                row["display"],
+                row["reference"],
+                row["spectral_resolution"],
+                row["observer"],
+                row["fit_method"],
+                row["fit_avg_de00"],
+                row["fit_max_de00"],
+                row["created"],
             ],
-        })
+        }
+        for row in colorimeter_correction.parse_web_check_entries(
+            json, parent.observers_ab
+        )
+    ]
 
     sort_state = [None, True]  # [column_index, ascending]
 
@@ -1272,31 +1175,7 @@ def get_cgats_measurement_mode(cgats: bytes, instrument: str) -> str:
     Returns:
         str: The measurement mode.
     """
-    base_id = cgats.queryv1("DISPLAY_TYPE_BASE_ID")
-    refresh = cgats.queryv1("DISPLAY_TYPE_REFRESH")
-    mode = None
-    if base_id:
-        # IMPORTANT: Make changes aswell in the following locations:
-        # - DisplayCAL.MainFrame.create_colorimeter_correction_handler
-        # - DisplayCAL.MainFrame.get_ccxx_measurement_modes
-        # - DisplayCAL.MainFrame.set_ccxx_measurement_mode
-        # - worker.Worker.check_add_display_type_base_id
-        # - worker.Worker.instrument_can_use_ccxx
-        if instrument in ("ColorHug", "ColorHug2"):
-            mode = {1: "F", 2: "R"}.get(base_id)
-        elif instrument == "ColorMunki Smile":
-            mode = {1: "f"}.get(base_id)
-        elif instrument == "Colorimtre HCFR":
-            mode = {1: "R"}.get(base_id)
-        elif instrument == "K-10":
-            mode = {1: "F"}.get(base_id)
-        else:
-            mode = {1: "l", 2: "c", 3: "g"}.get(base_id)
-    elif refresh == b"NO":
-        mode = "l"
-    elif refresh == b"YES":
-        mode = "c"
-    return mode
+    return colorimeter_correction.get_cgats_measurement_mode(cgats, instrument)
 
 
 def get_cgats_path(cgats: bytes) -> str:
@@ -1308,14 +1187,7 @@ def get_cgats_path(cgats: bytes) -> str:
     Returns:
         str: The path to save the CGATS file.
     """
-    descriptor = re.search(rb'\nDESCRIPTOR\s+"(.+?)"\n', cgats)
-    if descriptor:
-        descriptor = descriptor.groups()[0]
-    descriptor = descriptor.decode("utf-8")
-    description = descriptor or lang.getstr("unnamed")
-    name = make_argyll_compatible_path(description, is_name=True)[:255]
-    extension = cgats.split()[0].lower().decode("utf-8")
-    return os.path.join(config.get_argyll_data_dir(), f"{name}.{extension}")
+    return colorimeter_correction.get_cgats_path(cgats)
 
 
 def get_header(
@@ -1378,13 +1250,7 @@ def get_profile_load_on_login_label(os_cal: bool) -> str:
     Returns:
         str: The label for the profile load on login checkbox.
     """
-    label = lang.getstr("profile.load_on_login")
-    if sys.platform == "win32" and not os_cal:
-        lstr = lang.getstr("calibration.preserve")
-        if lang.getcode() != "de":
-            lstr = lstr[0].lower() + lstr[1:]
-        label += " && " + lstr
-    return label
+    return profile_install.get_profile_load_on_login_label(os_cal)
 
 
 def upload_colorimeter_correction(
@@ -1404,14 +1270,11 @@ def upload_colorimeter_correction(
         f"colorimetercorrections.{DOMAIN}",
         "GET",
         path,
-        # Remove CREATED date for calculating hash
         {
             "get": True,
-            "hash": md5(  # noqa: S324
-                re.sub(
-                    rb'\nCREATED\s+".+?"\n', rb"\n\n", bytes(params["cgats"])
-                ).strip()
-            ).hexdigest(),
+            "hash": colorimeter_correction.compute_upload_dedup_hash(
+                bytes(params["cgats"])
+            ),
         },
         silent=True,
     )
@@ -1970,6 +1833,7 @@ class GamapFrame(BaseFrame):
             ):
                 self.gamap_out_viewcond_ctrl.SetStringSelection(self.viewconds_ab[cur])
                 return
+        if v != cur:
             setcfg("gamap_out_viewcond", v)
             if self.Parent and hasattr(self.Parent, "profile_settings_changed"):
                 self.Parent.profile_settings_changed()
@@ -3223,6 +3087,10 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self.Bind(
             wx.EVT_MENU, self.enable_dry_run_handler, self.menuitem_enable_dry_run
         )
+        self.menuitem_use_qt_ui = options_advanced.FindItemById(
+            options_advanced.FindItem("ui.use_qt")
+        )
+        self.Bind(wx.EVT_MENU, self.use_qt_ui_handler, self.menuitem_use_qt_ui)
         self.menuitem_startup_sound = options.FindItemById(
             options.FindItem("startup_sound.enable")
         )
@@ -3618,6 +3486,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self.menuitem_enable_3dlut_tab.Check(bool(getcfg("3dlut.tab.enable")))
         self.menuitem_enable_argyll_debug.Check(bool(getcfg("argyll.debug")))
         self.menuitem_enable_dry_run.Check(bool(getcfg("dry_run")))
+        self.menuitem_use_qt_ui.Check(getcfg("ui.toolkit") == "qt")
         self.menuitem_startup_sound.Check(bool(getcfg("startup_sound.enable")))
         if self.menuitem_use_simple_splash:
             self.menuitem_use_simple_splash.Check(bool(getcfg("splash.simple")))
@@ -4745,220 +4614,14 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                   modes to their corresponding indices in the
                   `measurement_modes` list.
         """
-        measurement_mode = getcfg(cfgname)
-        # if self.get_instrument_type() == "spect":
-        # measurement_mode = strtr(measurement_mode, {"c": "", "l": ""})
-        if instrument_name != "DTP92":
-            measurement_modes = {
-                instrument_type: [
-                    lang.getstr("measurement_mode.refresh"),
-                    lang.getstr("measurement_mode.lcd"),
-                ]
-            }
-            measurement_modes_ab = {instrument_type: ["c", "l"]}
-        else:
-            measurement_modes = {
-                instrument_type: [lang.getstr("measurement_mode.refresh")]
-            }
-            measurement_modes_ab = {instrument_type: ["c"]}
-        instrument_features = self.worker.get_instrument_features(instrument_name)
-        if (
-            instrument_name in ("Spyder4", "Spyder5")
-            and self.worker.spyder4_cal_exists()
-        ):
-            # Spyder4 Argyll CMS >= 1.3.6
-            # Spyder5 Argyll CMS >= 1.7.0
-            # See http://www.argyllcms.com/doc/instruments.html#spyd4
-            # for description of supported modes
-            measurement_modes[instrument_type].extend(
-                [
-                    lang.getstr("measurement_mode.lcd.ccfl"),
-                    lang.getstr("measurement_mode.lcd.wide_gamut.ccfl"),
-                    lang.getstr("measurement_mode.lcd.white_led"),
-                    lang.getstr("measurement_mode.lcd.wide_gamut.rgb_led"),
-                    lang.getstr("measurement_mode.lcd.ccfl.2"),
-                ]
-            )
-            if self.worker.argyll_version >= [1, 5, 0]:
-                measurement_modes_ab[instrument_type].extend(["f", "L", "e", "B", "x"])
-            else:
-                measurement_modes_ab[instrument_type].extend(["3", "4", "5", "6", "7"])
-        elif instrument_name == "SpyderX":
-            # Argyll SpyderX modes:
-            # l General [Default,CB1] (LCD/CCFL)
-            # e Standard LED (LCD/white LED)
-            # b Wide Gamut LED (LCD/RGB LED)
-            # i GB LED (LCD/GB-R Phosphor LED)
-            measurement_modes[instrument_type] = [
-                lang.getstr("measurement_mode.generic"),
-                lang.getstr("measurement_mode.lcd.white_led"),
-                lang.getstr("measurement_mode.lcd.wide_gamut.led"),
-                lang.getstr("measurement_mode.lcd.wide_gamut.gb_led"),
-            ]
-            measurement_modes_ab[instrument_type] = ["l", "e", "b", "i"]
-        elif instrument_name == "SpyderX2":
-            # Argyll SpyderX2 modes: SpyderX plus high brightness
-            measurement_modes[instrument_type] = [
-                lang.getstr("measurement_mode.generic"),
-                lang.getstr("measurement_mode.lcd.white_led"),
-                lang.getstr("measurement_mode.lcd.wide_gamut.led"),
-                lang.getstr("measurement_mode.lcd.wide_gamut.gb_led"),
-                lang.getstr("measurement_mode.lcd.high_brightness", "High brightness"),
-            ]
-            measurement_modes_ab[instrument_type] = ["l", "e", "b", "i", "h"]
-        elif instrument_name == "Spyder 2024":
-            # Argyll Spyder/SpyderPro 2024 modes: SpyderX2 plus OLED and Mini-LED
-            measurement_modes[instrument_type] = [
-                lang.getstr("measurement_mode.generic"),
-                lang.getstr("measurement_mode.lcd.white_led"),
-                lang.getstr("measurement_mode.lcd.wide_gamut.led"),
-                lang.getstr("measurement_mode.lcd.wide_gamut.gb_led"),
-                lang.getstr("measurement_mode.lcd.high_brightness", "High brightness"),
-                lang.getstr("measurement_mode.lcd.oled", "OLED"),
-                lang.getstr("measurement_mode.lcd.mini_led", "Mini-LED"),
-            ]
-            measurement_modes_ab[instrument_type] = ["l", "e", "b", "i", "h", "o", "m"]
-        elif instrument_name in ("ColorHug", "ColorHug2"):
-            # Argyll CMS 1.3.6, spectro/colorhug.c, colorhug_disptypesel
-            # Note: projector mode (-yp) is not the same as ColorMunki
-            # projector mode! (-p)
-            # ColorHug2 needs Argyll CMS 1.7
-            measurement_modes[instrument_type].extend(
-                [
-                    lang.getstr("projector"),
-                    lang.getstr("measurement_mode.lcd.white_led"),
-                    lang.getstr("measurement_mode.factory"),
-                    lang.getstr("measurement_mode.raw"),
-                    lang.getstr("auto"),
-                ]
-            )
-            measurement_modes_ab[instrument_type].extend(["p", "e", "F", "R", "auto"])
-        elif instrument_name == "DTP94" and self.worker.argyll_version >= [1, 5, 0]:
-            # Argyll CMS 1.5.x introduces new measurement mode
-            measurement_modes[instrument_type].extend(
-                [lang.getstr("measurement_mode.generic")]
-            )
-            measurement_modes_ab[instrument_type].append("g")
-        elif instrument_name == "ColorMunki Smile":
-            # Only supported in Argyll CMS 1.5.x and newer
-            measurement_modes[instrument_type] = [
-                lang.getstr("measurement_mode.lcd.ccfl"),
-                lang.getstr("measurement_mode.lcd.white_led"),
-            ]
-            measurement_modes_ab[instrument_type] = ["f", "e"]
-        elif instrument_name == "Colorimtre HCFR" and self.worker.argyll_version >= [
-            1,
-            5,
-            0,
-        ]:
-            # Argyll CMS 1.5.x introduces new measurement mode
-            measurement_modes[instrument_type].extend(
-                [lang.getstr("measurement_mode.raw")]
-            )
-            measurement_modes_ab[instrument_type].append("R")
-        elif instrument_name == "K-10" or not instrument_features:
-            # K-10 and 'unknown' instruments
-            measurement_modes[instrument_type] = []
-            measurement_modes_ab[instrument_type] = []
-            for mode, desc in self.worker.get_instrument_measurement_modes().items():
-                measurement_modes[instrument_type].append(lang.getstr(desc))
-                measurement_modes_ab[instrument_type].append(mode)
-        if (
-            instrument_name == "K-10"
-            and measurement_mode not in measurement_modes_ab[instrument_type]
-        ):
-            measurement_mode = "F"
-        if instrument_features.get("projector_mode") and self.worker.argyll_version >= [
-            1,
-            1,
-            0,
-        ]:
-            # Projector mode introduced in Argyll 1.1.0 Beta
-            measurement_modes[instrument_type].append(lang.getstr("projector"))
-            measurement_modes_ab[instrument_type].append("p")
-        if measurement_mode not in measurement_modes_ab[instrument_type]:
-            if measurement_modes_ab[instrument_type]:
-                measurement_mode = measurement_modes_ab[instrument_type][0]
-            else:
-                measurement_mode = DEFAULTS["measurement_mode"]
-        if instrument_features.get("adaptive_mode") and (
-            self.worker.argyll_version[0:3] > [1, 1, 0]
-            or (
-                self.worker.argyll_version[0:3] == [1, 1, 0]
-                and "Beta" not in self.worker.argyll_version_string
-                and "RC1" not in self.worker.argyll_version_string
-                and "RC2" not in self.worker.argyll_version_string
-            )
-        ):
-            # Adaptive mode introduced in Argyll 1.1.0 RC3
-            for key in iter(measurement_modes):
-                instrument_modes = list(measurement_modes[key])
-                for i, mode in reversed(
-                    list(zip(list(range(len(instrument_modes))), instrument_modes))
-                ):
-                    if mode == lang.getstr("default"):
-                        mode = lang.getstr("measurement_mode.adaptive")
-                    else:
-                        mode = "{} {}".format(
-                            mode,
-                            lang.getstr("measurement_mode.adaptive"),
-                        )
-                    measurement_modes[key].insert(i + 1, mode)
-                    modesig = measurement_modes_ab[key][i]
-                    measurement_modes_ab[key].insert(i + 1, (modesig or "") + "V")
-            if getcfg(f"{cfgname}.adaptive"):
-                measurement_mode += "V"
-        if instrument_features.get("highres_mode"):
-            for key in iter(measurement_modes):
-                instrument_modes = list(measurement_modes[key])
-                for i, mode in reversed(
-                    list(zip(list(range(len(instrument_modes))), instrument_modes))
-                ):
-                    if mode == lang.getstr("default"):
-                        mode = lang.getstr("measurement_mode.highres")
-                    else:
-                        mode = "{} {}".format(
-                            mode, lang.getstr("measurement_mode.highres")
-                        )
-                    measurement_modes[key].insert(i + 1, mode)
-                    modesig = measurement_modes_ab[key][i]
-                    measurement_modes_ab[key].insert(i + 1, (modesig or "") + "H")
-            if getcfg(f"{cfgname}.highres"):
-                measurement_mode += "H"
-        measurement_modes_ab = dict(
-            list(
-                zip(
-                    list(measurement_modes_ab.keys()),
-                    [
-                        dict(
-                            list(
-                                zip(
-                                    list(range(len(measurement_modes_ab[key]))),
-                                    measurement_modes_ab[key],
-                                )
-                            )
-                        )
-                        for key in measurement_modes_ab
-                    ],
-                )
-            )
-        )
-        measurement_modes_ba = dict(
-            list(
-                zip(
-                    list(measurement_modes_ab.keys()),
-                    [
-                        swap_dict_keys_values(measurement_modes_ab[key])
-                        for key in measurement_modes_ab
-                    ],
-                )
-            )
+        result = colorimeter_correction.compute_measurement_modes(
+            self.worker, instrument_name, instrument_type, cfgname
         )
         return (
-            measurement_mode,
-            measurement_modes,
-            measurement_modes_ab,
-            measurement_modes_ba,
+            result.measurement_mode,
+            result.measurement_modes,
+            result.measurement_modes_ab,
+            result.measurement_modes_ba,
         )
 
     def update_measurement_modes(self) -> None:
@@ -6008,18 +5671,12 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             profile (bool, optional): Whether to check for profile-related
                 bugs.
         """
-        if sys.platform != "darwin" or intlist(platform.mac_ver()[0].split(".")) < [
-            10,
-            8,
-        ]:
+        if not preflight_checks.macos_bugs_warning_applicable():
             # We assume these macOS bugs exist since 10.8 "Mountain Lion"
             return None
         result = None
-        if cal and (
-            getcfg("calibration.black_point_correction.auto")
-            or getcfg("calibration.black_point_correction")
-            or getcfg("calibration.black_luminance", False)
-        ):  # Warn about calibration bugs
+        if cal and preflight_checks.should_warn_calibration_bugs():
+            # Warn about calibration bugs
             dlg = ConfirmDialog(
                 self,
                 msg=lang.getstr("macos.bugs.cal.warning"),
@@ -6042,10 +5699,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 self.update_black_point_rate_ctrl()
             elif result == wx.ID_CANCEL:
                 return False
-        if not profile or not (
-            getcfg("profile.type") != "S"
-            or not getcfg("profile.black_point_compensation")
-        ):
+        if not profile or not preflight_checks.should_warn_profile_bugs():
             return None
         # Warn about profile bugs
         dlg = ConfirmDialog(
@@ -6563,6 +6217,32 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             "skip_legacy_serial_ports",
             int(self.menuitem_skip_legacy_serial_ports.IsChecked()),
         )
+
+    def use_qt_ui_handler(self, event: wx.Event) -> None:
+        """Handle the "Use Qt user interface" menu item.
+
+        Persists the chosen UI toolkit (wx and Qt can't coexist in the same
+        running process) and offers to restart the app now so it takes
+        effect immediately.
+
+        Args:
+            event (wx.Event): The event triggered by the menu item.
+        """
+        use_qt = self.menuitem_use_qt_ui.IsChecked()
+        setcfg("ui.toolkit", "qt" if use_qt else "wx")
+        writecfg()
+        dlg = ConfirmDialog(
+            self,
+            msg=lang.getstr("ui.use_qt.confirm_restart"),
+            ok=lang.getstr("yes"),
+            cancel=lang.getstr("no"),
+            bitmap=get_icon(32, "dialog-information"),
+            log=False,
+        )
+        result = dlg.ShowModal()
+        dlg.Destroy()
+        if result == wx.ID_OK:
+            restart_application()
 
     def calibrate_instrument_handler(self, event: wx.Event) -> None:
         """Handle the calibrate instrument menu item.
@@ -8282,13 +7962,8 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             bool: True if the file does not exist or the user confirms to
                 overwrite, False if the user cancels the operation.
         """
-        if not filename:
-            filename = getcfg("profile.name.expanded") + ext
-            dst_file = os.path.join(
-                getcfg("profile.save_path"), getcfg("profile.name.expanded"), filename
-            )
-        else:
-            dst_file = os.path.join(getcfg("profile.save_path"), filename)
+        dst_file = preflight_checks.resolve_overwrite_path(ext, filename)
+        filename = os.path.basename(dst_file)
         if os.path.exists(dst_file):
             dlg = ConfirmDialog(
                 self,
@@ -9109,7 +8784,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         if isinstance(result, Exception) or not result:
             return
         try:
-            profile = ICCProfile(profile_path)
+            profile_install.load_installable_profile(profile_path)
         except (OSError, ICCProfileInvalidError):
             InfoDialog(
                 self,
@@ -9118,19 +8793,10 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 bitmap=get_icon(32, "dialog-error"),
             )
             return
-
-        if profile.profileClass != b"mntr" or profile.colorSpace != b"RGB":
+        except profile_install.ProfileUnsupportedError as exception:
             InfoDialog(
                 self,
-                msg=lang.getstr(
-                    "profile.unsupported",
-                    (
-                        profile.profileClass.decode("utf-8"),
-                        profile.colorSpace.decode("utf-8"),
-                    ),
-                )
-                + "\n"
-                + profile_path,
+                msg=str(exception) + "\n" + profile_path,
                 ok=lang.getstr("ok"),
                 bitmap=get_icon(32, "dialog-error"),
             )
@@ -9911,17 +9577,12 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
 
         # let the user choose a location for the result
         report_type = "Self Check" if self_check_report else "Measurement"
-        default_file = "{} Report {} - {} - {}".format(
+        default_file = measurement_report_utils.default_report_filename(
             report_type,
             VERSION_STRING,
-            re.sub(
-                r"[\\/:;*?\"<>|]+",
-                "_",
-                self.display_ctrl.GetStringSelection().replace(
-                    f" {lang.getstr('display.primary')}", ""
-                ),
+            self.display_ctrl.GetStringSelection().replace(
+                f" {lang.getstr('display.primary')}", ""
             ),
-            strftime("%Y-%m-%d %H-%M.html"),
         )
         if not path:
             default_dir = get_verified_path(
@@ -10315,28 +9976,12 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             self.worker.add_measurement_features(
                 args, True, allow_video_levels=True, quantize=True
             )
-            quantize_arg = get_arg("-Z", args)
-            if quantize_arg:
-                try:
-                    if quantize_arg[1] == "-Z":
-                        # Next arg is quantization bit depth
-                        qbits = int(args[quantize_arg[0] + 1])
-                    else:
-                        # Quantization bit depth is part of arg string
-                        qbits = int(quantize_arg[1][2:])
-                except (IndexError, TypeError, ValueError):
-                    pass
-            elif "-E" in args:
-                qbits = 8  # ArgyllCMS default for video encoding (see dispread doc)
+            qbits = measurement_report_utils.resolve_quantization_bits(args)
         if qbits:
             print(f"Quantizing reference device values to {qbits:.0f} bits")
             ti3_ref.quantize_device_values(qbits)
             if gray:
-                qmax = 2**qbits - 1.0
-                gray = [
-                    [round(round(v / 100.0 * qmax) / qmax * 100.0, 4) for v in RGB]
-                    for RGB in gray
-                ]
+                gray = measurement_report_utils.quantize_gray(gray, qbits)
 
         # Keep around ref TI3 for diagnostic purposes
         ti3_ref.write(f"{os.path.splitext(ti3_path)[0]}_ref.ti3")
@@ -10629,14 +10274,11 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         if not sim_profile and use_sim and use_sim_as_output:
             sim_profile = profile
 
-        if (
-            getcfg("measurement_report.trc_gamma") != 2.4
-            or getcfg("measurement_report.trc_gamma_type") != "B"
-            or getcfg("measurement_report.trc_output_offset")
-        ):
-            trc = ""
-        else:
-            trc = "BT.1886"
+        trc = measurement_report_utils.report_trc_label(
+            getcfg("measurement_report.trc_gamma"),
+            getcfg("measurement_report.trc_gamma_type"),
+            getcfg("measurement_report.trc_output_offset"),
+        )
 
         if self_check_report:
             display = oprof.getDeviceModelDescription() or "N/A"
@@ -11934,55 +11576,31 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         if config.is_uncalibratable_display():
             return False
         cal = getcfg("calibration.file", False)
-        options_dispcal = None
-        if cal:
-            filename, ext = os.path.splitext(cal)
-            if ext.lower() in (".icc", ".icm"):
-                self.worker.options_dispcal = []
-                try:
-                    profile = ICCProfile(cal)
-                except (OSError, ICCProfileInvalidError):
-                    InfoDialog(
-                        self,
-                        msg=lang.getstr("profile.invalid") + "\n" + cal,
-                        ok=lang.getstr("ok"),
-                        bitmap=get_icon(32, "dialog-error"),
-                    )
-                    self.start_timers()
-                    return wx.ID_CANCEL
-                else:
-                    # get dispcal options if present
-                    options_dispcal = [
-                        f"-{arg}" for arg in get_options_from_profile(profile)[0]
-                    ]
-            cal = f"{filename}.cal" if os.path.isfile(filename + ".cal") else None
-        if self.worker.argyll_version < [1, 1, 0] or not self.worker.has_lut_access():
-            # If Argyll < 1.1, we cannot save the current VideoLUT to use it.
-            # For web, there is no point in using the current VideoLUT as it
-            # may not be from the display we render on (and we cannot save it
-            # to begin with as there is no VideoLUT access).
-            # So an existing .cal file or no calibration are the only options.
-            can_use_current_cal = False
-        else:
-            can_use_current_cal = True
-        if cal:
-            msgstr = "dialog.cal_info"
-            icon = "information"
-        elif can_use_current_cal:
-            msgstr = "dialog.current_cal_warning"
-            icon = "warning"
-        else:
-            msgstr = "dialog.linear_cal_info"
-            icon = "information"
+        if cal and os.path.splitext(cal)[1].lower() in (".icc", ".icm"):
+            self.worker.options_dispcal = []
+        try:
+            info = preflight_checks.resolve_cal_choice_info(self.worker)
+        except preflight_checks.CalChoiceProfileInvalidError:
+            InfoDialog(
+                self,
+                msg=lang.getstr("profile.invalid") + "\n" + cal,
+                ok=lang.getstr("ok"),
+                bitmap=get_icon(32, "dialog-error"),
+            )
+            self.start_timers()
+            return wx.ID_CANCEL
         dlg = ConfirmDialog(
             self,
-            msg=lang.getstr(msgstr, os.path.basename(cal) if cal else None),
+            msg=lang.getstr(
+                info.msg_key,
+                os.path.basename(info.cal_path) if info.cal_path else None,
+            ),
             ok=lang.getstr("continue"),
             cancel=lang.getstr("cancel"),
-            bitmap=get_icon(32, f"dialog-{icon}"),
+            bitmap=get_icon(32, f"dialog-{info.icon}"),
         )
         border = 12
-        if can_use_current_cal or cal:
+        if info.show_reset_checkbox:
             dlg.reset_cal_ctrl = wx.CheckBox(
                 dlg, -1, lang.getstr("calibration.use_linear_instead")
             )
@@ -11999,31 +11617,25 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             if not embed_cal:
                 dlg.reset_cal_ctrl.SetValue(True)
 
-        if can_use_current_cal or cal:
+        if info.show_reset_checkbox:
             dlg.embed_cal_ctrl.Bind(wx.EVT_CHECKBOX, embed_cal_ctrl_handler)
-        dlg.embed_cal_ctrl.SetValue(bool(can_use_current_cal or cal))
+        dlg.embed_cal_ctrl.SetValue(bool(info.show_reset_checkbox))
         dlg.sizer3.Add(dlg.embed_cal_ctrl, flag=wx.TOP | wx.ALIGN_LEFT, border=border)
         dlg.sizer0.SetSizeHints(dlg)
         dlg.sizer0.Layout()
         result = wx.ID_OK if silent else dlg.ShowModal()
-        if can_use_current_cal or cal:
-            reset_cal = dlg.reset_cal_ctrl.GetValue()
+        reset_cal = dlg.reset_cal_ctrl.GetValue() if info.show_reset_checkbox else False
         embed_cal = dlg.embed_cal_ctrl.GetValue()
         dlg.Destroy()
         if result == wx.ID_CANCEL:
             self.start_timers()
             return wx.ID_CANCEL
-        if not embed_cal:
-            if can_use_current_cal and reset_cal:
-                self.reset_cal()
-            return False
-        if not (can_use_current_cal or cal) or reset_cal:
-            return get_data_path("linear.cal")
-        if cal:
-            if options_dispcal:
-                self.worker.options_dispcal = options_dispcal
-            return cal
-        return None
+        outcome = preflight_checks.compute_cal_choice_result(info, embed_cal, reset_cal)
+        if outcome.reset_video_lut:
+            self.reset_cal()
+        if outcome.options_dispcal:
+            self.worker.options_dispcal = outcome.options_dispcal
+        return outcome.apply_calibration
 
     def restore_measurement_mode(self) -> None:
         """Restore the measurement mode from backup."""
@@ -12815,31 +12427,28 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     )
                     dlg.sizer3.Add((1, 4))
                     self.profile_load_on_login_handler()
-            if (
-                (
-                    (
-                        sys.platform == "darwin"
-                        or (
-                            sys.platform != "win32"
-                            and self.worker.argyll_version >= [1, 1, 0]
-                        )
-                    )
-                    and (os.geteuid() == 0 or which("sudo"))
-                )
-                or (
-                    sys.platform == "win32"
-                    and sys.getwindowsversion() >= (6,)
-                    and self.worker.argyll_version > [1, 1, 1]
-                )
-                or TEST
-            ):
+            if sys.platform == "win32":
+                windows_version = sys.getwindowsversion()
+                is_superuser_or_sudo = False
+            else:
+                windows_version = None
+                is_superuser_or_sudo = os.geteuid() == 0 or bool(which("sudo"))
+            # NOTE: System install scope is currently not implemented
+            # correctly in dispwin 1.1.0, but a patch is trivial and
+            # should be in the next version
+            # 2010-06-18: Do not offer system install in DisplayCAL when
+            # installing via GCM or oyranos FIXME: oyranos-monitor can't
+            # be run via sudo
+            scope_options = profile_install.resolve_install_scope_options(
+                argyll_version=self.worker.argyll_version,
+                is_superuser_or_sudo=is_superuser_or_sudo,
+                windows_version=windows_version,
+                network_profiles_dir_exists=sys.platform == "darwin"
+                and os.path.isdir("/Network/Library/ColorSync/Profiles"),
+                test_mode=TEST,
+            )
+            if scope_options:
                 # Linux, OSX or Vista and later
-                # NOTE: System install scope is currently not implemented
-                # correctly in dispwin 1.1.0, but a patch is trivial and
-                # should be in the next version
-                # 2010-06-18: Do not offer system install in DisplayCAL when
-                # installing via GCM or oyranos FIXME: oyranos-monitor can't
-                # be run via sudo
                 self.install_profile_user = wx.RadioButton(
                     dlg, -1, lang.getstr("profile.install_user"), style=wx.RB_GROUP
                 )
@@ -12872,9 +12481,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     flag=wx.TOP | wx.ALIGN_LEFT,
                     border=4,
                 )
-                if sys.platform == "darwin" and os.path.isdir(
-                    "/Network/Library/ColorSync/Profiles"
-                ):
+                if "n" in scope_options:
                     self.install_profile_network = wx.RadioButton(
                         dlg, -1, lang.getstr("profile.install_network")
                     )
@@ -13038,28 +12645,15 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         elif result:
             # Check all profile install methods
             argyll_install, colord_install, oy_install, loader_install = result
-            all_good = (
-                argyll_install in (None, True)
-                and colord_install in (None, True)
-                and oy_install in (None, True)
-                and loader_install in (None, True)
+            summary = profile_install.summarize_install_result(
+                argyll_install, colord_install, oy_install, loader_install
             )
-            some_good = (
-                argyll_install is True
-                or colord_install is True
-                or oy_install is True
-                or loader_install is True
-            )
-            linux = sys.platform not in ("darwin", "win32")
-            if all_good:
-                msg = lang.getstr("profile.install.success")
-                icon = "dialog-information"
-            elif some_good and linux:
-                msg = lang.getstr("profile.install.warning")
-                icon = "dialog-warning"
-            else:
-                msg = lang.getstr("profile.install.error")
-                icon = "dialog-error"
+            icon = {
+                "success": "dialog-information",
+                "warning": "dialog-warning",
+                "error": "dialog-error",
+            }[summary.message_key]
+            msg = lang.getstr(f"profile.install.{summary.message_key}")
             dlg = InfoDialog(
                 self,
                 msg=msg,
@@ -13067,32 +12661,22 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 bitmap=get_icon(32, icon),
                 show=False,
             )
-            if not all_good and linux:
+            if summary.details:
                 sizer = wx.FlexGridSizer(0, 2, 8, 8)
                 dlg.sizer3.Add(sizer, 1, flag=wx.TOP, border=12)
-                for name, result_ in (
-                    ("ArgyllCMS", argyll_install),
-                    ("colord", colord_install),
-                    ("Oyranos", oy_install),
-                    (lang.getstr("profile_loader"), loader_install),
-                ):
-                    if result_ is not None:
-                        if result_ is True:
-                            icon = "checkmark"
-                            result_ = lang.getstr("ok")
-                        elif isinstance(result_, Warning):
-                            icon = "dialog-warning"
-                        else:
-                            icon = "x"
-                            if not result_:
-                                result_ = lang.getstr("failure")
-                        result_ = wrap(str(result_))
-                        sizer.Add(
-                            wx.StaticBitmap(dlg, -1, get_icon(16, icon)),
-                            flag=wx.TOP,
-                            border=2,
-                        )
-                        sizer.Add(wx.StaticText(dlg, -1, f"{name}: {result_}"))
+                for name, ok, text in summary.details:
+                    if ok:
+                        icon = "checkmark"
+                    elif ok is None:
+                        icon = "dialog-warning"
+                    else:
+                        icon = "x"
+                    sizer.Add(
+                        wx.StaticBitmap(dlg, -1, get_icon(16, icon)),
+                        flag=wx.TOP,
+                        border=2,
+                    )
+                    sizer.Add(wx.StaticText(dlg, -1, f"{name}: {wrap(text)}"))
                 dlg.sizer0.SetSizeHints(dlg)
                 dlg.sizer0.Layout()
             dlg.ok.SetDefault()
@@ -13975,17 +13559,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         Args:
             event (wx.Event): The event that triggered this handler.
         """
-        filetype = "ccss,ccmx" if self.worker.instrument_supports_ccss() else "ccmx"
-        params = {
-            "get": True,
-            "type": filetype,
-            "manufacturer_id": self.worker.get_display_edid().get(
-                "manufacturer_id", ""
-            ),
-            "display": self.worker.get_display_name(False, True) or "Unknown",
-            "instrument": self.worker.get_instrument_name() or "Unknown",
-            "json": 1,
-        }
+        params = colorimeter_correction.build_web_check_params(self.worker)
         self.worker.interactive = False
         self.worker.start(
             colorimeter_correction_web_check_choose,
@@ -15378,23 +14952,6 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 show_result_dialog(exception, self)
                 self.worker.wrapup(False)
                 return None
-            if reference_ti3[0].get("TARGET_INSTRUMENT") and not re.search(
-                rb'\nREFERENCE\s+".+?"\n', cgats
-            ):
-                # By default, CCSS files don't contain reference instrument
-                cgats = re.sub(
-                    rb'(\nDISPLAY\s+"[^"]*"\n)',
-                    b'\nREFERENCE "%s"\\1'
-                    % reference_ti3[0].get("TARGET_INSTRUMENT").replace(b"\\", b"\\\\"),
-                    cgats,
-                )
-            if not re.search(rb'\nTECHNOLOGY\s+".+?"\n', cgats) and tech:
-                # By default, CCMX files don't contain technology string
-                cgats = re.sub(
-                    rb'(\nDISPLAY\s+"[^"]*"\n)',
-                    b'\nTECHNOLOGY "%s"\\1' % tech,
-                    cgats,
-                )
             manufacturer_id = None
             if manufacturer:
                 if not PNP_ID_CACHE:
@@ -15404,41 +14961,17 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 manufacturer_id = manufacturers.get(manufacturer)
             debug_print(f"manufacturer_id: {manufacturer_id}")
             debug_print(f"manufacturer   : {manufacturer}")
-            if manufacturer_id and not re.search(
-                rb'\nMANUFACTURER_ID\s+".+?"\n', cgats
-            ):
-                # By default, CCMX/CCSS files don't contain manufacturer ID
-                cgats = re.sub(
-                    rb'(\nDISPLAY\s+"[^"]*"\n)',
-                    b'\nMANUFACTURER_ID "%s"\\1'
-                    % manufacturer_id.replace("\\", "\\\\").encode("utf-8"),
-                    cgats,
-                )
-            if manufacturer and not re.search(rb'\nMANUFACTURER\s+".+?"\n', cgats):
-                # By default, CCMX/CCSS files don't contain manufacturer
-                cgats = re.sub(
-                    rb'(\nDISPLAY\s+"[^"]*"\n)',
-                    b'\nMANUFACTURER "%s"\\1'
-                    % manufacturer.replace("\\", "\\\\").encode("utf-8"),
-                    cgats,
-                )
-            if observer and not re.search(rb'\nOBSERVER\s+".+?"\n', cgats):
-                # By default, CCMX/CCSS files don't contain observer
-                cgats = re.sub(
-                    rb'(\nDISPLAY\s+"[^"]*"\n)',
-                    b'\nOBSERVER "%s"\\1' % observer.replace(b"\\", b"\\\\"),
-                    cgats,
-                )
-            if reference_observer and not re.search(
-                rb'\nREFERENCE_OBSERVER\s+".+?"\n', cgats
-            ):
-                # By default, CCMX/CCSS files don't contain observer
-                cgats = re.sub(
-                    rb'(\nDISPLAY\s+"[^"]*"\n)',
-                    b'\nREFERENCE_OBSERVER "%s"\\1'
-                    % reference_observer.encode("UTF-8").replace(b"\\", b"\\\\"),
-                    cgats,
-                )
+            # By default Argyll omits these fields from CCMX/CCSS files; inject
+            # them (order matters for byte-identical output / MD5).
+            cgats = colorimeter_correction.inject_ccxx_metadata(
+                cgats,
+                reference=reference_ti3[0].get("TARGET_INSTRUMENT"),
+                technology=tech,
+                manufacturer_id=manufacturer_id,
+                manufacturer=manufacturer,
+                observer=observer,
+                reference_observer=reference_observer,
+            )
             result = check_create_dir(config.get_argyll_data_dir())
             if isinstance(result, Exception):
                 show_result_dialog(result, self)
@@ -15782,26 +15315,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         dlg.Destroy()
         if result != wx.ID_OK:
             return
-        if isinstance(cgats, str):
-            # upload_colorimeter_correction_handler() passes a str (decoded
-            # from the file), but the regex below requires bytes; normalize
-            # so it doesn't raise TypeError.
-            cgats = cgats.encode("utf-8")
-        ccxx = CGATS(cgats)
-        # Remove platform-specific/potentially sensitive information
-        cgats = re.sub(rb'\n(?:REFERENCE|TARGET)_FILENAME\s+"[^"]+"\n', b"\n", cgats)
-        params = {"cgats": cgats}
-        # Also upload reference and target CGATS (if available)
-        for label in ("REFERENCE", "TARGET"):
-            filename = (ccxx.queryv1(f"{label}_FILENAME") or b"").decode("utf-8")
-            algo_hash = ((ccxx.queryv1(f"{label}_HASH") or b"").decode("utf-8")).split(
-                ":", 1
-            )
-            if filename and os.path.isfile(filename) and algo_hash[0] in globals():
-                meas = bytes(CGATS(filename)).strip()
-                # Check hash
-                if globals()[algo_hash[0]](meas).hexdigest() == algo_hash[-1]:
-                    params[label.lower() + "_cgats"] = meas
+        params = colorimeter_correction.build_upload_params(cgats)
         if DEBUG or TEST:
             print(list(params.keys()))
         # Upload correction
@@ -15844,10 +15358,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         # different than raw data so MD5 will be different
         with open(path, "rb") as cgatsfile:
             cgats = cgatsfile.read().decode()
-        originator = re.search(r'\nORIGINATOR\s+"Argyll', cgats)
-        if not originator:
-            originator = re.search(r'\nORIGINATOR\s+"' + APPNAME, cgats)
-        if not originator:
+        if not colorimeter_correction.validate_upload_originator(cgats, APPNAME):
             InfoDialog(
                 self,
                 msg=lang.getstr("colorimeter_correction.upload.deny"),
@@ -16114,160 +15625,9 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         debug_print("   oeminst:", oeminst)
         debug_print("   path(s):", path)
         debug_print("   asroot:", asroot)
-        kind = None
-        if isinstance(path, list):
-            kind = "xrite"
-        elif path and os.path.exists(path):
-            filename, ext = os.path.splitext(path)
-            kind = "unknown"
-            if ext.lower() == ".txt":
-                kind = "icd"
-                result = True
-            else:
-                icolordisplay = "icolordisplay" in os.path.basename(path).lower()
-                if ext.lower() == ".dmg":
-                    if icolordisplay:
-                        kind = "icd"
-                        result = self.worker.exec_cmd(
-                            which("hdiutil"),
-                            ["attach", path],
-                            capture_output=True,
-                            skip_scripts=True,
-                        )
-                        if result and not isinstance(result, Exception):
-                            for _path in safe_glob(
-                                os.path.join(
-                                    os.path.sep,
-                                    "Volumes",
-                                    "iColorDisplay*",
-                                    "iColorDisplay*.app",
-                                    "Contents",
-                                    "Resources",
-                                    "DeviceCorrections.txt",
-                                )
-                            ):
-                                break
-                            else:
-                                result = Error(
-                                    lang.getstr("file.missing", "DeviceCorrections.txt")
-                                )
-                elif i1d3ccss and ext.lower() == ".edr":
-                    kind = "xrite"
-                elif ext.lower() in (".cab", ".exe"):
-                    if icolordisplay:
-                        kind = "icd"
-                        sevenzip = get_program_file("7z", "7-zip")
-                        if sevenzip:
-                            if not getcfg("dry_run"):
-                                # Extract from NSIS installer
-                                temp = self.worker.create_tempdir()
-                                if isinstance(temp, Exception):
-                                    result = temp
-                                else:
-                                    result = self.worker.exec_cmd(
-                                        sevenzip,
-                                        ["e", "-y", path, "DeviceCorrections.txt"],
-                                        capture_output=True,
-                                        skip_scripts=True,
-                                        working_dir=temp,
-                                    )
-                                    if result and not isinstance(result, Exception):
-                                        path = os.path.join(
-                                            temp, "DeviceCorrections.txt"
-                                        )
-                                    else:
-                                        self.worker.wrapup(False)
-                        else:
-                            result = Error(lang.getstr("file.missing", "7z" + EXE_EXT))
-                    elif i1d3ccss and (
-                        "colormunki" in os.path.basename(path).lower()
-                        or "i1profiler" in os.path.basename(path).lower()
-                        or os.path.basename(path).lower() == "i1d3"
-                    ):
-                        # Assume X-Rite installer
-                        kind = "xrite"
-                    elif spyd4en and (
-                        "spyder4" in os.path.basename(path).lower()
-                        or os.path.basename(path).lower() == "spyd4"
-                    ):
-                        # Assume Spyder4/5
-                        kind = "spyder4"
-        if kind:
-            if kind == "icd":
-                if (
-                    not getcfg("dry_run")
-                    and result
-                    and not isinstance(result, Exception)
-                ):
-                    # Assume iColorDisplay DeviceCorrections.txt
-                    ccmx_dir = config.get_argyll_data_dir()
-                    if not os.path.exists(ccmx_dir):
-                        result = check_create_dir(ccmx_dir)
-                        if isinstance(result, Exception):
-                            return result, i1d3, spyd4, icd
-                    print(lang.getstr("colorimeter_correction.import"))
-                    print(path)
-                    try:
-                        imported, skipped = ccmx.convert_devicecorrections_to_ccmx(
-                            path, ccmx_dir
-                        )
-                        if imported == 0:
-                            raise Info
-                    except ValueError as exception:
-                        result = Error(
-                            lang.getstr("file.invalid") + "\n" + str(exception)
-                        )
-                    except Info:
-                        result = False
-                    except Exception as exception:
-                        result = exception
-                    else:
-                        result = icd = True
-                        if skipped > 0:
-                            result = Warn(
-                                lang.getstr(
-                                    "colorimeter_correction.import.partial_warning",
-                                    ("iColor Display", skipped, imported + skipped),
-                                )
-                            )
-                    self.worker.wrapup(False)
-            elif kind == "xrite":
-                # Import .edr
-                if asroot and sys.platform == "win32":
-                    ccss = self.get_argyll_data_files("l", "*.ccss", True)
-                args = path if isinstance(path, list) else [path]
-                result = i1d3 = self.worker.import_edr(args, asroot=asroot)
-                if asroot and sys.platform == "win32":
-                    # Hacky but the only way to know if we were successful
-                    result = i1d3 = (
-                        self.get_argyll_data_files("l", "*.ccss", True) != ccss
-                    )
-            elif kind == "spyder4":
-                # Import spyd4cal.bin
-                result = spyd4 = self.worker.import_spyd4cal([path], asroot=asroot)
-                if asroot and sys.platform == "win32":
-                    result = spyd4 = self.get_argyll_data_files("l", "spyd4cal.bin")
-            elif oeminst and not icolordisplay:
-                if asroot and sys.platform == "win32":
-                    ccss = self.get_argyll_data_files("l", "*.ccss", True)
-                result = self.worker.import_colorimeter_corrections(
-                    oeminst, [path], asroot
-                )
-                if ".ccss" in "".join(self.worker.output) or (
-                    asroot
-                    and sys.platform == "win32"
-                    and self.get_argyll_data_files("l", "*.ccss", True) != ccss
-                ):
-                    i1d3 = result
-                if "spyd4cal.bin" in "".join(self.worker.output) or (
-                    asroot
-                    and sys.platform == "win32"
-                    and self.get_argyll_data_files("l", "spyd4cal.bin")
-                ):
-                    spyd4 = result
-            else:
-                result = Error(lang.getstr("error.file_type_unsupported") + "\n" + path)
-
+        result, i1d3, spyd4, icd = colorimeter_correction.detect_import_kind(
+            self.worker, result, i1d3, i1d3ccss, spyd4, spyd4en, icd, oeminst, path, asroot
+        )
         debug_print("import_colorimeter_correction ->")
         debug_print("   result:", result)
         debug_print("   i1d3:", i1d3)
@@ -16317,131 +15677,19 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         """
         if auto and not paths:
             paths = []
-            if importers.get("icd"):
-                # Look for iColorDisplay
-                if sys.platform == "win32":
-                    icdfn = safe_glob(
-                        os.path.join(
-                            getenvu("PROGRAMFILES", ""),
-                            "Quato",
-                            "iColorDisplay",
-                            "DeviceCorrections.txt",
-                        )
-                    )
-                elif sys.platform == "darwin":
-                    icdfn = safe_glob(
-                        os.path.join(
-                            os.path.sep,
-                            "Applications",
-                            "iColorDisplay*.app",
-                            "DeviceCorrections.txt",
-                        )
-                    )
-                    if not icdfn:
-                        icdfn = safe_glob(
-                            os.path.join(
-                                os.path.sep,
-                                "Volumes",
-                                "iColorDisplay*",
-                                "iColorDisplay*.app",
-                                "DeviceCorrections.txt",
-                            )
-                        )
-                else:
-                    icdfn = None
-                if icdfn:
-                    paths.extend(icdfn)
-            if importers.get("i1d3") and (oeminst or i1d3ccss) and not i1d3:
-                # Look for *.edr files
-                if sys.platform == "win32":
-                    i1d3fn = safe_glob(
-                        os.path.join(
-                            getenvu("PROGRAMFILES", ""),
-                            "X-Rite",
-                            "Devices",
-                            "i1d3",
-                            "Calibrations",
-                            "*.edr",
-                        )
-                    )
-                elif sys.platform == "darwin":
-                    i1d3fn = safe_glob(
-                        os.path.join(
-                            os.path.sep,
-                            "Library",
-                            "Application Support",
-                            "X-Rite",
-                            "Devices",
-                            "i1d3xrdevice",
-                            "Contents",
-                            "Resources",
-                            "Calibrations",
-                            "*.edr",
-                        )
-                    )
-                    if not i1d3fn:
-                        i1d3fn = safe_glob(
-                            os.path.join(
-                                os.path.sep, "Volumes", "i1Profiler", "*Setup.exe"
-                            )
-                        )
-                    if not i1d3fn:
-                        i1d3fn = safe_glob(
-                            os.path.join(
-                                os.path.sep,
-                                "Volumes",
-                                "ColorMunki Display",
-                                "*Setup.exe",
-                            )
-                        )
-                else:
-                    i1d3fn = []
-                if len(i1d3fn) > 1:
-                    # Multiple EDR files
-                    paths.append(i1d3fn)
-                else:
-                    paths.extend(i1d3fn)
-            if importers.get("spyd4") and (oeminst or spyd4en) and not spyd4:
-                # Look for dccmtr.dll
-                if sys.platform == "win32":
-                    spydfn = safe_glob(
-                        os.path.join(
-                            getenvu("PROGRAMFILES", ""),
-                            "Datacolor",
-                            "Spyder5*",
-                            "dccmtr.dll",
-                        )
-                    )
-                    if not spydfn:
-                        spydfn = safe_glob(
-                            os.path.join(
-                                getenvu("PROGRAMFILES", ""),
-                                "Datacolor",
-                                "Spyder4*",
-                                "dccmtr.dll",
-                            )
-                        )
-                elif sys.platform == "darwin":
-                    # Look for setup.exe on CD-ROM
-                    spydfn = safe_glob(
-                        os.path.join(
-                            os.path.sep, "Volumes", "Datacolor", "Data", "Setup.exe"
-                        )
-                    )
-                    if not spydfn:
-                        spydfn = safe_glob(
-                            os.path.join(
-                                os.path.sep,
-                                "Volumes",
-                                "Datacolor_ISO",
-                                "Data",
-                                "Setup.exe",
-                            )
-                        )
-                else:
-                    spydfn = None
-                if spydfn:
-                    paths.extend(spydfn)
+            found = colorimeter_correction.discover_auto_import_paths(
+                importers, i1d3, i1d3ccss, spyd4, spyd4en, oeminst
+            )
+            if found.get("icd"):
+                paths.extend(found["icd"])
+            i1d3fn = found.get("i1d3", [])
+            if len(i1d3fn) > 1:
+                # Multiple EDR files
+                paths.append(i1d3fn)
+            else:
+                paths.extend(i1d3fn)
+            if found.get("spyd4"):
+                paths.extend(found["spyd4"])
         for path in paths:
             (result, i1d3, spyd4, icd) = self.import_colorimeter_correction(
                 result, i1d3, i1d3ccss, spyd4, spyd4en, icd, oeminst, path, asroot
@@ -18677,67 +17925,9 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             list[str | tuple[str, float]]: A list of file paths or tuples of
                 (file path, last modification time).
         """
-        data_files = []
-        if sys.platform != "darwin":
-            if "l" in scope:
-                for commonappdata in config.COMMONAPPDATA:
-                    data_files += safe_glob(
-                        os.path.join(commonappdata, "color", wildcard)
-                    )
-                    data_files += safe_glob(
-                        os.path.join(commonappdata, "ArgyllCMS", wildcard)
-                    )
-            if "u" in scope:
-                data_files += safe_glob(os.path.join(config.APPDATA, "color", wildcard))
-        else:
-            if "l" in scope:
-                data_files += safe_glob(os.path.join(config.LIBRARY, "color", wildcard))
-                data_files += safe_glob(
-                    os.path.join(config.LIBRARY, "ArgyllCMS", wildcard)
-                )
-                if [1, 9] <= self.worker.argyll_version <= [1, 9, 1]:
-                    # Argyll CMS 1.9 and 1.9.1 use *nix locations due to a
-                    # configuration problem
-                    data_files += safe_glob(
-                        os.path.join("/usr/local/share", "ArgyllCMS", wildcard)
-                    )
-            if "u" in scope:
-                data_files += safe_glob(
-                    os.path.join(config.LIBRARY_HOME, "color", wildcard)
-                )
-                if [1, 9] <= self.worker.argyll_version <= [1, 9, 1]:
-                    # Argyll CMS 1.9 and 1.9.1 use *nix locations due to a
-                    # configuration problem
-                    data_files += safe_glob(
-                        os.path.join(
-                            config.HOME, ".local", "share", "ArgyllCMS", wildcard
-                        )
-                    )
-        if "u" in scope:
-            data_files += safe_glob(os.path.join(config.APPDATA, "ArgyllCMS", wildcard))
-        filenames = list(data_files)
-        data_files = []
-        mapping = {}
-        for filename in filenames:
-            basename = os.path.basename(filename)
-            if (
-                basename not in mapping
-                or os.path.basename(os.path.dirname(filename)) == "ArgyllCMS"
-            ):
-                # Prefer files with same basename in 'ArgyllCMS' folder over
-                # 'color' folder
-                mapping[basename] = filename
-
-        for filename in mapping.values():
-            if include_lastmod:
-                try:
-                    lastmod = os.stat(filename).st_mtime
-                except OSError:
-                    lastmod = -1
-                data_files.append((filename, lastmod))
-            else:
-                data_files.append(filename)
-        return data_files
+        return colorimeter_correction.get_argyll_data_files(
+            self.worker, scope, wildcard, include_lastmod
+        )
 
     def get_instrument_type(self) -> str:
         """Return the instrument type as a string.
@@ -20733,135 +19923,52 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                 self.lut_viewer.Refresh()
 
     def update_whitepoint_config_from_temperature(self) -> None:
-        """Update the whitepoint configuration from the color temperature."""
-        if getcfg("whitepoint.colortemp", False):
-            # Color temperature
-            if getcfg("whitepoint.colortemp.locus") == "T":
-                # Planckian locus
-                xyY = planckianCT2xyY(getcfg("whitepoint.colortemp"))  # noqa: N806
-            else:
-                # Daylight locus
-                xyY = CIEDCCT2xyY(getcfg("whitepoint.colortemp"))  # noqa: N806
-                # Update 3D LUT whitepoint target
-            if xyY:
-                setcfg("3dlut.whitepoint.x", xyY[0])
-                setcfg("3dlut.whitepoint.y", xyY[1])
-            else:
-                setcfg("3dlut.whitepoint.x", None)
-                setcfg("3dlut.whitepoint.y", None)
+        """Delegate to `main_settings.update_whitepoint_config_from_temperature()`."""
+        main_settings.update_whitepoint_config_from_temperature()
 
     def update_ccmx_items_from_path(
         self, ccmx: str, path: str, ccxxsetting: str, update_ccmx_items: bool
     ) -> bool:
-        """Update the colorimeter correction matrix items based on the path.
-
-        Args:
-            ccmx (str): The colorimeter correction matrix file path.
-            path (str): The path to the profile.
-            ccxxsetting (str): The colorimeter correction setting.
-            update_ccmx_items (bool): Whether to update the CCMX items.
-
-        Returns:
-            bool: True if CCMX items were updated, False otherwise.
-        """
-        if not ccmx:
-            ccxx = safe_glob(
-                os.path.join(os.path.dirname(path), "*.ccmx")
-            ) or safe_glob(os.path.join(os.path.dirname(path), "*.ccss"))
-            if ccxx and len(ccxx) == 1:
-                ccmx = ccxx[0]
-                update_ccmx_items = True
-        if ccmx:
-            setcfg(
-                "colorimeter_correction_matrix_file",
-                f"{ccxxsetting}:{ccmx}",
-            )
-        return update_ccmx_items
+        """Delegate to `main_settings.update_ccmx_items_from_path()`."""
+        return main_settings.update_ccmx_items_from_path(
+            ccmx, path, ccxxsetting, update_ccmx_items
+        )
 
     def set_profile_quality_config_with_option(self, option: str) -> None:
-        """Set the profile quality configuration.
-
-        Args:
-            option (str): The option string containing the profile quality
-                setting.
-        """
-        setcfg("profile.quality", option[1])
+        """Delegate to `main_settings.set_profile_quality_config_with_option()`."""
+        main_settings.set_profile_quality_config_with_option(option)
 
     def set_profile_quality_b2a_config_with_option(self, option: str) -> None:
-        """Set the profile quality B2A configuration.
-
-        Args:
-            option (str): The option string containing the profile quality B2A
-                setting.
-        """
-        setcfg("profile.quality.b2a", option[1] or "l")
+        """Delegate to `main_settings.set_profile_quality_b2a_config_with_option()`."""
+        main_settings.set_profile_quality_b2a_config_with_option(option)
 
     def set_profile_black_point_compenstation_config_with_option(
         self, option: str, is_preset: bool, is_3dlut_preset: bool
     ) -> None:
-        """Set the profile black point compensation configuration.
-
-        Args:
-            option (str): The option string containing the profile black point
-                compensation setting.
-            is_preset (bool): Whether the profile is a preset.
-            is_3dlut_preset (bool): Whether the profile is a 3D LUT preset.
-        """
-        if is_preset and not is_3dlut_preset and sys.platform == "darwin":
-            # Force profile type to single shaper + matrix
-            # due to OS X bugs with cLUT profiles and
-            # matrix profiles with individual shaper curves
-            option = "aS"
-            # Force black point compensation due to OS X
-            # bugs with non BPC profiles
-            setcfg("profile.black_point_compensation", 1)
-        setcfg("profile.type", option[1])
+        """Delegate to `main_settings`."""
+        main_settings.set_profile_black_point_compenstation_config_with_option(
+            option, is_preset, is_3dlut_preset
+        )
 
     def set_gamap_profile_config_with_option(self, option: str) -> None:
-        """Set the gamap profile configuration.
-
-        Args:
-            option (str): The option string containing the profile.
-        """
-        option = option.split(None, 1)
-        setcfg("gamap_profile", option[-1][1:-1])
-        setcfg("gamap_perceptual", 1)
-        if option[0:1] == "S":
-            setcfg("gamap_saturation", 1)
+        """Delegate to `main_settings.set_gamap_profile_config_with_option()`."""
+        main_settings.set_gamap_profile_config_with_option(option)
 
     def set_gamap_src_viewcond_config_with_option(self, option: str) -> None:
-        """Set the gamap source view condition configuration.
-
-        Args:
-            option (str): The option string containing the source view
-                condition.
-        """
-        setcfg("gamap_src_viewcond", option[1:])
+        """Delegate to `main_settings.set_gamap_src_viewcond_config_with_option()`."""
+        main_settings.set_gamap_src_viewcond_config_with_option(option)
 
     def set_gamap_out_viewcond_config_with_option(self, option: str) -> None:
-        """Set the gamap output view condition configuration.
-
-        Args:
-            option (str): The option string containing the output view
-                condition.
-        """
-        setcfg("gamap_out_viewcond", option[1:])
+        """Delegate to `main_settings.set_gamap_out_viewcond_config_with_option()`."""
+        main_settings.set_gamap_out_viewcond_config_with_option(option)
 
     def set_gamap_perceptual_intent_config_with_option(self, option: str) -> None:
-        """Set the gamap perceptual intent configuration.
-
-        Args:
-            option (str): The option string containing the perceptual intent.
-        """
-        setcfg("gamap_perceptual_intent", option[1:])
+        """Delegate to `main_settings`."""
+        main_settings.set_gamap_perceptual_intent_config_with_option(option)
 
     def set_gamap_saturation_intent_config_with_option(self, option: str) -> None:
-        """Set the gamap saturation intent configuration.
-
-        Args:
-            option (str): The option string containing the saturation intent.
-        """
-        setcfg("gamap_saturation_intent", option[1:])
+        """Delegate to `main_settings`."""
+        main_settings.set_gamap_saturation_intent_config_with_option(option)
 
     def set_display_number_config_with_option(
         self, option: str, display_match: bool, display_changed: bool
@@ -20893,241 +20000,92 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
     def set_interactive_display_adjustment_config_with_option(
         self, option: str
     ) -> None:
-        """Set the interactive display adjustment configuration.
-
-        Args:
-            option (str): The option string containing the interactive display
-                adjustment setting.
-        """
-        setcfg("calibration.interactive_display_adjustment", 0)
+        """Delegate to `main_settings`."""
+        main_settings.set_interactive_display_adjustment_config_with_option(option)
 
     def set_calibration_quality_config_with_option(self, option: str) -> None:
-        """Set the calibration quality configuration.
-
-        Args:
-            option (str): The option string containing the calibration quality
-                setting.
-        """
-        setcfg("calibration.quality", option[1])
+        """Delegate to `main_settings.set_calibration_quality_config_with_option()`."""
+        main_settings.set_calibration_quality_config_with_option(option)
 
     def set_measurement_mode_config_with_option(self, option: str) -> None:
-        """Set the measurement mode configuration.
-
-        Args:
-            option (str): The option string containing the measurement mode
-                setting.
-        """
-        if getcfg("measurement_mode") != "auto":
-            setcfg("measurement_mode", option[1])
+        """Delegate to `main_settings.set_measurement_mode_config_with_option()`."""
+        main_settings.set_measurement_mode_config_with_option(option)
 
     def set_whitepoint_temperature_config_with_option(self, option: str) -> None:
-        """Set the whitepoint temperature configuration.
-
-        Args:
-            option (str): The option string containing the whitepoint
-                temperature setting.
-        """
-        setcfg("whitepoint.colortemp.locus", option[0:1])
-        if option[1:]:
-            setcfg("whitepoint.colortemp", int(float(option[1:])))
-        setcfg("whitepoint.x", None)
-        setcfg("whitepoint.y", None)
+        """Delegate to `main_settings`."""
+        main_settings.set_whitepoint_temperature_config_with_option(option)
 
     def set_whitepoint_config_with_option(self, option: str) -> None:
-        """Set the whitepoint configuration.
-
-        Args:
-            option (str): The option string containing the whitepoint setting.
-        """
-        option = option[1:].split(",")
-        setcfg("whitepoint.colortemp", None)
-        setcfg("whitepoint.x", option[0])
-        setcfg("whitepoint.y", option[1])
-        setcfg("3dlut.whitepoint.x", option[0])
-        setcfg("3dlut.whitepoint.y", option[1])
+        """Delegate to `main_settings.set_whitepoint_config_with_option()`."""
+        main_settings.set_whitepoint_config_with_option(option)
 
     def set_calibration_luminance_config_with_option(self, option: str) -> None:
-        """Set the calibration luminance configuration.
-
-        Args:
-            option (str): The option string containing the luminance setting.
-        """
-        setcfg("calibration.luminance", option[1:])
+        """Delegate to `main_settings.set_calibration_luminance_config_with_option()`."""
+        main_settings.set_calibration_luminance_config_with_option(option)
 
     def set_tone_response_curve_config_with_option(self, option: str) -> None:
-        """Set the tone response curve configuration.
-
-        Args:
-            option (str): The option string containing the tone response curve
-                setting.
-        """
-        setcfg("trc.type", option[0:1])
-        setcfg("trc", option[1:])
+        """Delegate to `main_settings.set_tone_response_curve_config_with_option()`."""
+        main_settings.set_tone_response_curve_config_with_option(option)
 
     def set_calibration_black_output_offset_config_with_option(
         self, option: str
     ) -> None:
-        """Set the calibration black output offset configuration.
-
-        Args:
-            option (str): The option string containing the black output.
-        """
-        setcfg("calibration.black_output_offset", option[1:])
+        """Delegate to `main_settings`."""
+        main_settings.set_calibration_black_output_offset_config_with_option(option)
 
     def set_ambient_view_condition_adjustment_config_with_option(
         self, option: str
     ) -> None:
-        """Set the ambient view condition adjustment configuration.
-
-        Args:
-            option (str): The option string containing the ambient view
-                condition adjustment setting.
-        """
-        try:
-            ambient = float(option[1:])
-        except ValueError:
-            pass
-        else:
-            setcfg("calibration.ambient_viewcond_adjust", 1)
-            # Argyll dispcal uses 20% of ambient (in lux,
-            # fixed steradiant of 3.1415) as adapting
-            # luminance, but we assume it already *is*
-            # the adapting luminance. To correct for this,
-            # scale so that dispcal gets the correct value.
-            setcfg(
-                "calibration.ambient_viewcond_adjust.lux",
-                ambient / 5.0,
-            )
+        """Delegate to `main_settings`."""
+        main_settings.set_ambient_view_condition_adjustment_config_with_option(option)
 
     def set_black_point_correction_config_with_option(
         self, option: str, black_point_correction: bool
     ) -> bool:
-        """Set the calibration black point correction configuration.
-
-        Args:
-            option (str): The option string containing the black point correction
-                setting.
-            black_point_correction (bool): Current state of black point correction.
-
-        Returns:
-            tuple(bool): Updated state of black point correction.
-        """
-        if stripzeros(option[1:]) >= 0:
-            black_point_correction = True
-            setcfg("calibration.black_point_correction", option[1:])
-        return (black_point_correction,)
+        """Delegate to `main_settings`."""
+        return main_settings.set_black_point_correction_config_with_option(
+            option, black_point_correction
+        )
 
     def set_calibration_black_point_rate_config_with_option(self, option: str) -> None:
-        """Set the calibration black point rate configuration.
-
-        Args:
-            option (str): The option string containing the black point rate
-                setting.
-        """
-        setcfg("calibration.black_point_rate", option[1:])
+        """Delegate to `main_settings`."""
+        main_settings.set_calibration_black_point_rate_config_with_option(option)
 
     def set_calibration_black_luminance_config_with_option(self, option: str) -> None:
-        """Set the calibration black luminance configuration.
-
-        Args:
-            option (str): The option string containing the black luminance
-                setting.
-        """
-        setcfg("calibration.black_luminance", option[1:])
+        """Delegate to `main_settings`."""
+        main_settings.set_calibration_black_luminance_config_with_option(option)
 
     def set_measureframe_config_with_option(self, option: str) -> None:
-        """Set the measure frame configuration.
-
-        Args:
-            option (str): The option string containing the measure frame
-                setting.
-        """
-        if len(option[1:]) >= 5:
-            setcfg("dimensions.measureframe", option[1:])
-            setcfg("dimensions.measureframe.unzoomed", option[1:])
+        """Delegate to `main_settings.set_measureframe_config_with_option()`."""
+        main_settings.set_measureframe_config_with_option(option)
 
     def set_measurement_mode_adaptive_config_with_option(self, option: str) -> None:
-        """Set the measurement mode adaptive configuration.
-
-        Args:
-            option (str): The option string containing the adaptive setting.
-        """
-        setcfg("measurement_mode.adaptive", option)
+        """Delegate to `main_settings`."""
+        main_settings.set_measurement_mode_adaptive_config_with_option(option)
 
     def set_measurement_mode_highres_config_with_option(self, option: str) -> None:
-        """Set the measurement mode high resolution configuration.
-
-        Args:
-            option (str): The option string containing the high resolution
-                setting.
-        """
-        setcfg("measurement_mode.highres", option)
+        """Delegate to `main_settings`."""
+        main_settings.set_measurement_mode_highres_config_with_option(option)
 
     def set_measurement_mode_projector_config_with_option(self, option: str) -> None:
-        """Set the measurement mode projector configuration.
-
-        Args:
-            option (str): The option string containing the projector setting.
-        """
-        if len(option[1:]) == 0:
-            setcfg("measurement_mode.projector", 1)
-        self.set_measureframe_config_with_option(option)
+        """Delegate to `main_settings`."""
+        main_settings.set_measurement_mode_projector_config_with_option(option)
 
     def set_measure_darken_background_config_with_option(self, option: str) -> None:
-        """Set the measure darken background configuration.
-
-        Args:
-            option (str): The option string containing the darken background
-                setting.
-        """
-        setcfg("measure.darken_background", option)
+        """Delegate to `main_settings`."""
+        main_settings.set_measure_darken_background_config_with_option(option)
 
     def set_ccss_config_with_option(self, option: str, path: str) -> tuple[str, bool]:
-        """Set the colorimeter correction matrix file configuration.
-
-        Args:
-            option (str): The option string containing the ccmx file path.
-            path (str): The path to the calibration file.
-
-        Returns:
-            tuple[str, bool]: The ccmx file path and a boolean indicating
-                whether to update ccmx items.
-        """
-        option = option.split(None, 1)
-        ccmx = option[-1][1:-1]
-        if not os.path.isabs(ccmx):
-            ccmx = os.path.join(os.path.dirname(path), ccmx)
-        # Need to update ccmx items again even if
-        # comport_ctrl_handler already did
-        update_ccmx_items = True
-        return ccmx, update_ccmx_items
+        """Delegate to `main_settings.set_ccss_config_with_option()`."""
+        return main_settings.set_ccss_config_with_option(option, path)
 
     def set_drift_compensation_config_with_option(self, option: str) -> None:
-        """Set the drift compensation configuration.
-
-        Args:
-            option (str): The option string containing the drift compensation
-                setting.
-        """
-        if "b" in option[1:]:
-            setcfg("drift_compensation.blacklevel", 1)
-        if "w" in option[1:]:
-            setcfg("drift_compensation.whitelevel", 1)
+        """Delegate to `main_settings.set_drift_compensation_config_with_option()`."""
+        main_settings.set_drift_compensation_config_with_option(option)
 
     def set_tristimulus_observer_config_with_option(self, option: str) -> bool:
-        """Set the tristimulus observer configuration.
-
-        Args:
-            option (str): The option string containing the observer setting.
-
-        Returns:
-            tuple(bool): Always returns True in a tuple.
-        """
-        setcfg("observer", option[1:])
-        # Need to update ccmx items again even if
-        # comport_ctrl_handler already did because CCMX
-        # observer may override calibration observer
-        return (True,)
+        """Delegate to `main_settings`."""
+        return main_settings.set_tristimulus_observer_config_with_option(option)
 
     def set_video_levels_config_with_option(self) -> None:
         """Set the video levels configuration."""

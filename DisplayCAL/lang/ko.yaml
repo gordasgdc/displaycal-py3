@@ -974,6 +974,7 @@
 
 "colorimeter_correction.create.info": |-
   컬러리미터 보정치를 생성하려면, 먼저 스펙트로미터를 사용하여 테스트 컬러를 측정해야 합니다. 분광 보정 대신 컬러리미터를 사용하여 보정치 행렬을 생성하고자 하는 경우에도 스펙트로미터를 사용한 측정이 필요합니다.
+
   대안으로 “찾기...”를 선택하여 기존 측정치를 사용할 수도 있습니다.
 
 "colorimeter_correction.create.success": |-
@@ -1116,7 +1117,7 @@
   측정 데이터로부터 프로파일 생성...
 
 "create_profile_from_edid": |-
-  확장 디스플레이 식별 데이터로부터 프로파일 생성...
+  EDID 데이터로부터 프로파일 생성...
 
 "created": |-
   생성일
@@ -1531,6 +1532,7 @@
 
 "donation_message": |-
   DisplayCAL 과 ArgyllCMS 의 지속적인 개발 및 업데이트, 기술적인 지원을 희망하신다면, 금전적 후원을 고려해 주십시오. DisplayCAL 은 ArgyllCMS 없이는 사용될 수 없기 때문에 DisplayCAL로 들어오는 모든 후원은 두 프로젝트에 나누어 후원됩니다.
+
   개인사용자의 비상업적 사용의 경우, 단 한번의 후원이라도 감사드립니다. 만약 DisplayCAL을 전문적으로 사용하신다면, 연간 또는 월간 후원을 해 주시면 DisplayCAL 과 ArgyllCMS 두 프로젝트의 지속과발전에 정말 큰 도움이 될 것입니다.
   
   모든 후원자 여러분께 진심으로 감사드립니다!
@@ -2290,6 +2292,9 @@
 "is_linear": |-
   Is linear
 
+"lang.confirm_restart": |-
+  언어는 DisplayCAL을 다음에 시작할 때 변경됩니다. 지금 DisplayCAL을 다시 시작하시겠습니까?
+
 "laptop.icc": |-
   노트북 (감마 2.2)
 
@@ -2328,12 +2333,14 @@
 
 "macos.bugs.cal.warning": |-
   macOS 미리보기 및 QuickLook 같은 Apple CMM(색 관리 모듈) 사용 앱은 보정 블랙 포인트 색조 보정을 지원하지 않습니다.
+
   자체 색 관리를 사용하는 앱은 영향을 받지 않습니다(예: Adobe ACE를 사용하는 Adobe Creative Suite, littleCMS를 사용하는 오픈소스 그래픽 앱(GIMP, Krita), 또는 색 관리에 3D LUT를 사용하는 앱).
   
   보정 블랙 포인트 색조 보정을 비활성화하시겠습니까?
 
 "macos.bugs.profile.warning": |-
   macOS 미리보기 및 QuickLook 같은 Apple CMM(색 관리 모듈) 사용 앱은 블랙 포인트 보상이 포함된 단일 곡선 + 매트릭스 외의 디스플레이 프로파일 유형을 지원하지 않습니다.
+
   자체 색 관리를 사용하는 앱은 영향을 받지 않습니다(예: Adobe ACE를 사용하는 Adobe Creative Suite, littleCMS를 사용하는 오픈소스 그래픽 앱(GIMP, Krita), 또는 색 관리에 3D LUT를 사용하는 앱).
   
   프로파일 유형을 단일 곡선 + 매트릭스로 설정하고 블랙 포인트 보상을 활성화하시겠습니까?
@@ -2412,6 +2419,7 @@
 
 "measureframe.info": |-
   측정창을 원하는 곳에 위치하고 필요한 경우 크기를 조절합니다. 전체 윈도우는 디스플레이 측정 패치의 표시에 사용됩니다. 원 모양은 측정장치를 위치할 대략의 가이드입니다.
+
   측정장치를 올려놓은 후 „측정 시작“ 을 클릭합니다. 취소하고 메인 화면으로 돌아오려면 측정창을 닫습니다.
 
 "measureframe.measurebutton": |-
@@ -2963,6 +2971,7 @@
   프로파일을 OpenSUSE “ICC profile Taxi” 서비스를 통해 다른 사용자와 공유할 수 있습니다.
   
   아래에 장치 속성과 충분한 설명을 기술하여 주세요. 디스플레이 장치의 OSD 메뉴로부터 설정값을 확인하고 기본값에서 변경된 설정값만을 기술해 주세요.
+
   예: 대부분의 디스플레이 장치들은 사전설정(chosen preset), 밝기(brightness), 대비(contrast), 색온도(color temperature), RGB 게인(RGB gain), 감마(gamma) 와 같은 설정이 있습니다. 노트북의 경우에는 대부분 밝기(brightness)만 있습니다. 디스플레이 장치의 캘리브레이션 도중 추가적으로 변경한 값이 있다면 가능하다면 함께 기록해 주세요.
 
 "profile.share.meta_missing": |-
@@ -3649,6 +3658,12 @@
 
 "udev_hotplug.unavailable": |-
   udev 또는 hotplug가 감지되지 않았습니다.
+
+"ui.use_qt": |-
+  Qt 사용자 인터페이스 사용 (실험적)
+
+"ui.use_qt.confirm_restart": |-
+  사용자 인터페이스 툴킷은 DisplayCAL을 다음에 시작할 때 변경됩니다. 지금 DisplayCAL을 다시 시작하시겠습니까?
 
 "unassigned": |-
   Unassigned

@@ -7,6 +7,7 @@ for debugging purposes.
 
 from __future__ import annotations
 
+import sys
 import traceback
 from typing import TYPE_CHECKING
 
@@ -21,6 +22,21 @@ if TYPE_CHECKING:
 
 
 WX_EVENT_TYPES = {}
+
+
+def print_safe(text: str) -> None:
+    """Print text, tolerating terminals/pipes that can't encode all of it.
+
+    On Windows, stdout is sometimes attached to a non-UTF-8 pipe or console
+    codepage (e.g. cp1252 under Git Bash or when output is redirected), which
+    can't represent the box-drawing characters used by ``box()``. Falling
+    back to a lossy encode/decode keeps error reporting from crashing itself.
+    """
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        encoding = getattr(sys.stdout, "encoding", None) or "ascii"
+        print(text.encode(encoding, errors="replace").decode(encoding))
 
 
 def getevtobjname(event: wx.Event, window: None | wx.Window = None) -> None | str:
@@ -112,12 +128,12 @@ def handle_error(
         errstr, tbstr = (str(v) for v in (error, tbstr))
         msg = f"{errstr}\n\n{tbstr}"
         if msg.startswith(errstr):
-            print(box(tbstr))
+            print_safe(box(tbstr))
         else:
-            print(box(msg))
+            print_safe(box(msg))
     else:
         msg = str(error)
-        print(box(msg))
+        print_safe(box(msg))
 
     if silent:
         return

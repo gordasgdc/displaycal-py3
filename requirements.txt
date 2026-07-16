@@ -11,10 +11,15 @@ psutil
 PyChromecast
 pyglet <= 2.1.3; python_version < "3.10"
 pyglet >= 2.1.6; python_version >= "3.10"
+pyqtgraph >= 0.13
+PySide6 >= 6.7
 pywin32; sys_platform == "win32"
 PyYAML
+qtpy >= 2.4
 Send2Trash
 typing_extensions; python_version < "3.11"
 WMI; sys_platform == "win32"
+# wxPython is being phased out in favour of Qt (qtpy/PySide6) for DisplayCAL 4.0.
+# It is still required by the not-yet-ported legacy wx_* modules.
 wxPython >= 4.2.2
 zeroconf

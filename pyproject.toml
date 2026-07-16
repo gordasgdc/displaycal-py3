@@ -231,6 +231,37 @@ extend-ignore = [
     "S603",  # Subprocess without shell=True
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# Synthetic-ICC tool is color-math heavy: CIE XYZ / RGB names are the correct
+# domain notation (uppercase), and create_profile mirrors the branch-heavy wx
+# backend it ports.
+"DisplayCAL/ui/tools/synth_profile.py" = ["N802", "N803", "N806", "C901"]
+# 3D-LUT maker is color-math heavy (CIE XYZ / xyY naming) and reimplements the
+# branch-heavy wx LUT3DMixin handlers it ports.
+"DisplayCAL/ui/tools/lut3d.py" = ["N806", "C901"]
+# Interactive-adjustment parser: ``dE`` is the standard Delta-E notation and the
+# ``*_xy_dE`` names mirror the wx ``parse_txt`` locals this ports verbatim; the
+# single dispatch function is branch-heavy for the same reason ``parse_txt`` is.
+"DisplayCAL/ui/display_adjustment.py" = ["N806", "C901"]
+# Measurement-report window: ``XYZbp*`` uses CIE XYZ notation and the branch-heavy
+# ``set_profile`` / ``chart_ctrl_handler`` / ``update_estimated_measurement_time``
+# mirror the wx ``ReportFrame`` handlers they port verbatim.
+"DisplayCAL/ui/measurement_report.py" = ["N803", "N806", "C901"]
+# Colorimeter-correction import: ``detect_import_kind`` / ``discover_auto_
+# import_paths`` / ``get_argyll_data_files`` mirror the branch-heavy wx
+# ``MainFrame.import_colorimeter_correction`` / ``..._producer`` /
+# ``get_argyll_data_files`` they port verbatim.
+"DisplayCAL/colorimeter_correction.py" = ["C901"]
+# Same import pipeline, driven from the Qt side: ``_do_import`` mirrors the wx
+# producer's body (auto-discovery, per-path dispatch, OEM-package download
+# fallback).
+"DisplayCAL/ui/colorimeter_correction_io.py" = ["C901"]
+# Toolkit-neutral measurement-report pipeline: ``resolve_report_context`` and
+# ``finalize_measurement_report`` mirror the branch-heavy wx
+# ``measurement_report_handler`` / ``measurement_report_consumer`` bodies they
+# port verbatim.
+"DisplayCAL/measurement_report.py" = ["C901"]
+
 [tool.ruff.lint.mccabe]
 max-complexity = 12
 

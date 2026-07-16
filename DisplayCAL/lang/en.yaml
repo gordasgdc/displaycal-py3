@@ -651,6 +651,7 @@
   Correction creation failed.
 "colorimeter_correction.create.info": |-
   To create a colorimeter correction, you first need to measure the required test colors with a spectrometer, and in case you want to create a correction matrix instead of a spectral correction, also with the colorimeter.
+
   Alternatively you can also use existing measurements by choosing “Browse...”.
 "colorimeter_correction.create.success": |-
   Correction successfully created.
@@ -747,7 +748,7 @@
 "create_profile": |-
   Create profile from measurement data...
 "create_profile_from_edid": |-
-  Create profile from extended display identification data...
+  Create profile from EDID data...
 "created": |-
   Created
 "creator": |-
@@ -1026,6 +1027,7 @@
   Your support is appreciated!
 "donation_message": |-
   If you would like to support the development of, technical assistance with, and continued availability of DisplayCAL and ArgyllCMS, please consider a financial contribution. As DisplayCAL wouldn't be useful without ArgyllCMS, all contributions received for DisplayCAL will be split between both projects.
+
   For light personal non-commercial use, a one-time contribution may be appropriate. If you're using DisplayCAL professionally, an annual or monthly contribution would make a great deal of difference in ensuring that both projects continue to be available.
 
   Thanks to all contributors!
@@ -1550,6 +1552,8 @@
   Is illuminant
 "is_linear": |-
   Is linear
+"lang.confirm_restart": |-
+  The language will change the next time DisplayCAL is started. Would you like to restart DisplayCAL now?
 "laptop.icc": |-
   Laptop (Gamma 2.2)
 "level": |-
@@ -1576,11 +1580,13 @@
   Your graphics drivers or hardware do not support loadable gamma ramps or calibration. You may need to update your device drivers.
 "macos.bugs.cal.warning": |-
   Applications using the Apple CMM (color management module), like macOS Preview and QuickLook, do not support calibration black point hue correction.
+
   Applications that use their own color management are not affected (like Adobe Creative Suite using Adobe ACE, or open source graphics applications using littleCMS like GIMP or Krita, or applications employing 3D LUTs for color management).
 
   Do you want to disable calibration black point hue correction?
 "macos.bugs.profile.warning": |-
   Applications using the Apple CMM (color management module), like macOS Preview and QuickLook, do not support display profile types other than single curve + matrix with black point compensation.
+
   Applications that use their own color management are not affected (like Adobe Creative Suite using Adobe ACE, or open source graphics applications using littleCMS like GIMP or Krita, or applications employing 3D LUTs for color management).
 
   Do you want to set the profile type to single curve + matrix and enable black point compensation?
@@ -1634,6 +1640,7 @@
   Please place this window in the center of the screen
 "measureframe.info": |-
   Move the measurement window to the desired screen position and resize if needed. Approximately the whole window area will be used to display measurement patches, the circle is just there as a guide to help you place your measurement device.
+
   Place the measurement device on the window and click on “Start measurement”. To cancel and return to the main window, close the measurement window.
 "measureframe.measurebutton": |-
   Start measurement
@@ -2009,6 +2016,7 @@
   You may share your profile with other users via the OpenSUSE “ICC Profile Taxi” service.
 
   Please provide a meaningful description and enter display device properties below. Read display device settings from your display device's OSD and only enter settings applicable to your display device which have changed from defaults.
+
   Example: For most display devices, these are the name of the chosen preset, brightness, contrast, color temperature and/or whitepoint RGB gains, as well as gamma. On laptops and notebooks, usually only the brightness. If you have changed additional settings while calibrating your display device, enter them too if possible.
 "profile.share.meta_missing": |-
   The profile does not contain the necessary meta information.
@@ -2470,6 +2478,10 @@
   Type
 "udev_hotplug.unavailable": |-
   Neither udev nor hotplug detected.
+"ui.use_qt": |-
+  Use Qt user interface (experimental)
+"ui.use_qt.confirm_restart": |-
+  The user interface toolkit will change the next time DisplayCAL is started. Would you like to restart DisplayCAL now?
 "unassigned": |-
   Unassigned
 "uninstall": |-
