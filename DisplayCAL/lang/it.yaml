@@ -1021,6 +1021,7 @@
   Il tuo supporto è apprezzato!
 "donation_message": |-
   Se desideri supportare lo sviluppo, l'assistenza tecnica e la continua disponibilità di DisplayCAL e ArgyllCMS, considera un contributo economico. Poiché DisplayCAL non sarebbe utile senza ArgyllCMS, tutti i contributi ricevuti per DisplayCAL saranno suddivisi tra entrambi i progetti.
+
   Per un uso personale leggero e non commerciale può essere appropriato un contributo una tantum. Se usi DisplayCAL professionalmente, un contributo annuale o mensile farebbe una grande differenza per garantire che entrambi i progetti continuino a essere disponibili.
 
   Grazie a tutti i contributori!
@@ -1573,11 +1574,13 @@
   I driver grafici o l'hardware non supportano il caricamento delle rampe gamma o la calibrazione. Potrebbe essere necessario aggiornare i driver del dispositivo.
 "macos.bugs.cal.warning": |-
   Le applicazioni che usano Apple CMM (modulo gestione colore), come Anteprima macOS e QuickLook, non supportano la correzione tonalità del punto nero di calibrazione.
+
   Le applicazioni che usano la propria gestione colore non sono interessate (come Adobe Creative Suite con Adobe ACE, o applicazioni grafiche open source che usano littleCMS come GIMP o Krita, o applicazioni che impiegano LUT 3D per gestione colore).
 
   Vuoi disabilitare la correzione tonalità del punto nero di calibrazione?
 "macos.bugs.profile.warning": |-
   Le applicazioni che usano Apple CMM (modulo gestione colore), come Anteprima macOS e QuickLook, non supportano tipi di profilo display diversi da curva singola + matrice con compensazione punto nero.
+
   Le applicazioni che usano la propria gestione colore non sono interessate (come Adobe Creative Suite con Adobe ACE, o applicazioni grafiche open source che usano littleCMS come GIMP o Krita, o applicazioni che impiegano LUT 3D per gestione colore).
 
   Vuoi impostare il tipo profilo su curva singola + matrice e abilitare la compensazione punto nero?
@@ -1631,6 +1634,7 @@
   Posiziona questa finestra al centro dello schermo
 "measureframe.info": |-
   Spostare la finestra di misurazione nella posizione dello schermo desiderata e ridimensionarla se necessario. Tutta l'area sarà usata approssimativamente per mostrare i campioni, il cerchio è solo una guida per l'aiuto al posizionamento dello strumento di misurazione.
+
   Posizionare lo strumento di misurazione sulla finestra e premere su „Avvio misurazione“. Per annullare e ritornare alla finestra principale chiudere la finestra di misurazione.
 "measureframe.measurebutton": |-
   Avvio misurazione
@@ -2004,6 +2008,7 @@
   Puoi condividere il tuo profilo con altri utenti tramite il servizio OpenSUSE “ICC Profile Taxi”.
 
   Fornisci una descrizione significativa e inserisci sotto le proprietà del display. Leggi le impostazioni display dal menu OSD e applica solo le impostazioni pertinenti che hai modificato rispetto ai valori predefiniti.
+
   Esempio: per la maggior parte dei display, nomi preset selezionati, luminosità, contrasto, temperatura colore e/o guadagni punto bianco RGB, nonché gamma. Nei laptop spesso solo luminosità. Se hai modificato impostazioni aggiuntive durante la calibrazione, inseriscile se possibile.
 "profile.share.meta_missing": |-
   Il profilo non contiene i metadati richiesti.

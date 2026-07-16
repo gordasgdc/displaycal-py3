@@ -976,6 +976,7 @@
 
 "colorimeter_correction.create.info": |-
   Pour créer une correction du colorimètre, vous devez d’abord mesurer les couleurs de test à l’aide d’un spectromètre et, dans le cas où vous voulez créer une matrice de correction plutôt qu’une correction spectrale, avec le colorimètre également.
+
   Vous pouvez aussi utiliser des mesures existantes en choisissant « Parcourir »
 
 "colorimeter_correction.create.success": |-
@@ -1534,6 +1535,7 @@
 
 "donation_message": |-
   Si vous désirez supporter le développement, apporter une assistance technique et faire se poursuivre la disponibilité de DisplayCAL et d’ArgyllCMS, pensez à une contribution financière. Comme DisplayCAL ne serai d’aucune utilité sans ArgyllCMS, toutes les donations reçues pour DisplayCAL seront partagées entre les deux projets.
+
   Pour une faible utilisation non commerciale, une donation unique semble appropriée. Si vous utilisez DisplayCAL de manière professionnelles, une contribution annuelle ou mensuelle ferait une grande différence en permettant aux deux projets de continuer d’exister.
   
   Merci à tous les contributeurs !
@@ -2328,12 +2330,14 @@
 
 "macos.bugs.cal.warning": |-
   Les applications utilisant Apple CMM (module de gestion des couleurs), comme Aperçu et QuickLook sur macOS, ne prennent pas en charge la correction de teinte du point noir d'étalonnage.
+
   Les applications qui utilisent leur propre gestion des couleurs ne sont pas concernées (comme Adobe Creative Suite utilisant Adobe ACE, ou les applications graphiques open source utilisant littleCMS comme GIMP ou Krita, ou les applications qui utilisent des LUT 3D pour la gestion des couleurs).
   
   Voulez-vous désactiver la correction de teinte du point noir d'étalonnage ?
 
 "macos.bugs.profile.warning": |-
   Les applications utilisant Apple CMM (module de gestion des couleurs), comme Aperçu et QuickLook sur macOS, ne prennent pas en charge les types de profils d'affichage autres que courbe unique + matrice avec compensation du point noir.
+
   Les applications qui utilisent leur propre gestion des couleurs ne sont pas concernées (comme Adobe Creative Suite utilisant Adobe ACE, ou les applications graphiques open source utilisant littleCMS comme GIMP ou Krita, ou les applications qui utilisent des LUT 3D pour la gestion des couleurs).
   
   Voulez-vous définir le type de profil sur courbe unique + matrice et activer la compensation du point noir ?
@@ -2412,6 +2416,7 @@
 
 "measureframe.info": |-
   Déplacez la fenêtre de mesure à l’endroit désiré de l’écran et redimensionnez-la si besoin. Pratiquement toute la surface de la fenêtre sera utilisée pour afficher les échantillons à mesurer, le cercle n'est là que pour vous servir de guide pour placer votre périphérique de mesure.
+
   Placez le périphérique de mesure sur la fenêtre et cliquez sur « Commencer la mesure ». Pour annuler et revenir à la fenêtre principale, fermez la fenêtre de mesure.
 
 "measureframe.measurebutton": |-
@@ -2963,6 +2968,7 @@
   Vous pouvez partager votre profil avec les autres utilisateurs via le service OpenSUSE « ICC Profile Taxi ».
   
   Veuillez fournir une description significative et entrer les propriétés du périphérique d’affichage ci-dessous. Consultez les réglages du périphérique d’affichage depuis l’OSD de votre périphérique d’affichage et n'entrez que les réglages applicables à votre périphérique d’affichage qui ont changé par rapport aux valeurs par défaut.
+
   Exemple : pour la plupart des périphériques d’affichage, il s'agit du nom de la présélection choisie, luminosité, contraste, température des couleurs et/ou niveaux RVB du point blanc, ainsi que le gamma. Sur les portables et notebooks, généralement uniquement la luminosité. Si vous avez modifié des réglages supplémentaires au cours de l’étalonnage de votre périphérique d’affichage, entrez-les également si possible.
 
 "profile.share.meta_missing": |-

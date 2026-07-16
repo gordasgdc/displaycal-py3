@@ -1021,6 +1021,7 @@
   ¡Se agradece su apoyo!
 "donation_message": |-
   Si desea apoyar el desarrollo, la asistencia técnica y la disponibilidad continua de DisplayCAL y ArgyllCMS, considere realizar una contribución económica. Como DisplayCAL no sería útil sin ArgyllCMS, todas las contribuciones recibidas para DisplayCAL se repartirán entre ambos proyectos.
+
   Para un uso personal ligero y no comercial, puede ser apropiada una contribución única. Si utiliza DisplayCAL de forma profesional, una contribución anual o mensual marcaría una gran diferencia para garantizar que ambos proyectos sigan estando disponibles.
 
   ¡Gracias a todos los colaboradores!
@@ -1573,11 +1574,13 @@
   Acceso LUT no compatible
 "macos.bugs.cal.warning": |-
   Las aplicaciones que usan Apple CMM (módulo de gestión de color), como Vista Previa y QuickLook de macOS, no admiten corrección del matiz del punto negro de calibración.
+
   Las aplicaciones que usan su propia gestión de color no se ven afectadas (como Adobe Creative Suite con Adobe ACE, o aplicaciones gráficas de código abierto que usan littleCMS como GIMP o Krita, o aplicaciones que emplean LUT 3D para gestión de color).
 
   ¿Desea desactivar la corrección del matiz del punto negro de calibración?
 "macos.bugs.profile.warning": |-
   Las aplicaciones que usan Apple CMM (módulo de gestión de color), como Vista Previa y QuickLook de macOS, no admiten tipos de perfil de pantalla distintos de curva única + matriz con compensación del punto negro.
+
   Las aplicaciones que usan su propia gestión de color no se ven afectadas (como Adobe Creative Suite con Adobe ACE, o aplicaciones gráficas de código abierto que usan littleCMS como GIMP o Krita, o aplicaciones que emplean LUT 3D para gestión de color).
 
   ¿Desea establecer el tipo de perfil en curva única + matriz y activar la compensación del punto negro?
@@ -1631,6 +1634,7 @@
   Centrar manualmente
 "measureframe.info": |-
   Mover la ventana de medicion a la posición de pantalla deseada y redimensionarla si es necesario. Aproximadamente todo el area de la ventana se utilizara para mostrar los parches de medicion, el circulo es como una guia para ayudarle a situar su instrumento de medicion.
+
   Situe el instrumento de medicion en la pantalla y pulse en „Comenzar medicion“. Para cancelar y volver a la pantalla principal, cierre la ventana de medicion.
 "measureframe.measurebutton": |-
   Comenzar medicion
@@ -2004,6 +2008,7 @@
   Puede compartir su perfil con otros usuarios via el servicio OpenSUSE “ICC Profile Taxi”.
 
   Por favor proporcione una descripcion significativa e introduzca las propiedades de la pantalla mas abajo. Leer ajustes de la pantalla del menu OSD de la misma y aplicar solo las ajustes aplicables a la pantalla que se alteraron de las que trae por defecto.
+
   Ejemplo: Para la mayor parte de las pantallas, estos son los nombres de los preajustes escogidos, brillo, contraste, color temperatura y/o ganancia del punto blanco RGB, asi como la gamma. En portatiles y ultraligeros, habitualmente solo el brillo. Si ha cambiado ajustes adicionales mientras calibraba su pantalla, introduzcalas si es posible.
 "profile.share.meta_missing": |-
   El perfil no contiene la meta informacion necesaria.

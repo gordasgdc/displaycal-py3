@@ -201,7 +201,7 @@ def test__enumerate_displays_without_a_proper_dispwin_output_with_partial_match(
     with pytest.raises(ValueError) as cm:
         result = real_display_size_mm._enumerate_displays()
     assert str(cm.value) == (
-        "An internal error occurred.\n"
+        "An internal error occurred.\n\n"
         "Error code: -1\n"
         "Error message: dispwin returns no usable data while enumerating displays."
     )
