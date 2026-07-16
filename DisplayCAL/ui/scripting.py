@@ -209,8 +209,15 @@ class ScriptingHostMixin:
         """Stop serving the scripting socket."""
         self.listening = False
 
-    def connect(self, ip: str, port: int) -> ScriptingClientSocket | OSError:
+    def open_connection(self, ip: str, port: int) -> ScriptingClientSocket | OSError:
         """Connect to another scripting host's socket.
+
+        Named ``open_connection`` rather than ``connect``: on a ``QObject``
+        subclass (every window mixing this in), a plain ``connect`` method is
+        silently shadowed by Qt's own signal-connection ``connect`` at the
+        binding level regardless of Python MRO, so calling ``self.connect(...)``
+        would raise a ``TypeError`` from PySide/PyQt instead of ever reaching
+        this method.
 
         Args:
             ip (str): The IP address to connect to.
@@ -507,7 +514,7 @@ class ScriptingHostMixin:
                 if name != lock_name:
                     continue
                 ip, port = ip_port.split(":", 1)
-                conn = self.connect(ip, int(port))
+                conn = self.open_connection(ip, int(port))
                 if isinstance(conn, Exception):
                     raise conn
                 # Confirm we reached the expected app (the port could have been
