@@ -102,7 +102,7 @@ from DisplayCAL.worker import (
 )
 
 if TYPE_CHECKING:
-    from qtpy.QtGui import QCloseEvent
+    from qtpy.QtGui import QCloseEvent, QKeyEvent
 
 #: File suffixes accepted for loading (drag-and-drop / open), replacing the chart.
 LOAD_SUFFIXES = (".ti1", ".ti3", ".cgats", ".txt", ".icc", ".icm")
@@ -573,6 +573,9 @@ class TestchartEditorWindow(BaseWindow):
         self.grid.setColumnWidth(len(self._RGB_COLUMNS), 44)
         self.grid.itemChanged.connect(self._on_cell_changed)
         self.grid.itemSelectionChanged.connect(self.tc_set_default_status)
+        self.grid.verticalHeader().sectionDoubleClicked.connect(
+            self._on_row_label_dclick
+        )
         root.addWidget(self.grid, 1)
 
         self.setCentralWidget(central)
@@ -1503,6 +1506,83 @@ class TestchartEditorWindow(BaseWindow):
         self._set_swatch(item.row(), sample)
         self.grid.blockSignals(False)
         self.tc_save_check()
+
+    # -- keyboard / row editing ----------------------------------------------
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 (Qt override)
+        """Handle Ctrl/Cmd+S (save) and Delete/Backspace (remove selected rows).
+
+        Ports ``wx_testchart_editor.tc_key_handler``.
+
+        Args:
+            event (QKeyEvent): The Qt key event.
+        """
+        if event.modifiers() & (Qt.ControlModifier | Qt.MetaModifier):
+            if event.key() == Qt.Key_S:
+                if self.ti1 is not None:
+                    if not self.ti1.filename or not os.path.exists(self.ti1.filename):
+                        self.tc_save_as()
+                    elif self.ti1.modified:
+                        self.tc_save()
+                return
+            if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+                rows = sorted(
+                    index.row() for index in self.grid.selectionModel().selectedRows()
+                )
+                if rows:
+                    if len(rows) == self.grid.rowCount():
+                        self.tc_clear()
+                    else:
+                        self.tc_delete_rows(rows)
+                return
+        super().keyPressEvent(event)
+
+    def _on_row_label_dclick(self, row: int) -> None:
+        """Insert a new white patch row below a double-clicked row label.
+
+        Ports ``wx_testchart_editor.tc_grid_label_left_dclick_handler``.
+
+        Args:
+            row (int): The grid row whose vertical-header label was
+                double-clicked.
+        """
+        if self.ti1 is None:
+            return
+        approx_wp = self.ti1.queryv1("APPROX_WHITE_POINT")
+        if approx_wp:
+            wp = [float(v) for v in approx_wp.split()]
+            wp = [(v / wp[1]) * 100.0 for v in wp]
+        else:
+            wp = colormath.get_standard_illuminant("D65", scale=100)
+        newdata = {
+            "SAMPLE_ID": row + 2,
+            "RGB_R": 100.0,
+            "RGB_G": 100.0,
+            "RGB_B": 100.0,
+            "XYZ_X": wp[0],
+            "XYZ_Y": 100.0,
+            "XYZ_Z": wp[2],
+        }
+        self.tc_add_data(row, [newdata])
+
+    def tc_delete_rows(self, rows: list[int]) -> None:
+        """Delete the given grid rows and renumber the underlying chart data.
+
+        Ports ``wx_testchart_editor.tc_delete_rows``.
+
+        Args:
+            rows (list[int]): Row indices to delete.
+        """
+        if self.ti1 is None or not rows:
+            return
+        data = self.ti1.queryv1("DATA")
+        for row in sorted(rows, reverse=True):
+            data.moveby1(row + 1, -1)
+            dict.pop(data, len(data) - 1)
+        self.ti1.setmodified(True)
+        self._populate_grid()
+        self._select_row(min(rows))
+        self.tc_check()
 
     # -- generation --------------------------------------------------------
 
