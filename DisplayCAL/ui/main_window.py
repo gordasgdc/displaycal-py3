@@ -233,6 +233,7 @@ from DisplayCAL.ui.header_banner import (
     HEADER_BANNER_SIZE,
     HeaderBanner,
     header_banner_pixmap,
+    header_continuation_pixmap,
 )
 from DisplayCAL.ui.measure_frame import MeasureFrame
 from DisplayCAL.ui import message_box
@@ -882,6 +883,35 @@ def lut3d_content_colorspace_items() -> list[str]:
 def lut3d_encoding_items(codes: list[str]) -> list[tuple[str, str]]:
     """Return ``(config value, label)`` pairs for a list of encoding codes."""
     return [(code, lang.getstr(f"3dlut.encoding.type_{code}")) for code in codes]
+
+
+class _HeaderPanelBar(QWidget):
+    """The "current file" bar beneath the header banner.
+
+    wx (``MainFrame``'s ``headerpanel``, ``display_cal.py``) doesn't let the
+    header artwork end at the banner: it overlays a second bitmap
+    (``self.header_btm``, the next ``80x120`` logical strip of
+    ``theme/header.png``) as this bar's top-left background, continuing the
+    flare/circles graphic instead of cutting it off -- the source of a
+    reported "header clipped at the bottom" parity gap (the plain
+    stylesheet-only ``QWidget`` this replaces just showed flat blue there).
+    Painting it here, before the base ``paintEvent`` draws the stylesheet
+    background over the remainder and the ``QHBoxLayout`` children paint on
+    top, mirrors the same "paint explicitly, don't rely on sibling stacking"
+    approach already used by :class:`~DisplayCAL.ui.header_banner.HeaderBanner`.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._continuation = header_continuation_pixmap()
+        self.setAttribute(Qt.WA_StyledBackground, True)
+
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: D102 (Qt override)
+        super().paintEvent(event)
+        if not self._continuation.isNull():
+            painter = QPainter(self)
+            painter.drawPixmap(0, 0, self._continuation)
+            painter.end()
 
 
 class _TabStack(QStackedWidget):
@@ -2750,7 +2780,7 @@ class MainWindow(BaseWindow):
         )
         outer.addWidget(banner)
 
-        bar = QWidget()
+        bar = _HeaderPanelBar()
         bar.setObjectName("headerpanel")
         # Scoped to the object name (not a bare "QWidget { ... }" rule) so the
         # background doesn't cascade into descendants: any style sheet on a

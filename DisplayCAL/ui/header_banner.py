@@ -18,14 +18,19 @@ from DisplayCAL import config
 #: Logical size (pt) of the wx ``get_header()`` wordmark bitmap.
 HEADER_BANNER_SIZE = (222, 64)
 
+#: Logical origin/size (pt) of the flare-graphic continuation wx draws as
+#: ``MainFrame.header_btm`` (``display_cal.py``'s ``y, w, h = 64, 80, 120``),
+#: the region of ``theme/header.png`` immediately below :data:`HEADER_BANNER_SIZE`.
+HEADER_CONTINUATION_ORIGIN = (0, 64)
+HEADER_CONTINUATION_SIZE = (80, 120)
 
-def header_banner_pixmap() -> QPixmap:
-    """Return the ``theme/header.png`` wordmark, cropped to its banner.
 
-    wx's ``get_header()`` draws the top ``222x64`` (logical) region of this
-    artwork, which already bakes in the logo flare, the "DisplayCAL" wordmark
-    and the same blue gradient as the surrounding banner. Loads the ``@2x``
-    asset when available so it stays crisp on HiDPI displays.
+def _crop_header_asset(origin: tuple[int, int], size: tuple[int, int]) -> QPixmap:
+    """Return a logical ``origin``/``size`` region of ``theme/header.png``.
+
+    Loads the ``@2x`` asset when available so it stays crisp on HiDPI
+    displays; the crop rectangle is scaled by the asset's actual density
+    relative to :data:`HEADER_BANNER_SIZE`'s nominal width.
     """
     path = config.get_data_path("theme/header@2x.png") or config.get_data_path(
         "theme/header.png"
@@ -35,11 +40,36 @@ def header_banner_pixmap() -> QPixmap:
     source = QPixmap(path)
     if source.isNull():
         return source
-    w, h = HEADER_BANNER_SIZE
-    ratio = source.width() / w
-    cropped = source.copy(0, 0, round(w * ratio), round(h * ratio))
+    ratio = source.width() / HEADER_BANNER_SIZE[0]
+    x, y = (round(v * ratio) for v in origin)
+    w, h = (round(v * ratio) for v in size)
+    cropped = source.copy(x, y, w, h)
     cropped.setDevicePixelRatio(ratio)
     return cropped
+
+
+def header_banner_pixmap() -> QPixmap:
+    """Return the ``theme/header.png`` wordmark, cropped to its banner.
+
+    wx's ``get_header()`` draws the top ``222x64`` (logical) region of this
+    artwork, which already bakes in the logo flare, the "DisplayCAL" wordmark
+    and the same blue gradient as the surrounding banner. Loads the ``@2x``
+    asset when available so it stays crisp on HiDPI displays.
+    """
+    return _crop_header_asset((0, 0), HEADER_BANNER_SIZE)
+
+
+def header_continuation_pixmap() -> QPixmap:
+    """Return the flare-graphic continuation below the banner crop.
+
+    wx's ``MainFrame`` doesn't stop at the ``222x64`` banner: it overlays a
+    second bitmap (``self.header_btm``), the next ``80x120`` (logical) strip
+    of ``theme/header.png``, as the top-left background of the functional
+    "current file" bar beneath the banner -- continuing the flare/circles
+    artwork instead of cutting it off. Qt's port originally omitted this,
+    leaving the graphic looking clipped at the bottom compared to wx.
+    """
+    return _crop_header_asset(HEADER_CONTINUATION_ORIGIN, HEADER_CONTINUATION_SIZE)
 
 
 class HeaderBanner(QWidget):
