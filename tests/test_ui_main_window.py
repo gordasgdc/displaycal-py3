@@ -7234,3 +7234,47 @@ def test_set_language_action_handler_skips_restart_when_declined(window, monkeyp
         dialog._do_not_show_again_cb.setChecked(True)
         dialog.reject()
         assert getcfg("show_donation_message") == 0
+
+
+# --- runtime theme changes ---------------------------------------------------
+
+
+def test_palette_change_event_refreshes_themed_icons(window, monkeypatch):
+    """A live light/dark switch must re-render icons baked for the old scheme.
+
+    ``_pixmap``/``get_themed_pixmap`` decide whether to recolor a monochrome
+    glyph at call time, so a button that only fetched its icon once (at
+    construction) would otherwise keep showing an icon rendered for whichever
+    scheme was active when the window was built, even after the OS flips
+    schemes and ``Application`` re-applies the palette.
+    """
+    from qtpy.QtCore import QEvent
+
+    calls = []
+    original = mw.MainWindow._refresh_themed_icons
+
+    def spy(self):
+        calls.append(True)
+        original(self)
+
+    monkeypatch.setattr(mw.MainWindow, "_refresh_themed_icons", spy)
+    assert window._themed_icon_updaters
+    window.changeEvent(QEvent(QEvent.PaletteChange))
+    assert calls
+
+
+def test_themed_icon_updaters_reflect_current_theme(window, monkeypatch):
+    """Replaying the updaters must pick up ``is_dark()`` at refresh time."""
+    seen_dark_values = []
+    original_pixmap = mw.MainWindow._pixmap
+
+    def spy_pixmap(self, size, name):
+        seen_dark_values.append(mw.is_dark(self))
+        return original_pixmap(self, size, name)
+
+    monkeypatch.setattr(mw.MainWindow, "_pixmap", spy_pixmap)
+    monkeypatch.setattr(mw, "is_dark", lambda source=None: True)
+    seen_dark_values.clear()
+    window._refresh_themed_icons()
+    assert seen_dark_values
+    assert all(seen_dark_values)

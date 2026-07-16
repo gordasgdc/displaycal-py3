@@ -125,7 +125,7 @@ from decimal import Decimal
 from hashlib import md5
 from typing import TYPE_CHECKING, Callable
 
-from qtpy.QtCore import QSize, Qt, QThread, QTimer, Signal
+from qtpy.QtCore import QEvent, QSize, Qt, QThread, QTimer, Signal
 from qtpy.QtGui import QAction, QActionGroup, QColor, QIcon, QPainter, QPixmap
 from qtpy.QtWidgets import (
     QButtonGroup,
@@ -1009,6 +1009,12 @@ class MainWindow(BaseWindow):
         self._position_restored = False
         self._tab_buttons: dict[str, QToolButton] = {}
         self._panels: dict[str, QWidget] = {}
+        #: Zero-arg callbacks that re-fetch and re-apply a themed icon/pixmap;
+        #: replayed by :meth:`changeEvent` when the OS light/dark scheme flips
+        #: at runtime, since the pixmaps built here are baked once for
+        #: whichever theme was active at construction time and don't
+        #: otherwise notice a later ``QApplication.setPalette`` call.
+        self._themed_icon_updaters: list[Callable[[], None]] = []
         #: config key -> (combo, [values]) for the generic value-combo binder.
         self._value_combos: dict[str, tuple[QComboBox, list]] = {}
         #: config key -> checkbox for the generic checkbox binder.
@@ -2827,6 +2833,42 @@ class MainWindow(BaseWindow):
         """
         return get_themed_pixmap(size, name, is_dark(self))
 
+    def _themed_icon(
+        self, widget: QToolButton | QLabel, size: int, name: str
+    ) -> None:
+        """Apply a themed icon/pixmap to ``widget`` now and on theme changes.
+
+        :meth:`_pixmap` bakes the recolor decision into a plain ``QPixmap`` at
+        call time, so a widget that only ever calls it once keeps showing the
+        icon rendered for whichever scheme was active when it was built (e.g.
+        the dark-mode-only light-gray recolor of monochrome glyphs). Routing
+        icon assignment through here instead records an updater that
+        :meth:`changeEvent` replays whenever the OS flips light/dark at
+        runtime, so the icon stays legible in the new scheme.
+        """
+
+        def apply() -> None:
+            pixmap = self._pixmap(size, name)
+            if pixmap.isNull():
+                return
+            if isinstance(widget, QLabel):
+                widget.setPixmap(pixmap)
+            else:
+                widget.setIcon(pixmap)
+
+        self._themed_icon_updaters.append(apply)
+        apply()
+
+    def _refresh_themed_icons(self) -> None:
+        """Re-apply every icon registered via :meth:`_themed_icon`."""
+        for update in self._themed_icon_updaters:
+            update()
+
+    def changeEvent(self, event: QEvent) -> None:  # noqa: D102 (Qt override)
+        if event.type() in (QEvent.PaletteChange, QEvent.ApplicationPaletteChange):
+            self._refresh_themed_icons()
+        super().changeEvent(event)
+
     @classmethod
     def _header_tool_button(
         cls, icon_name: str, tooltip_key: str, slot: Callable[[], None]
@@ -2897,9 +2939,7 @@ class MainWindow(BaseWindow):
             button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
             button.setIconSize(QSize(32, 32))
             button.setStyleSheet(self._TAB_BUTTON_STYLE)
-            pixmap = self._pixmap(32, icon_name)
-            if not pixmap.isNull():
-                button.setIcon(pixmap)
+            self._themed_icon(button, 32, icon_name)
             # Escape "&" (wx doesn't treat it as a mnemonic marker on a
             # plain label the way Qt does by default; an unescaped "&" here
             # is silently consumed instead of shown, e.g. "Display &
@@ -2971,9 +3011,7 @@ class MainWindow(BaseWindow):
         grid.setColumnStretch(1, 1)
         for row_index, (icon_name, label_key) in enumerate(rows):
             icon_label = QLabel()
-            pixmap = self._pixmap(32, icon_name)
-            if not pixmap.isNull():
-                icon_label.setPixmap(pixmap)
+            self._themed_icon(icon_label, 32, icon_name)
             icon_label.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
             grid.addWidget(icon_label, row_index, 0)
             text_label = QLabel(self._info_text_html(label_key))
@@ -3030,6 +3068,16 @@ class MainWindow(BaseWindow):
         self.display_lut_link_ctrl.toggled.connect(
             self.display_lut_link_ctrl_handler
         )
+        # Unlike the other icons here, this one's icon name depends on toggle
+        # state, not just the theme; re-derive it from the current state
+        # (rather than baking in whichever state was current when the OS
+        # theme flipped) so a runtime theme change can't also revert an
+        # in-progress link toggle.
+        self._themed_icon_updaters.append(
+            lambda: self._apply_display_lut_link_icon(
+                self.display_lut_link_ctrl.isChecked()
+            )
+        )
         display_row.addWidget(self.display_lut_link_ctrl)
 
         self.detect_displays_and_ports_btn = QToolButton()
@@ -3037,9 +3085,7 @@ class MainWindow(BaseWindow):
         self.detect_displays_and_ports_btn.setToolTip(
             lang.getstr("detect_displays_and_ports")
         )
-        refresh_pixmap = self._pixmap(16, "stock_refresh")
-        if not refresh_pixmap.isNull():
-            self.detect_displays_and_ports_btn.setIcon(refresh_pixmap)
+        self._themed_icon(self.detect_displays_and_ports_btn, 16, "stock_refresh")
         self.detect_displays_and_ports_btn.clicked.connect(
             self.detect_displays_and_ports_btn_handler
         )
@@ -3221,9 +3267,7 @@ class MainWindow(BaseWindow):
         self.colorimeter_correction_info_btn.setToolTip(
             lang.getstr("colorimeter_correction.info")
         )
-        info_pixmap = self._pixmap(16, "info")
-        if not info_pixmap.isNull():
-            self.colorimeter_correction_info_btn.setIcon(info_pixmap)
+        self._themed_icon(self.colorimeter_correction_info_btn, 16, "info")
         self.colorimeter_correction_info_btn.clicked.connect(
             self.colorimeter_correction_info_btn_handler
         )
@@ -3233,9 +3277,7 @@ class MainWindow(BaseWindow):
         self.colorimeter_correction_matrix_btn.setToolTip(
             lang.getstr("colorimeter_correction_matrix_file.choose")
         )
-        open_pixmap = self._pixmap(16, "document-open")
-        if not open_pixmap.isNull():
-            self.colorimeter_correction_matrix_btn.setIcon(open_pixmap)
+        self._themed_icon(self.colorimeter_correction_matrix_btn, 16, "document-open")
         self.colorimeter_correction_matrix_btn.clicked.connect(
             self.colorimeter_correction_matrix_btn_handler
         )
@@ -3245,9 +3287,7 @@ class MainWindow(BaseWindow):
         self.colorimeter_correction_web_btn.setToolTip(
             lang.getstr("colorimeter_correction.web_check")
         )
-        web_pixmap = self._pixmap(16, "web")
-        if not web_pixmap.isNull():
-            self.colorimeter_correction_web_btn.setIcon(web_pixmap)
+        self._themed_icon(self.colorimeter_correction_web_btn, 16, "web")
         self.colorimeter_correction_web_btn.clicked.connect(
             self.colorimeter_correction_web_btn_handler
         )
@@ -3257,9 +3297,7 @@ class MainWindow(BaseWindow):
         self.colorimeter_correction_create_btn.setToolTip(
             lang.getstr("colorimeter_correction.create")
         )
-        create_pixmap = self._pixmap(16, "list-add")
-        if not create_pixmap.isNull():
-            self.colorimeter_correction_create_btn.setIcon(create_pixmap)
+        self._themed_icon(self.colorimeter_correction_create_btn, 16, "list-add")
         self.colorimeter_correction_create_btn.clicked.connect(
             self.colorimeter_correction_create_btn_handler
         )
@@ -3271,9 +3309,7 @@ class MainWindow(BaseWindow):
         self.display_tech_info_show_btn.setToolButtonStyle(
             Qt.ToolButtonTextBesideIcon
         )
-        display_tech_pixmap = self._pixmap(16, "info")
-        if not display_tech_pixmap.isNull():
-            self.display_tech_info_show_btn.setIcon(display_tech_pixmap)
+        self._themed_icon(self.display_tech_info_show_btn, 16, "info")
         self.display_tech_info_show_btn.setText(
             lang.getstr("info.display_tech.show")
         )
@@ -4221,9 +4257,7 @@ class MainWindow(BaseWindow):
         button = QToolButton()
         button.setAutoRaise(True)
         button.setToolTip(lang.getstr(tooltip_key))
-        pixmap = self._pixmap(16, icon_name)
-        if not pixmap.isNull():
-            button.setIcon(pixmap)
+        self._themed_icon(button, 16, icon_name)
         button.clicked.connect(handler)
         return button
 

@@ -60,6 +60,14 @@ class Application(QApplication):
         if color_scheme_changed is not None:
             color_scheme_changed.connect(self._on_color_scheme_changed)
 
+        if install_sigint:
+            signal.signal(signal.SIGINT, self._signal_handler)
+            # Give the Python interpreter a chance to run its signal handlers;
+            # without periodic re-entry Qt's C++ loop never yields to Python.
+            self._signal_timer = QTimer(self)
+            self._signal_timer.timeout.connect(lambda: None)
+            self._signal_timer.start(100)
+
     def _on_color_scheme_changed(self, _scheme: object) -> None:
         """Reapply the theme when the OS light/dark preference changes.
 
@@ -70,14 +78,6 @@ class Application(QApplication):
         from DisplayCAL.ui.theme import apply_theme
 
         apply_theme(self)
-
-        if install_sigint:
-            signal.signal(signal.SIGINT, self._signal_handler)
-            # Give the Python interpreter a chance to run its signal handlers;
-            # without periodic re-entry Qt's C++ loop never yields to Python.
-            self._signal_timer = QTimer(self)
-            self._signal_timer.timeout.connect(lambda: None)
-            self._signal_timer.start(100)
 
     # -- exit handlers ------------------------------------------------------
 
