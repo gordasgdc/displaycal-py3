@@ -45,6 +45,25 @@ def get_theme_pixmap(size: int, name: str) -> QPixmap:
     return QPixmap(path)
 
 
+def get_header_icon_pixmap() -> QPixmap:
+    """Return the ``theme/headericon.png`` donation-dialog icon as a ``QPixmap``.
+
+    Mirrors wx's ``get_bitmap("theme/headericon")`` (used by
+    ``display_cal.donation_message``): loads the ``@2x`` asset when available
+    so it stays crisp on HiDPI displays, otherwise the plain PNG at its
+    native size (no forced resize, matching wx's behaviour at standard DPI).
+    """
+    path = config.get_data_path("theme/headericon@2x.png")
+    if path:
+        pixmap = QPixmap(path)
+        pixmap.setDevicePixelRatio(2.0)
+        return pixmap
+    path = config.get_data_path("theme/headericon.png")
+    if not path:
+        return QPixmap()
+    return QPixmap(path)
+
+
 def _is_grayscale(pixmap: QPixmap) -> bool:
     """Return whether every opaque pixel of ``pixmap`` is a shade of gray."""
     image = pixmap.toImage().convertToFormat(QImage.Format_ARGB32)

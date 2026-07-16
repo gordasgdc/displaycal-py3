@@ -213,6 +213,7 @@ from DisplayCAL.options import TEST
 from DisplayCAL.ui.about_window import AboutWindow
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import (
+    get_header_icon_pixmap,
     get_language_flag_pixmap,
     get_theme_pixmap,
     get_themed_pixmap,
@@ -608,15 +609,26 @@ class _DonationDialog(QDialog):
         self.setWindowTitle(lang.getstr("welcome"))
         layout = QVBoxLayout(self)
 
+        top_row = QHBoxLayout()
+        self._icon_label = QLabel(self)
+        icon_pixmap = get_header_icon_pixmap()
+        if not icon_pixmap.isNull():
+            self._icon_label.setPixmap(icon_pixmap)
+        self._icon_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        top_row.addWidget(self._icon_label, 0, Qt.AlignTop)
+
+        text_column = QVBoxLayout()
         header = QLabel(lang.getstr("donation_header"), self)
         font = header.font()
         font.setPointSize(font.pointSize() + 4)
         header.setFont(font)
-        layout.addWidget(header)
+        text_column.addWidget(header)
 
         message = QLabel(lang.getstr("donation_message"), self)
         message.setWordWrap(True)
-        layout.addWidget(message)
+        text_column.addWidget(message)
+        top_row.addLayout(text_column)
+        layout.addLayout(top_row)
 
         self._do_not_show_again_cb = QCheckBox(
             lang.getstr("dialog.do_not_show_again"), self

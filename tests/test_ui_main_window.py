@@ -6676,6 +6676,10 @@ def test_show_donation_message_if_needed_skips_dialog_when_not_flagged(
 
 
 class TestDonationDialog:
+    def test_header_icon_pixmap_not_null(self, window):
+        dialog = mw._DonationDialog(window)
+        assert not dialog._icon_label.pixmap().isNull()
+
     def test_accept_launches_donate_url_and_clears_flag(self, window, monkeypatch):
         setcfg("show_donation_message", 1)
         launched = []
