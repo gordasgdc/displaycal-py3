@@ -118,6 +118,16 @@ def stub_worker(monkeypatch):
     monkeypatch.setattr(
         Worker, "get_instrument_measurement_modes", lambda self, *a, **k: {}
     )
+    # CreateCorrectionWindow._populate_details() -> _populate_technology()
+    # calls this once a TI3 pair is selected (i.e. any test using the
+    # test_ti3/ref_ti3 fixtures). The real implementation shells out to
+    # `ccxxmake -??` with no timeout, which hangs CI the same way as the
+    # other real-Argyll calls stubbed in this fixture.
+    monkeypatch.setattr(
+        Worker,
+        "get_technology_strings",
+        lambda self, *a, **k: {"l": "LCD", "c": "CRT", "u": "Unknown"},
+    )
     # CreateCorrectionWindow.__init__() also unconditionally calls this on
     # every window construction. The real implementation shells out to
     # `ccxxmake -?` with a 30s timeout, which reliably eats the full 30s on
