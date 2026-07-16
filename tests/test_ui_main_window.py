@@ -2032,6 +2032,93 @@ def test_measureframe_result_failure_shows_error(window, _no_writecfg, monkeypat
     assert "boom" in errors[0][2]
 
 
+# --- closing the measure frame directly (X button / Esc) instead of pressing
+# Measure -- regression coverage for "closing the Measurement Area frame
+# leaves the app dead" (begin_measurement() hides MainWindow before showing
+# the in-process MeasureFrame, but nothing used to bring it back unless the
+# user actually completed a measurement).
+
+
+def test_measureframe_close_guard_allows_when_worker_idle(window, monkeypatch):
+    monkeypatch.setattr(window.worker, "is_working", lambda: False)
+    aborted = []
+    monkeypatch.setattr(
+        window.worker, "abort_subprocess", lambda *a, **k: aborted.append((a, k))
+    )
+
+    assert window._measureframe_close_guard() is True
+    assert aborted == []
+
+
+def test_measureframe_close_guard_aborts_when_worker_busy(window, monkeypatch):
+    monkeypatch.setattr(window.worker, "is_working", lambda: True)
+    aborted = []
+    monkeypatch.setattr(
+        window.worker, "abort_subprocess", lambda *a, **k: aborted.append((a, k))
+    )
+
+    assert window._measureframe_close_guard() is False
+    assert aborted == [((), {"confirm": True})]
+
+
+def test_on_measureframe_closed_restores_main_window_and_backups(window, monkeypatch):
+    restored = []
+    monkeypatch.setattr(
+        window, "_restore_after_measurement", lambda: restored.append("main")
+    )
+    monkeypatch.setattr(
+        window,
+        "_restore_measurement_mode_and_testchart",
+        lambda: restored.append("backups"),
+    )
+
+    window._on_measureframe_closed()
+
+    assert restored == ["main", "backups"]
+
+
+def test_ensure_measureframe_wires_close_guard_and_signal(window, monkeypatch):
+    """End-to-end: closing the actual frame runs the guard then the restore."""
+    monkeypatch.setattr(window.worker, "is_working", lambda: False)
+    restored = []
+    monkeypatch.setattr(
+        window, "_restore_after_measurement", lambda: restored.append("main")
+    )
+    monkeypatch.setattr(
+        window,
+        "_restore_measurement_mode_and_testchart",
+        lambda: restored.append("backups"),
+    )
+    window._ensure_measureframe()
+    window.measureframe.show()
+
+    window.measureframe.close()
+
+    assert restored == ["main", "backups"]
+    assert window.measureframe.isVisible() is False
+
+
+def test_ensure_measureframe_close_vetoed_while_worker_busy(window, monkeypatch):
+    """A close while the worker is mid-run aborts instead of restoring."""
+    monkeypatch.setattr(window.worker, "is_working", lambda: True)
+    aborted = []
+    monkeypatch.setattr(
+        window.worker, "abort_subprocess", lambda *a, **k: aborted.append((a, k))
+    )
+    restored = []
+    monkeypatch.setattr(
+        window, "_restore_after_measurement", lambda: restored.append("main")
+    )
+    window._ensure_measureframe()
+    window.measureframe.show()
+
+    window.measureframe.close()
+
+    assert aborted == [((), {"confirm": True})]
+    assert restored == []
+    assert window.measureframe.isVisible() is True
+
+
 # --- pre-flight confirm/overwrite dialogs -----------------------------------
 
 

@@ -424,6 +424,71 @@ def test_detected_levels_issue_confirm_prefers_progress_wnd_confirm3():
     assert worker._detected_levels_issue_confirm_wait is False
 
 
+def test_abort_subprocess_confirm_prefers_progress_wnd_confirm(monkeypatch):
+    """confirm=True routes through progress_wnd.confirm(), never a wx ConfirmDialog.
+
+    abort_subprocess() used to build a wx ConfirmDialog directly whenever
+    confirm=True and progress_wnd was set, which asserts with "No wx.App
+    created yet" under the Qt UI (no running wx.App) -- the same hazard
+    already fixed for detected_levels_issue_confirm() above. It must prefer a
+    callable progress_wnd.confirm() instead, mirroring _prompt_confirm().
+    """
+    import DisplayCAL.worker as worker_module
+    from DisplayCAL import localization as lang
+
+    def _boom(*_args, **_kwargs):
+        raise AssertionError("must not construct a wx ConfirmDialog under Qt")
+
+    monkeypatch.setattr(worker_module, "ConfirmDialog", _boom)
+
+    worker = Worker()
+    seen = {}
+
+    class FakeProgressWnd:
+        def confirm(self, msg, ok, cancel, icon):
+            seen["msg"] = msg
+            seen["ok"] = ok
+            seen["cancel"] = cancel
+            seen["icon"] = icon
+            return False
+
+    worker.progress_wnd = FakeProgressWnd()
+
+    worker.abort_subprocess(confirm=True)
+
+    assert seen  # confirm() was actually called, not the wx dialog
+    assert seen["msg"] == lang.getstr("dialog.confirm_cancel")
+    # Declining leaves the abort request cleared rather than proceeding.
+    assert worker.abort_requested is False
+
+
+def test_abort_subprocess_confirm_true_proceeds_past_guard(monkeypatch):
+    """Confirming via progress_wnd.confirm() proceeds to the actual abort."""
+    import DisplayCAL.worker as worker_module
+
+    started = []
+
+    def _fake_thread(*args, **kwargs):
+        started.append((args, kwargs))
+        return MagicMock()
+
+    monkeypatch.setattr(worker_module.threading, "Thread", _fake_thread)
+    monkeypatch.setattr(worker_module.wx, "GetApp", lambda: None)
+
+    worker = Worker()
+    worker.use_patterngenerator = False
+    worker.use_madnet_tpg = False
+    worker.progress_wnd = type(
+        "FakeProgressWnd", (), {"confirm": lambda self, *a, **k: True}
+    )()
+
+    worker.abort_subprocess(confirm=True)
+
+    assert worker.subprocess_abort is True
+    # The Qt-safe (no wx.App) termination path actually ran.
+    assert started
+
+
 @pytest.mark.skipif(
     sys.platform == "win32",
     reason="Worker.authenticate() returns None on Windows without touching "

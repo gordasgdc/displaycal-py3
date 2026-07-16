@@ -8540,10 +8540,41 @@ class MainWindow(BaseWindow):
         self.measureframe.raise_()
 
     def _ensure_measureframe(self) -> None:
-        """Create the child measure frame once, wiring its Measure signal."""
+        """Create the child measure frame once, wiring its signals."""
         if self.measureframe is None:
             self.measureframe = MeasureFrame(self)
             self.measureframe.measure_requested.connect(self.call_pending_function)
+            self.measureframe.close_guard = self._measureframe_close_guard
+            self.measureframe.frame_closed.connect(self._on_measureframe_closed)
+
+    def _measureframe_close_guard(self) -> bool:
+        """Veto a user-initiated measure-frame close while the worker runs.
+
+        Qt port of the working-branch of wx's ``MeasureFrame.close_handler``:
+        closing while a measurement is mid-flight aborts the subprocess
+        (with confirmation) instead of letting the frame disappear with the
+        worker still running and no window left to restore.
+
+        Returns:
+            bool: True to allow the close, False to veto it.
+        """
+        if self.worker.is_working():
+            self.worker.abort_subprocess(confirm=True)
+            return False
+        return True
+
+    def _on_measureframe_closed(self) -> None:
+        """Restore the main window after the user closes the frame directly.
+
+        Qt port of the non-working branch of wx's ``MeasureFrame
+        .close_handler`` (``self.Parent.Show()`` + ``restore_measurement_mode``
+        / ``restore_testchart``). Only reached once :meth:`_measureframe_close_guard`
+        has allowed the close, i.e. the worker was not running, so there is no
+        in-flight measurement to reconcile -- just the main window's own
+        visibility and any CCXX-flow instrument/testchart backup to restore.
+        """
+        self._restore_after_measurement()
+        self._restore_measurement_mode_and_testchart()
 
     def _start_measureframe_subprocess(self) -> None:
         """Run the measure frame as a subprocess on a worker thread."""

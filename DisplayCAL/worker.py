@@ -4356,19 +4356,34 @@ END_DATA
             if pause:
                 self.progress_wnd.pause_continue_handler(True)
                 self.pause_continue()
-            dlg = ConfirmDialog(
-                self.progress_wnd,
-                msg=lang.getstr("dialog.confirm_cancel"),
-                ok=lang.getstr("yes"),
-                cancel=lang.getstr("no"),
-                bitmap=get_icon(32, "dialog-warning"),
-            )
-            self.progress_wnd.dlg = dlg
-            dlg_result = dlg.ShowModal()
-            if isinstance(prev_dlg, DummyDialog):
-                self.progress_wnd.dlg = prev_dlg
-            dlg.Destroy()
-            if dlg_result != wx.ID_OK:
+            # Toolkit-neutral seam (see _prompt_confirm): a Qt progress_wnd
+            # (ProgressAdapter / _AdjustmentTerminal) services this through
+            # its own confirm() round-trip; only construct the wx
+            # ConfirmDialog directly when there's no such hook, otherwise it
+            # asserts (no running wx.App under the Qt UI).
+            confirm_fn = getattr(self.progress_wnd, "confirm", None)
+            if callable(confirm_fn):
+                confirmed = confirm_fn(
+                    lang.getstr("dialog.confirm_cancel"),
+                    lang.getstr("yes"),
+                    lang.getstr("no"),
+                    "dialog-warning",
+                )
+            else:
+                dlg = ConfirmDialog(
+                    self.progress_wnd,
+                    msg=lang.getstr("dialog.confirm_cancel"),
+                    ok=lang.getstr("yes"),
+                    cancel=lang.getstr("no"),
+                    bitmap=get_icon(32, "dialog-warning"),
+                )
+                self.progress_wnd.dlg = dlg
+                dlg_result = dlg.ShowModal()
+                if isinstance(prev_dlg, DummyDialog):
+                    self.progress_wnd.dlg = prev_dlg
+                dlg.Destroy()
+                confirmed = dlg_result == wx.ID_OK
+            if not confirmed:
                 if pause:
                     self.progress_wnd.Resume()
                 else:

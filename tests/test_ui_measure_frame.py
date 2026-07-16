@@ -174,3 +174,63 @@ def test_show_reapplies_stored_dimensions_every_time(qapp):
         assert frame.size() != first_size
     finally:
         frame.deleteLater()
+
+
+# --- closing directly (X button / Esc) instead of pressing Measure ---------
+#
+# Regression coverage for the "closing the Measurement Area frame leaves the
+# app dead" bug: MainWindow.hide()s itself before presenting this frame, so
+# nothing ever brought it back if the user closed the frame instead of
+# clicking Measure. MeasureFrame itself stays toolkit/owner-neutral -- it only
+# exposes a close_guard veto hook and a frame_closed notification signal, the
+# owner (MainWindow) decides what either of those actually do.
+
+
+def test_close_without_guard_hides_and_emits_frame_closed(qapp):
+    """With no owner installed, closing behaves like a plain window close."""
+    frame = MeasureFrame()
+    try:
+        frame.show()
+        received = []
+        frame.frame_closed.connect(lambda: received.append(True))
+
+        frame.close()
+
+        assert received == [True]
+        assert not frame.isVisible()
+    finally:
+        frame.deleteLater()
+
+
+def test_close_guard_veto_keeps_frame_open_and_suppresses_signal(qapp):
+    """A close_guard returning False vetoes the close entirely."""
+    frame = MeasureFrame()
+    try:
+        frame.show()
+        frame.close_guard = lambda: False
+        received = []
+        frame.frame_closed.connect(lambda: received.append(True))
+
+        frame.close()
+
+        assert received == []
+        assert frame.isVisible()
+    finally:
+        frame.deleteLater()
+
+
+def test_close_guard_allow_closes_and_emits_frame_closed(qapp):
+    """A close_guard returning True lets the close proceed as normal."""
+    frame = MeasureFrame()
+    try:
+        frame.show()
+        frame.close_guard = lambda: True
+        received = []
+        frame.frame_closed.connect(lambda: received.append(True))
+
+        frame.close()
+
+        assert received == [True]
+        assert not frame.isVisible()
+    finally:
+        frame.deleteLater()

@@ -32,7 +32,7 @@ from __future__ import annotations
 import math
 import os
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from qtpy.QtCore import Qt, Signal
 from qtpy.QtGui import QColor, QIcon, QImage, QPainter
@@ -362,6 +362,12 @@ class MeasureFrame(BaseWindow):
     #: generator can await display.
     pattern_shown = Signal()
 
+    #: Emitted when the user closes the frame directly (X button / window
+    #: manager close) rather than by pressing Measure, once :attr:`close_guard`
+    #: (if any) has allowed it. The owner uses this to bring itself back,
+    #: mirroring wx's ``MeasureFrame.close_handler`` hide+show pair.
+    frame_closed = Signal()
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(
             parent=parent,
@@ -378,6 +384,14 @@ class MeasureFrame(BaseWindow):
         self.display_size_mm: dict[tuple[int, int, int, int], list[float]] = {}
         self.default_size = float(DEFAULTS.get("size.measureframe", 300))
         self._current_geometry: tuple[int, int, int, int] | None = None
+
+        #: Optional veto hook set by the owner (``MainWindow``) to guard a
+        #: user-initiated close while a measurement worker is running,
+        #: mirroring wx's ``close_handler`` (which aborts the subprocess with
+        #: confirmation instead of closing). Return ``False`` to veto the
+        #: close. ``None`` (the standalone entry point's default) always
+        #: allows it.
+        self.close_guard: Callable[[], bool] | None = None
 
         self._panel = _MeasurePanel(self)
         self._build_controls()
@@ -843,12 +857,22 @@ class MeasureFrame(BaseWindow):
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 (Qt override)
         """Persist the geometry before the base class handles closing.
 
+        Consults :attr:`close_guard` first (set by the owning ``MainWindow``)
+        so a close while the worker is mid-measurement can be vetoed rather
+        than silently leaving the caller with no visible window, matching
+        wx's ``MeasureFrame.close_handler``.
+
         Args:
             event (QCloseEvent): The Qt close event.
         """
+        if self.close_guard is not None and not self.close_guard():
+            event.ignore()
+            return
         if self.isVisible():
             self.save_dimensions()
         super().closeEvent(event)
+        if event.isAccepted():
+            self.frame_closed.emit()
 
 
 def main() -> int:
