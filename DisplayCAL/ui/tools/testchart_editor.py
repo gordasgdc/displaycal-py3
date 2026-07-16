@@ -30,11 +30,15 @@ averaged into weighted Lab points). Dropping a **CSV** converts it to a temporar
 TI1 and loads it. The lookups run off a :class:`QThread` behind a progress
 dialog.
 
+The 23-way **patch reordering** ("change patch order" combo + apply button) is
+also ported, reusing :class:`DisplayCAL.cgats.CGATS`'s existing sort/checkerboard
+methods.
+
 Still deferred to later stages (and to the not-yet-ported main window for its
 parent integration): the **image / DPX video-pattern export** (it depends on the
-measurement-frame display geometry that lives in the measurement flow) and the
-23-way **patch reordering**. The per-parameter reconstruction of hand-authored
-charts that carry no ``targen`` keywords is also approximate for now.
+measurement-frame display geometry that lives in the measurement flow). The
+per-parameter reconstruction of hand-authored charts that carry no ``targen``
+keywords is also approximate for now.
 """
 
 from __future__ import annotations
@@ -72,7 +76,15 @@ from DisplayCAL import argyll_rgb2xyz, colormath, config
 from DisplayCAL import localization as lang
 from DisplayCAL.argyll import check_set_argyll_bin, get_argyll_util
 from DisplayCAL.argyll_cgats import ti3_to_ti1, verify_cgats
-from DisplayCAL.cgats import CGATS, CGATSError, CGATSKeyError
+from DisplayCAL.cgats import (
+    CGATS,
+    CGATSError,
+    CGATSKeyError,
+    sort_by_rec709_luma,
+    sort_by_rgb,
+    sort_by_rgb_sum,
+    stable_sort_by_l,
+)
 from DisplayCAL.config import (
     DEFAULTS,
     VALID_VALUES,
@@ -128,6 +140,33 @@ CSV_EXPORT_FORMATS = (
     ("CSV (0.0..100.0)", 100),
     ("CSV (0..255)", 255),
     ("CSV (0..1023)", 1023),
+)
+
+#: Localization keys for the 23 "change patch order" modes, in combo-box order.
+PATCH_ORDER_LSTRS = (
+    "testchart.sort_RGB_gray_to_top",
+    "testchart.sort_RGB_white_to_top",
+    "testchart.sort_RGB_red_to_top",
+    "testchart.sort_RGB_green_to_top",
+    "testchart.sort_RGB_blue_to_top",
+    "testchart.sort_RGB_cyan_to_top",
+    "testchart.sort_RGB_magenta_to_top",
+    "testchart.sort_RGB_yellow_to_top",
+    "testchart.sort_by_HSI",
+    "testchart.sort_by_HSL",
+    "testchart.sort_by_HSV",
+    "testchart.sort_by_L",
+    "testchart.sort_by_rec709_luma",
+    "testchart.sort_by_RGB",
+    "testchart.sort_by_RGB_sum",
+    "testchart.sort_by_BGR",
+    "testchart.optimize_display_response_delay",
+    "testchart.interleave",
+    "testchart.shift_interleave",
+    "testchart.maximize_lightness_difference",
+    "testchart.maximize_rec709_luma_difference",
+    "testchart.maximize_RGB_difference",
+    "testchart.vary_RGB_difference",
 )
 
 #: Fullspread-algorithm TI1 keyword → targen algo code, for load reconstruction.
@@ -849,7 +888,11 @@ class TestchartEditorWindow(BaseWindow):
         return row
 
     def _build_add_ti3_row(self) -> QHBoxLayout:
-        """Build the "add reference patches" button + relative-adaptation toggle.
+        """Build the "add reference patches" row.
+
+        Matches wx's "buttons row 3": the add-reference button + its
+        relative-adaptation toggle, followed by the patch-reordering combo
+        box and its Apply button.
 
         Returns:
             QHBoxLayout: The assembled row.
@@ -863,6 +906,20 @@ class TestchartEditorWindow(BaseWindow):
         )
         self.add_ti3_relative_cb.toggled.connect(self._on_add_ti3_relative)
         row.addWidget(self.add_ti3_relative_cb)
+        row.addSpacing(50)
+
+        self.change_patch_order_ctrl = QComboBox()
+        self.change_patch_order_ctrl.addItems(
+            [lang.getstr(lstr) for lstr in PATCH_ORDER_LSTRS]
+        )
+        self.change_patch_order_ctrl.setToolTip(
+            lang.getstr("testchart.change_patch_order")
+        )
+        row.addWidget(self.change_patch_order_ctrl)
+        self.change_patch_order_btn = QPushButton(lang.getstr("apply"))
+        self.change_patch_order_btn.clicked.connect(self.tc_sort_handler)
+        row.addWidget(self.change_patch_order_btn)
+
         row.addStretch(1)
         return row
 
@@ -1216,6 +1273,16 @@ class TestchartEditorWindow(BaseWindow):
             self.tc_dark_emphasis_intctrl.setEnabled(dark_enable)
         self.tc_precond.setEnabled(bool(getcfg("tc_precond_profile")))
         self._update_add_precond_controls()
+        self._update_sort_controls()
+
+    def _update_sort_controls(self) -> None:
+        """Enable the patch-reordering combo/button only for a loaded chart.
+
+        Ports ``wx_testchart_editor.tc_enable_sort_controls``.
+        """
+        enabled = self.ti1 is not None
+        self.change_patch_order_ctrl.setEnabled(enabled)
+        self.change_patch_order_btn.setEnabled(enabled)
 
     def _update_add_precond_controls(self) -> None:
         """Enable the saturation-sweep / add-reference controls (matches wx).
@@ -1360,6 +1427,7 @@ class TestchartEditorWindow(BaseWindow):
         self.tc_save_check()
         self.tc_vrml_update_enabled()
         self._update_add_precond_controls()
+        self._update_sort_controls()
         self.tc_set_default_status()
 
     def tc_save_check(self) -> None:
@@ -1583,6 +1651,77 @@ class TestchartEditorWindow(BaseWindow):
         self._populate_grid()
         self._select_row(min(rows))
         self.tc_check()
+
+    # -- patch reordering ----------------------------------------------------
+
+    def tc_sort_handler(self, *_args) -> None:
+        """Reorder the chart's patches per the selected mode and refresh the grid.
+
+        Ports ``wx_testchart_editor.tc_sort_handler``'s 23 modes (gray/white/
+        primary-to-top, hue-space sorts, and checkerboard interleave patterns)
+        onto the same :class:`DisplayCAL.cgats.CGATS` sort/checkerboard methods.
+        """
+        if self.ti1 is None:
+            return
+        idx = self.change_patch_order_ctrl.currentIndex()
+        if idx == 0:
+            self.ti1.sort_rgb_gray_to_top()
+        elif idx == 1:
+            self.ti1.sort_rgb_white_to_top()
+        elif idx == 2:
+            self.ti1.sort_rgb_to_top(red=True)  # Red
+        elif idx == 3:
+            self.ti1.sort_rgb_to_top(green=True)  # Green
+        elif idx == 4:
+            self.ti1.sort_rgb_to_top(blue=True)  # Blue
+        elif idx == 5:
+            self.ti1.sort_rgb_to_top(green=True, blue=True)  # Cyan
+        elif idx == 6:
+            self.ti1.sort_rgb_to_top(red=True, blue=True)  # Magenta
+        elif idx == 7:
+            self.ti1.sort_rgb_to_top(red=True, green=True)  # Yellow
+        elif idx == 8:
+            self.ti1.sort_by_hsi()
+        elif idx == 9:
+            self.ti1.sort_by_hsl()
+        elif idx == 10:
+            self.ti1.sort_by_hsv()
+        elif idx == 11:
+            self.ti1.sort_by_l()
+        elif idx == 12:
+            self.ti1.sort_by_rec709_luma()
+        elif idx == 13:
+            self.ti1.sort_by_rgb()
+        elif idx == 14:
+            self.ti1.sort_by_rgb_sum()
+        elif idx == 15:
+            self.ti1.sort_by_bgr()
+        elif idx == 16:
+            # Minimize display response delay
+            self.ti1.sort_by_bgr()
+            self.ti1.sort_rgb_gray_to_top()
+            self.ti1.sort_rgb_white_to_top()
+        elif idx == 17:
+            # Interleave
+            self.ti1.checkerboard(None, None)
+        elif idx == 18:
+            # Shift & interleave
+            self.ti1.checkerboard(None, None, split_grays=True, shift=True)
+        elif idx == 19:
+            # Maximize L* difference
+            self.ti1.checkerboard(sort1=stable_sort_by_l)
+        elif idx == 20:
+            # Maximize Rec. 709 luma difference
+            self.ti1.checkerboard(sort_by_rec709_luma)
+        elif idx == 21:
+            # Maximize RGB difference
+            self.ti1.checkerboard(sort_by_rgb_sum)
+        elif idx == 22:
+            # Vary RGB difference
+            self.ti1.checkerboard(sort_by_rgb, None, split_grays=True, shift=True)
+        self.ti1.setmodified(True)
+        self._populate_grid()
+        self.tc_save_check()
 
     # -- generation --------------------------------------------------------
 
