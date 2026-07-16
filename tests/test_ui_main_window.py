@@ -2652,11 +2652,46 @@ def test_profile_request_runs_measure_through_controller(window, monkeypatch):
 
 
 def test_profile_request_marks_untethered_interactive(window, monkeypatch):
+    # The "Untethered" display routes through UntetheredController instead of
+    # WorkerRunController (see _run_measurement_via_worker) -- both must be
+    # stubbed, otherwise this starts a real background thread running
+    # worker.measure() for real, which eventually hits an unmocked
+    # message_box.critical() and hangs the test suite.
     monkeypatch.setattr(config, "get_display_name", lambda *a, **k: "Untethered")
     monkeypatch.setattr(mw.WorkerRunController, "run", lambda *a, **k: None)
+    monkeypatch.setattr(mw.UntetheredController, "run", lambda *a, **k: None)
 
     window.measurement_requested.emit(mw.MeasurementAction.PROFILE)
 
+    assert window.worker.interactive is True
+
+
+def test_profile_request_untethered_routes_through_untethered_controller(
+    window, monkeypatch
+):
+    # Companion to test_profile_request_runs_measure_through_controller: the
+    # "Untethered" display must route through UntetheredController, not the
+    # plain progress-dialog WorkerRunController.
+    calls = {}
+
+    def fake_run(_ctrl, producer, consumer=None, **kwargs):
+        calls["producer"] = producer
+        calls["consumer"] = consumer
+        calls["wkwargs"] = kwargs.get("wkwargs")
+
+    monkeypatch.setattr(config, "get_display_name", lambda *a, **k: "Untethered")
+    monkeypatch.setattr(mw.UntetheredController, "run", fake_run)
+    monkeypatch.setattr(
+        mw.WorkerRunController,
+        "run",
+        lambda *a, **k: pytest.fail("should not use WorkerRunController"),
+    )
+
+    window.measurement_requested.emit(mw.MeasurementAction.PROFILE)
+
+    assert calls["producer"] == window.worker.measure
+    assert calls["consumer"] == window._on_measurement_finished
+    assert calls["wkwargs"] == {"apply_calibration": True}
     assert window.worker.interactive is True
 
 

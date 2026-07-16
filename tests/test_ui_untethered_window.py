@@ -194,6 +194,27 @@ def test_auto_advance_requires_two_settled_readings(window, cgats):
     assert window.finish_btn.isEnabled() is True
 
 
+def test_advancing_to_next_patch_refreshes_the_target_swatch(window, cgats):
+    # Regression test: the instrument stays physically fixed on-screen for the
+    # whole session -- only the displayed target colour is supposed to
+    # advance. If show_rgb() isn't called for the new index after a commit,
+    # the swatch keeps showing the just-committed patch's colour, the
+    # (stationary) instrument keeps reading that same already-known colour,
+    # and since the delta check compares against the last *committed* value,
+    # every further reading stays "too close" to ever commit again -- the run
+    # gets stuck on that patch forever.
+    window.set_cgats(cgats)
+    window.parse_txt("key to take a reading\n")
+    window._measure_btn_handler()
+    window.parse_txt(
+        "Result is XYZ: 0.000010 0.000010 0.000010, "
+        "D50 Lab: 0.000000 0.000000 0.000000\n"
+    )
+    assert window.index == 1
+    # The swatch must now show patch 1 (white), not patch 0's colour.
+    assert window.label_rgb.text() == "RGB 255 255 255"
+
+
 def test_committed_patch_fills_lab_columns(window, cgats):
     window.set_cgats(cgats)
     window.parse_txt("key to take a reading\n")

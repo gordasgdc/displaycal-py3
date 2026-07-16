@@ -116,7 +116,25 @@ class UntetheredWindow(BaseWindow):
             title=lang.getstr("measurement.untethered"),
             icon_name=APPNAME.lower(),
         )
-        self.setStyleSheet(f"QWidget {{ background-color: {BGCOLOUR}; }}")
+        # QLabel/QCheckBox text is styled individually with FGCOLOUR below, but
+        # the grid's cell/header text is palette-driven (not per-widget
+        # styled), so without an explicit color here it renders in the OS
+        # palette's *own* text color (dark on a light-mode OS) against this
+        # forced-dark background -- unreadable regardless of the OS theme,
+        # since this window (like DisplayAdjustmentWindow) is intentionally
+        # always dark, matching the wx frame's hardcoded BGCOLOUR/FGCOLOUR.
+        self.setStyleSheet(
+            f"QWidget {{ background-color: {BGCOLOUR}; color: {FGCOLOUR}; }}"
+            f"QTableWidget {{ background-color: {BGCOLOUR}; color: {FGCOLOUR};"
+            " gridline-color: #444444; }"
+            f"QHeaderView::section {{ background-color: #222222; color: {FGCOLOUR}; }}"
+            # An explicit ``color`` in a stylesheet always wins over the
+            # palette, including the palette's automatic dimming of disabled
+            # widgets -- without this, a disabled button (e.g. "Finish" before
+            # all patches are measured) renders with identical, active-looking
+            # text and reads as unresponsive rather than legitimately disabled.
+            "QPushButton:disabled, QToolButton:disabled { color: #666666; }"
+        )
 
         #: The CGATS test chart being measured; set by the driver before the
         #: first output chunk arrives (mirrors ``Worker.set_terminal_cgats``).
@@ -132,9 +150,6 @@ class UntetheredWindow(BaseWindow):
         self.measured: list[int] = []
         self.finished = False
         self._checkerboard = _checkerboard_pixmap()
-        # Needs to be stereo!
-        self._measurement_sound = audio.Sound(get_data_path("beep.wav"))
-        self._commit_sound = audio.Sound(get_data_path("camera_shutter.wav"))
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -207,7 +222,6 @@ class UntetheredWindow(BaseWindow):
 
         self._set_sound_icon()
         self._setup()
-        self.resize(700, 620)
 
     # -- setup / reset -------------------------------------------------------
 
@@ -339,8 +353,7 @@ class UntetheredWindow(BaseWindow):
     def _handle_result(self, txt: str, data_len: int) -> None:
         """Handle a "Result is XYZ:" line: record it and advance if settled."""
         self.last_error = None
-        if getcfg("measurement.play_sound"):
-            self._measurement_sound.safe_play()
+        self._play_sound("beep.wav")
         match = re.search(
             r"XYZ:\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)", txt
         )
@@ -374,8 +387,7 @@ class UntetheredWindow(BaseWindow):
         self.measure_count += 1
         if self.measure_count != 2:
             return
-        if getcfg("measurement.play_sound"):
-            self._commit_sound.safe_play()
+        self._play_sound("camera_shutter.wav")
         self.measure_count = 0
         self._set_row_label(self.index, str(self.index + 1))
         query = self.cgats[0].queryi1(
@@ -416,8 +428,19 @@ class UntetheredWindow(BaseWindow):
                     self.index = i
                     break
         if self.index != index:
-            self._set_row_label(self.index, f"► {self.index + 1}")
-            self.grid.scrollToItem(self.grid.item(self.index, 0))
+            # Refresh the on-screen target swatch to the new patch's colour
+            # (show_rgb also marks the row label and scrolls it into view).
+            # The device stays physically fixed for the whole session -- only
+            # the displayed colour advances -- so without this the swatch
+            # keeps showing the just-committed patch, the (stationary)
+            # instrument keeps reading that same already-known colour, and
+            # since untethered.min_delta is checked against the last
+            # *committed* value, every further reading stays "too close" to
+            # commit again: the run gets stuck on this patch forever.
+            show_xyz = self.index in self.measured
+            self.show_rgb(not show_xyz)
+            if show_xyz:
+                self.show_xyz()
 
     def _handle_ready_for_reading(self) -> None:
         """Handle "hit a key to take a reading": auto-measure or wait for input."""
@@ -597,6 +620,24 @@ class UntetheredWindow(BaseWindow):
     def _set_sound_icon(self) -> None:
         name = "sound_volume_full" if getcfg("measurement.play_sound") else "sound_off"
         self.sound_on_off_btn.setIcon(_icon(16, name))
+
+    def _play_sound(self, filename: str) -> None:
+        """Best-effort single sound, built lazily (port of the wx frame's
+        eager ``audio.Sound`` construction in ``__init__``).
+
+        Deferred to first use -- and wrapped defensively -- like
+        ``DisplayAdjustmentWindow._play_sound``: constructing ``audio.Sound``
+        eagerly at window construction (as the wx frame does) means every
+        ``UntetheredWindow()`` pays for backend/device probing whether or not
+        a sound is ever actually played, which is wasted work in headless
+        contexts (tests, CI) and a failure there must never break the window.
+        """
+        if not getcfg("measurement.play_sound"):
+            return
+        try:
+            audio.Sound(get_data_path(filename)).safe_play()
+        except Exception:  # noqa: BLE001 - a missing/failed sound must never break measurement
+            pass
 
     def _send(self, key: str) -> None:
         """Request that ``key`` be sent to the interactive ``spotread``."""
