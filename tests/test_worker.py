@@ -431,6 +431,13 @@ def test_detected_levels_issue_confirm_prefers_progress_wnd_confirm3():
 )
 def test_worker_authenticate_threads_password_prompt(monkeypatch):
     """Worker.authenticate() passes Worker.password_prompt to Sudo.authenticate()."""
+    import wx
+
+    # authenticate() unconditionally constructs a BetterWindowDisabler(),
+    # which calls wx.GetTopLevelWindows(); under GTK/Linux with no wx.App
+    # running this crashes the process natively (no Python traceback), not
+    # just a normal assertion, taking the whole pytest-xdist worker down.
+    _ = wx.GetApp() or wx.App()
     worker = Worker()
     prompt_seam = object()
     worker.password_prompt = prompt_seam
