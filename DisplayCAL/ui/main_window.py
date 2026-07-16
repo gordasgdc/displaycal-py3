@@ -607,33 +607,35 @@ class _DonationDialog(QDialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle(lang.getstr("welcome"))
-        layout = QVBoxLayout(self)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
 
-        top_row = QHBoxLayout()
         self._icon_label = QLabel(self)
         icon_pixmap = get_header_icon_pixmap()
         if not icon_pixmap.isNull():
             self._icon_label.setPixmap(icon_pixmap)
         self._icon_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-        top_row.addWidget(self._icon_label, 0, Qt.AlignTop)
+        layout.addWidget(self._icon_label, 0, Qt.AlignTop)
 
-        text_column = QVBoxLayout()
+        right_column = QVBoxLayout()
+        right_column.setContentsMargins(12, 12, 12, 12)
+
         header = QLabel(lang.getstr("donation_header"), self)
         font = header.font()
         font.setPointSize(font.pointSize() + 4)
         header.setFont(font)
-        text_column.addWidget(header)
+        right_column.addWidget(header)
 
         message = QLabel(lang.getstr("donation_message"), self)
         message.setWordWrap(True)
-        text_column.addWidget(message)
-        top_row.addLayout(text_column)
-        layout.addLayout(top_row)
+        right_column.addWidget(message)
+        layout.addLayout(right_column)
 
+        buttons_row = QHBoxLayout()
         self._do_not_show_again_cb = QCheckBox(
             lang.getstr("dialog.do_not_show_again"), self
         )
-        layout.addWidget(self._do_not_show_again_cb)
+        buttons_row.addWidget(self._do_not_show_again_cb)
 
         buttons = QDialogButtonBox(self)
         contribute_button = buttons.addButton(
@@ -643,7 +645,8 @@ class _DonationDialog(QDialog):
         buttons.addButton(lang.getstr("not_now"), QDialogButtonBox.RejectRole)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        buttons_row.addWidget(buttons)
+        right_column.addLayout(buttons_row)
 
     def accept(self) -> None:  # noqa: D102 (Qt override)
         launch_file(f"https://{DOMAIN}/#donate")
