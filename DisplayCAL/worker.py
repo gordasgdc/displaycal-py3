@@ -4505,7 +4505,14 @@ END_DATA
             return False
         self.instrument_on_screen = True
         self.log(f"{APPNAME}: Instrument on screen")
-        if not isinstance(self.progress_wnd, (UntetheredFrame, DisplayUniformityFrame)):
+        if not (
+            isinstance(self.progress_wnd, (UntetheredFrame, DisplayUniformityFrame))
+            # Toolkit-neutral seam: the Qt untethered terminal proxy
+            # (DisplayCAL.ui.worker_runner._UntetheredTerminal) is not a real
+            # UntetheredFrame instance (no wx App to build one), so it marks
+            # itself with this duck-typed attribute instead.
+            or getattr(self.progress_wnd, "is_untethered_terminal", False)
+        ):
             self.safe_send(" ")
             self.pauseable_now = True
         if self.use_madvr:
@@ -14289,7 +14296,11 @@ BEGIN_DATA
             )
             or (
                 "Result is XYZ:" in txt
-                and not isinstance(self.progress_wnd, UntetheredFrame)
+                and not (
+                    isinstance(self.progress_wnd, UntetheredFrame)
+                    # See instrument_place_on_screen for this duck-typed seam.
+                    or getattr(self.progress_wnd, "is_untethered_terminal", False)
+                )
             )
         ):
             if self.cmdname == get_argyll_utilname("dispcal") and self.repeat:
@@ -15205,8 +15216,10 @@ BEGIN_DATA
             args += parse_argument_string(getcfg("extra_args.dispread"))
         self.options_dispread = list(args)
         cgats = self.ensure_patch_sequence(inoutfile + ".ti1")
-        if getattr(self, "terminal", None) and isinstance(
-            self.terminal, UntetheredFrame
+        if getattr(self, "terminal", None) and (
+            isinstance(self.terminal, UntetheredFrame)
+            # See instrument_place_on_screen for this duck-typed seam.
+            or getattr(self.terminal, "is_untethered_terminal", False)
         ):
             result = self.set_terminal_cgats(cgats)
             if isinstance(result, Exception):
@@ -16140,7 +16153,7 @@ BEGIN_DATA
         Args:
             interactive_frame (str or wx.TopLevelWindow): Type of
                 interactive window, or a wx.TopLevelWindow instance for wx
-                callers. Qt callers pass "" or "adjust".
+                callers. Qt callers pass "", "adjust" or "untethered".
             pauseable (bool): Is the operation pauseable?
             cancelable (bool): Is the operation cancelable?
             show_remaining_time (bool): Show remaining time in the progress

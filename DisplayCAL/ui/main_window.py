@@ -264,9 +264,11 @@ from DisplayCAL.ui.tools.synth_profile import SynthICCWindow
 from DisplayCAL.ui.tools.testchart_editor import TestchartEditorWindow
 from DisplayCAL.ui.tools.visual_whitepoint_editor import VisualWhitepointEditorWindow
 from DisplayCAL.ui.update_check_window import UpdateCheckController
+from DisplayCAL.ui.untethered_window import UntetheredWindow
 from DisplayCAL.ui.worker_runner import (
     AdjustmentController,
     PasswordPromptAdapter,
+    UntetheredController,
     WorkerRunController,
 )
 from DisplayCAL.util_decimal import stripzeros
@@ -1060,6 +1062,11 @@ class MainWindow(BaseWindow):
         #: interactive calibration run.
         self._adjustment_window: DisplayAdjustmentWindow | None = None
         self._adjustment_controller: AdjustmentController | None = None
+        #: The untethered-measurement navigation window / driver, created
+        #: lazily on first measurement against the "Untethered" pseudo-display
+        #: (see :meth:`_ensure_untethered_controller`).
+        self._untethered_window: UntetheredWindow | None = None
+        self._untethered_controller: UntetheredController | None = None
         #: The ``current_cal_choice()`` result for the pending ``PROFILE`` run,
         #: set by :meth:`profile_btn_handler` and consumed by
         #: :meth:`_run_profile_measurement`.
@@ -7004,8 +7011,7 @@ class MainWindow(BaseWindow):
         setcfg("calibration.file.previous", None)
         apply_calibration = self._pending_apply_calibration
         self._pending_apply_calibration = True
-        controller = self._ensure_run_controller()
-        controller.run(
+        self._run_measurement_via_worker(
             self.worker.measure,
             self._on_measure_testchart_finished,
             wkwargs={"apply_calibration": apply_calibration},
@@ -7363,8 +7369,7 @@ class MainWindow(BaseWindow):
             self._report_measurement_done()
             return
         self._pending_report_ti1_path = ti1_path
-        controller = self._ensure_run_controller()
-        controller.run(
+        self._run_measurement_via_worker(
             self.worker.measure_ti1,
             self._on_report_measurement_finished,
             wargs=(ti1_path, cal_path, context.colormanaged),
@@ -8690,6 +8695,63 @@ class MainWindow(BaseWindow):
             )
         return self._run_controller
 
+    def _ensure_untethered_controller(self) -> UntetheredController:
+        """Create the untethered-measurement window / driver once, on first run."""
+        if self._untethered_controller is None:
+            self._untethered_window = UntetheredWindow(self)
+            self._untethered_controller = UntetheredController(
+                self.worker, self._untethered_window, self
+            )
+        return self._untethered_controller
+
+    def _run_measurement_via_worker(
+        self,
+        producer,
+        consumer,
+        *,
+        wargs: tuple = (),
+        wkwargs: dict | None = None,
+        progress_msg: str = "",
+        pauseable: bool = True,
+    ) -> None:
+        """Run a measurement producer, picking the right Qt driver for it.
+
+        The plain :class:`WorkerRunController` progress dialog has no
+        patch-navigation UI at all, so when there is no video signal to
+        synchronize a patch generator against (the "Untethered" pseudo-display)
+        the measurement instead runs through :class:`UntetheredController`
+        and its interactive :class:`~DisplayCAL.ui.untethered_window.UntetheredWindow`
+        (issue #841). Every non-interactive-adjustment caller of
+        ``worker.measure`` / ``worker.measure_ti1`` that sets
+        ``worker.interactive = config.get_display_name() == "Untethered"``
+        should route through here instead of calling
+        :meth:`_ensure_run_controller` directly.
+
+        Args:
+            producer: The worker measurement method to run (``worker.measure``
+                or ``worker.measure_ti1``).
+            consumer: Called on the GUI thread with the producer result.
+            wargs (tuple): Positional arguments for the producer.
+            wkwargs (dict | None): Keyword arguments for the producer.
+            progress_msg (str): Progress dialog message (non-interactive path
+                only).
+            pauseable (bool): Whether the run is pauseable (non-interactive
+                path only).
+        """
+        if config.get_display_name() == "Untethered":
+            controller = self._ensure_untethered_controller()
+            controller.run(producer, consumer, wargs=wargs, wkwargs=wkwargs)
+            return
+        controller = self._ensure_run_controller()
+        controller.run(
+            producer,
+            consumer,
+            wargs=wargs,
+            wkwargs=wkwargs,
+            progress_msg=progress_msg,
+            pauseable=pauseable,
+        )
+
     def _run_profile_measurement(self) -> None:
         """Run the characterization measurement (Qt port of ``just_profile``).
 
@@ -8707,8 +8769,7 @@ class MainWindow(BaseWindow):
         setcfg("calibration.file.previous", None)
         apply_calibration = self._pending_apply_calibration
         self._pending_apply_calibration = True
-        controller = self._ensure_run_controller()
-        controller.run(
+        self._run_measurement_via_worker(
             self.worker.measure,
             self._on_measurement_finished,
             wkwargs={"apply_calibration": apply_calibration},
