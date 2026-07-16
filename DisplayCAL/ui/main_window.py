@@ -126,7 +126,7 @@ from hashlib import md5
 from typing import TYPE_CHECKING, Callable
 
 from qtpy.QtCore import QSize, Qt, QThread, QTimer, Signal
-from qtpy.QtGui import QAction, QActionGroup, QColor, QPainter, QPixmap
+from qtpy.QtGui import QAction, QActionGroup, QColor, QIcon, QPainter, QPixmap
 from qtpy.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -212,7 +212,11 @@ from DisplayCAL.meta import VERSION_STRING
 from DisplayCAL.options import TEST
 from DisplayCAL.ui.about_window import AboutWindow
 from DisplayCAL.ui.application import Application
-from DisplayCAL.ui.assets import get_theme_pixmap, get_themed_pixmap
+from DisplayCAL.ui.assets import (
+    get_language_flag_pixmap,
+    get_theme_pixmap,
+    get_themed_pixmap,
+)
 from DisplayCAL.ui.theme import is_dark
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.ccxx_plot_window import CCXXPlotWindow
@@ -2291,8 +2295,10 @@ class MainWindow(BaseWindow):
         hook into yet.
 
         wx additionally shows a per-language country-flag icon (a hardcoded
-        language-code -> ISO-3166 map plus bitmaps); that's cosmetic-only and
-        deliberately not reproduced here.
+        language-code -> ISO-3166 map plus bitmaps); reproduced here via
+        :func:`~DisplayCAL.ui.assets.get_language_flag_pixmap`, using PNGs
+        extracted from wx's ``flagart`` catalog rather than a runtime ``wx``
+        import.
         """
         language_menu = self._language_menu = self.menuBar().addMenu(
             f"&{lang.getstr('menu.language')}"
@@ -2305,6 +2311,9 @@ class MainWindow(BaseWindow):
         )
         for name, lcode in languages:
             action = language_menu.addAction(name)
+            flag = get_language_flag_pixmap(lcode)
+            if not flag.isNull():
+                action.setIcon(QIcon(flag))
             action.setCheckable(True)
             group.addAction(action)
             if lcode == current:

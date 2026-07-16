@@ -19,6 +19,13 @@ from DisplayCAL import config
 #: high-resolution source to downscale from.
 THEME_ICON_SIZES = (512, 256, 128, 64, 48, 32, 24, 22, 16)
 
+#: Map a DisplayCAL language code to the ISO 3166-1 alpha-2 country code whose
+#: flag represents it in the Language menu. Mirrors wx's hardcoded ``lmap`` in
+#: ``display_cal.py`` (English shows the US flag; Ukrainian, Korean and both
+#: Chinese variants are mapped to their national flag rather than a literal
+#: language code).
+LANGUAGE_FLAG_MAP = {"en": "us", "ko": "kr", "ukr": "ua", "zh_hk": "cn", "zh_cn": "cn"}
+
 
 def get_theme_pixmap(size: int, name: str) -> QPixmap:
     """Return the themed PNG ``name`` at ``size`` as a ``QPixmap``.
@@ -84,6 +91,27 @@ def get_themed_pixmap(size: int, name: str, dark: bool) -> QPixmap:
     painter.fillRect(tinted.rect(), QColor("#cccccc"))
     painter.end()
     return tinted
+
+
+def get_language_flag_pixmap(lcode: str) -> QPixmap:
+    """Return the small national-flag ``QPixmap`` for language ``lcode``.
+
+    Flags live under ``theme/icons/flags/<cc>.png``, extracted once from wx's
+    ``wx.lib.art.flagart`` catalog so the Qt UI doesn't need a runtime ``wx``
+    import (wx is being phased out) for a purely cosmetic Language-menu icon.
+
+    Args:
+        lcode (str): DisplayCAL language code (e.g. ``"de"``, ``"zh_cn"``).
+
+    Returns:
+        QPixmap: The flag pixmap, or a null ``QPixmap`` if ``lcode`` has no
+        matching asset.
+    """
+    country_code = LANGUAGE_FLAG_MAP.get(lcode, lcode)
+    path = config.get_data_path(f"theme/icons/flags/{country_code}.png")
+    if not path:
+        return QPixmap()
+    return QPixmap(path)
 
 
 def get_theme_icon(name: str, sizes: tuple[int, ...] = THEME_ICON_SIZES) -> QIcon:

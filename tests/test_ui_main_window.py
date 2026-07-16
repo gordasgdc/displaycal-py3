@@ -7175,6 +7175,11 @@ def test_language_menu_checks_current_language(window):
     assert checked[0].text() == current_name
 
 
+def test_language_menu_actions_have_flag_icons(window):
+    for action in window._language_menu.actions():
+        assert not action.icon().isNull()
+
+
 def test_language_menu_actions_are_mutually_exclusive(window):
     actions = window._language_menu.actions()
     actions[0].setChecked(True)
