@@ -919,3 +919,230 @@ def test_adjustment_controller_finish_after_swap_hides_progress_dialog(qapp):
     assert ctrl._swapped is False
     assert ctrl._adapter is None
     dialog.deleteLater()
+
+
+class _FakeUntetheredWindow(QObject):
+    """Stand-in for the Qt ``UntetheredWindow`` the driver marshals to."""
+
+    send_requested = Signal(str)
+    abort_requested = Signal()
+    closing = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.parsed = []
+        self.pulses = []
+        self.cgats = None
+        self.reset_calls = 0
+        self.shown = False
+        self.is_measuring = False
+
+    def parse_txt(self, txt):
+        self.parsed.append(txt)
+
+    def pulse(self, msg=""):
+        self.pulses.append(msg)
+
+    def set_cgats(self, cgats):
+        self.cgats = cgats
+
+    def reset(self):
+        self.reset_calls += 1
+
+    def place(self):
+        pass
+
+    def show(self):
+        self.shown = True
+
+    def raise_(self):
+        pass
+
+    def hide(self):
+        self.shown = False
+
+    def isVisible(self):  # noqa: N802 - Qt name the terminal probes
+        return self.shown
+
+    def isActiveWindow(self):  # noqa: N802 - Qt name the terminal probes
+        return False
+
+
+class FakeMeasureWorker:
+    """Minimal worker exposing what ``UntetheredController`` touches."""
+
+    def __init__(self, result=True, block=None):
+        self.sent = []
+        self.terminal = None
+        self.progress_wnd = None
+        self.thread = None
+        self._result = result
+        self._block = block
+        self.abort_calls = []
+
+    def measure(self, apply_calibration=True):
+        # Emit a chunk so the terminal marshalling is exercised end to end.
+        self.terminal.write("Connecting to the instrument\n")
+        if self._block is not None:
+            self._block.wait()
+        return self._result
+
+    def safe_send(self, data):
+        self.sent.append(data)
+        return True
+
+    def abort_subprocess(self, confirm=False):
+        # A real Worker kills the spotread subprocess, which unblocks its
+        # producer thread; the block Event stands in for that here.
+        self.abort_calls.append(confirm)
+        if self._block is not None:
+            self._block.set()
+
+    def _init_run_state(self, **kwargs):
+        # Stand-in for Worker._init_run_state (see FakeWorker's copy).
+        self.interactive_frame = kwargs.get("interactive_frame", "")
+        self.pauseable = kwargs.get("pauseable", False)
+        self.cancelable = kwargs.get("cancelable", True)
+        self.paused = False
+        self.subprocess_abort = False
+        self.thread_abort = False
+        self.abort_requested = False
+        self.finished = False
+        self.starttime = time.time()
+
+
+def test_untethered_terminal_write_marshals_to_window(qapp):
+    window = _FakeUntetheredWindow()
+    terminal = wr._UntetheredTerminal(window)
+    terminal.write("hello")
+    assert window.parsed == ["hello"]
+    terminal.write("")
+    assert window.parsed == ["hello"]
+
+
+def test_untethered_terminal_cgats_marshals_to_window(qapp):
+    window = _FakeUntetheredWindow()
+    terminal = wr._UntetheredTerminal(window)
+    sentinel = object()
+    terminal.cgats = sentinel
+    assert window.cgats is sentinel
+    assert terminal.cgats is sentinel
+
+
+def test_untethered_terminal_is_untethered_terminal_marker(qapp):
+    window = _FakeUntetheredWindow()
+    terminal = wr._UntetheredTerminal(window)
+    assert terminal.is_untethered_terminal is True
+
+
+def test_untethered_terminal_pulse_returns_flags(qapp):
+    window = _FakeUntetheredWindow()
+    terminal = wr._UntetheredTerminal(window)
+    keep_going, skip = terminal.Pulse("please wait")
+    assert (keep_going, skip) == (True, False)
+    assert window.pulses == ["please wait"]
+    terminal.keepGoing = False
+    assert terminal.Pulse()[0] is False
+
+
+def test_untethered_terminal_confirm_same_thread_shows_directly(qapp):
+    window = _FakeUntetheredWindow()
+    terminal = wr._UntetheredTerminal(window)
+    terminal._ask = lambda request: True
+    assert terminal.confirm("place instrument", "OK", "Cancel") is True
+
+
+def test_untethered_controller_forwards_send_to_worker(qapp):
+    window = _FakeUntetheredWindow()
+    worker = FakeMeasureWorker()
+    ctrl = wr.UntetheredController(worker, window)
+    assert ctrl is not None
+    window.send_requested.emit(" ")
+    assert worker.sent == [" "]
+
+
+def test_untethered_controller_forwards_abort_requested_to_worker(qapp):
+    window = _FakeUntetheredWindow()
+    worker = FakeMeasureWorker()
+    ctrl = wr.UntetheredController(worker, window)
+    assert ctrl is not None
+    window.abort_requested.emit()
+    assert worker.abort_calls == [False]
+
+
+def test_untethered_controller_sets_interactive_state(qapp):
+    window = _FakeUntetheredWindow()
+    block = Event()
+    worker = FakeMeasureWorker(block=block)
+    ctrl = wr.UntetheredController(worker, window)
+    try:
+        ctrl.run(worker.measure)
+        assert worker.interactive is True
+        assert worker.interactive_frame == "untethered"
+        assert worker.progress_wnd is not None
+        assert worker.thread is ctrl._thread
+        assert window.reset_calls == 1
+        assert window.shown is True
+    finally:
+        block.set()
+        assert _spin_until(qapp, lambda: ctrl.is_running is False)
+
+
+def test_untethered_controller_run_calls_consumer_and_cleans_up(qapp):
+    window = _FakeUntetheredWindow()
+    worker = FakeMeasureWorker(result=True)
+    ctrl = wr.UntetheredController(worker, window)
+    got = []
+    ctrl.run(worker.measure, got.append)
+    assert _spin_until(qapp, lambda: got)
+    assert got == [True]
+    # The streamed chunk reached the window on the GUI thread.
+    assert window.parsed == ["Connecting to the instrument\n"]
+    assert worker.progress_wnd is None
+    assert worker.terminal is None
+    assert worker.thread is None
+    assert window.shown is False
+    assert ctrl.is_running is False
+
+
+def test_untethered_controller_aborts_worker_when_window_closes(qapp):
+    # Closing the window mid-measurement must abort the still-running
+    # spotread subprocess -- otherwise the producer thread stays blocked
+    # forever with nothing left to answer its prompts.
+    window = _FakeUntetheredWindow()
+    block = Event()
+    worker = FakeMeasureWorker(block=block)
+    ctrl = wr.UntetheredController(worker, window)
+    ctrl.run(worker.measure)
+    assert ctrl.is_running is True
+
+    window.closing.emit()
+
+    assert worker.abort_calls == [False]
+    assert ctrl._terminal.keepGoing is False
+    assert _spin_until(qapp, lambda: ctrl.is_running is False)
+
+
+def test_untethered_controller_closing_is_noop_when_not_running(qapp):
+    window = _FakeUntetheredWindow()
+    worker = FakeMeasureWorker()
+    ctrl = wr.UntetheredController(worker, window)
+
+    window.closing.emit()  # Nothing running yet; must not touch the worker.
+
+    assert worker.abort_calls == []
+
+
+def test_untethered_controller_ignores_second_run_while_running(qapp):
+    window = _FakeUntetheredWindow()
+    block = Event()
+    worker = FakeMeasureWorker(block=block)
+    ctrl = wr.UntetheredController(worker, window)
+    try:
+        ctrl.run(worker.measure)
+        first_thread = ctrl._thread
+        ctrl.run(worker.measure)  # ignored while running
+        assert ctrl._thread is first_thread
+    finally:
+        block.set()
+        assert _spin_until(qapp, lambda: ctrl.is_running is False)
