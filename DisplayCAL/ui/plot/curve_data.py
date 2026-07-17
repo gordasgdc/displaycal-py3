@@ -14,11 +14,15 @@ It also bridges profile sources that aren't ``.icc``/``.icm`` files: loading a
 
 from __future__ import annotations
 
+import contextlib
 import os
 from typing import TYPE_CHECKING
 
+import numpy
+
 from DisplayCAL import colormath
-from DisplayCAL.icc_profile import CurveType
+from DisplayCAL.config import getcfg
+from DisplayCAL.icc_profile import CurveType, LUT16Type
 
 if TYPE_CHECKING:
     from DisplayCAL.icc_profile import ICCProfile, VideoCardGammaType
@@ -478,4 +482,246 @@ def read_current_lut(worker: Worker, display_no: int = 1) -> ICCProfile:
     profile = cal_to_fake_profile(outfilename)
     if not profile:
         raise ValueError("Could not read the current video card LUT")
+    return profile
+
+
+# -- shaper curves (advanced options) ----------------------------------------
+
+#: cLUT tags that may carry shaper curves, in wx's ``add_shaper_curves`` order.
+_SHAPER_TAGS = ("A2B0", "A2B1", "A2B2", "B2A0", "B2A1", "B2A2")
+
+#: Colour space signature -> per-channel display names (wx's ``toggle.Label``).
+_COLORSPACE_CHANNELS: dict[bytes, tuple[str, ...]] = {
+    b"XYZ": ("X", "Y", "Z"),
+    b"Lab": ("L*", "a*", "b*"),
+    b"Luv": ("L*", "u*", "v*"),
+    b"YCbr": ("Y", "Cb", "Cr"),
+    b"Yxy": ("Y", "x", "y"),
+    b"RGB": ("R", "G", "B"),
+    b"GRAY": ("K",),
+    b"HSV": ("H", "S", "V"),
+    b"HLS": ("H", "L", "S"),
+    b"CMYK": ("C", "M", "Y", "K"),
+    b"CMY": ("C", "M", "Y"),
+}
+
+
+def _colorspace_channel_names(colorspace: bytes, count: int) -> list[str]:
+    """Return ``count`` display names for ``colorspace``, falling back to indices.
+
+    Args:
+        colorspace (bytes): An ICC colour space signature (e.g. ``b"RGB"``).
+        count (int): Number of channels actually present.
+
+    Returns:
+        list[str]: Per-channel display names.
+    """
+    names = _COLORSPACE_CHANNELS.get(colorspace)
+    if names and len(names) == count:
+        return list(names)
+    return [str(i + 1) for i in range(count)]
+
+
+def available_shaper_modes(profile: ICCProfile) -> list[str]:
+    """Return the shaper-curve mode keys available for ``profile``.
+
+    Mirrors ``wx_lut_viewer.LUTFrame.add_shaper_curves``: offered only when the
+    user has turned on advanced options, and only for the ``A2B``/``B2A`` cLUT
+    tags actually present.
+
+    Args:
+        profile (ICCProfile): The profile to inspect.
+
+    Returns:
+        list[str]: Mode keys like ``"A2B0.input"``/``"A2B0.output"``.
+    """
+    if not getcfg("show_advanced_options"):
+        return []
+    modes = []
+    for tag in _SHAPER_TAGS:
+        if isinstance(profile.tags.get(tag), LUT16Type):
+            modes.append(f"{tag}.input")
+            modes.append(f"{tag}.output")
+    return modes
+
+
+def shaper_mode_lang_key(mode: str) -> str:
+    """Return the wx lang key for a shaper mode key.
+
+    Args:
+        mode (str): A key from :func:`available_shaper_modes`.
+
+    Returns:
+        str: The matching ``"profile.tags.<tag>.shaper_curves.<input|output>"``
+        lang key (reusing wx's existing translations).
+    """
+    tag, io = mode.split(".")
+    return f"profile.tags.{tag}.shaper_curves.{io}"
+
+
+def extract_shaper_curve(
+    profile: ICCProfile, mode: str
+) -> tuple[dict[str, list[tuple[float, float]]], float, float, str, str]:
+    """Return display-ready shaper-curve data for ``mode``.
+
+    Extracted from the shaper-curve branch of ``LUTFrame.DrawLUT``. A2B
+    ``input`` curves and B2A ``output`` curves operate on the profile's device
+    colour space; A2B ``output`` and B2A ``input`` operate on the connection
+    colour space (typically Lab). The Lab L* channel is stored in the v2
+    ``0..25500/65280`` encoding rather than v4's plain ``0..65535``, and is
+    resampled onto the same uniform grid as the other channels.
+
+    Unlike :func:`curve_display`, the returned points are already scaled for
+    display (not normalised 0..1), since shaper curves have no meaningful
+    "raw" 0..1 form shared across colour spaces.
+
+    Args:
+        profile (ICCProfile): The profile carrying the ``LUT16Type`` tag.
+        mode (str): A key from :func:`available_shaper_modes`.
+
+    Returns:
+        tuple: ``(channels, x_max, y_max, x_label, y_label)``, matching
+        :func:`curve_display`'s return shape.
+    """
+    tag_name, io = mode.split(".")
+    lut = profile.tags[tag_name]
+    tables = lut.input if io == "input" else lut.output
+    is_a2b = tag_name.startswith("A2B")
+    to_pcs = is_a2b == (io == "output")
+    colorspace = profile.connectionColorSpace if to_pcs else profile.colorSpace
+
+    entry_count = len(tables[0])
+    maxv = 100.0 if colorspace != b"RGB" else 255.0
+    lin = [v / (entry_count - 1.0) * maxv for v in range(entry_count)]
+
+    names = _colorspace_channel_names(colorspace, len(tables))
+    channels: dict[str, list[tuple[float, float]]] = {}
+    for i, (table, name) in enumerate(zip(tables, names)):
+        xp = lin
+        source = table
+        if colorspace == b"Lab" and i == 0:
+            if to_pcs:
+                source = [v / 65280.0 * 65535.0 for v in table]
+            else:
+                xp = [
+                    min(v / (entry_count - 1.0) * (100 + 25500 / 65280.0), maxv)
+                    for v in range(entry_count)
+                ]
+        yp = [v / 65535.0 * maxv for v in source]
+        if colorspace == b"Lab" and i == 0:
+            # Interpolate to the uniform grid, using the same axis as the
+            # other channels.
+            xi = numpy.interp(lin, yp, xp)
+            yi = numpy.interp(lin, xi, lin)
+        else:
+            yi = yp
+        channels[name] = [(v, max(yp[0], y)) for v, y in zip(lin, yi)]
+
+    label = "".join(names)
+    return channels, maxv, maxv, label, label
+
+
+# -- profile actions (BPC / install / reload) --------------------------------
+
+
+def apply_bpc(profile: ICCProfile) -> ICCProfile:
+    """Return a fake vcgt profile with black point compensation applied.
+
+    Mirrors ``LUTFrame.apply_bpc_handler``.
+
+    Args:
+        profile (ICCProfile): The profile whose vcgt curves to compensate.
+
+    Returns:
+        ICCProfile: A fake profile carrying the black-point-compensated vcgt.
+
+    Raises:
+        Exception: If the profile has no vcgt, or the fake profile could not
+            be built.
+    """
+    from DisplayCAL.argyll_cgats import cal_to_fake_profile, vcgt_to_cal
+
+    cal = vcgt_to_cal(profile)
+    cal.filename = profile.filename or ""
+    cal.apply_bpc(weight=True)
+    fake = cal_to_fake_profile(cal)
+    if not fake:
+        raise ValueError("Could not apply black point compensation")
+    return fake
+
+
+def install_vcgt(profile: ICCProfile, worker: Worker) -> None:
+    """Install ``profile``'s vcgt to the display via Argyll ``dispwin``.
+
+    Mirrors ``LUTFrame.install_vcgt_handler``.
+
+    Args:
+        profile (ICCProfile): The profile whose vcgt to install.
+        worker (Worker): A :class:`DisplayCAL.worker.Worker` driving
+            ``dispwin``.
+
+    Raises:
+        Exception: If a temporary directory, the ``dispwin`` command line, or
+            the installation itself failed.
+    """
+    from DisplayCAL.argyll import make_argyll_compatible_path
+    from DisplayCAL.argyll_cgats import vcgt_to_cal
+
+    cwd = worker.create_tempdir()
+    if isinstance(cwd, Exception):
+        raise cwd
+    cal_path = os.path.join(
+        cwd,
+        make_argyll_compatible_path(
+            profile.getDescription() or "Video LUT", is_name=True
+        ),
+    )
+    vcgt_to_cal(profile).write(cal_path)
+    try:
+        cmd, args = worker.prepare_dispwin(cal_path)
+        if isinstance(cmd, Exception):
+            raise cmd
+        if cmd:
+            result = worker.exec_cmd(
+                cmd, args, capture_output=True, skip_scripts=True
+            )
+            if isinstance(result, Exception):
+                raise result
+            if not result:
+                raise RuntimeError("".join(worker.errors))
+    finally:
+        with contextlib.suppress(OSError):
+            os.remove(cal_path)
+
+
+def reload_display_vcgt(worker: Worker) -> ICCProfile:
+    """Reload the vcgt from the current display profile via ``dispwin``.
+
+    Mirrors ``LUTFrame.reload_vcgt_handler``.
+
+    Args:
+        worker (Worker): A :class:`DisplayCAL.worker.Worker` driving
+            ``dispwin``.
+
+    Returns:
+        ICCProfile: The display profile whose vcgt was just (re)loaded.
+
+    Raises:
+        Exception: If the ``dispwin`` command line or the reload itself
+            failed, or if there is no display profile to read back.
+    """
+    from DisplayCAL.config import get_display_profile
+
+    cmd, args = worker.prepare_dispwin(True)
+    if isinstance(cmd, Exception):
+        raise cmd
+    if cmd:
+        result = worker.exec_cmd(cmd, args, capture_output=True, skip_scripts=True)
+        if isinstance(result, Exception):
+            raise result
+        if not result:
+            raise RuntimeError("".join(worker.errors))
+    profile = get_display_profile()
+    if profile is None:
+        raise ValueError("No display profile available")
     return profile
