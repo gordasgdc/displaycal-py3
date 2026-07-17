@@ -5574,7 +5574,8 @@ class MainWindow(BaseWindow):
         Mirrors wx's ``measurement_mode_ctrl_handler``, minus the old-Argyll
         "projector/adaptive mode unavailable" fallback dialogs (those only
         applied to Argyll versions far older than anything this Qt port
-        targets).
+        targets). The confirm-and-toggle-BPC prompt, a separate dialog, is
+        reproduced via :meth:`_confirm_black_point_correction_choice`.
 
         Args:
             index (int): The newly selected combo index.
@@ -5582,6 +5583,10 @@ class MainWindow(BaseWindow):
         if self._updating or index < 0:
             return
         code = self.get_measurement_mode()
+        cal_changed = (
+            code != getcfg("measurement_mode")
+            and getcfg("calibration.file", False) not in self.presets[1:]
+        )
         instrument_features = self.worker.get_instrument_features()
         if (
             code
@@ -5601,6 +5606,61 @@ class MainWindow(BaseWindow):
             setcfg("measurement_mode.highres", 1 if code and "H" in code else 0)
         setcfg("measurement_mode.projector", 1 if code and "p" in code else None)
         self.update_colorimeter_correction_matrix_ctrl()
+        if (
+            code
+            and self.get_trc()
+            and ("c" not in code or "p" in code)
+            and float(self.get_black_point_correction()) > 0
+            and getcfg("calibration.black_point_correction_choice.show")
+            and not getcfg("calibration.black_point_correction.auto")
+        ):
+            self._confirm_black_point_correction_choice(code, cal_changed)
+
+    def _confirm_black_point_correction_choice(
+        self, code: str, cal_changed: bool
+    ) -> None:
+        """Confirm-and-toggle black-point-correction prompt on mode switch.
+
+        Qt port of the "don't ask again" ``ConfirmDialog`` in wx's
+        ``measurement_mode_ctrl_handler``, shown when the newly selected
+        measurement mode implies black-point-correction should also toggle.
+
+        Args:
+            code: The (ColorHug-adjusted) measurement mode code from
+                :meth:`get_measurement_mode`.
+            cal_changed: Whether the mode switch itself already marked the
+                calibration as changed, so accepting shouldn't re-mark it.
+        """
+        turn_on = "c" in code
+        box = QMessageBox(self)
+        box.setWindowTitle(lang.getstr("calibration.black_point_correction"))
+        box.setIcon(QMessageBox.Question)
+        box.setText(lang.getstr("calibration.black_point_correction_choice"))
+        ok_button = box.addButton(
+            lang.getstr("turn_on" if turn_on else "turn_off"), QMessageBox.AcceptRole
+        )
+        box.addButton(lang.getstr("setting.keep_current"), QMessageBox.RejectRole)
+        checkbox = QCheckBox(lang.getstr("dialog.do_not_show_again"))
+        box.setCheckBox(checkbox)
+        message_box.exec_box(box)
+        setcfg(
+            "calibration.black_point_correction_choice.show",
+            int(not checkbox.isChecked()),
+        )
+        if box.clickedButton() is not ok_button:
+            return
+        bkpt_corr = 1.0 if turn_on else 0.0
+        if not cal_changed and bkpt_corr != getcfg(
+            "calibration.black_point_correction"
+        ):
+            self._mark_profile_settings_changed()
+        setcfg("calibration.black_point_correction", bkpt_corr)
+        was_updating = self._updating
+        self._updating = True
+        try:
+            self.update_calibration_controls()
+        finally:
+            self._updating = was_updating
 
     def update_measurement_mode_ctrl(self) -> None:
         """Populate the measurement-mode combo for the current instrument.

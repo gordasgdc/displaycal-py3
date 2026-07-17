@@ -473,6 +473,195 @@ def test_measurement_mode_ctrl_rebuilds_on_instrument_change(window):
     assert before  # sanity: there was something to compare against
 
 
+# --- measurement_mode_ctrl_handler's BPC choice dialog (issue #845) ---------
+
+
+def _prime_bpc_choice_conditions(window, monkeypatch, code):
+    """Stub the guards in ``measurement_mode_ctrl_handler`` so its BPC-choice
+    dialog condition is met regardless of the stub worker's actual
+    instrument/measurement-mode state."""
+    setcfg("calibration.black_point_correction_choice.show", 1)
+    setcfg("calibration.black_point_correction.auto", 0)
+    monkeypatch.setattr(window, "get_measurement_mode", lambda: code)
+    monkeypatch.setattr(window, "get_trc", lambda: "2.4")
+    monkeypatch.setattr(window, "get_black_point_correction", lambda: "1.0")
+
+
+def test_measurement_mode_ctrl_handler_shows_bpc_choice_dialog_when_applicable(
+    window, monkeypatch
+):
+    # "l" has neither "c" nor "p", satisfying the guard's turn-off case
+    # (``"c" not in code``).
+    _prime_bpc_choice_conditions(window, monkeypatch, "l")
+    calls = []
+    monkeypatch.setattr(
+        window,
+        "_confirm_black_point_correction_choice",
+        lambda code, cal_changed: calls.append((code, cal_changed)),
+    )
+
+    window.measurement_mode_ctrl_handler(0)
+
+    assert calls and calls[0][0] == "l"
+
+
+def test_measurement_mode_ctrl_handler_skips_dialog_when_choice_hidden(
+    window, monkeypatch
+):
+    _prime_bpc_choice_conditions(window, monkeypatch, "l")
+    setcfg("calibration.black_point_correction_choice.show", 0)
+    calls = []
+    monkeypatch.setattr(
+        window,
+        "_confirm_black_point_correction_choice",
+        lambda *a, **k: calls.append(True),
+    )
+
+    window.measurement_mode_ctrl_handler(0)
+
+    assert calls == []
+
+
+def test_measurement_mode_ctrl_handler_skips_dialog_when_bpc_auto(
+    window, monkeypatch
+):
+    _prime_bpc_choice_conditions(window, monkeypatch, "c")
+    setcfg("calibration.black_point_correction.auto", 1)
+    calls = []
+    monkeypatch.setattr(
+        window,
+        "_confirm_black_point_correction_choice",
+        lambda *a, **k: calls.append(True),
+    )
+
+    window.measurement_mode_ctrl_handler(0)
+
+    assert calls == []
+
+
+def test_measurement_mode_ctrl_handler_skips_dialog_when_bpc_zero(
+    window, monkeypatch
+):
+    _prime_bpc_choice_conditions(window, monkeypatch, "c")
+    monkeypatch.setattr(window, "get_black_point_correction", lambda: "0.0")
+    calls = []
+    monkeypatch.setattr(
+        window,
+        "_confirm_black_point_correction_choice",
+        lambda *a, **k: calls.append(True),
+    )
+
+    window.measurement_mode_ctrl_handler(0)
+
+    assert calls == []
+
+
+def test_confirm_bpc_choice_turn_on_accept_persists_bpc(window, monkeypatch):
+    setcfg("calibration.black_point_correction", 0.0)
+    monkeypatch.setattr(mw, "QMessageBox", _FakeBpcChoiceMessageBox)
+    _FakeBpcChoiceMessageBox.clicked_role = "accept"
+    _FakeBpcChoiceMessageBox.check_clicked = False
+    updated = []
+    monkeypatch.setattr(
+        window, "update_calibration_controls", lambda: updated.append(True)
+    )
+
+    window._confirm_black_point_correction_choice("c", cal_changed=True)
+
+    assert getcfg("calibration.black_point_correction") == 1.0
+    assert updated == [True]
+
+
+def test_confirm_bpc_choice_turn_off_accept_persists_bpc(window, monkeypatch):
+    setcfg("calibration.black_point_correction", 1.0)
+    monkeypatch.setattr(mw, "QMessageBox", _FakeBpcChoiceMessageBox)
+    _FakeBpcChoiceMessageBox.clicked_role = "accept"
+    _FakeBpcChoiceMessageBox.check_clicked = False
+    monkeypatch.setattr(window, "update_calibration_controls", lambda: None)
+
+    window._confirm_black_point_correction_choice("l", cal_changed=True)
+
+    assert getcfg("calibration.black_point_correction") == 0.0
+
+
+def test_confirm_bpc_choice_keep_current_leaves_bpc_unchanged(window, monkeypatch):
+    setcfg("calibration.black_point_correction", 0.5)
+    monkeypatch.setattr(mw, "QMessageBox", _FakeBpcChoiceMessageBox)
+    _FakeBpcChoiceMessageBox.clicked_role = "reject"
+    _FakeBpcChoiceMessageBox.check_clicked = False
+    updated = []
+    monkeypatch.setattr(
+        window, "update_calibration_controls", lambda: updated.append(True)
+    )
+
+    window._confirm_black_point_correction_choice("c", cal_changed=True)
+
+    assert getcfg("calibration.black_point_correction") == 0.5
+    assert updated == []
+
+
+def test_confirm_bpc_choice_checkbox_persists_regardless_of_button(
+    window, monkeypatch
+):
+    setcfg("calibration.black_point_correction_choice.show", 1)
+    monkeypatch.setattr(mw, "QMessageBox", _FakeBpcChoiceMessageBox)
+    _FakeBpcChoiceMessageBox.clicked_role = "reject"
+    _FakeBpcChoiceMessageBox.check_clicked = True
+    monkeypatch.setattr(window, "update_calibration_controls", lambda: None)
+
+    window._confirm_black_point_correction_choice("c", cal_changed=True)
+
+    assert getcfg("calibration.black_point_correction_choice.show") == 0
+
+
+def test_confirm_bpc_choice_unchecked_keeps_showing_next_time(window, monkeypatch):
+    setcfg("calibration.black_point_correction_choice.show", 1)
+    monkeypatch.setattr(mw, "QMessageBox", _FakeBpcChoiceMessageBox)
+    _FakeBpcChoiceMessageBox.clicked_role = "accept"
+    _FakeBpcChoiceMessageBox.check_clicked = False
+    monkeypatch.setattr(window, "update_calibration_controls", lambda: None)
+
+    window._confirm_black_point_correction_choice("c", cal_changed=True)
+
+    assert getcfg("calibration.black_point_correction_choice.show") == 1
+
+
+def test_confirm_bpc_choice_marks_settings_changed_when_cal_unchanged(
+    window, monkeypatch
+):
+    setcfg("calibration.black_point_correction", 0.0)
+    monkeypatch.setattr(mw, "QMessageBox", _FakeBpcChoiceMessageBox)
+    _FakeBpcChoiceMessageBox.clicked_role = "accept"
+    _FakeBpcChoiceMessageBox.check_clicked = False
+    monkeypatch.setattr(window, "update_calibration_controls", lambda: None)
+    marked = []
+    monkeypatch.setattr(
+        window, "_mark_profile_settings_changed", lambda: marked.append(True)
+    )
+
+    window._confirm_black_point_correction_choice("c", cal_changed=False)
+
+    assert marked == [True]
+
+
+def test_confirm_bpc_choice_skips_mark_when_cal_already_changed(
+    window, monkeypatch
+):
+    setcfg("calibration.black_point_correction", 0.0)
+    monkeypatch.setattr(mw, "QMessageBox", _FakeBpcChoiceMessageBox)
+    _FakeBpcChoiceMessageBox.clicked_role = "accept"
+    _FakeBpcChoiceMessageBox.check_clicked = False
+    monkeypatch.setattr(window, "update_calibration_controls", lambda: None)
+    marked = []
+    monkeypatch.setattr(
+        window, "_mark_profile_settings_changed", lambda: marked.append(True)
+    )
+
+    window._confirm_black_point_correction_choice("c", cal_changed=True)
+
+    assert marked == []
+
+
 def test_colorimeter_correction_matrix_ctrl_hidden_when_ccxx_unsupported(window):
     # The stub worker's default argyll_version ([0, 0, 0]) can't use CCXX.
     assert window.colorimeter_correction_matrix_ctrl.isVisibleTo(window) is False
@@ -2563,6 +2752,24 @@ class _FakeTwoButtonMessageBox:
             self.clicked_role
         ]
         return self._buttons[role]
+
+
+class _FakeBpcChoiceMessageBox(_FakeTwoButtonMessageBox):
+    """Extends :class:`_FakeTwoButtonMessageBox` with the "don't ask again"
+    checkbox :meth:`MainWindow._confirm_black_point_correction_choice` adds
+    via ``setCheckBox`` -- the real ``QCheckBox`` instance production code
+    creates is stored as-is, so tests can flip it via ``check_clicked`` to
+    simulate the user ticking it before the (mocked) modal closes."""
+
+    check_clicked = False  # set per-test
+
+    def setCheckBox(self, checkbox):
+        self._checkbox = checkbox
+
+    def exec_(self):
+        if self.check_clicked:
+            self._checkbox.setChecked(True)
+        return None
 
 
 def test_profile_btn_handler_stashes_apply_calibration_and_begins(
