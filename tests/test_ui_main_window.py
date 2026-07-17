@@ -262,6 +262,30 @@ def test_profile_types_cover_config_valid_values():
     assert values == set(config.VALID_VALUES["profile.type"])
 
 
+def test_lut3d_format_items_double_digit_argyll_includes_madvr():
+    # Regression test for #847: "1.10.0" < "1.6" lexicographically, which
+    # wrongly hid madVR for Argyll releases with a double-digit component.
+    values = {value for value, _label in mw.lut3d_format_items("1.10.0")}
+    assert "madVR" in values
+
+
+def test_lut3d_format_items_old_argyll_excludes_madvr():
+    values = {value for value, _label in mw.lut3d_format_items("1.5.0")}
+    assert "madVR" not in values
+
+
+def test_lut3d_rendering_intent_items_double_digit_argyll_includes_lp():
+    # Regression test for #847: "1.10.0" < "1.8.3" lexicographically, which
+    # wrongly hid "lp" for Argyll releases with a double-digit component.
+    values = {value for value, _label in mw.lut3d_rendering_intent_items("1.10.0")}
+    assert "lp" in values
+
+
+def test_lut3d_rendering_intent_items_old_argyll_excludes_lp():
+    values = {value for value, _label in mw.lut3d_rendering_intent_items("1.5.0")}
+    assert "lp" not in values
+
+
 # --- window construction / wiring ------------------------------------------
 
 

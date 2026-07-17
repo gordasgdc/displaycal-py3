@@ -44,6 +44,7 @@ import shutil
 from dataclasses import dataclass
 
 from DisplayCAL import colormath
+from DisplayCAL.argyll import argyll_version_at_least
 from DisplayCAL.argyll_names import VIDEO_ENCODINGS
 from DisplayCAL.config import PROFILE_EXT, get_data_path
 from DisplayCAL.meta import NAME as APPNAME
@@ -200,7 +201,7 @@ def compute_trc_visibility(
         content_colorspace_is_custom (bool): Whether the content-colorspace
             combo's selection is its trailing "custom" row.
     """
-    base_show = argyll_version >= "1.6"
+    base_show = argyll_version_at_least(argyll_version, "1.6")
     smpte2084 = trc.startswith("smpte2084")
     smpte2084r = trc == "smpte2084.rolloffclip"
     hlg = trc == "hlg"
@@ -391,7 +392,7 @@ def lut3d_encoding_codes(file_format: str, argyll_version: str) -> tuple[
     else:
         encodings = ["n"] if file_format == "dcl" else list(VIDEO_ENCODINGS)
     if (
-        argyll_version >= "1.7"
+        argyll_version_at_least(argyll_version, "1.7")
         and argyll_version != "1.7.0_beta"
         and file_format != "dcl"
     ):
@@ -410,7 +411,7 @@ def lut3d_encoding_controls_visible(argyll_version: str) -> bool:
     1.7.0 beta 3" clause has no effect on the result: every version it would
     exclude from the first OR-clause still satisfies the second).
     """
-    return argyll_version >= "1.6"
+    return argyll_version_at_least(argyll_version, "1.6")
 
 
 def lut3d_bitdepth_controls_visible(file_format: str) -> tuple[bool, bool]:

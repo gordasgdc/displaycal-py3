@@ -114,6 +114,14 @@ def test_visibility_old_argyll_hides_everything():
     assert v.black_output_offset is False
 
 
+def test_visibility_double_digit_argyll_shows_everything():
+    # Regression test for #847: "1.10.0" < "1.6" lexicographically, which
+    # wrongly hid the TRC row for Argyll releases with a double-digit
+    # component.
+    v = _visibility(argyll_version="1.10.0")
+    assert v.trc_row is True
+
+
 def test_visibility_custom_gamma_shown_without_advanced_options():
     # "customgamma" is visible even without show_advanced_options (matches
     # wx: ``trc == "customgamma" or show_advanced_options``).
@@ -426,6 +434,13 @@ def test_lut3d_encoding_codes_omits_clip_wtw_for_old_argyll():
     assert "T" not in inputs
 
 
+def test_lut3d_encoding_codes_inserts_clip_wtw_for_double_digit_argyll():
+    # Regression test for #847: "1.10.0" < "1.7" lexicographically, which
+    # wrongly omitted "T" for Argyll releases with a double-digit component.
+    inputs, _outputs = l3d.lut3d_encoding_codes("cube", "1.10.0")
+    assert "T" in inputs
+
+
 def test_lut3d_encoding_codes_output_excludes_x_and_bigx():
     _inputs, outputs = l3d.lut3d_encoding_codes("cube", "1.9.0")
     assert "x" not in outputs
@@ -436,6 +451,11 @@ def test_lut3d_encoding_controls_visible_gated_on_argyll_1_6():
     assert l3d.lut3d_encoding_controls_visible("1.6.0") is True
     assert l3d.lut3d_encoding_controls_visible("1.9.0") is True
     assert l3d.lut3d_encoding_controls_visible("1.5.0") is False
+
+
+def test_lut3d_encoding_controls_visible_double_digit_argyll():
+    # Regression test for #847: "1.10.0" < "1.6" lexicographically.
+    assert l3d.lut3d_encoding_controls_visible("1.10.0") is True
 
 
 def test_lut3d_bitdepth_controls_visible():

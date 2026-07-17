@@ -174,6 +174,7 @@ from DisplayCAL import localization as lang
 from DisplayCAL import profile_name as profile_name_mod
 from DisplayCAL import report
 from DisplayCAL.argyll import (
+    argyll_version_at_least,
     check_argyll_bin,
     check_set_argyll_bin,
     get_argyll_util,
@@ -906,7 +907,7 @@ def lut3d_format_items(argyll_version: str = "0.0.0") -> list[tuple[str, str]]:
     return [
         (fmt, lang.getstr(f"3dlut.format.{fmt}"))
         for fmt in config.VALID_VALUES["3dlut.format"]
-        if fmt != "madVR" or argyll_version >= "1.6"
+        if fmt != "madVR" or argyll_version_at_least(argyll_version, "1.6")
     ]
 
 
@@ -919,7 +920,7 @@ def lut3d_rendering_intent_items(argyll_version: str = "0.0.0") -> list[tuple[st
     return [
         (ri, lang.getstr(f"gamap.intents.{ri}"))
         for ri in config.VALID_VALUES["3dlut.rendering_intent"]
-        if ri != "lp" or argyll_version >= "1.8.3"
+        if ri != "lp" or argyll_version_at_least(argyll_version, "1.8.3")
     ]
 
 
