@@ -255,6 +255,39 @@ def test_controller_run_calls_consumer_and_cleans_up(qapp):
         dlg.deleteLater()
 
 
+def test_controller_run_defaults_interactive_frame_empty(qapp):
+    # Every pre-existing caller (calibrate/profile/report measurement) omits
+    # interactive_frame and must keep getting the non-interactive "" default.
+    dlg = _new_progress_dialog()
+    worker = FakeWorker()
+    ctrl = wr.WorkerRunController(worker, dlg)
+    got = []
+    try:
+        ctrl.run(lambda: True, got.append)
+        assert _spin_until(qapp, lambda: got)
+        assert worker.interactive_frame == ""
+    finally:
+        dlg.deleteLater()
+
+
+def test_controller_run_threads_interactive_frame_to_worker(qapp):
+    # Issue #844: a single-shot spotread run (ambient/whitepoint/luminance
+    # measure buttons) needs interactive_frame="ambient"/"luminance" so
+    # Worker.check_is_single_measurement auto-answers the "hit a key to
+    # read" prompt instead of hanging forever waiting for a keystroke this
+    # headless run can never send (see Worker._init_run_state).
+    dlg = _new_progress_dialog()
+    worker = FakeWorker()
+    ctrl = wr.WorkerRunController(worker, dlg)
+    got = []
+    try:
+        ctrl.run(lambda: True, got.append, interactive_frame="luminance")
+        assert _spin_until(qapp, lambda: got)
+        assert worker.interactive_frame == "luminance"
+    finally:
+        dlg.deleteLater()
+
+
 def test_controller_run_ignores_second_start_while_running(qapp):
     dlg = _new_progress_dialog()
     worker = FakeWorker()

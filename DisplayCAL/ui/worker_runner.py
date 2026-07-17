@@ -664,6 +664,7 @@ class WorkerRunController(QObject):
         progress_msg: str = "",
         pauseable: bool = True,
         cancelable: bool = True,
+        interactive_frame: str = "",
     ) -> None:
         """Start a worker producer with the progress dialog.
 
@@ -678,10 +679,20 @@ class WorkerRunController(QObject):
             progress_msg (str): Initial progress message.
             pauseable (bool): Whether the operation can be paused.
             cancelable (bool): Whether the operation can be cancelled.
+            interactive_frame (str): Passed through to
+                ``Worker._init_run_state``. ``"ambient"`` or ``"luminance"``
+                makes a single-shot ``spotread`` run auto-answer its "hit a
+                key to read" prompt (see ``Worker.check_is_single_measurement``
+                / ``do_single_measurement``) instead of blocking forever on a
+                keystroke this headless run can never send.
         """
         if self.is_running:
             return
-        self._prepare_worker(pauseable=pauseable, cancelable=cancelable)
+        self._prepare_worker(
+            pauseable=pauseable,
+            cancelable=cancelable,
+            interactive_frame=interactive_frame,
+        )
         self._adapter = ProgressAdapter(self._dialog)
         self._worker.progress_wnd = self._adapter
         self._consumer = consumer
@@ -711,11 +722,17 @@ class WorkerRunController(QObject):
         self._poll.start()
         self._thread.start()
 
-    def _prepare_worker(self, *, pauseable: bool, cancelable: bool) -> None:
+    def _prepare_worker(
+        self, *, pauseable: bool, cancelable: bool, interactive_frame: str = ""
+    ) -> None:
         """Initialise the worker state ``Worker.start()`` would set."""
         worker = self._worker
         worker.interactive = False
-        worker._init_run_state(pauseable=pauseable, cancelable=cancelable)
+        worker._init_run_state(
+            interactive_frame=interactive_frame,
+            pauseable=pauseable,
+            cancelable=cancelable,
+        )
 
     def _on_poll(self) -> None:
         """Read the worker buffers and advance the dialog (GUI thread)."""
