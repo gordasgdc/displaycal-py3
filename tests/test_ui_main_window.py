@@ -1500,13 +1500,15 @@ def test_measurement_report_btn_handler_runs_report_self_check_with_alt(
     assert calls == [True]
 
 
-def test_report_panel_edit_chart_requested_opens_testchart_editor(window):
+def test_report_panel_edit_chart_requested_opens_report_testchart_editor(window):
     try:
         window._report_panel.edit_chart_requested.emit()
-        assert window._testchart_editor_window is not None
+        assert window._report_testchart_editor_window is not None
+        assert window._testchart_editor_window is None
+        assert window._report_testchart_editor_window.cfg == "measurement_report.chart"
     finally:
-        if window._testchart_editor_window is not None:
-            window._testchart_editor_window.close()
+        if window._report_testchart_editor_window is not None:
+            window._report_testchart_editor_window.close()
 
 
 def _fake_report_context(**overrides):
