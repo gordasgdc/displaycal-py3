@@ -561,6 +561,28 @@ def parse_argyll_version_string(argyll_version_string: str) -> list[int | str]:
     return argyll_version
 
 
+def argyll_version_at_least(argyll_version_string: str, min_version: str) -> bool:
+    """Return whether ``argyll_version_string`` is at least ``min_version``.
+
+    Compares parsed, numeric version components instead of the raw strings,
+    so double-digit components (e.g. ``"1.10.0"``) sort correctly instead of
+    lexicographically (where ``"1.10.0" < "1.3.3"``).
+
+    Args:
+        argyll_version_string (str): E.g. ``getcfg("argyll.version")``.
+        min_version (str): A dotted, purely numeric version, e.g. ``"1.6"``.
+
+    Returns:
+        bool: Whether ``argyll_version_string >= min_version``.
+    """
+    parsed = [
+        v
+        for v in parse_argyll_version_string(argyll_version_string)
+        if isinstance(v, int)
+    ]
+    return parsed >= [int(v) for v in min_version.split(".")]
+
+
 ARGYLLCMS_BINARIES_API_URL = (
     "https://api.github.com/repos/eoyilmaz/argyllcms-binaries/releases/latest"
 )

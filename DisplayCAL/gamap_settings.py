@@ -14,6 +14,7 @@ without reading gamut-mapping widget state directly.
 from __future__ import annotations
 
 from DisplayCAL import config
+from DisplayCAL.argyll import argyll_version_at_least
 from DisplayCAL.argyll_names import INTENTS, VIEWCONDS
 
 #: Profile types whose gamut can be usefully remapped. Mirrors wx's
@@ -48,8 +49,8 @@ def viewcond_items(argyll_version: str) -> list[str]:
         v
         for v in VIEWCONDS
         if not (
-            (v == "pc" and argyll_version < "1.1.1")
-            or (v == "tv" and argyll_version < "1.6")
+            (v == "pc" and not argyll_version_at_least(argyll_version, "1.1.1"))
+            or (v == "tv" and not argyll_version_at_least(argyll_version, "1.6"))
         )
     ]
 
@@ -67,9 +68,9 @@ def intent_items(argyll_version: str) -> list[str]:
         list[str]: Rendering-intent codes, in wx's fixed display order.
     """
     items = list(INTENTS)
-    if argyll_version < "1.3.3":
+    if not argyll_version_at_least(argyll_version, "1.3.3"):
         items.remove("pa")
-    if argyll_version < "1.8.3":
+    if not argyll_version_at_least(argyll_version, "1.8.3"):
         items.remove("lp")
     return items
 

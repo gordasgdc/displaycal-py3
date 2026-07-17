@@ -23,6 +23,14 @@ def test_viewcond_items_modern_argyll_includes_pc_and_tv():
     assert "tv" in items
 
 
+def test_viewcond_items_double_digit_argyll_includes_pc_and_tv():
+    # Regression test for #847: "1.10.0" < "1.3.3" lexicographically, which
+    # wrongly hid "pc"/"tv" for Argyll releases with a double-digit component.
+    items = gs.viewcond_items("1.10.0")
+    assert "pc" in items
+    assert "tv" in items
+
+
 def test_viewcond_items_preserves_order():
     items = gs.viewcond_items("1.9.2")
     assert items == [
@@ -52,6 +60,14 @@ def test_intent_items_old_argyll_excludes_pa_and_lp():
 
 def test_intent_items_modern_argyll_includes_pa_and_lp():
     items = gs.intent_items("1.9.2")
+    assert "pa" in items
+    assert "lp" in items
+
+
+def test_intent_items_double_digit_argyll_includes_pa_and_lp():
+    # Regression test for #847: "1.10.0" < "1.8.3" lexicographically, which
+    # wrongly hid "pa"/"lp" for Argyll releases with a double-digit component.
+    items = gs.intent_items("1.10.0")
     assert "pa" in items
     assert "lp" in items
 
