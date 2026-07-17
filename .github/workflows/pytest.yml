@@ -100,9 +100,19 @@ jobs:
 
     - name: Install wxPython ${{ env.WX_VERSION }}
       run: |
+        set -euo pipefail
         py_version="${{ matrix.python-version }}"
         py_version="${py_version//./}"
-        uv pip install --system "https://extras.wxpython.org/wxPython4/extras/linux/gtk3/ubuntu-24.04/wxpython-${{ env.WX_VERSION }}-cp${py_version}-cp${py_version}-linux_x86_64.whl"
+        wx_url="https://extras.wxpython.org/wxPython4/extras/linux/gtk3/ubuntu-24.04/wxpython-${{ env.WX_VERSION }}-cp${py_version}-cp${py_version}-linux_x86_64.whl"
+        for attempt in 1 2 3; do
+          if uv pip install --system "${wx_url}"; then
+            break
+          fi
+          if [ "${attempt}" -eq 3 ]; then
+            exit 1
+          fi
+          sleep "$((attempt * 10))"
+        done
 
     - name: Install Python dependencies
       run: |
