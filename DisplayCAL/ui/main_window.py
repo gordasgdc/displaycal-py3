@@ -714,6 +714,61 @@ class _UniformityLayoutDialog(QDialog):
         return int(self._rows_combo.currentText())
 
 
+class _ExtraArgsDialog(QDialog):
+    """Qt port of wx's ``ExtraArgsFrame`` (``extra.xrc``, Options > Advanced >
+    "Set additional commandline arguments...").
+
+    Seven raw text fields, one per Argyll tool (dispcal/dispread/spotread/
+    specplot/colprof/collink/targen), each writing straight through to its
+    ``extra_args.<tool>`` config key as it's edited, matching wx's live
+    ``EVT_TEXT`` handler rather than an OK/Cancel confirm flow. ``worker.py``
+    already reads all seven keys into their respective command builders (it's
+    shared by both UI backends); this dialog is the only missing piece. Kept
+    non-modal and reused as a singleton (:attr:`MainWindow._extra_args_dialog`),
+    matching wx's ``self.extra_args`` frame that is created once and then just
+    shown/raised.
+    """
+
+    #: (field label, ``extra_args.<suffix>`` config key) pairs, wx's order.
+    _FIELDS = (
+        ("dispcal", "dispcal"),
+        ("dispread", "dispread"),
+        ("spotread", "spotread"),
+        ("specplot", "specplot"),
+        ("colprof", "colprof"),
+        ("collink", "collink"),
+        ("targen", "targen"),
+    )
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(lang.getstr("extra_args"))
+
+        layout = QVBoxLayout(self)
+
+        form = QFormLayout()
+        for label, suffix in self._FIELDS:
+            cfg_key = f"extra_args.{suffix}"
+            edit = QLineEdit(getcfg(cfg_key), self)
+            edit.setMinimumWidth(480)
+            edit.textChanged.connect(
+                lambda value, cfg_key=cfg_key: setcfg(cfg_key, value)
+            )
+            form.addRow(label, edit)
+        layout.addLayout(form)
+
+        divider = QFrame(self)
+        divider.setFrameShape(QFrame.HLine)
+        divider.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(divider)
+
+        environment_label = QLabel(lang.getstr("environment"), self)
+        font = environment_label.font()
+        font.setBold(True)
+        environment_label.setFont(font)
+        layout.addWidget(environment_label)
+
+
 class _LuminancePatchWindow(QWidget):
     """On-screen white/black patch for direct luminance measurement.
 
@@ -1188,6 +1243,7 @@ class MainWindow(BaseWindow):
         self._synthicc_window: SynthICCWindow | None = None
         self._lut3d_window: LUT3DWindow | None = None
         self._curve_viewer_window: CurveViewerWindow | None = None
+        self._extra_args_dialog: _ExtraArgsDialog | None = None
         #: Persistent log window singleton, matching wx's unconditionally
         #: constructed ``self.infoframe`` (see ``init_infoframe``) -- created
         #: once up front (hidden) rather than lazily, so log output drained
@@ -1807,11 +1863,7 @@ class MainWindow(BaseWindow):
         translucent windows natively (no desktop screenshot involved), so
         there's nothing here for a fallback to guard against; the
         illustrated splash is used unconditionally (see
-        :func:`~DisplayCAL.ui.startup.splash_pixmap`). ``extra_args`` (wx's
-        separate ``ExtraArgsFrame``, seven raw dispcal/dispread/spotread/
-        specplot/colprof/collink/targen argument text fields) is also not
-        reproduced -- a standalone window port on its own, out of scope for
-        this menu pass.
+        :func:`~DisplayCAL.ui.startup.splash_pixmap`).
         """
         options_menu = self.menuBar().addMenu(f"&{lang.getstr('menu.options')}")
 
@@ -1920,6 +1972,11 @@ class MainWindow(BaseWindow):
         self.use_qt_ui_action.setChecked(get_ui_toolkit() == "qt")
         self.use_qt_ui_action.toggled.connect(self._use_qt_ui_toggled)
 
+        advanced_menu.addSeparator()
+
+        extra_args_action = advanced_menu.addAction(lang.getstr("extra_args"))
+        extra_args_action.triggered.connect(self._extra_args_action_handler)
+
         options_menu.addSeparator()
 
         restore_defaults_action = options_menu.addAction(
@@ -2007,6 +2064,22 @@ class MainWindow(BaseWindow):
         )
         if answer == QMessageBox.Yes:
             restart_application()
+
+    def _extra_args_action_handler(self) -> None:
+        """Options > Advanced > "Set additional commandline arguments...".
+
+        Qt port of ``extra_args_handler``: reuses a single
+        :class:`_ExtraArgsDialog` instance across opens (matching wx's
+        ``self.extra_args`` singleton), non-modal so it can stay open
+        alongside the main window.
+        """
+        dialog = self._extra_args_dialog
+        if dialog is None:
+            dialog = _ExtraArgsDialog(self)
+            self._extra_args_dialog = dialog
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
 
     def _restore_defaults_handler(self) -> None:
         """Options menu "Restore defaults" handler.
