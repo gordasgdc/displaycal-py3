@@ -1176,6 +1176,14 @@ class MainWindow(BaseWindow):
         self._testchart_paths: list[str] = []
         self._current_testchart_path: str | None = None
         self._testchart_editor_window: TestchartEditorWindow | None = None
+        #: Separate singleton for the Verification tab's chart-edit button
+        #: (:meth:`_open_report_testchart_editor`), bound to
+        #: ``measurement_report.chart`` -- kept apart from
+        #: ``_testchart_editor_window`` (bound to ``testchart.file``) so
+        #: editing the report's chart never clobbers the Profiling tab's,
+        #: mirroring wx's separate ``ReportFrame.tcframe`` vs.
+        #: ``MainFrame.tcframe`` instances.
+        self._report_testchart_editor_window: TestchartEditorWindow | None = None
         self._synthicc_window: SynthICCWindow | None = None
         self._lut3d_window: LUT3DWindow | None = None
         self._curve_viewer_window: CurveViewerWindow | None = None
@@ -4280,7 +4288,9 @@ class MainWindow(BaseWindow):
         self._report_panel = ReportPanel(
             self, show_measure_button=False, worker=self.worker
         )
-        self._report_panel.edit_chart_requested.connect(self._open_testchart_editor)
+        self._report_panel.edit_chart_requested.connect(
+            self._open_report_testchart_editor
+        )
         return self._report_panel
 
     #: Rounder pill-style corners for the bottom action buttons, closer to
@@ -6774,6 +6784,34 @@ class MainWindow(BaseWindow):
         if first_open:
             window = TestchartEditorWindow()
             self._testchart_editor_window = window
+        if path != "auto" and (
+            first_open or window.ti1 is None or window.ti1.filename != path
+        ):
+            window.load_file(path)
+        window.show()
+        window.raise_()
+        window.activateWindow()
+
+    def _open_report_testchart_editor(self) -> None:
+        """Show the testchart editor bound to the Verification tab's chart.
+
+        Qt port of wx's ``ReportPanel.chart_btn_handler``
+        (``DisplayCAL/wx_report_frame.py:342-363``): opens a chart editor
+        instance dedicated to ``measurement_report.chart``, distinct from
+        :meth:`_open_testchart_editor`'s Profiling-tab singleton, so saving
+        a chart here can only ever retarget the report's chart (via
+        :meth:`~DisplayCAL.ui.measurement_report.ReportPanel.mr_set_testchart`),
+        never ``testchart.file``.
+        """
+        path = getcfg("measurement_report.chart")
+        window = self._report_testchart_editor_window
+        first_open = window is None
+        if first_open:
+            window = TestchartEditorWindow(
+                cfg="measurement_report.chart",
+                chart_selected_callback=self._report_panel.mr_set_testchart,
+            )
+            self._report_testchart_editor_window = window
         if path != "auto" and (
             first_open or window.ti1 is None or window.ti1.filename != path
         ):

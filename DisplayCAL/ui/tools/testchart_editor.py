@@ -372,7 +372,26 @@ class TestchartEditorWindow(BaseWindow):
     #: Grid columns holding editable device values.
     _RGB_COLUMNS = ("R %", "G %", "B %")
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        cfg: str = "testchart.file",
+        chart_selected_callback: Callable[[str], None] | None = None,
+    ) -> None:
+        """Initialize the testchart editor window.
+
+        Args:
+            cfg: Config key the editor's active chart is bound to. Defaults
+                to the Profiling tab's ``testchart.file``; the Verification
+                tab's editor passes ``measurement_report.chart`` instead so
+                saving-as offers to (and, once confirmed, does) retarget the
+                report's chart rather than the profiling one.
+            chart_selected_callback: Called with the saved path once it
+                matches ``cfg``, mirroring wx's
+                ``parent_set_chart_methodname`` -- lets the caller (e.g.
+                :meth:`ReportPanel.mr_set_testchart
+                <DisplayCAL.ui.measurement_report.ReportPanel.mr_set_testchart>`)
+                react to the newly selected chart.
+        """
         super().__init__(
             name="tcgen",
             title=lang.getstr("testchart.edit"),
@@ -381,7 +400,8 @@ class TestchartEditorWindow(BaseWindow):
         self.worker = Worker()
         self.worker.set_argyll_version("targen")
         self.argyll_version = self.worker.argyll_version
-        self.cfg = "testchart.file"
+        self.cfg = cfg
+        self._chart_selected_callback = chart_selected_callback
         self.ti1: CGATS | None = None
         self.tc_amount = 0
         self._loading = False
@@ -2730,7 +2750,31 @@ END_DATA"""
             f"{lang.getstr('testchart.edit').rstrip('.')}: {os.path.basename(path)}"
         )
         self.save_btn.setEnabled(False)
+        if self._chart_selected_callback is not None:
+            if path != getcfg(self.cfg) and self._confirm_select_chart():
+                setcfg(self.cfg, path)
+                self.writecfg()
+            if path == getcfg(self.cfg):
+                self._chart_selected_callback(path)
         return True
+
+    def _confirm_select_chart(self) -> bool:
+        """Ask whether the just-saved chart should become the active one.
+
+        Mirrors wx's ``tc_save_as_handler`` confirm dialog, shown only when
+        saving as a path different from the bound ``cfg`` key's current
+        value (e.g. the Verification tab's ``measurement_report.chart``).
+        """
+        box = QMessageBox(self)
+        box.setWindowTitle(self.windowTitle())
+        box.setIcon(QMessageBox.Question)
+        box.setText(lang.getstr("testchart.confirm_select"))
+        ok_button = box.addButton(
+            lang.getstr("testchart.select"), QMessageBox.AcceptRole
+        )
+        box.addButton(lang.getstr("testchart.dont_select"), QMessageBox.RejectRole)
+        message_box.exec_box(box)
+        return box.clickedButton() is ok_button
 
     def tc_clear(self) -> None:
         """Discard the current chart and reset the editor."""
