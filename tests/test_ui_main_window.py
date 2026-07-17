@@ -695,6 +695,147 @@ def test_luminance_custom_persists(window):
     assert getcfg("calibration.luminance", False) is None
 
 
+def test_luminance_measure_btn_handler_creates_and_reuses_patch_window(window):
+    # Issue #844: clicking luminance_measure_btn / black_luminance_measure_btn
+    # should pop an on-screen patch window, reused (not recreated) on repeat
+    # clicks, like the visual-whitepoint-editor singleton precedent.
+    window._luminance_measure_btn_handler("luminance_measure_btn")
+    white_window = window._luminance_patch_window
+    assert white_window is not None
+    assert white_window.isVisible()
+    window._luminance_measure_btn_handler("luminance_measure_btn")
+    assert window._luminance_patch_window is white_window
+
+    window._luminance_measure_btn_handler("black_luminance_measure_btn")
+    black_window = window._black_luminance_patch_window
+    assert black_window is not None
+    assert black_window is not white_window
+
+
+def test_luminance_patch_measure_button_runs_producer_through_controller(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    run_calls = []
+
+    class _FakeController:
+        def run(self, *a, **k):
+            run_calls.append((a, k))
+
+    monkeypatch.setattr(window, "_ensure_run_controller", lambda: _FakeController())
+    window._luminance_measure_btn_handler("luminance_measure_btn")
+    window._luminance_patch_window.measure_requested.emit()
+
+    assert run_calls
+    args, kwargs = run_calls[0]
+    assert args[0] == window._luminance_measure_producer
+    assert kwargs["pauseable"] is False
+    # Issue #844: without this, spotread's "hit a key to read" prompt hangs
+    # forever, since nothing else auto-answers it for a one-shot reading.
+    assert kwargs["interactive_frame"] == "luminance"
+
+
+def test_luminance_patch_measure_button_missing_argyll_is_noop(window, monkeypatch):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: False)
+    run_calls = []
+
+    class _FakeController:
+        def run(self, *a, **k):
+            run_calls.append((a, k))
+
+    monkeypatch.setattr(window, "_ensure_run_controller", lambda: _FakeController())
+    window._luminance_measure_btn_handler("luminance_measure_btn")
+    # The patch window itself still opens (independent of Argyll); only the
+    # in-patch Measure button is gated, mirroring wx's check placement.
+    window._luminance_patch_window.measure_requested.emit()
+    assert run_calls == []
+
+
+def test_luminance_measure_consumer_sets_white_luminance_clamped(window):
+    window.worker.output = ["XYZ: 10.0 20.0 30.0"]
+    window._luminance_measure_consumer("ok", "luminance_measure_btn")
+    assert window.luminance_ctrl.currentIndex() == 1
+    # 20.0 is below the 40 cd/m2 floor, so it must be clamped.
+    assert window.luminance_textctrl.value() == 40.0
+    assert getcfg("calibration.luminance") == 40.0
+
+
+def test_luminance_measure_consumer_sets_white_luminance_above_floor(window):
+    window.worker.output = ["XYZ: 10.0 80.0 30.0"]
+    window._luminance_measure_consumer("ok", "luminance_measure_btn")
+    assert window.luminance_textctrl.value() == 80.0
+
+
+def test_luminance_measure_consumer_sets_black_luminance_unclamped(window):
+    window.worker.output = ["XYZ: 0.01 0.02 0.03"]
+    window._luminance_measure_consumer("ok", "black_luminance_measure_btn")
+    assert window.black_luminance_ctrl.currentIndex() == 1
+    assert window.black_luminance_textctrl.value() == 0.02
+    assert getcfg("calibration.black_luminance") == 0.02
+
+
+def test_luminance_measure_consumer_monochrome_y_fallback(window):
+    window.worker.output = ["Y: 55.5"]
+    window._luminance_measure_consumer("ok", "luminance_measure_btn")
+    assert window.luminance_textctrl.value() == 55.5
+
+
+def test_luminance_measure_consumer_no_match_shows_error(window, monkeypatch):
+    errors = []
+    monkeypatch.setattr(mw.message_box, "critical", lambda *a, **k: errors.append(a))
+    window.worker.output = ["nothing useful here"]
+    window._luminance_measure_consumer("ok", "luminance_measure_btn")
+    assert errors
+
+
+def test_luminance_measure_consumer_exception_shows_error(window, monkeypatch):
+    errors = []
+    monkeypatch.setattr(mw.message_box, "critical", lambda *a, **k: errors.append(a))
+    window._luminance_measure_consumer(RuntimeError("boom"), "luminance_measure_btn")
+    assert errors
+
+
+def test_ambient_luminance_measure_btn_sets_white_luminance(window):
+    window.worker.output = ["XYZ: 10.0 65.0 30.0"]
+    window._ambient_measure_consumer("ok", "ambient_luminance_measure_btn")
+    assert window.luminance_ctrl.currentIndex() == 1
+    assert window.luminance_textctrl.value() == 65.0
+    # Unlike whitepoint_measure_btn/ambient_measure_btn, this button never
+    # touches the whitepoint or ambient-viewcond fields.
+    assert window.ambient_adjust_cb.isChecked() is False
+
+
+def test_ambient_luminance_measure_btn_lux_only_is_noop(window):
+    # Faithful to wx: ambient_luminance_measure_btn only fills the white
+    # luminance field when the instrument also reports XYZ/Y; a lux-only
+    # ambient reading silently does nothing for this button.
+    window.luminance_ctrl.setCurrentIndex(0)
+    window.worker.output = ["Ambient = 250.0 Lux"]
+    window._ambient_measure_consumer("ok", "ambient_luminance_measure_btn")
+    assert window.luminance_ctrl.currentIndex() == 0
+
+
+def test_ambient_measure_btn_handler_runs_producer_through_controller(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    run_calls = []
+
+    class _FakeController:
+        def run(self, *a, **k):
+            run_calls.append((a, k))
+
+    monkeypatch.setattr(window, "_ensure_run_controller", lambda: _FakeController())
+    window._ambient_measure_btn_handler("ambient_measure_btn")
+
+    assert run_calls
+    args, kwargs = run_calls[0]
+    assert args[0] == window._ambient_measure_producer
+    # Issue #844: without this, spotread's "hit a key to read" prompt hangs
+    # forever, since nothing else auto-answers it for a one-shot reading.
+    assert kwargs["interactive_frame"] == "ambient"
+
+
 def test_trc_selection_persists(window):
     window.trc_ctrl.setCurrentIndex(2)  # L*
     assert getcfg("trc") == "l"

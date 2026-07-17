@@ -235,7 +235,11 @@ from DisplayCAL.ui.header_banner import (
     header_banner_pixmap,
     header_continuation_pixmap,
 )
-from DisplayCAL.ui.measure_frame import MeasureFrame
+from DisplayCAL.ui.measure_frame import (
+    MeasureFrame,
+    default_measureframe_size,
+    resolve_screen_size_mm,
+)
 from DisplayCAL.ui import message_box
 from DisplayCAL.ui.measurement_flow import (
     MeasurementFlow,
@@ -709,6 +713,61 @@ class _UniformityLayoutDialog(QDialog):
         return int(self._rows_combo.currentText())
 
 
+class _LuminancePatchWindow(QWidget):
+    """On-screen white/black patch for direct luminance measurement.
+
+    Qt port of the ad-hoc ``wx.Frame`` wx's ``luminance_measure_handler``
+    builds: a plain full-colour panel with a "Measure" button the user
+    positions over the instrument. Kept as its own lightweight floating
+    tool window (no menu bar, no geometry persistence) rather than reusing
+    :class:`~DisplayCAL.ui.measure_frame.MeasureFrame`, which is wired to
+    the dispcal/dispread subprocess flow instead of a one-shot ``spotread``
+    reading. Pattern-generator support (wx's ``setup_patterngenerator``)
+    isn't reproduced, matching the rest of this port's ambient/whitepoint
+    measure buttons.
+    """
+
+    measure_requested = Signal()
+
+    def __init__(self, parent: QWidget, color: QColor) -> None:
+        super().__init__(parent, Qt.Tool)
+        self.setWindowTitle(lang.getstr("measureframe.title"))
+        self._color = color
+        size = self._default_size()
+        self.resize(size, size)
+        measure_btn = QPushButton(lang.getstr("measure"), self)
+        measure_btn.clicked.connect(self.measure_requested)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        # Empty row above absorbs all growth, matching wx's FlexGridSizer(2,
+        # 3) with only the top row growable: the button sits on the bottom
+        # edge, horizontally centred, not in the middle of the patch.
+        layout.addStretch(1)
+        layout.addWidget(measure_btn, 0, Qt.AlignHCenter)
+
+    def _default_size(self) -> int:
+        """100 mm square in pixels, matching wx's ad-hoc frame sizing.
+
+        Mirrors ``wx_measure_frame.get_default_size()`` via the same
+        physical-size resolution :class:`~DisplayCAL.ui.measure_frame
+        .MeasureFrame` uses, so the patch opens at a sensible on-screen size
+        instead of an arbitrary small default.
+        """
+        screen = self.screen()
+        if screen is not None:
+            geo = screen.geometry()
+            geometry = (geo.x(), geo.y(), geo.width(), geo.height())
+            size_mm = resolve_screen_size_mm(screen, geometry)
+            if size_mm:
+                return default_measureframe_size((geo.width(), geo.height()), size_mm)
+        return int(DEFAULTS.get("size.measureframe", 300))
+
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802 (Qt override)
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), self._color)
+        super().paintEvent(event)
+
+
 def _as_float(value: object) -> float | None:
     """Best-effort float coercion (``None`` when not numeric)."""
     try:
@@ -1152,6 +1211,11 @@ class MainWindow(BaseWindow):
         self._visual_whitepoint_editor_window: VisualWhitepointEditorWindow | None = (
             None
         )
+        #: On-screen white/black patch windows for the luminance measure
+        #: buttons, created lazily on first click (see
+        #: :meth:`_luminance_measure_btn_handler`).
+        self._luminance_patch_window: _LuminancePatchWindow | None = None
+        self._black_luminance_patch_window: _LuminancePatchWindow | None = None
         #: 3D LUT input-colorspace combo: description -> profile path,
         #: mirroring wx's ``MainFrame.input_profiles`` (populated once from
         #: the bundled reference profiles, see ``_lut3d_init_input_profiles``).
@@ -3496,9 +3560,21 @@ class MainWindow(BaseWindow):
         self.luminance_textctrl.setSuffix(" cd/m²")
         self.luminance_textctrl.valueChanged.connect(self._luminance_changed)
         self.luminance_ctrl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.luminance_measure_btn = self._tool_button(
+            "palette-white",
+            "measure",
+            lambda: self._luminance_measure_btn_handler("luminance_measure_btn"),
+        )
+        self.ambient_luminance_measure_btn = self._tool_button(
+            "stock_3d-color-picker",
+            "ambient.measure",
+            lambda: self._ambient_measure_btn_handler("ambient_luminance_measure_btn"),
+        )
         luminance_row = QHBoxLayout()
         luminance_row.addWidget(self.luminance_ctrl, 1)
         luminance_row.addWidget(self.luminance_textctrl)
+        luminance_row.addWidget(self.luminance_measure_btn)
+        luminance_row.addWidget(self.ambient_luminance_measure_btn)
         form.addRow(lang.getstr("calibration.luminance"), self._wrap(luminance_row))
 
         # Black level (black luminance).
@@ -3519,9 +3595,17 @@ class MainWindow(BaseWindow):
         self.black_luminance_ctrl.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Fixed
         )
+        self.black_luminance_measure_btn = self._tool_button(
+            "palette-black",
+            "measure",
+            lambda: self._luminance_measure_btn_handler(
+                "black_luminance_measure_btn"
+            ),
+        )
         black_luminance_row = QHBoxLayout()
         black_luminance_row.addWidget(self.black_luminance_ctrl, 1)
         black_luminance_row.addWidget(self.black_luminance_textctrl)
+        black_luminance_row.addWidget(self.black_luminance_measure_btn)
         self._black_luminance_row_widget = self._wrap(black_luminance_row)
         form.addRow(
             lang.getstr("calibration.black_luminance"),
@@ -6135,19 +6219,21 @@ class MainWindow(BaseWindow):
     def _ambient_measure_btn_handler(self, evtobjname: str) -> None:
         """Whitepoint/ambient "measure" button handler.
 
-        Qt port of wx's ``ambient_measure_handler`` for the two buttons this
-        port has (``whitepoint_measure_btn``, ``ambient_measure_btn``) --
-        both drive Argyll's ``spotread`` directly in ambient mode (using the
-        instrument's diffuser, no on-screen patch). Not reproduced: the
-        white/black luminance measure buttons (need an on-screen patch
-        window wx builds ad hoc) and the visual-whitepoint-editor's own
-        measure button (a separate, editor-embedded flow).
+        Qt port of wx's ``ambient_measure_handler`` for the three buttons
+        this port has (``whitepoint_measure_btn``, ``ambient_measure_btn``,
+        ``ambient_luminance_measure_btn``) -- all three drive Argyll's
+        ``spotread`` directly in ambient mode (using the instrument's
+        diffuser, no on-screen patch). The white/black luminance measure
+        buttons pop an on-screen patch instead and are handled separately
+        by :meth:`_luminance_measure_btn_handler`. Not reproduced: the
+        visual-whitepoint-editor's own measure button (a separate,
+        editor-embedded flow).
 
         Args:
-            evtobjname: Which button was clicked (``"whitepoint_measure_btn"``
-                or ``"ambient_measure_btn"``), threaded through to the
-                consumer exactly like wx threads ``event.GetEventObject()
-                .Name``.
+            evtobjname: Which button was clicked (``"whitepoint_measure_btn"``,
+                ``"ambient_measure_btn"`` or ``"ambient_luminance_measure_btn"``),
+                threaded through to the consumer exactly like wx threads
+                ``event.GetEventObject().Name``.
         """
         if not check_set_argyll_bin():
             return
@@ -6162,6 +6248,7 @@ class MainWindow(BaseWindow):
             lambda result: self._ambient_measure_consumer(result, evtobjname),
             progress_msg=lang.getstr("ambient.measure"),
             pauseable=False,
+            interactive_frame="ambient",
         )
 
     def _ambient_measure_producer(self) -> str | bool | Exception:
@@ -6187,9 +6274,9 @@ class MainWindow(BaseWindow):
     ) -> None:
         """Parse ``spotread`` output and update the whitepoint/ambient fields.
 
-        Qt port of ``ambient_measure_consumer``, scoped to the two buttons
-        :meth:`_ambient_measure_btn_handler` drives (the luminance and
-        visual-whitepoint-editor branches of the wx consumer don't apply).
+        Qt port of ``ambient_measure_consumer``, scoped to the three buttons
+        :meth:`_ambient_measure_btn_handler` drives (the visual-whitepoint-
+        editor branch of the wx consumer doesn't apply).
         """
         if not result or isinstance(result, Exception):
             if isinstance(result, Exception):
@@ -6210,7 +6297,14 @@ class MainWindow(BaseWindow):
             r"Yxy: (\d+(?:\.\d+)) (\d+(?:\.\d+)) (\d+(?:\.\d+))", text
         )
         lux_match = re.search(r"Ambient = (\d+(?:\.\d+)) Lux", text, re.I)
-        if not (k_match or yxy_match or lux_match):
+        # XYZ / monochrome Y: only relevant for ambient_luminance_measure_btn,
+        # which (like wx) may fill in the white luminance field when the
+        # instrument reports it alongside (or instead of) an ambient level.
+        xyz_match = re.search(
+            r"XYZ: (\d+(?:\.\d+)) (\d+(?:\.\d+)) (\d+(?:\.\d+))", text
+        )
+        y_match = re.search(r"Y: (\d+(?:\.\d+))", text)
+        if not (k_match or yxy_match or lux_match or xyz_match or y_match):
             message_box.critical(self, APPNAME, text + lang.getstr("failure"))
             return
         k = float(k_match.group(1)) if k_match else None
@@ -6252,6 +6346,10 @@ class MainWindow(BaseWindow):
                     QMessageBox.No,
                 )
                 set_whitepoint = answer == QMessageBox.Yes
+        elif evtobjname == "ambient_luminance_measure_btn" and (xyz_match or y_match):
+            y = float(xyz_match.group(2) if xyz_match else y_match.group(1))
+            self.luminance_ctrl.setCurrentIndex(1)
+            self.luminance_textctrl.setValue(max(y, 40))
 
         if not set_whitepoint:
             return
@@ -6274,6 +6372,119 @@ class MainWindow(BaseWindow):
             self.whitepoint_x_ctrl.setValue(round(float(x), 4))
             self.whitepoint_y_ctrl.setValue(round(float(y), 4))
         self._whitepoint_changed()
+
+    def _luminance_measure_btn_handler(self, evtobjname: str) -> None:
+        """Open the on-screen white/black patch for direct luminance measurement.
+
+        Qt port of wx's ``luminance_measure_handler`` for the
+        ``luminance_measure_btn`` / ``black_luminance_measure_btn`` controls:
+        pops a full-colour patch window (:class:`_LuminancePatchWindow`)
+        with its own "Measure" button, reused on repeat clicks like the
+        ``_visual_whitepoint_editor_window`` singleton precedent elsewhere
+        on this window. Pattern-generator support (wx's
+        ``setup_patterngenerator``) isn't reproduced.
+
+        Args:
+            evtobjname: Which button was clicked (``"luminance_measure_btn"``
+                or ``"black_luminance_measure_btn"``), threaded through to
+                :meth:`_luminance_measure_consumer`.
+        """
+        white = evtobjname == "luminance_measure_btn"
+        window = (
+            self._luminance_patch_window
+            if white
+            else self._black_luminance_patch_window
+        )
+        if window is None:
+            window = _LuminancePatchWindow(
+                self, QColor(Qt.white) if white else QColor(Qt.black)
+            )
+            window.measure_requested.connect(
+                lambda: self._luminance_patch_measure_handler(evtobjname)
+            )
+            if white:
+                self._luminance_patch_window = window
+            else:
+                self._black_luminance_patch_window = window
+        window.show()
+        window.raise_()
+        window.activateWindow()
+
+    def _luminance_patch_measure_handler(self, evtobjname: str) -> None:
+        """"Measure" button handler inside the on-screen luminance patch.
+
+        Qt port of the branch of wx's ``ambient_measure_handler`` reached
+        from the ad-hoc patch frame's own Measure button
+        (``interactive_frame == "luminance"``): runs ``spotread`` in
+        emissive mode against the visible on-screen patch rather than the
+        instrument's ambient diffuser.
+        """
+        if not check_set_argyll_bin():
+            return
+        if sys.platform == "win32" and sys.getwindowsversion() < (5, 1):
+            message_box.critical(
+                self, APPNAME, lang.getstr("windows.version.unsupported")
+            )
+            return
+        controller = self._ensure_run_controller()
+        controller.run(
+            self._luminance_measure_producer,
+            lambda result: self._luminance_measure_consumer(result, evtobjname),
+            progress_msg=lang.getstr("measure"),
+            pauseable=False,
+            interactive_frame="luminance",
+        )
+
+    def _luminance_measure_producer(self) -> str | bool | Exception:
+        """Run ``spotread`` in emissive mode for a white/black luminance patch.
+
+        Qt port of ``ambient_measure_producer``'s emissive (``"-e"``) branch,
+        reached from wx's ad-hoc luminance patch window.
+        """
+        cmd = get_argyll_util("spotread")
+        args = ["-v", "-e", "-x"]
+        if getcfg("extra_args.spotread").strip():
+            args += parse_argument_string(getcfg("extra_args.spotread"))
+        result = self.worker.add_measurement_features(
+            args, False, allow_nondefault_observer=True, ambient=False
+        )
+        if isinstance(result, Exception):
+            return result
+        return self.worker.exec_cmd(cmd, args, capture_output=True, skip_scripts=True)
+
+    def _luminance_measure_consumer(
+        self, result: str | bool | Exception, evtobjname: str
+    ) -> None:
+        """Parse ``spotread`` output and update the white/black luminance field.
+
+        Qt port of ``ambient_measure_consumer``'s XYZ/monochrome-Y branch,
+        scoped to the two on-screen patch buttons
+        :meth:`_luminance_measure_btn_handler` drives.
+        """
+        if not result or isinstance(result, Exception):
+            if isinstance(result, Exception):
+                message_box.critical(self, APPNAME, str(result))
+            return
+        text = re.sub(
+            r"[^\t\n\r\x20-\x7f]", "", "".join(self.worker.output)
+        ).strip()
+        xyz_match = re.search(
+            r"XYZ: (\d+(?:\.\d+)) (\d+(?:\.\d+)) (\d+(?:\.\d+))", text
+        )
+        y_match = re.search(r"Y: (\d+(?:\.\d+))", text)  # Monochrome, e.g. Spyder4/5
+        if not (xyz_match or y_match):
+            message_box.critical(self, APPNAME, text + lang.getstr("failure"))
+            return
+        y = float(xyz_match.group(2) if xyz_match else y_match.group(1))
+        if evtobjname == "luminance_measure_btn":
+            # Force minimum luminance of 40 cd/m2, suitable for dark
+            # viewing. See Mantiuk et al, "Display Considerations for Night
+            # and Low-Illumination Viewing".
+            self.luminance_ctrl.setCurrentIndex(1)
+            self.luminance_textctrl.setValue(max(y, 40))
+        else:
+            self.black_luminance_ctrl.setCurrentIndex(1)
+            self.black_luminance_textctrl.setValue(y)
 
     def _calibration_quality_changed(self, value: int) -> None:
         """Persist the calibration quality and refresh its labels."""

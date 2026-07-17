@@ -109,6 +109,43 @@ def default_measureframe_size(
     return round(100.0 * px_per_mm)
 
 
+def resolve_screen_size_mm(
+    screen: QScreen, geometry: tuple[int, int, int, int]
+) -> list[float] | None:
+    """Resolve a screen's physical size in millimetres, or ``None`` if unknown.
+
+    Shared by :class:`MeasureFrame` and other windows that need a
+    physically-sized default (e.g. :class:`~DisplayCAL.ui.main_window
+    ._LuminancePatchWindow`). Tries Argyll's ``real_display_size_mm`` first,
+    falling back to Qt's own per-screen physical-size query -- the
+    equivalent of wx's ``wx.DisplaySizeMM()`` fallback in
+    ``wx_measure_frame.get_default_size()`` -- since ``real_display_size_mm``
+    only resolves on Wayland and returns ``(0, 0)`` on macOS/Windows.
+
+    Args:
+        screen (QScreen): The screen to measure.
+        geometry (tuple[int, int, int, int]): That screen's ``(x, y, w, h)``
+            pixel geometry, used to look up its Argyll display number.
+
+    Returns:
+        list[float] | None: ``[width_mm, height_mm]``, or ``None`` if
+        neither source could resolve a non-zero size.
+    """
+    if real_display_size_mm is not None:
+        display_no = get_argyll_display_number(geometry)
+        if display_no is not None:
+            try:
+                size_mm = real_display_size_mm.real_display_size_mm(display_no)
+            except Exception:
+                size_mm = None
+            if size_mm and 0 not in size_mm:
+                return [float(v) for v in size_mm]
+    physical = screen.physicalSize()
+    if physical.width() and physical.height():
+        return [physical.width(), physical.height()]
+    return None
+
+
 def compute_frame_geometry(
     x: float,
     y: float,
@@ -553,34 +590,9 @@ class MeasureFrame(BaseWindow):
         geo = screen.geometry()
         geometry = (geo.x(), geo.y(), geo.width(), geo.height())
         size_mm = self.display_size_mm.get(geometry)
-        if size_mm is None and real_display_size_mm is not None:
-            display_no = get_argyll_display_number(geometry)
-            if display_no is not None:
-                try:
-                    size_mm = real_display_size_mm.real_display_size_mm(
-                        display_no
-                    )
-                except Exception:
-                    size_mm = None
-                if size_mm and 0 not in size_mm:
-                    size_mm = [float(v) for v in size_mm]
-                    self.display_size_mm[geometry] = size_mm
-                else:
-                    size_mm = None
         if size_mm is None:
-            # real_display_size_mm() has no macOS/Windows implementation (it
-            # only resolves physical size on Wayland), so it returns (0, 0)
-            # on those platforms. Fall back to Qt's own per-screen physical
-            # size query -- the equivalent of wx's ``wx.DisplaySizeMM()``
-            # fallback in wx_measure_frame.get_default_size(). Without this,
-            # the 300 px constant below is used regardless of the actual
-            # display, which on a non-Retina external monitor next to a
-            # Retina built-in one under-sizes the default by ~1.5x and
-            # inflates the scale saved to ``dimensions.measureframe`` (and
-            # thus the patch size Argyll draws) by the same factor.
-            physical = screen.physicalSize()
-            if physical.width() and physical.height():
-                size_mm = [physical.width(), physical.height()]
+            size_mm = resolve_screen_size_mm(screen, geometry)
+            if size_mm is not None:
                 self.display_size_mm[geometry] = size_mm
         if size_mm:
             return float(
