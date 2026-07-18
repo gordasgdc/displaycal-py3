@@ -111,6 +111,8 @@ class _GamutThread(QThread):
         worker (Worker): The worker driving ``xicclu``.
         intent (str): Rendering intent (``a``/``r``/``p``/``s``).
         direction (str): Lookup direction (``f``/``ib``).
+        order (str): ``xicclu`` lookup order - ``n`` normal (prefers the
+            profile's CLUT, if present) or ``r`` reverse (matrix/shaper only).
         parent (QWidget | None): Optional Qt parent.
     """
 
@@ -125,6 +127,7 @@ class _GamutThread(QThread):
         worker: Worker,
         intent: str,
         direction: str,
+        order: str = "n",
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -133,18 +136,27 @@ class _GamutThread(QThread):
         self._worker = worker
         self._intent = intent
         self._direction = direction
+        self._order = order
 
     def run(self) -> None:
         try:
             pcs_data = [
                 compute_profile_gamut(
-                    self._profile, self._worker, self._intent, self._direction
+                    self._profile,
+                    self._worker,
+                    self._intent,
+                    self._direction,
+                    self._order,
                 )
             ]
             if self._comparison is not None:
                 pcs_data.append(
                     compute_profile_gamut(
-                        self._comparison, self._worker, self._intent, self._direction
+                        self._comparison,
+                        self._worker,
+                        self._intent,
+                        self._direction,
+                        self._order,
                     )
                 )
             self.done.emit(pcs_data, self._profile, self._comparison)
@@ -269,6 +281,18 @@ class ProfileInfoWindow(BaseWindow):
             self.direction_combo.addItem(lang.getstr(key), code)
         self.direction_combo.currentIndexChanged.connect(self._recompute)
 
+        # Gamut lookup order: use the profile's CLUT (A2B0/B2A0) if present,
+        # or force the matrix/shaper path instead. Literal "LUT" label
+        # (untranslated), matching wx GamutViewOptions.toggle_clut. Shown
+        # only for profiles that actually have a CLUT to toggle to/from.
+        self.gamut_clut_check = QCheckBox("LUT")
+        self.gamut_clut_check.setToolTip(
+            "Use the profile's CLUT for the gamut lookup, if present "
+            "(unchecked uses the matrix/shaper path instead)"
+        )
+        self.gamut_clut_check.setChecked(True)
+        self.gamut_clut_check.toggled.connect(self._recompute)
+
         # Comparison profile descriptions can be very long (e.g. "EBU 3213
         # (PAL) primaries with Rec709 transfer function"); cap the combo's
         # own width to that, not its widest item, so it doesn't force the
@@ -309,10 +333,16 @@ class ProfileInfoWindow(BaseWindow):
 
         self.info = self._build_info_table()
         # The embedded curve panel is driven by the shared mode combo above, so
-        # hide its own mode selector. The "show actual LUT" option is a
-        # standalone curve-viewer feature only (wx's profile-info omits it). The
-        # cursor readout is shown in this window's shared ``coords_label`` (same
-        # place as the gamut view), not the panel's own, so hide the latter.
+        # hide its own mode selector. The "show actual LUT" checkbox reads back
+        # the *live video-card LUT* (wx_lut_viewer's own feature, driven by
+        # ``calibration.show_actual_lut``) - unrelated to this window's static
+        # profile comparison, so it stays hidden here too. The comparison this
+        # issue's wx counterpart offers (parametric TRC tags vs the profile's
+        # actual CLUT-derived response) is instead available through the mode
+        # combo's "[rgb]TRC" vs "measured" entries plus the panel's own "LUT"
+        # checkbox (shown for "measured" mode on cLUT profiles). The cursor
+        # readout is shown in this window's shared ``coords_label`` (same place
+        # as the gamut view), not the panel's own, so hide the latter.
         self.curve_panel = CurvePanel(
             show_mode_selector=False, show_actual_lut=False, show_coords=False
         )
@@ -455,6 +485,9 @@ class ProfileInfoWindow(BaseWindow):
                 self.comparison_combo,
             ),
             (None, lang.getstr("rendering_intent"), self.intent_combo),
+            # wx order: LUT toggle right after rendering intent, before the
+            # direction combo.
+            (None, "", self.gamut_clut_check),
             # wx gives the gamut direction combo no label; its items
             # ("Device → A2B → PCS" …) are self-describing.
             (None, "", self.direction_combo),
@@ -483,6 +516,8 @@ class ProfileInfoWindow(BaseWindow):
         * whitepoint locus marker — only when a colour-temperature locus is set,
         * comparison marker and its comparison-whitepoint legend — only when a
           comparison profile is selected.
+        * gamut CLUT toggle — only for profiles that actually have a CLUT
+          (``A2B0``/``B2A0``) to toggle to/from.
         """
         self.colorspace_marker.setVisible(self.outline_check.isChecked())
         has_locus = WHITEPOINTS.get(self.whitepoint_combo.currentText(), 0) != 0
@@ -490,6 +525,11 @@ class ProfileInfoWindow(BaseWindow):
         has_comparison = self._comparison_profile is not None
         self.comparison_marker.setVisible(has_comparison)
         self.comparison_whitepoint_legend.setVisible(has_comparison)
+        has_clut = bool(
+            self._profile
+            and ("A2B0" in self._profile.tags or "B2A0" in self._profile.tags)
+        )
+        self.gamut_clut_check.setVisible(has_clut)
 
     def _build_central(self) -> QWidget:
         """Assemble the toolbar, plot/curve views, controls and info table.
@@ -627,6 +667,12 @@ class ProfileInfoWindow(BaseWindow):
             f"{lang.getstr('profile.info')} — {profile.getDescription()}"
         )
         self._profile = profile
+        # A freshly loaded profile defaults back to preferring its CLUT
+        # (matches wx, which resets this per profile rather than remembering
+        # a prior profile's unchecked state).
+        self.gamut_clut_check.blockSignals(True)
+        self.gamut_clut_check.setChecked(True)
+        self.gamut_clut_check.blockSignals(False)
         self._recompute()
 
     def _on_comparison_selected(self, index: int) -> None:
@@ -694,6 +740,7 @@ class ProfileInfoWindow(BaseWindow):
             self.worker,
             self.intent_combo.currentData(),
             self.direction_combo.currentData(),
+            "n" if self.gamut_clut_check.isChecked() else "r",
             parent=self,
         )
         self._thread.done.connect(self._on_gamut_ready)

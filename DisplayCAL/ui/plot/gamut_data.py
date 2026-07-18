@@ -132,7 +132,8 @@ def compute_profile_gamut(
             ``xicclu``.
         intent (str): Rendering intent (``a``/``r``/``p``/``s``).
         direction (str): ``f`` forward, or ``ib`` inverted-backward (round-trip).
-        order (str): ``n`` normal or ``c`` chromatic-adaptation order.
+        order (str): ``xicclu`` lookup order - ``n`` normal (prefers the
+            profile's CLUT, if present) or ``r`` reverse (matrix/shaper only).
         size (int): Segments per primary→secondary edge.
 
     Returns:

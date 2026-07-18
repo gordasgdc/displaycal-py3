@@ -303,7 +303,15 @@ class CurvePanel(QWidget):
         self.direction_label = QLabel(lang.getstr("direction"))
         self.direction_combo = QComboBox()
         self.direction_combo.currentIndexChanged.connect(self._redraw)
-        self.clut_check = QCheckBox(lang.getstr("use_separate_lut_access"))
+        # Literal "LUT" label (untranslated, like wx's own toggle_clut
+        # checkbox) - not lang.getstr("use_separate_lut_access"), which is an
+        # unrelated app-wide "Advanced" menu setting about hardware video
+        # card gamma table access, not this cLUT-vs-matrix lookup choice.
+        self.clut_check = QCheckBox("LUT")
+        self.clut_check.setToolTip(
+            "Use the profile's CLUT (if present) for the measured tone "
+            "response, instead of the colorimetric matrix/shaper"
+        )
         self.clut_check.setChecked(True)
         self.clut_check.toggled.connect(self._redraw)
 
