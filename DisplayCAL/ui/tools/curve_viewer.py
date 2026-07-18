@@ -11,7 +11,10 @@ Loads an ICC profile and shows its tone curves with
   backward variants for cLUT profiles) and cLUT/matrix controls.
 
 It also loads ``.cal`` calibration files and can show the live video-card LUT
-read back from the graphics card ("show actual LUT").
+read back from the graphics card ("show actual LUT"), apply black point
+compensation, install/reload a display's vcgt, save the plot or vcgt, show
+advanced per-tag shaper curves, and (the standalone window only) follow the
+display it's dragged onto.
 
 The curve-and-controls view itself lives in :class:`CurvePanel`, a plain
 ``QWidget`` with no window chrome, so other tools (e.g.
@@ -23,22 +26,35 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from qtpy.QtCore import Qt, QThread, Signal
 from qtpy.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
+    QFileDialog,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
 from DisplayCAL import config
 from DisplayCAL import localization as lang
-from DisplayCAL.config import get_data_path, getcfg
+from DisplayCAL.config import (
+    get_argyll_display_number,
+    get_data_path,
+    get_display_profile,
+    get_verified_path,
+    getcfg,
+    is_virtual_display,
+    setcfg,
+)
+from DisplayCAL.icc_profile import VideoCardGammaType
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
@@ -46,17 +62,25 @@ from DisplayCAL.ui.plot.curve import CurvePlot
 from DisplayCAL.ui.plot.curve_data import (
     CURVE_MODES,
     DIRECTIONS,
+    apply_bpc,
     available_curve_modes,
     available_directions,
+    available_shaper_modes,
     curve_display,
     extract_curves,
+    extract_shaper_curve,
+    install_vcgt,
     load_profile_or_cal,
     measured_tone_response,
     read_current_lut,
+    reload_display_vcgt,
+    shaper_mode_lang_key,
 )
 from DisplayCAL.worker import Worker
 
 if TYPE_CHECKING:
+    from qtpy.QtGui import QMoveEvent, QShowEvent
+
     from DisplayCAL.icc_profile import ICCProfile
 
 #: Profile file suffixes accepted for opening / drag-and-drop (``.cal`` is
@@ -144,6 +168,42 @@ class _LutReadThread(QThread):
             self._worker.wrapup(False)
 
 
+class _ActionThread(QThread):
+    """Run a zero-argument callable driving ``worker`` off the GUI thread.
+
+    Shared by the vcgt actions (install / reload), which drive Argyll
+    ``dispwin`` and so shouldn't block the GUI.
+
+    Args:
+        worker (Worker): The worker the callable drives (only used to
+            ``wrapup`` afterwards).
+        func (Callable[[], object]): The action to run; its return value (or
+            raised exception) is emitted via :attr:`done`.
+        parent (QWidget | None): Optional Qt parent.
+    """
+
+    #: Emitted with the callable's return value or, on failure, an ``Exception``.
+    done = Signal(object)
+
+    def __init__(
+        self,
+        worker: Worker,
+        func: Callable[[], object],
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._worker = worker
+        self._func = func
+
+    def run(self) -> None:
+        try:
+            result = self._func()
+        except Exception as exception:  # noqa: BLE001  (report on GUI thread)
+            result = exception
+        self.done.emit(result)
+        self._worker.wrapup(False)
+
+
 class CurvePanel(QWidget):
     """Embeddable calibration / tone-response / measured curve view.
 
@@ -183,9 +243,35 @@ class CurvePanel(QWidget):
         self.worker = Worker()
         self._thread: _MeasuredThread | None = None
         self._read_thread: _LutReadThread | None = None
+        self._action_thread: _ActionThread | None = None
 
         self.mode_combo = QComboBox()
         self.mode_combo.currentIndexChanged.connect(self._redraw)
+
+        # Short literal labels, full translated tooltips (matches wx's own
+        # fallback-UI labels for this toolbar, which are likewise untranslated).
+        self.save_plot_btn = QPushButton("Save")
+        self.save_plot_btn.setToolTip(
+            f"{lang.getstr('save_as')} (*.bmp, *.png, *.jpg, *.xbm, *.xpm)"
+        )
+        self.save_plot_btn.clicked.connect(self._save_plot)
+        self.save_plot_btn.setEnabled(False)
+
+        # wx's reload/BPC/install/save-CAL toolbar, shown only in vcgt mode.
+        self.reload_vcgt_btn = QPushButton("Reload")
+        self.reload_vcgt_btn.setToolTip(
+            lang.getstr("calibration.load_from_display_profile")
+        )
+        self.reload_vcgt_btn.clicked.connect(self._reload_vcgt)
+        self.apply_bpc_btn = QPushButton("BPC")
+        self.apply_bpc_btn.setToolTip(lang.getstr("black_point_compensation"))
+        self.apply_bpc_btn.clicked.connect(self._apply_bpc)
+        self.install_vcgt_btn = QPushButton("Apply")
+        self.install_vcgt_btn.setToolTip(lang.getstr("apply_cal"))
+        self.install_vcgt_btn.clicked.connect(self._install_vcgt)
+        self.save_vcgt_btn = QPushButton("Save CAL")
+        self.save_vcgt_btn.setToolTip(f"{lang.getstr('save_as')} (*.cal)")
+        self.save_vcgt_btn.clicked.connect(self._save_cal)
 
         # wx "L* →": plot the tone response against perceptual L* (default) or
         # linear luminance. Re-scales the axes only, so no recompute.
@@ -241,10 +327,27 @@ class CurvePanel(QWidget):
         mode_row.setContentsMargins(0, 0, 0, 0)
         mode_row.addWidget(QLabel(lang.getstr("mode")))
         mode_row.addWidget(self.mode_combo)
+        mode_row.addWidget(self.save_plot_btn)
         mode_row.addStretch(1)
         self.mode_row.setVisible(show_mode_selector)
         layout.addWidget(self.mode_row)
         layout.addWidget(self.plot, 1)
+
+        # vcgt-only action toolbar (wx's reload/BPC/install/save-CAL buttons),
+        # shown only in vcgt mode.
+        self.vcgt_actions_row = QWidget()
+        vcgt_actions_row = QHBoxLayout(self.vcgt_actions_row)
+        vcgt_actions_row.setContentsMargins(0, 0, 0, 0)
+        vcgt_actions_row.addStretch(1)
+        for button in (
+            self.reload_vcgt_btn,
+            self.apply_bpc_btn,
+            self.install_vcgt_btn,
+            self.save_vcgt_btn,
+        ):
+            vcgt_actions_row.addWidget(button)
+        vcgt_actions_row.addStretch(1)
+        layout.addWidget(self.vcgt_actions_row)
 
         # Centred L*/channel toggles below the plot (wx cbox_sizer): the L*
         # toggle first, then the R/G/B primaries.
@@ -323,6 +426,27 @@ class CurvePanel(QWidget):
         # L* toggle only applies to the tone response (trc/measured), whose
         # X axis is the perceptual/linear response; vcgt is device in/out.
         self.show_as_L.setVisible(self.mode_combo.currentData() in ("trc", "measured"))
+        self._update_vcgt_actions_visibility()
+
+    def _update_vcgt_actions_visibility(self) -> None:
+        """Show/enable the reload/BPC/install/save-CAL buttons in vcgt mode only.
+
+        Mirrors ``LUTFrame.DrawLUT``'s ``*_btn.Enable``/``Show`` calls.
+        """
+        is_vcgt = self.mode_combo.currentData() == "vcgt"
+        has_vcgt = bool(
+            self._profile
+            and isinstance(self._profile.tags.get("vcgt"), VideoCardGammaType)
+        )
+        self.vcgt_actions_row.setVisible(is_vcgt)
+        self.reload_vcgt_btn.setEnabled(is_vcgt and bool(self._profile))
+        enable_bpc = is_vcgt and has_vcgt
+        if enable_bpc:
+            values = self._profile.tags["vcgt"].getNormalizedValues()
+            enable_bpc = values[0] != (0, 0, 0)
+        self.apply_bpc_btn.setEnabled(enable_bpc)
+        self.install_vcgt_btn.setEnabled(is_vcgt and has_vcgt)
+        self.save_vcgt_btn.setEnabled(is_vcgt and has_vcgt)
 
     def _update_channel_row(self) -> None:
         """Show a channel toggle only for channels currently plotted.
@@ -333,6 +457,7 @@ class CurvePanel(QWidget):
         for name, check in self.channel_checks.items():
             check.setVisible(name in channels)
         self.channel_row.setVisible(any(n in channels for n in self.channel_checks))
+        self.save_plot_btn.setEnabled(bool(channels))
 
     def _on_mouse_moved(self, pos: object) -> None:
         """Update the input/output readout as the cursor moves over the plot.
@@ -383,6 +508,7 @@ class CurvePanel(QWidget):
         self.profile_changed.emit(profile)
 
         modes = available_curve_modes(profile)
+        shaper_modes = available_shaper_modes(profile)
         self.mode_combo.blockSignals(True)
         self.mode_combo.clear()
         for mode in modes:
@@ -390,7 +516,10 @@ class CurvePanel(QWidget):
                 CURVE_MODES[mode], default="Measured tone response"
             )
             self.mode_combo.addItem(label, mode)
+        for mode in shaper_modes:
+            self.mode_combo.addItem(lang.getstr(shaper_mode_lang_key(mode)), mode)
         self.mode_combo.blockSignals(False)
+        modes = modes + shaper_modes
 
         self.direction_combo.blockSignals(True)
         self.direction_combo.clear()
@@ -475,8 +604,32 @@ class CurvePanel(QWidget):
         if mode == "measured":
             self._draw_measured()
             return
+        if "." in mode:  # advanced shaper curve, e.g. "A2B0.input"
+            self._draw_shaper(mode)
+            return
         self._raw_curves = extract_curves(self._profile, mode)
         self._render()
+        self.status.setText(self._profile.getDescription())
+
+    def _draw_shaper(self, mode: str) -> None:
+        """Draw an advanced per-tag shaper curve (already display-scaled).
+
+        Args:
+            mode (str): A key from :func:`~DisplayCAL.ui.plot.curve_data.
+                available_shaper_modes` (e.g. ``"A2B0.input"``).
+        """
+        channels, x_max, y_max, x_label, y_label = extract_shaper_curve(
+            self._profile, mode
+        )
+        self.plot.draw_curves(
+            channels,
+            show_linear=True,
+            x_range=(0.0, x_max),
+            y_range=(0.0, y_max),
+            x_label=x_label,
+            y_label=y_label,
+        )
+        self._update_channel_row()
         self.status.setText(self._profile.getDescription())
 
     def _render(self) -> None:
@@ -534,6 +687,137 @@ class CurvePanel(QWidget):
         self._render()
         self.status.setText(self._profile.getDescription())
 
+    # -- vcgt actions ----------------------------------------------------
+
+    def _apply_bpc(self) -> None:
+        """Apply black point compensation to the displayed vcgt and reload it."""
+        try:
+            profile = apply_bpc(self._profile)
+        except Exception as exception:  # noqa: BLE001
+            self.status.setText(f"{lang.getstr('error')}: {exception}")
+            return
+        self._user_profile = profile
+        self.set_profile(profile)
+
+    def _install_vcgt(self) -> None:
+        """Install the displayed vcgt to the display via Argyll ``dispwin``."""
+        if self._action_thread is not None and self._action_thread.isRunning():
+            return
+        self.status.setText(lang.getstr("please_wait"))
+        profile = self._profile
+        self._action_thread = _ActionThread(
+            self.worker, lambda: install_vcgt(profile, self.worker), parent=self
+        )
+        self._action_thread.done.connect(self._on_install_vcgt_done)
+        self._action_thread.start()
+
+    def _on_install_vcgt_done(self, result: object) -> None:
+        """Receive the install-vcgt result on the GUI thread.
+
+        Args:
+            result (object): ``None`` on success, or an ``Exception``.
+        """
+        self._action_thread = None
+        if isinstance(result, Exception):
+            self.status.setText(f"{lang.getstr('error')}: {result}")
+            return
+        self.status.setText(self._profile.getDescription())
+
+    def _reload_vcgt(self) -> None:
+        """Reload the vcgt from the current display profile via ``dispwin``."""
+        if self._action_thread is not None and self._action_thread.isRunning():
+            return
+        self.status.setText(lang.getstr("please_wait"))
+        self._action_thread = _ActionThread(
+            self.worker, lambda: reload_display_vcgt(self.worker), parent=self
+        )
+        self._action_thread.done.connect(self._on_reload_vcgt_done)
+        self._action_thread.start()
+
+    def _on_reload_vcgt_done(self, result: object) -> None:
+        """Receive the reloaded display profile on the GUI thread.
+
+        Args:
+            result (object): The reloaded ``ICCProfile``, or an ``Exception``.
+        """
+        self._action_thread = None
+        if isinstance(result, Exception):
+            self.status.setText(f"{lang.getstr('error')}: {result}")
+            return
+        self._user_profile = result
+        self.set_profile(result)
+
+    # -- save --------------------------------------------------------------
+
+    def _save_plot(self) -> None:
+        """Save the current plot as an image (wx's generic ``SaveFile``)."""
+        if self._profile is None:
+            return
+        import pyqtgraph.exporters as pg_exporters
+
+        mode_label = self.mode_combo.currentText()
+        base = os.path.splitext(
+            os.path.basename(self._profile.filename or lang.getstr("unnamed"))
+        )[0]
+        default_dir, _ = get_verified_path("last_filedialog_path")
+        default_path = os.path.join(default_dir, f"{mode_label} {base}.png")
+        path, _selected_filter = QFileDialog.getSaveFileName(
+            self,
+            lang.getstr("save_as"),
+            default_path,
+            "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;XPM (*.xpm);;XBM (*.xbm)",
+        )
+        if not path:
+            return
+        setcfg("last_filedialog_path", path)
+        try:
+            exporter = pg_exporters.ImageExporter(self.plot.getPlotItem())
+            exporter.export(path)
+        except Exception as exception:  # noqa: BLE001
+            message_box.critical(self, self.window().windowTitle(), str(exception))
+
+    def _save_cal(self) -> None:
+        """Save the displayed vcgt as an Argyll ``.cal`` file."""
+        if self._profile is None:
+            return
+        from DisplayCAL.argyll_cgats import vcgt_to_cal
+
+        base = os.path.splitext(
+            os.path.basename(self._profile.filename or lang.getstr("unnamed"))
+        )[0]
+        default_dir, _ = get_verified_path("last_filedialog_path")
+        default_path = os.path.join(default_dir, f"{base}.cal")
+        path, _selected_filter = QFileDialog.getSaveFileName(
+            self, lang.getstr("save_as"), default_path, "CAL (*.cal)"
+        )
+        if not path:
+            return
+        setcfg("last_filedialog_path", path)
+        try:
+            vcgt_to_cal(self._profile).write(path)
+        except Exception as exception:  # noqa: BLE001
+            message_box.critical(self, self.window().windowTitle(), str(exception))
+
+    # -- per-monitor auto-follow -------------------------------------------
+
+    def follow_display(self, display_no: int) -> None:
+        """Reload for the display ``display_no`` (the window moved onto it).
+
+        Mirrors ``LUTFrame.move_handler``/``load_lut``: shows the live LUT if
+        "show actual LUT" is on, else that display's profile.
+
+        Args:
+            display_no (int): The Argyll display index (0-based) the
+                standalone window is now on.
+        """
+        if self.actual_lut_check.isChecked():
+            self._on_actual_lut_toggled(True)
+            return
+        profile = get_display_profile(display_no)
+        if profile is not None:
+            self._user_profile = profile
+            self.set_profile(profile)
+
 
 class CurveViewerWindow(BaseWindow):
     """Standalone window wrapping :class:`CurvePanel` with file drop/scripting."""
@@ -555,6 +839,53 @@ class CurveViewerWindow(BaseWindow):
         )
         self.droptarget.install_on(self)
         self.init_menubar()
+
+        self._current_geometry: tuple[int, int, int, int] | None = None
+
+    # -- per-monitor auto-follow --------------------------------------------
+
+    def _current_display_geometry(self) -> tuple[int, int, int, int] | None:
+        """Return the ``(x, y, w, h)`` pixel geometry of the window's screen.
+
+        Returns:
+            tuple[int, int, int, int] | None: The geometry, or ``None`` if no
+                screen could be resolved.
+        """
+        handle = self.windowHandle()
+        screen = handle.screen() if handle is not None else None
+        screen = screen or QApplication.primaryScreen()
+        if screen is None:
+            return None
+        geo = screen.geometry()
+        return (geo.x(), geo.y(), geo.width(), geo.height())
+
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 (Qt override)
+        """Record the initial screen geometry so the first move is a no-op."""
+        super().showEvent(event)
+        self._current_geometry = self._current_display_geometry()
+
+    def moveEvent(self, event: QMoveEvent) -> None:  # noqa: N802 (Qt override)
+        """Reload the display's profile whenever the window moves to another screen.
+
+        Mirrors ``LUTFrame.move_handler``: dragging the window onto a
+        different physical display re-points ``display.number`` and reloads
+        that display's profile (or, if "show actual LUT" is on, its live LUT).
+
+        Args:
+            event (QMoveEvent): The Qt move event.
+        """
+        super().moveEvent(event)
+        if not self.isVisible() or os.getenv("XDG_SESSION_TYPE") == "wayland":
+            return
+        geometry = self._current_display_geometry()
+        if geometry is None or geometry == self._current_geometry:
+            return
+        self._current_geometry = geometry
+        display_no = get_argyll_display_number(geometry)
+        if display_no is None or is_virtual_display(display_no):
+            return
+        setcfg("display.number", display_no + 1)
+        self.panel.follow_display(display_no)
 
     def _on_profile_changed(self, profile: ICCProfile) -> None:
         """Update the window title to reflect the displayed profile.
