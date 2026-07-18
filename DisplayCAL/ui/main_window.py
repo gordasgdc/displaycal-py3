@@ -6355,10 +6355,115 @@ class MainWindow(BaseWindow):
         window = self._visual_whitepoint_editor_window
         if window is None:
             window = VisualWhitepointEditorWindow()
+            window.measure_requested.connect(
+                self._visual_whitepoint_editor_measure_handler
+            )
             self._visual_whitepoint_editor_window = window
         window.show()
         window.raise_()
         window.activateWindow()
+
+    def _visual_whitepoint_editor_measure_handler(self) -> None:
+        """"Measure" button handler inside the visual whitepoint editor.
+
+        Qt port of the ``visual_whitepoint_editor_measure_btn`` branch of
+        wx's ``ambient_measure_handler``: runs ``spotread`` in emissive mode
+        against the editor's on-screen patch, same as
+        :meth:`_luminance_patch_measure_handler`. The result feeds *this
+        window's* whitepoint target fields (colour temperature or Yxy), not
+        the editor's own RGB spinners -- see
+        :meth:`_visual_whitepoint_editor_measure_consumer`.
+        """
+        if not check_set_argyll_bin():
+            self._visual_whitepoint_editor_measure_reset()
+            return
+        if sys.platform == "win32" and sys.getwindowsversion() < (5, 1):
+            message_box.critical(
+                self, APPNAME, lang.getstr("windows.version.unsupported")
+            )
+            self._visual_whitepoint_editor_measure_reset()
+            return
+        controller = self._ensure_run_controller()
+        controller.run(
+            self._luminance_measure_producer,
+            self._visual_whitepoint_editor_measure_consumer,
+            progress_msg=lang.getstr("measure"),
+            pauseable=False,
+            interactive_frame="luminance",
+        )
+
+    def _visual_whitepoint_editor_measure_reset(self) -> None:
+        """Re-enable the editor's Measure button after a validation failure."""
+        window = self._visual_whitepoint_editor_window
+        if window is not None:
+            window.measure_btn.setEnabled(True)
+
+    def _visual_whitepoint_editor_measure_consumer(
+        self, result: str | bool | Exception
+    ) -> None:
+        """Parse ``spotread`` output and propose it as the whitepoint target.
+
+        Qt port of the ``visual_whitepoint_editor_measure_btn`` branch of
+        wx's ``ambient_measure_consumer``: unlike
+        :meth:`_luminance_measure_consumer` (which fills in the white/black
+        luminance fields), this always targets the *whitepoint* fields
+        (colour temperature or Yxy), and additionally proposes a dimmed
+        luminance target when the editor's own patch RGB isn't full white.
+        """
+        self._visual_whitepoint_editor_measure_reset()
+        if not result or isinstance(result, Exception):
+            if isinstance(result, Exception):
+                message_box.critical(self, APPNAME, str(result))
+            return
+        text = re.sub(
+            r"[^\t\n\r\x20-\x7f]", "", "".join(self.worker.output)
+        ).strip()
+        if getcfg("whitepoint.colortemp.locus") == "T":
+            k_match = re.search(
+                r"Planckian temperature += (\d+(?:\.\d+)?)K", text, re.I
+            )
+        else:
+            k_match = re.search(
+                r"Daylight temperature += (\d+(?:\.\d+)?)K", text, re.I
+            )
+        xyz_match = re.search(
+            r"XYZ: (\d+(?:\.\d+)) (\d+(?:\.\d+)) (\d+(?:\.\d+))", text
+        )
+        yxy_match = re.search(
+            r"Yxy: (\d+(?:\.\d+)) (\d+(?:\.\d+)) (\d+(?:\.\d+))", text
+        )
+        if not (k_match or xyz_match or yxy_match):
+            message_box.critical(self, APPNAME, text + lang.getstr("failure"))
+            return
+        k = float(k_match.group(1)) if k_match else None
+
+        if xyz_match:
+            rgb = [getcfg(f"whitepoint.visual_editor.{a}") for a in "rgb"]
+            if max(rgb) < 255:
+                self.luminance_ctrl.setCurrentIndex(1)
+                self.luminance_textctrl.setValue(float(xyz_match.group(2)))
+            else:
+                self.luminance_ctrl.setCurrentIndex(0)
+
+        if not k and not yxy_match:
+            message_box.critical(
+                self,
+                APPNAME,
+                lang.getstr(
+                    "ambient.measure.color.unsupported",
+                    self.comport_ctrl.currentText(),
+                ),
+            )
+            return
+        if k and self.whitepoint_ctrl.currentIndex() in (0, 1):
+            self.whitepoint_ctrl.setCurrentIndex(1)
+            self.whitepoint_colortemp_ctrl.setValue(round(k))
+        elif yxy_match:
+            self.whitepoint_ctrl.setCurrentIndex(2)
+            _y, x, y = yxy_match.groups()
+            self.whitepoint_x_ctrl.setValue(round(float(x), 4))
+            self.whitepoint_y_ctrl.setValue(round(float(y), 4))
+        self._whitepoint_changed()
 
     def _ambient_measure_btn_handler(self, evtobjname: str) -> None:
         """Whitepoint/ambient "measure" button handler.
@@ -6369,9 +6474,9 @@ class MainWindow(BaseWindow):
         ``spotread`` directly in ambient mode (using the instrument's
         diffuser, no on-screen patch). The white/black luminance measure
         buttons pop an on-screen patch instead and are handled separately
-        by :meth:`_luminance_measure_btn_handler`. Not reproduced: the
-        visual-whitepoint-editor's own measure button (a separate,
-        editor-embedded flow).
+        by :meth:`_luminance_measure_btn_handler`. The visual-whitepoint-
+        editor's own measure button is a separate, editor-embedded flow,
+        handled by :meth:`_visual_whitepoint_editor_measure_handler`.
 
         Args:
             evtobjname: Which button was clicked (``"whitepoint_measure_btn"``,

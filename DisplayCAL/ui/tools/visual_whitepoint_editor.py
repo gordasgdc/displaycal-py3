@@ -17,10 +17,11 @@ is judged against the *uncalibrated* panel; it also seeds the initial whitepoint
 from the display profile's ``vcgt``. This is inert when no Argyll displays are
 enumerated (e.g. headless).
 
-Deliberately dropped versus the wx module (both are main-window-only
-integrations that require the not-yet-ported :class:`DisplayCAL.display_cal`
-main window): the **Measure** button (which called the parent's
-``ambient_measure_handler``) and the network **pattern-generator** patch output.
+The embedded **Measure** button emits :attr:`VisualWhitepointEditorWindow
+.measure_requested`, driven by :class:`DisplayCAL.ui.main_window.MainWindow`
+(see ``_visual_whitepoint_editor_measure_handler``), mirroring how wx's button
+called back into the parent's ``ambient_measure_handler``. Still deliberately
+dropped: the network **pattern-generator** patch output (tracked separately).
 The custom wx spinners/sliders/AUI docking are replaced by native Qt widgets.
 """
 
@@ -797,6 +798,12 @@ class _ProfileManager(QObject):
 class VisualWhitepointEditorWindow(BaseWindow):
     """Standalone visual whitepoint editor window."""
 
+    #: Emitted when the embedded "Measure" button is clicked. The main
+    #: window (which owns the instrument/worker) drives the actual
+    #: measurement and re-enables :attr:`measure_btn` when done -- mirrors
+    #: wx's ``measure_btn`` calling back into ``Parent.ambient_measure_handler``.
+    measure_requested = Signal()
+
     def __init__(self) -> None:
         super().__init__(
             name="VisualWhitepointEditor",
@@ -929,6 +936,14 @@ class VisualWhitepointEditorWindow(BaseWindow):
         area_grid.addWidget(self.center_y_btn, 2, 2)
         area_grid.setColumnStretch(1, 1)
         panel.addLayout(area_grid)
+
+        self.measure_btn = QPushButton(lang.getstr("measure"))
+        self.measure_btn.clicked.connect(self._on_measure)
+        measure_row = QHBoxLayout()
+        measure_row.addStretch(1)
+        measure_row.addWidget(self.measure_btn)
+        measure_row.addStretch(1)
+        panel.addLayout(measure_row)
         panel.addStretch(1)
 
         self.bg_area = _BackgroundArea(central)
@@ -1049,6 +1064,18 @@ class VisualWhitepointEditorWindow(BaseWindow):
         x = self.area_x_slider.value() / 1000.0
         y = self.area_y_slider.value() / 1000.0
         self.bg_area.set_layout(self.default_size, scale, x, y)
+
+    def _on_measure(self) -> None:
+        """Persist the current colour/geometry and request a measurement.
+
+        Qt port of wx's ``measure()``: disables the button (re-enabled by
+        the main window once the measurement completes) and persists
+        settings first, since the main window's consumer reads
+        ``whitepoint.visual_editor.*`` back out of config.
+        """
+        self.measure_btn.setEnabled(False)
+        self._save_cfg()
+        self.measure_requested.emit()
 
     def _on_zoom_normal(self) -> None:
         """Reset the patch size slider to the default scale."""

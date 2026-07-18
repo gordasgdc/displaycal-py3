@@ -1049,6 +1049,116 @@ def test_ambient_measure_btn_handler_runs_producer_through_controller(
     assert kwargs["interactive_frame"] == "ambient"
 
 
+def test_visual_whitepoint_editor_measure_btn_runs_producer_through_controller(
+    window, monkeypatch
+):
+    # Issue #850: the visual whitepoint editor's own embedded Measure button
+    # should drive the same emissive spotread flow as the on-screen luminance
+    # patches, reusing _luminance_measure_producer.
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
+    run_calls = []
+
+    class _FakeController:
+        def run(self, *a, **k):
+            run_calls.append((a, k))
+
+    monkeypatch.setattr(window, "_ensure_run_controller", lambda: _FakeController())
+    window._visual_whitepoint_editor_btn_handler()
+    editor = window._visual_whitepoint_editor_window
+    editor.measure_btn.click()
+
+    assert editor.measure_btn.isEnabled() is False
+    assert run_calls
+    args, kwargs = run_calls[0]
+    assert args[0] == window._luminance_measure_producer
+    assert args[1] == window._visual_whitepoint_editor_measure_consumer
+    assert kwargs["pauseable"] is False
+    assert kwargs["interactive_frame"] == "luminance"
+
+
+def test_visual_whitepoint_editor_measure_btn_missing_argyll_reenables_button(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: False)
+    window._visual_whitepoint_editor_btn_handler()
+    editor = window._visual_whitepoint_editor_window
+    editor.measure_btn.click()
+    assert editor.measure_btn.isEnabled() is True
+
+
+def test_visual_whitepoint_editor_measure_consumer_sets_colortemp_whitepoint(window):
+    window._visual_whitepoint_editor_btn_handler()
+    editor = window._visual_whitepoint_editor_window
+    editor.measure_btn.setEnabled(False)
+    # The implementation only proposes a colour-temp whitepoint when the
+    # control isn't already on x,y chromaticity (mirrors wx); pin the start
+    # state explicitly rather than relying on a fresh window's default, since
+    # config leaked from an earlier test elsewhere in the suite can leave a
+    # new MainWindow's whitepoint_ctrl pre-set to index 2.
+    window.whitepoint_ctrl.setCurrentIndex(0)
+    window.worker.output = ["Daylight temperature = 6504K"]
+    window._visual_whitepoint_editor_measure_consumer("ok")
+    assert editor.measure_btn.isEnabled() is True
+    assert window.whitepoint_ctrl.currentIndex() == 1
+    assert window.whitepoint_colortemp_ctrl.value() == 6504
+
+
+def test_visual_whitepoint_editor_measure_consumer_sets_yxy_whitepoint(window):
+    window.worker.output = ["Yxy: 80.0 0.3127 0.3290"]
+    window._visual_whitepoint_editor_measure_consumer("ok")
+    assert window.whitepoint_ctrl.currentIndex() == 2
+    assert window.whitepoint_x_ctrl.value() == 0.3127
+    assert window.whitepoint_y_ctrl.value() == 0.329
+
+
+def test_visual_whitepoint_editor_measure_consumer_dims_luminance_for_non_white_patch(
+    window,
+):
+    setcfg("whitepoint.visual_editor.r", 200)
+    setcfg("whitepoint.visual_editor.g", 200)
+    setcfg("whitepoint.visual_editor.b", 200)
+    try:
+        window.worker.output = ["XYZ: 10.0 65.0 30.0", "Daylight temperature = 6504K"]
+        window._visual_whitepoint_editor_measure_consumer("ok")
+        assert window.luminance_ctrl.currentIndex() == 1
+        assert window.luminance_textctrl.value() == 65.0
+    finally:
+        setcfg("whitepoint.visual_editor.r", 255)
+        setcfg("whitepoint.visual_editor.g", 255)
+        setcfg("whitepoint.visual_editor.b", 255)
+
+
+def test_visual_whitepoint_editor_measure_consumer_full_white_patch_uses_as_measured(
+    window,
+):
+    setcfg("whitepoint.visual_editor.r", 255)
+    setcfg("whitepoint.visual_editor.g", 255)
+    setcfg("whitepoint.visual_editor.b", 255)
+    window.luminance_ctrl.setCurrentIndex(1)
+    window.worker.output = ["XYZ: 10.0 65.0 30.0", "Daylight temperature = 6504K"]
+    window._visual_whitepoint_editor_measure_consumer("ok")
+    assert window.luminance_ctrl.currentIndex() == 0
+
+
+def test_visual_whitepoint_editor_measure_consumer_no_match_shows_error(
+    window, monkeypatch
+):
+    errors = []
+    monkeypatch.setattr(mw.message_box, "critical", lambda *a, **k: errors.append(a))
+    window.worker.output = ["nothing useful here"]
+    window._visual_whitepoint_editor_measure_consumer("ok")
+    assert errors
+
+
+def test_visual_whitepoint_editor_measure_consumer_exception_shows_error(
+    window, monkeypatch
+):
+    errors = []
+    monkeypatch.setattr(mw.message_box, "critical", lambda *a, **k: errors.append(a))
+    window._visual_whitepoint_editor_measure_consumer(RuntimeError("boom"))
+    assert errors
+
+
 def test_trc_selection_persists(window):
     window.trc_ctrl.setCurrentIndex(2)  # L*
     assert getcfg("trc") == "l"
