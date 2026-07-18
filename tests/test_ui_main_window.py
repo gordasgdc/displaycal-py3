@@ -8,6 +8,7 @@ See ``DisplayCAL/ui/MAINFRAME_PORT_PLAN.md`` (Stage 3).
 
 import os
 import shutil
+import sys
 import time
 from types import SimpleNamespace
 
@@ -7529,29 +7530,47 @@ def test_calibrate_instrument_finished_noop_on_success(window, monkeypatch):
 # ``QAction`` references construction already assigns to ``self`` stay valid.
 
 
+class _FakeSysModule:
+    """Stand-in for the ``sys`` module with ``platform`` overridden.
+
+    Delegates every other attribute (``argv``, ``exit``,
+    ``getwindowsversion``, ...) to the real ``sys`` module via
+    ``__getattr__``. Used by :func:`_build_window_with_platform` instead of
+    ``monkeypatch.setattr(mw.sys, "platform", ...)``: ``mw.sys`` is the
+    real, single global ``sys`` module, so mutating its ``platform``
+    attribute doesn't just affect ``_build_tools_menu()``'s own gate -- it
+    also reaches every other module's ``sys.platform`` reads for the
+    duration of the test, including ones with real, un-mockable
+    consequences: CPython's own ``multiprocessing`` resource-tracker
+    dispatches its spawn path off it (spoofing "linux" while the real host
+    is Windows makes ``Worker()`` -> ``ThreadAbort()`` -> ``mp.Event()``
+    try to ``import _posixsubprocess``, which doesn't exist there, crashing
+    the whole worker), and ``DisplayCAL.config`` only imports
+    ``LIBRARY``/``LIBRARY_HOME`` at module-import time when the *real* host
+    is "darwin" (spoofing "darwin" on a real Linux host then makes
+    ``colorimeter_correction.py``'s data-file lookup raise
+    ``AttributeError: module 'DisplayCAL.config' has no attribute
+    'LIBRARY'``). Both were hit for real in CI (PR #881, runs 29646328469
+    and 29647026132). Replacing the *name* ``sys`` inside
+    ``main_window``'s own module namespace, instead of mutating the shared
+    module object, confines the spoof to exactly the one place under test.
+    """
+
+    def __init__(self, platform: str) -> None:
+        self.platform = platform
+
+    def __getattr__(self, name):
+        return getattr(sys, name)
+
+
 def _build_window_with_platform(monkeypatch, platform: str) -> mw.MainWindow:
     """Construct a MainWindow with ``sys.platform`` spoofed to ``platform``.
 
-    The naive approach -- monkeypatch ``mw.sys.platform`` then call
-    ``mw.MainWindow()`` -- crashes when the spoofed value crosses the
-    POSIX/Windows boundary from the real host platform: ``mw.sys`` is the
-    real, single global ``sys`` module, so the patch also affects the
-    ``Worker()`` -> ``WorkerBase.__init__`` -> ``ThreadAbort()`` ->
-    ``mp.Event()`` call that ``MainWindow.__init__`` makes internally, and
-    CPython's own ``multiprocessing`` dispatches its resource-tracker spawn
-    path off the *real* ``sys.platform`` -- e.g. spoofing "linux" on real
-    Windows CI makes it try to ``import _posixsubprocess``, which doesn't
-    exist there, crashing instead of failing the assertion (seen for real
-    on Windows CI, PR #881 run 29647026132). Sidestep it by constructing
-    the ``Worker`` (and enumerating it, so stub_worker's patched displays/
-    instruments are still picked up) before the spoof takes effect, then
-    handing it to ``MainWindow(worker=...)`` so ``__init__`` adopts it
-    instead of constructing (and spoof-crashing on) its own.
+    See :class:`_FakeSysModule` for why this doesn't use
+    ``monkeypatch.setattr(mw.sys, "platform", ...)``.
     """
-    worker = Worker()
-    worker.enumerate_displays_and_ports()
-    monkeypatch.setattr(mw.sys, "platform", platform)
-    return mw.MainWindow(worker=worker)
+    monkeypatch.setattr(mw, "sys", _FakeSysModule(platform))
+    return mw.MainWindow()
 
 
 def test_instrument_conf_and_driver_actions_absent_on_macos_by_default(
