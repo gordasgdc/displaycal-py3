@@ -109,7 +109,7 @@ from requests import HTTPError
 from DisplayCAL.debughelpers import DownloadError
 import pytest
 
-from DisplayCAL import config
+from DisplayCAL import audio, config
 from DisplayCAL.util_os import which
 from DisplayCAL.worker import Worker
 
@@ -149,6 +149,19 @@ try:
     QDesktopServices.openUrl = staticmethod(lambda *args, **kwargs: True)
 except ImportError:
     pass
+
+# Every "instrument connected" / "measurement taken" / startup chime in the
+# app goes through audio.Sound(path).safe_play() (worker.py's measurement_/
+# commit_sound, display_cal.py's startup_sound, ui/startup.py's
+# play_startup_sound(), ui/untethered_window.py, wx_windows.py's progress
+# gauge, ...). All of those call sites do `audio.Sound(...)` module-qualified
+# rather than `from DisplayCAL.audio import Sound`, so replacing the class
+# attribute here -- before any other DisplayCAL module has a chance to call
+# it -- makes every one of them transparently construct the module's own
+# no-op DummySound instead, silencing beep.wav/camera_shutter.wav/
+# intro_new.wav etc. for the whole test session without needing a per-file
+# monkeypatch.
+audio.Sound = audio.DummySound
 
 
 @pytest.fixture(scope="module")

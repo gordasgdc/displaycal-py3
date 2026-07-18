@@ -3041,7 +3041,11 @@ class Worker(WorkerBase):
                 cmd = which(ocmd)
         if not cmd or not os.path.isfile(cmd):
             return Error(lang.getstr("file.missing", ocmd))
-        _disabler = BetterWindowDisabler()
+        # BetterWindowDisabler.disable() unconditionally touches
+        # wx.GetTopLevelWindows(), which needs a live wx.App -- under Qt-only
+        # operation (no wx.App running) this doesn't raise a catchable
+        # exception on Linux/GTK, it crashes the whole process natively.
+        _disabler = BetterWindowDisabler() if wx.GetApp() is not None else None
         result = True
         if not self.sudo:
             self.sudo = Sudo()

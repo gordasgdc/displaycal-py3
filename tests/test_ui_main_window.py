@@ -8,6 +8,7 @@ See ``DisplayCAL/ui/MAINFRAME_PORT_PLAN.md`` (Stage 3).
 
 import os
 import shutil
+import sys
 import time
 from types import SimpleNamespace
 
@@ -90,6 +91,17 @@ def _init_config():
     setcfg("3dlut.format", "cube")
     setcfg("profile.black_point_compensation", 0)
     setcfg("calibration.black_point_correction.auto", 0)
+    # test_confirm_bpc_choice_turn_on_accept_persists_bpc drives the real
+    # _confirm_black_point_correction_choice() "accept" path, which persists
+    # calibration.black_point_correction = 1.0, and never restores it. Left
+    # leaked, a later test's freshly-constructed window initializes its
+    # black-point-correction control from that value, so
+    # get_black_point_correction() > 0 -- one of
+    # measurement_mode_ctrl_handler()'s guards for showing the (here
+    # unmocked) BPC choice QMessageBox -- becomes true too, hanging the run
+    # exactly like the other pinned keys above (confirmed via a real CI hang
+    # in test_measurement_mode_ctrl_populates_and_persists).
+    setcfg("calibration.black_point_correction", 0.0)
     orig_argyll_version = getcfg("argyll.version")
     setcfg("argyll.version", "0.0.0")
     yield
@@ -7373,17 +7385,29 @@ def test_report_menu_matches_wx_xrc_order(window):
     assert texts == actual
 
 
-def test_instrument_menu_matches_wx_xrc_order(window):
-    expected = ["enable_spyder2", "", "calibrate_instrument"]
-    actual = [lang.getstr(key) if key else "" for key in expected]
-    for action in window._tools_menu.actions():
-        if action.text() == lang.getstr("instrument"):
-            instrument_menu = action.menu()
-            break
-    else:
-        pytest.fail("instrument submenu not found")
-    texts = [action.text() for action in instrument_menu.actions()]
-    assert texts == actual
+def test_instrument_menu_matches_wx_xrc_order(qapp, stub_worker, monkeypatch):
+    # The Instrument submenu gains extra, platform-conditional items on
+    # Linux/Windows (#851), so this order assertion is only meaningful
+    # against a fixed platform rather than whatever the CI host happens to
+    # be; pin to macOS/the pre-#851 baseline like the sibling tests below do
+    # (via _build_window_with_platform, defined further down in this file's
+    # #851 section -- see its docstring for why a naive
+    # ``monkeypatch.setattr(mw.sys, "platform", ...)`` + ``mw.MainWindow()``
+    # isn't safe here).
+    win = _build_window_with_platform(monkeypatch, "darwin")
+    try:
+        expected = ["enable_spyder2", "", "calibrate_instrument"]
+        actual = [lang.getstr(key) if key else "" for key in expected]
+        for action in win._tools_menu.actions():
+            if action.text() == lang.getstr("instrument"):
+                instrument_menu = action.menu()
+                break
+        else:
+            pytest.fail("instrument submenu not found")
+        texts = [action.text() for action in instrument_menu.actions()]
+        assert texts == actual
+    finally:
+        win.close()
 
 
 def test_ccxx_menu_matches_wx_xrc_order(window):
@@ -7493,6 +7517,475 @@ def test_calibrate_instrument_finished_noop_on_success(window, monkeypatch):
     monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
     window._on_calibrate_instrument_finished("some spotread output")
     assert errors == []
+
+
+# --- instrument udev conf / driver install-uninstall (#851) -----------------
+#
+# Menu-item presence is asserted via the stored ``self.*_action`` attributes
+# (mirroring wx's own ``self.menuitem_*`` refs for these same four items)
+# rather than by walking ``QMenu.actions()``: under this offscreen macOS test
+# environment, drilling into a *nested* ``QMenu`` (``action.menu()``) is
+# unreliable -- it can raise "libshiboken: Internal C++ object ... already
+# deleted" even for an untouched, freshly built menu -- while the top-level
+# ``QAction`` references construction already assigns to ``self`` stay valid.
+
+
+class _FakeSysModule:
+    """Stand-in for the ``sys`` module with ``platform`` overridden.
+
+    Delegates every other attribute (``argv``, ``exit``,
+    ``getwindowsversion``, ...) to the real ``sys`` module via
+    ``__getattr__``. Used by :func:`_build_window_with_platform` instead of
+    ``monkeypatch.setattr(mw.sys, "platform", ...)``: ``mw.sys`` is the
+    real, single global ``sys`` module, so mutating its ``platform``
+    attribute doesn't just affect ``_build_tools_menu()``'s own gate -- it
+    also reaches every other module's ``sys.platform`` reads for the
+    duration of the test, including ones with real, un-mockable
+    consequences: CPython's own ``multiprocessing`` resource-tracker
+    dispatches its spawn path off it (spoofing "linux" while the real host
+    is Windows makes ``Worker()`` -> ``ThreadAbort()`` -> ``mp.Event()``
+    try to ``import _posixsubprocess``, which doesn't exist there, crashing
+    the whole worker), and ``DisplayCAL.config`` only imports
+    ``LIBRARY``/``LIBRARY_HOME`` at module-import time when the *real* host
+    is "darwin" (spoofing "darwin" on a real Linux host then makes
+    ``colorimeter_correction.py``'s data-file lookup raise
+    ``AttributeError: module 'DisplayCAL.config' has no attribute
+    'LIBRARY'``). Both were hit for real in CI (PR #881, runs 29646328469
+    and 29647026132). Replacing the *name* ``sys`` inside
+    ``main_window``'s own module namespace, instead of mutating the shared
+    module object, confines the spoof to exactly the one place under test.
+    """
+
+    def __init__(self, platform: str) -> None:
+        self.platform = platform
+
+    def __getattr__(self, name):
+        return getattr(sys, name)
+
+
+def _build_window_with_platform(monkeypatch, platform: str) -> mw.MainWindow:
+    """Construct a MainWindow with ``sys.platform`` spoofed to ``platform``.
+
+    See :class:`_FakeSysModule` for why this doesn't use
+    ``monkeypatch.setattr(mw.sys, "platform", ...)``.
+    """
+    monkeypatch.setattr(mw, "sys", _FakeSysModule(platform))
+    return mw.MainWindow()
+
+
+def test_instrument_conf_and_driver_actions_absent_on_macos_by_default(
+    qapp, stub_worker, monkeypatch
+):
+    # Pin the platform explicitly rather than relying on the shared `window`
+    # fixture: these actions are gated by the *real* host sys.platform (see
+    # #851), so this "absent on macOS" assertion only holds when run on an
+    # actual macOS CI host, not on Linux/Windows CI, where the same fixture
+    # would legitimately create them.
+    win = _build_window_with_platform(monkeypatch, "darwin")
+    try:
+        assert win.install_argyll_instrument_conf_action is None
+        assert win.uninstall_argyll_instrument_conf_action is None
+        assert win.install_argyll_instrument_drivers_action is None
+        assert win.uninstall_argyll_instrument_drivers_action is None
+    finally:
+        win.close()
+
+
+def test_instrument_conf_actions_present_on_linux(qapp, stub_worker, monkeypatch):
+    win = _build_window_with_platform(monkeypatch, "linux")
+    try:
+        assert win.install_argyll_instrument_conf_action is not None
+        assert win.uninstall_argyll_instrument_conf_action is not None
+        assert win.install_argyll_instrument_conf_action.text() == lang.getstr(
+            "argyll.instrument.configuration_files.install"
+        )
+        assert win.uninstall_argyll_instrument_conf_action.text() == lang.getstr(
+            "argyll.instrument.configuration_files.uninstall"
+        )
+        assert win.install_argyll_instrument_drivers_action is None
+        assert win.uninstall_argyll_instrument_drivers_action is None
+    finally:
+        win.close()
+
+
+def test_instrument_menu_all_actions_present_under_test_flag(
+    qapp, stub_worker, monkeypatch
+):
+    # Matches wx: every platform-conditional item is bound under TEST,
+    # regardless of the actual host platform, so it can be exercised in CI
+    # without needing a real Linux/Windows box (see the #851 issue notes).
+    monkeypatch.setattr(mw, "TEST", True)
+    win = mw.MainWindow()
+    try:
+        assert win.install_argyll_instrument_conf_action is not None
+        assert win.uninstall_argyll_instrument_conf_action is not None
+        assert win.install_argyll_instrument_drivers_action is not None
+        assert win.uninstall_argyll_instrument_drivers_action is not None
+        assert win.install_argyll_instrument_drivers_action.text() == lang.getstr(
+            "argyll.instrument.drivers.install"
+        )
+        assert win.uninstall_argyll_instrument_drivers_action.text() == lang.getstr(
+            "argyll.instrument.drivers.uninstall"
+        )
+    finally:
+        win.close()
+
+
+def test_update_instrument_conf_menu_state_noop_without_action(
+    qapp, stub_worker, monkeypatch
+):
+    # Same host-platform-dependence as the "absent on macOS" test above:
+    # pin to macOS so install_argyll_instrument_conf_action is actually None
+    # regardless of the CI host running Linux/Windows.
+    win = _build_window_with_platform(monkeypatch, "darwin")
+    try:
+        assert win.install_argyll_instrument_conf_action is None
+        win._update_instrument_conf_menu_state()  # Must not raise.
+    finally:
+        win.close()
+
+
+def test_update_instrument_conf_menu_state_enables_correctly(window, monkeypatch):
+    install_action = mw.QAction("install", window)
+    uninstall_action = mw.QAction("uninstall", window)
+    window.install_argyll_instrument_conf_action = install_action
+    window.uninstall_argyll_instrument_conf_action = uninstall_action
+
+    monkeypatch.setattr(
+        mw,
+        "get_argyll_instrument_config",
+        lambda what=None: [] if what == "installed" else ["usb/55-Argyll.rules"],
+    )
+    window._update_instrument_conf_menu_state()
+    assert install_action.isEnabled() is True
+    assert uninstall_action.isEnabled() is False
+
+    monkeypatch.setattr(
+        mw,
+        "get_argyll_instrument_config",
+        lambda what=None: (
+            ["/etc/udev/rules.d/55-Argyll.rules"]
+            if what == "installed"
+            else ["usb/55-Argyll.rules"]
+        ),
+    )
+    window._update_instrument_conf_menu_state()
+    assert install_action.isEnabled() is False
+    assert uninstall_action.isEnabled() is True
+
+
+def test_confirm_instrument_conf_system_file_removal_true_on_continue(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw.QMessageBox, "exec_", lambda self: None)
+    monkeypatch.setattr(mw.QMessageBox, "clickedButton", lambda self: self.buttons()[0])
+    assert (
+        window._confirm_instrument_conf_system_file_removal(
+            "/lib/udev/rules.d/55-Argyll.rules"
+        )
+        is True
+    )
+
+
+def test_confirm_instrument_conf_system_file_removal_false_on_cancel(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw.QMessageBox, "exec_", lambda self: None)
+    monkeypatch.setattr(mw.QMessageBox, "clickedButton", lambda self: self.buttons()[1])
+    assert (
+        window._confirm_instrument_conf_system_file_removal(
+            "/lib/udev/rules.d/55-Argyll.rules"
+        )
+        is False
+    )
+
+
+class _FakeInstrumentConfUninstallDialog:
+    """Stand-in for ``mw._InstrumentConfUninstallDialog`` that skips the modal loop."""
+
+    answer = None  # set per-test
+    selected = None  # set per-test; None keeps every filename selected
+
+    def __init__(self, filenames, parent=None):
+        self._filenames = filenames
+
+    def exec_(self):
+        return self.__class__.answer
+
+    def selected_filenames(self):
+        if self.__class__.selected is not None:
+            return self.__class__.selected
+        return list(self._filenames)
+
+
+class _FakeInstrumentDriversConfirmDialog:
+    """Stand-in for ``mw._InstrumentDriversConfirmDialog`` that skips the modal loop."""
+
+    answer = None  # set per-test
+    launch = False  # set per-test
+
+    def __init__(self, title, msg, ok_label, uninstall, parent=None):
+        pass
+
+    def exec_(self):
+        return self.__class__.answer
+
+    def launch_devman(self):
+        return self.__class__.launch
+
+
+def test_install_argyll_instrument_conf_handler_install_runs_producer(
+    window, monkeypatch
+):
+    monkeypatch.setattr(window.worker, "authenticate", lambda cmd: True)
+    run_calls = []
+
+    class _FakeController:
+        def run(self, *a, **k):
+            run_calls.append((a, k))
+
+    monkeypatch.setattr(window, "_ensure_run_controller", lambda: _FakeController())
+    window._install_argyll_instrument_conf_action_handler(False)
+    assert run_calls
+    args, kwargs = run_calls[0]
+    assert args[0] == window.worker.install_argyll_instrument_conf
+    assert kwargs["wkwargs"] == {"uninstall": False, "filenames": None}
+    assert kwargs["pauseable"] is False
+
+
+def test_install_argyll_instrument_conf_handler_uninstall_no_installed_files_is_noop(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw, "get_argyll_instrument_config", lambda what=None: [])
+    controller_calls = []
+    monkeypatch.setattr(
+        window, "_ensure_run_controller", lambda: controller_calls.append(True)
+    )
+    window._install_argyll_instrument_conf_action_handler(True)
+    assert controller_calls == []
+
+
+def test_install_argyll_instrument_conf_handler_uninstall_dialog_rejected_is_noop(
+    window, monkeypatch
+):
+    monkeypatch.setattr(
+        mw,
+        "get_argyll_instrument_config",
+        lambda what=None: ["/etc/udev/rules.d/55-Argyll.rules"],
+    )
+    _FakeInstrumentConfUninstallDialog.answer = mw.QDialog.Rejected
+    monkeypatch.setattr(
+        mw, "_InstrumentConfUninstallDialog", _FakeInstrumentConfUninstallDialog
+    )
+    controller_calls = []
+    monkeypatch.setattr(
+        window, "_ensure_run_controller", lambda: controller_calls.append(True)
+    )
+    window._install_argyll_instrument_conf_action_handler(True)
+    assert controller_calls == []
+
+
+def test_install_argyll_instrument_conf_handler_uninstall_no_files_selected_is_noop(
+    window, monkeypatch
+):
+    monkeypatch.setattr(
+        mw,
+        "get_argyll_instrument_config",
+        lambda what=None: ["/etc/udev/rules.d/55-Argyll.rules"],
+    )
+    _FakeInstrumentConfUninstallDialog.answer = mw.QDialog.Accepted
+    _FakeInstrumentConfUninstallDialog.selected = []
+    monkeypatch.setattr(
+        mw, "_InstrumentConfUninstallDialog", _FakeInstrumentConfUninstallDialog
+    )
+    controller_calls = []
+    monkeypatch.setattr(
+        window, "_ensure_run_controller", lambda: controller_calls.append(True)
+    )
+    window._install_argyll_instrument_conf_action_handler(True)
+    assert controller_calls == []
+
+
+def test_install_argyll_instrument_conf_handler_system_file_declined_aborts(
+    window, monkeypatch
+):
+    filename = "/lib/udev/rules.d/55-Argyll.rules"
+    monkeypatch.setattr(
+        mw, "get_argyll_instrument_config", lambda what=None: [filename]
+    )
+    _FakeInstrumentConfUninstallDialog.answer = mw.QDialog.Accepted
+    _FakeInstrumentConfUninstallDialog.selected = [filename]
+    monkeypatch.setattr(
+        mw, "_InstrumentConfUninstallDialog", _FakeInstrumentConfUninstallDialog
+    )
+    monkeypatch.setattr(
+        window, "_confirm_instrument_conf_system_file_removal", lambda fn: False
+    )
+    controller_calls = []
+    monkeypatch.setattr(
+        window, "_ensure_run_controller", lambda: controller_calls.append(True)
+    )
+    window._install_argyll_instrument_conf_action_handler(True)
+    assert controller_calls == []
+
+
+def test_install_argyll_instrument_conf_handler_uninstall_runs_producer(
+    window, monkeypatch
+):
+    filename = "/etc/udev/rules.d/55-Argyll.rules"
+    monkeypatch.setattr(
+        mw, "get_argyll_instrument_config", lambda what=None: [filename]
+    )
+    _FakeInstrumentConfUninstallDialog.answer = mw.QDialog.Accepted
+    _FakeInstrumentConfUninstallDialog.selected = [filename]
+    monkeypatch.setattr(
+        mw, "_InstrumentConfUninstallDialog", _FakeInstrumentConfUninstallDialog
+    )
+    monkeypatch.setattr(window.worker, "authenticate", lambda cmd: True)
+    run_calls = []
+
+    class _FakeController:
+        def run(self, *a, **k):
+            run_calls.append((a, k))
+
+    monkeypatch.setattr(window, "_ensure_run_controller", lambda: _FakeController())
+    window._install_argyll_instrument_conf_action_handler(True)
+    assert run_calls
+    args, kwargs = run_calls[0]
+    assert args[0] == window.worker.install_argyll_instrument_conf
+    assert kwargs["wkwargs"] == {"uninstall": True, "filenames": [filename]}
+
+
+def test_install_argyll_instrument_conf_handler_auth_exception_shows_error(
+    window, monkeypatch
+):
+    monkeypatch.setattr(
+        window.worker, "authenticate", lambda cmd: RuntimeError("boom")
+    )
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    controller_calls = []
+    monkeypatch.setattr(
+        window, "_ensure_run_controller", lambda: controller_calls.append(True)
+    )
+    window._install_argyll_instrument_conf_action_handler(False)
+    assert errors
+    assert controller_calls == []
+
+
+def test_install_argyll_instrument_conf_handler_auth_cancelled_is_silent(
+    window, monkeypatch
+):
+    monkeypatch.setattr(window.worker, "authenticate", lambda cmd: False)
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    controller_calls = []
+    monkeypatch.setattr(
+        window, "_ensure_run_controller", lambda: controller_calls.append(True)
+    )
+    window._install_argyll_instrument_conf_action_handler(False)
+    assert errors == []
+    assert controller_calls == []
+
+
+def test_on_install_argyll_instrument_conf_finished_exception_shows_error(
+    window, monkeypatch
+):
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    window._on_install_argyll_instrument_conf_finished(RuntimeError("boom"), False)
+    assert errors
+
+
+def test_on_install_argyll_instrument_conf_finished_false_shows_worker_errors(
+    window, monkeypatch
+):
+    window.worker.errors = ["disk full"]
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    window._on_install_argyll_instrument_conf_finished(False, True)
+    assert errors
+    assert "disk full" in errors[0][2]
+
+
+def test_on_install_argyll_instrument_conf_finished_success_shows_info(
+    window, monkeypatch
+):
+    infos = []
+    monkeypatch.setattr(
+        mw.QMessageBox, "information", lambda *a, **k: infos.append(a)
+    )
+    refresh_calls = []
+    monkeypatch.setattr(
+        window,
+        "_update_instrument_conf_menu_state",
+        lambda: refresh_calls.append(True),
+    )
+    window._on_install_argyll_instrument_conf_finished(True, False)
+    assert refresh_calls == [True]
+    assert infos
+    assert infos[0][2] == lang.getstr(
+        "argyll.instrument.configuration_files.install.success"
+    )
+
+
+def test_install_argyll_instrument_drivers_handler_dialog_rejected_is_noop(
+    window, monkeypatch
+):
+    _FakeInstrumentDriversConfirmDialog.answer = mw.QDialog.Rejected
+    monkeypatch.setattr(
+        mw, "_InstrumentDriversConfirmDialog", _FakeInstrumentDriversConfirmDialog
+    )
+    controller_calls = []
+    monkeypatch.setattr(
+        window, "_ensure_run_controller", lambda: controller_calls.append(True)
+    )
+    window._install_argyll_instrument_drivers_action_handler(False)
+    assert controller_calls == []
+
+
+def test_install_argyll_instrument_drivers_handler_runs_producer(
+    window, monkeypatch
+):
+    _FakeInstrumentDriversConfirmDialog.answer = mw.QDialog.Accepted
+    _FakeInstrumentDriversConfirmDialog.launch = True
+    monkeypatch.setattr(
+        mw, "_InstrumentDriversConfirmDialog", _FakeInstrumentDriversConfirmDialog
+    )
+    run_calls = []
+
+    class _FakeController:
+        def run(self, *a, **k):
+            run_calls.append((a, k))
+
+    monkeypatch.setattr(window, "_ensure_run_controller", lambda: _FakeController())
+    window._install_argyll_instrument_drivers_action_handler(True)
+    assert run_calls
+    args, kwargs = run_calls[0]
+    assert args[0] == window.worker.install_argyll_instrument_drivers
+    assert kwargs["wargs"] == (True, True)
+    assert kwargs["pauseable"] is False
+
+
+def test_on_install_argyll_instrument_drivers_finished_exception_shows_error(
+    window, monkeypatch
+):
+    errors = []
+    monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
+    update_calls = []
+    monkeypatch.setattr(window, "update_controls", lambda: update_calls.append(True))
+    window._on_install_argyll_instrument_drivers_finished(RuntimeError("boom"))
+    assert errors
+    assert update_calls == []
+
+
+def test_on_install_argyll_instrument_drivers_finished_success_updates_controls(
+    window, monkeypatch
+):
+    update_calls = []
+    monkeypatch.setattr(window, "update_controls", lambda: update_calls.append(True))
+    window._on_install_argyll_instrument_drivers_finished(None)
+    assert update_calls == [True]
 
 
 def test_show_curves_action_handler_creates_and_shows_window(window):
