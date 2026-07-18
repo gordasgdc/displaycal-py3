@@ -7384,17 +7384,29 @@ def test_report_menu_matches_wx_xrc_order(window):
     assert texts == actual
 
 
-def test_instrument_menu_matches_wx_xrc_order(window):
-    expected = ["enable_spyder2", "", "calibrate_instrument"]
-    actual = [lang.getstr(key) if key else "" for key in expected]
-    for action in window._tools_menu.actions():
-        if action.text() == lang.getstr("instrument"):
-            instrument_menu = action.menu()
-            break
-    else:
-        pytest.fail("instrument submenu not found")
-    texts = [action.text() for action in instrument_menu.actions()]
-    assert texts == actual
+def test_instrument_menu_matches_wx_xrc_order(qapp, stub_worker, monkeypatch):
+    # The Instrument submenu gains extra, platform-conditional items on
+    # Linux/Windows (#851), so this order assertion is only meaningful
+    # against a fixed platform rather than whatever the CI host happens to
+    # be; pin to macOS/the pre-#851 baseline like the sibling tests below do
+    # (via _build_window_with_platform, defined further down in this file's
+    # #851 section -- see its docstring for why a naive
+    # ``monkeypatch.setattr(mw.sys, "platform", ...)`` + ``mw.MainWindow()``
+    # isn't safe here).
+    win = _build_window_with_platform(monkeypatch, "darwin")
+    try:
+        expected = ["enable_spyder2", "", "calibrate_instrument"]
+        actual = [lang.getstr(key) if key else "" for key in expected]
+        for action in win._tools_menu.actions():
+            if action.text() == lang.getstr("instrument"):
+                instrument_menu = action.menu()
+                break
+        else:
+            pytest.fail("instrument submenu not found")
+        texts = [action.text() for action in instrument_menu.actions()]
+        assert texts == actual
+    finally:
+        win.close()
 
 
 def test_ccxx_menu_matches_wx_xrc_order(window):
@@ -7517,16 +7529,51 @@ def test_calibrate_instrument_finished_noop_on_success(window, monkeypatch):
 # ``QAction`` references construction already assigns to ``self`` stay valid.
 
 
-def test_instrument_conf_and_driver_actions_absent_on_macos_by_default(window):
-    assert window.install_argyll_instrument_conf_action is None
-    assert window.uninstall_argyll_instrument_conf_action is None
-    assert window.install_argyll_instrument_drivers_action is None
-    assert window.uninstall_argyll_instrument_drivers_action is None
+def _build_window_with_platform(monkeypatch, platform: str) -> mw.MainWindow:
+    """Construct a MainWindow with ``sys.platform`` spoofed to ``platform``.
+
+    The naive approach -- monkeypatch ``mw.sys.platform`` then call
+    ``mw.MainWindow()`` -- crashes when the spoofed value crosses the
+    POSIX/Windows boundary from the real host platform: ``mw.sys`` is the
+    real, single global ``sys`` module, so the patch also affects the
+    ``Worker()`` -> ``WorkerBase.__init__`` -> ``ThreadAbort()`` ->
+    ``mp.Event()`` call that ``MainWindow.__init__`` makes internally, and
+    CPython's own ``multiprocessing`` dispatches its resource-tracker spawn
+    path off the *real* ``sys.platform`` -- e.g. spoofing "linux" on real
+    Windows CI makes it try to ``import _posixsubprocess``, which doesn't
+    exist there, crashing instead of failing the assertion (seen for real
+    on Windows CI, PR #881 run 29647026132). Sidestep it by constructing
+    the ``Worker`` (and enumerating it, so stub_worker's patched displays/
+    instruments are still picked up) before the spoof takes effect, then
+    handing it to ``MainWindow(worker=...)`` so ``__init__`` adopts it
+    instead of constructing (and spoof-crashing on) its own.
+    """
+    worker = Worker()
+    worker.enumerate_displays_and_ports()
+    monkeypatch.setattr(mw.sys, "platform", platform)
+    return mw.MainWindow(worker=worker)
+
+
+def test_instrument_conf_and_driver_actions_absent_on_macos_by_default(
+    qapp, stub_worker, monkeypatch
+):
+    # Pin the platform explicitly rather than relying on the shared `window`
+    # fixture: these actions are gated by the *real* host sys.platform (see
+    # #851), so this "absent on macOS" assertion only holds when run on an
+    # actual macOS CI host, not on Linux/Windows CI, where the same fixture
+    # would legitimately create them.
+    win = _build_window_with_platform(monkeypatch, "darwin")
+    try:
+        assert win.install_argyll_instrument_conf_action is None
+        assert win.uninstall_argyll_instrument_conf_action is None
+        assert win.install_argyll_instrument_drivers_action is None
+        assert win.uninstall_argyll_instrument_drivers_action is None
+    finally:
+        win.close()
 
 
 def test_instrument_conf_actions_present_on_linux(qapp, stub_worker, monkeypatch):
-    monkeypatch.setattr(mw.sys, "platform", "linux")
-    win = mw.MainWindow()
+    win = _build_window_with_platform(monkeypatch, "linux")
     try:
         assert win.install_argyll_instrument_conf_action is not None
         assert win.uninstall_argyll_instrument_conf_action is not None
@@ -7565,9 +7612,18 @@ def test_instrument_menu_all_actions_present_under_test_flag(
         win.close()
 
 
-def test_update_instrument_conf_menu_state_noop_without_action(window):
-    assert window.install_argyll_instrument_conf_action is None
-    window._update_instrument_conf_menu_state()  # Must not raise.
+def test_update_instrument_conf_menu_state_noop_without_action(
+    qapp, stub_worker, monkeypatch
+):
+    # Same host-platform-dependence as the "absent on macOS" test above:
+    # pin to macOS so install_argyll_instrument_conf_action is actually None
+    # regardless of the CI host running Linux/Windows.
+    win = _build_window_with_platform(monkeypatch, "darwin")
+    try:
+        assert win.install_argyll_instrument_conf_action is None
+        win._update_instrument_conf_menu_state()  # Must not raise.
+    finally:
+        win.close()
 
 
 def test_update_instrument_conf_menu_state_enables_correctly(window, monkeypatch):
