@@ -90,6 +90,17 @@ def _init_config():
     setcfg("3dlut.format", "cube")
     setcfg("profile.black_point_compensation", 0)
     setcfg("calibration.black_point_correction.auto", 0)
+    # test_confirm_bpc_choice_turn_on_accept_persists_bpc drives the real
+    # _confirm_black_point_correction_choice() "accept" path, which persists
+    # calibration.black_point_correction = 1.0, and never restores it. Left
+    # leaked, a later test's freshly-constructed window initializes its
+    # black-point-correction control from that value, so
+    # get_black_point_correction() > 0 -- one of
+    # measurement_mode_ctrl_handler()'s guards for showing the (here
+    # unmocked) BPC choice QMessageBox -- becomes true too, hanging the run
+    # exactly like the other pinned keys above (confirmed via a real CI hang
+    # in test_measurement_mode_ctrl_populates_and_persists).
+    setcfg("calibration.black_point_correction", 0.0)
     orig_argyll_version = getcfg("argyll.version")
     setcfg("argyll.version", "0.0.0")
     yield
