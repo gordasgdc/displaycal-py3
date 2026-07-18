@@ -1090,6 +1090,12 @@ def test_visual_whitepoint_editor_measure_consumer_sets_colortemp_whitepoint(win
     window._visual_whitepoint_editor_btn_handler()
     editor = window._visual_whitepoint_editor_window
     editor.measure_btn.setEnabled(False)
+    # The implementation only proposes a colour-temp whitepoint when the
+    # control isn't already on x,y chromaticity (mirrors wx); pin the start
+    # state explicitly rather than relying on a fresh window's default, since
+    # config leaked from an earlier test elsewhere in the suite can leave a
+    # new MainWindow's whitepoint_ctrl pre-set to index 2.
+    window.whitepoint_ctrl.setCurrentIndex(0)
     window.worker.output = ["Daylight temperature = 6504K"]
     window._visual_whitepoint_editor_measure_consumer("ok")
     assert editor.measure_btn.isEnabled() is True
