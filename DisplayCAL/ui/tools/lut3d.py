@@ -71,6 +71,7 @@ from DisplayCAL.icc_profile import (
 )
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.ui.application import Application
+from DisplayCAL.ui.assets import get_theme_pixmap
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
 from DisplayCAL.ui import message_box
@@ -473,6 +474,12 @@ class LUT3DWindow(BaseWindow):
         self.lut3d_trc_apply_none_ctrl.toggled.connect(self.lut3d_trc_apply_ctrl_handler)
         self._trc_apply_group.addButton(self.lut3d_trc_apply_none_ctrl)
         none_layout.addWidget(self.lut3d_trc_apply_none_ctrl)
+        self.lut3d_input_value_clipping_bmp = QLabel()
+        clipping_pixmap = get_theme_pixmap(16, "dialog-warning")
+        if not clipping_pixmap.isNull():
+            self.lut3d_input_value_clipping_bmp.setPixmap(clipping_pixmap)
+        self.lut3d_input_value_clipping_bmp.setVisible(False)
+        none_layout.addWidget(self.lut3d_input_value_clipping_bmp)
         self.lut3d_input_value_clipping_label = QLabel(
             lang.getstr("warning.input_value_clipping")
         )
@@ -1528,6 +1535,7 @@ class LUT3DWindow(BaseWindow):
             and getcfg("3dlut.rendering_intent")
             not in ("la", "p", "pa", "ms", "s", "lp")
         )
+        self.lut3d_input_value_clipping_bmp.setVisible(show)
         self.lut3d_input_value_clipping_label.setVisible(show)
 
     # -- signal slots ------------------------------------------------------
