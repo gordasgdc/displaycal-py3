@@ -687,14 +687,22 @@ class LUT3DWindow(BaseWindow):
         grid.setHorizontalSpacing(4)
         grid.setVerticalSpacing(8)
         for r, color in enumerate(("white", "red", "green", "blue")):
-            grid.addWidget(QLabel(lang.getstr(color)), r, 0, Qt.AlignVCenter)
+            row_label = QLabel(lang.getstr(color))
+            setattr(self, f"lut3d_content_colorspace_{color[0]}_label", row_label)
+            grid.addWidget(row_label, r, 0, Qt.AlignVCenter)
             for c, coord in enumerate("xy"):
                 spin = self._spin(-1.0, 1.0, 0.0001, 4, width=100)
                 setattr(self, f"lut3d_content_colorspace_{color}_{coord}", spin)
                 spin.valueChanged.connect(
                     partial(self._on_content_colorspace_xy, color, coord)
                 )
-                grid.addWidget(QLabel(coord), r, c * 2 + 1, Qt.AlignVCenter)
+                coord_label = QLabel(coord)
+                setattr(
+                    self,
+                    f"lut3d_content_colorspace_{color}_{coord}_label",
+                    coord_label,
+                )
+                grid.addWidget(coord_label, r, c * 2 + 1, Qt.AlignVCenter)
                 grid.addWidget(spin, r, c * 2 + 2)
         grid.setColumnStretch(5, 1)
         return self.content_colorspace_grid
@@ -1583,8 +1591,12 @@ class LUT3DWindow(BaseWindow):
         ):
             getattr(self, name).setEnabled(v)
         for color in ("white", "red", "green", "blue"):
+            getattr(self, f"lut3d_content_colorspace_{color[0]}_label").setEnabled(v)
             for coord in "xy":
                 getattr(self, f"lut3d_content_colorspace_{color}_{coord}").setEnabled(v)
+                getattr(
+                    self, f"lut3d_content_colorspace_{color}_{coord}_label"
+                ).setEnabled(v)
         self.lut3d_show_input_value_clipping_warning(_checked)
         self.lut3d_show_hdr_display_control()
 
