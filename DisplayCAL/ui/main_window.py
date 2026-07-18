@@ -177,6 +177,7 @@ from DisplayCAL.argyll import (
     argyll_version_at_least,
     check_argyll_bin,
     check_set_argyll_bin,
+    get_argyll_instrument_config,
     get_argyll_util,
     make_argyll_compatible_path,
 )
@@ -278,7 +279,7 @@ from DisplayCAL.ui.worker_runner import (
 )
 from DisplayCAL.util_decimal import stripzeros
 from DisplayCAL.util_dict import dict_sort
-from DisplayCAL.util_os import get_program_file, launch_file, waccess
+from DisplayCAL.util_os import get_program_file, launch_file, waccess, which
 from DisplayCAL.worker import (
     Worker,
     check_file_isfile,
@@ -600,6 +601,79 @@ class _DeleteConfirmationDialog(QDialog):
 
     def related_files(self) -> dict[str, bool]:
         return {name: cb.isChecked() for name, cb in self._checks.items()}
+
+
+class _InstrumentConfUninstallDialog(QDialog):
+    """Qt port of the checkbox ``ConfirmDialog`` in ``install_argyll_instrument_conf``.
+
+    Lets the user individually toggle which installed Argyll instrument
+    udev-rule/hotplug files get uninstalled, mirroring wx's per-file
+    ``wx.CheckBox`` list, all pre-checked.
+    """
+
+    def __init__(self, filenames: list[str], parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(
+            lang.getstr("argyll.instrument.configuration_files.uninstall")
+        )
+        layout = QVBoxLayout(self)
+        label = QLabel(lang.getstr("dialog.confirm_uninstall"))
+        label.setWordWrap(True)
+        layout.addWidget(label)
+
+        self._checks: dict[str, QCheckBox] = {}
+        for filename in filenames:
+            cb = QCheckBox(filename)
+            cb.setChecked(True)
+            self._checks[filename] = cb
+            layout.addWidget(cb)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.button(QDialogButtonBox.Ok).setText(lang.getstr("uninstall"))
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def selected_filenames(self) -> list[str]:
+        return [name for name, cb in self._checks.items() if cb.isChecked()]
+
+
+class _InstrumentDriversConfirmDialog(QDialog):
+    """Qt port of the ``ConfirmDialog`` in ``install_argyll_instrument_drivers``.
+
+    A single "launch device manager afterwards" checkbox alongside the
+    confirm/cancel buttons, mirroring wx's ``dlg.launch_devman`` checkbox,
+    which starts pre-checked only when uninstalling (matching wx's
+    ``dlg.launch_devman.SetValue(uninstall)``).
+    """
+
+    def __init__(
+        self,
+        title: str,
+        msg: str,
+        ok_label: str,
+        uninstall: bool,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        layout = QVBoxLayout(self)
+        label = QLabel(msg)
+        label.setWordWrap(True)
+        layout.addWidget(label)
+
+        self._launch_devman_cb = QCheckBox(lang.getstr("device_manager.launch"))
+        self._launch_devman_cb.setChecked(uninstall)
+        layout.addWidget(self._launch_devman_cb)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.button(QDialogButtonBox.Ok).setText(ok_label)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def launch_devman(self) -> bool:
+        return self._launch_devman_cb.isChecked()
 
 
 class _DonationDialog(QDialog):
@@ -2138,10 +2212,28 @@ class MainWindow(BaseWindow):
         :mod:`DisplayCAL.ui.spyder2_enable`) and "calibrate_instrument"
         (:meth:`_calibrate_instrument_action_handler`, running
         ``Worker.calibrate_instrument_producer`` through the shared
-        :class:`WorkerRunController`) are reproduced; the Argyll instrument
-        configuration-file / driver install-uninstall entries are not (they
-        need the still-unported driver-installer / `oeminst` plumbing wx's
-        own handlers wrap).
+        :class:`WorkerRunController`) are reproduced. The four
+        platform-conditional Argyll instrument configuration-file / driver
+        install-uninstall entries are reproduced too
+        (:meth:`_install_argyll_instrument_conf_action_handler` /
+        :meth:`_install_argyll_instrument_drivers_action_handler`), gated by
+        the same ``sys.platform`` checks (plus ``TEST``) wx's own
+        ``MainFrame.__init__`` uses to ``Bind``/``RemoveItem`` them: the udev
+        configuration-file pair is Linux-only, the driver-install entry is
+        Windows-only, and the driver-uninstall entry additionally needs
+        Windows Vista or newer. wx's inline ``ConfirmDialog`` checkbox list
+        for picking which installed configuration files to uninstall becomes
+        :class:`_InstrumentConfUninstallDialog` (the same pattern as
+        :class:`_DeleteConfirmationDialog`), and its "this is a system file"
+        second-guess prompt is a plain :class:`QMessageBox`. The driver
+        install/uninstall confirmation (with its "launch Device Manager
+        afterwards" checkbox) becomes :class:`_InstrumentDriversConfirmDialog`.
+        Both reuse the already-ported ``Worker.install_argyll_instrument_conf``
+        / ``Worker.install_argyll_instrument_drivers`` producers through the
+        shared :class:`WorkerRunController`, and
+        :meth:`Worker.authenticate` is called upfront on the GUI thread
+        exactly as wx does, since ``Worker.exec_cmd``'s ``asroot`` handling
+        refuses to prompt for a password from a background thread.
 
         wx's ``video_card_gamma_table`` submenu (load/reset the display's
         video card gamma table directly, independent of a full calibrate
@@ -2209,6 +2301,43 @@ class MainWindow(BaseWindow):
         reset_cal_action.triggered.connect(self._reset_video_lut_action_handler)
 
         instrument_menu = tools_menu.addMenu(lang.getstr("instrument"))
+        self.install_argyll_instrument_conf_action: QAction | None = None
+        self.uninstall_argyll_instrument_conf_action: QAction | None = None
+        self.install_argyll_instrument_drivers_action: QAction | None = None
+        self.uninstall_argyll_instrument_drivers_action: QAction | None = None
+        if sys.platform not in ("darwin", "win32") or TEST:
+            # Linux may need instrument access being set up (udev rules)
+            self.install_argyll_instrument_conf_action = instrument_menu.addAction(
+                lang.getstr("argyll.instrument.configuration_files.install")
+            )
+            self.install_argyll_instrument_conf_action.triggered.connect(
+                lambda: self._install_argyll_instrument_conf_action_handler(False)
+            )
+            self.uninstall_argyll_instrument_conf_action = instrument_menu.addAction(
+                lang.getstr("argyll.instrument.configuration_files.uninstall")
+            )
+            self.uninstall_argyll_instrument_conf_action.triggered.connect(
+                lambda: self._install_argyll_instrument_conf_action_handler(True)
+            )
+            self._update_instrument_conf_menu_state()
+        if sys.platform == "win32" or TEST:
+            # Windows may need an Argyll CMS instrument driver
+            self.install_argyll_instrument_drivers_action = instrument_menu.addAction(
+                lang.getstr("argyll.instrument.drivers.install")
+            )
+            self.install_argyll_instrument_drivers_action.triggered.connect(
+                lambda: self._install_argyll_instrument_drivers_action_handler(False)
+            )
+        if (sys.platform == "win32" and sys.getwindowsversion() >= (6,)) or TEST:
+            # Windows Vista and newer can uninstall the Argyll CMS instrument driver
+            self.uninstall_argyll_instrument_drivers_action = (
+                instrument_menu.addAction(
+                    lang.getstr("argyll.instrument.drivers.uninstall")
+                )
+            )
+            self.uninstall_argyll_instrument_drivers_action.triggered.connect(
+                lambda: self._install_argyll_instrument_drivers_action_handler(True)
+            )
         self.enable_spyder2_action = instrument_menu.addAction(
             lang.getstr("enable_spyder2")
         )
@@ -2356,6 +2485,153 @@ class MainWindow(BaseWindow):
     def _on_calibrate_instrument_finished(self, result: object) -> None:
         if isinstance(result, Exception):
             message_box.critical(self, APPNAME, str(result))
+
+    def _update_instrument_conf_menu_state(self) -> None:
+        """Refresh the enabled state of the udev conf install/uninstall actions.
+
+        Qt port of the corresponding slice of wx's ``update_menus``: only
+        enable "install" if the configuration isn't already installed (and is
+        installable), and only enable "uninstall" if it is installed.
+        """
+        if self.install_argyll_instrument_conf_action is None:
+            return
+        installed = get_argyll_instrument_config("installed")
+        installable = get_argyll_instrument_config()
+        self.install_argyll_instrument_conf_action.setEnabled(
+            bool(not installed and installable)
+        )
+        self.uninstall_argyll_instrument_conf_action.setEnabled(
+            bool(installed and installable)
+        )
+
+    def _confirm_instrument_conf_system_file_removal(self, filename: str) -> bool:
+        """Qt port of the second, system-file ``ConfirmDialog``.
+
+        See ``install_argyll_instrument_conf``.
+        """
+        box = QMessageBox(self)
+        box.setWindowTitle(
+            lang.getstr("argyll.instrument.configuration_files.uninstall")
+        )
+        box.setIcon(QMessageBox.Warning)
+        box.setText(lang.getstr("warning.system_file", filename))
+        continue_button = box.addButton(
+            lang.getstr("continue"), QMessageBox.AcceptRole
+        )
+        box.addButton(lang.getstr("cancel"), QMessageBox.RejectRole)
+        message_box.exec_box(box)
+        return box.clickedButton() is continue_button
+
+    def _install_argyll_instrument_conf_action_handler(self, uninstall: bool) -> None:
+        """(Un)install Argyll instrument udev rules/hotplug scripts (Linux).
+
+        Instrument menu action. Qt port of ``install_argyll_instrument_conf``/
+        ``uninstall_argyll_instrument_conf``: for uninstall, lets the user
+        toggle which installed files to remove
+        (:class:`_InstrumentConfUninstallDialog`), warning separately before
+        removing any file under ``/lib/udev/rules.d`` (likely owned by
+        another package, e.g. ``colord``, rather than installed by this
+        action). Authenticates for the elevated ``cp``/``rm`` upfront on the
+        GUI thread, exactly as wx does, then runs
+        ``Worker.install_argyll_instrument_conf`` through the shared
+        :class:`WorkerRunController`.
+        """
+        filenames = None
+        cmd = "cp"
+        if uninstall:
+            filenames = get_argyll_instrument_config("installed")
+            if not filenames:
+                return
+            dialog = _InstrumentConfUninstallDialog(filenames, self)
+            if dialog.exec_() != QDialog.Accepted:
+                return
+            filenames = dialog.selected_filenames()
+            if not filenames:
+                return
+            for filename in filenames:
+                if os.path.dirname(filename) != "/lib/udev/rules.d":
+                    continue
+                if not self._confirm_instrument_conf_system_file_removal(filename):
+                    return
+            cmd = "rm"
+
+        result = self.worker.authenticate(which(cmd))
+        if result not in (True, None):
+            if isinstance(result, Exception):
+                message_box.critical(self, APPNAME, str(result))
+            return
+
+        controller = self._ensure_run_controller()
+        controller.run(
+            self.worker.install_argyll_instrument_conf,
+            lambda result: self._on_install_argyll_instrument_conf_finished(
+                result, uninstall
+            ),
+            wkwargs={"uninstall": uninstall, "filenames": filenames},
+            progress_msg=lang.getstr(
+                "argyll.instrument.configuration_files."
+                + ("uninstall" if uninstall else "install")
+            ),
+            pauseable=False,
+        )
+
+    def _on_install_argyll_instrument_conf_finished(
+        self, result: object, uninstall: bool
+    ) -> None:
+        if isinstance(result, Exception):
+            message_box.critical(self, APPNAME, str(result))
+        elif result is False:
+            message_box.critical(
+                self, APPNAME, "".join(self.worker.errors) or lang.getstr("error")
+            )
+        else:
+            self._update_instrument_conf_menu_state()
+            msgid = "argyll.instrument.configuration_files." + (
+                "uninstall.success" if uninstall else "install.success"
+            )
+            message_box.information(self, APPNAME, lang.getstr(msgid))
+
+    def _install_argyll_instrument_drivers_action_handler(
+        self, uninstall: bool
+    ) -> None:
+        """(Un)install the Argyll instrument USB driver (Instrument menu, Windows).
+
+        Qt port of ``install_argyll_instrument_drivers``/
+        ``uninstall_argyll_instrument_drivers``: confirms via
+        :class:`_InstrumentDriversConfirmDialog`, then runs
+        ``Worker.install_argyll_instrument_drivers`` through the shared
+        :class:`WorkerRunController`. Unlike wx's own handler, which calls
+        ``self.check_update_controls(True)`` (a full re-detect-displays pass)
+        on success, this refreshes via the lighter :meth:`update_controls` --
+        the Qt port has no equivalent of that heavier flow yet.
+        """
+        if uninstall:
+            title = lang.getstr("argyll.instrument.drivers.uninstall")
+            msg = lang.getstr("argyll.instrument.drivers.uninstall.confirm")
+            ok_label = lang.getstr("continue")
+        else:
+            title = lang.getstr("argyll.instrument.drivers.install")
+            msg = lang.getstr("argyll.instrument.drivers.install.confirm")
+            ok_label = lang.getstr("download_install")
+        dialog = _InstrumentDriversConfirmDialog(title, msg, ok_label, uninstall, self)
+        if dialog.exec_() != QDialog.Accepted:
+            return
+        launch_devman = dialog.launch_devman()
+
+        controller = self._ensure_run_controller()
+        controller.run(
+            self.worker.install_argyll_instrument_drivers,
+            self._on_install_argyll_instrument_drivers_finished,
+            wargs=(uninstall, launch_devman),
+            progress_msg=title,
+            pauseable=False,
+        )
+
+    def _on_install_argyll_instrument_drivers_finished(self, result: object) -> None:
+        if isinstance(result, Exception):
+            message_box.critical(self, APPNAME, str(result))
+        else:
+            self.update_controls()
 
     def _show_curves_action_handler(self) -> None:
         """Open the calibration curve viewer (Tools menu).
