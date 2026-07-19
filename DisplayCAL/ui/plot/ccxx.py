@@ -22,6 +22,7 @@ from qtpy.QtCore import Qt
 from qtpy.QtGui import QColor
 
 from DisplayCAL import colormath
+from DisplayCAL.icc_profile import CRInterpolation
 from DisplayCAL.ui.plot.ccxx_data import COMPARISON_GAMUTS, comparison_gamut_triangle
 from DisplayCAL.ui.theme import plot_colors
 
@@ -42,6 +43,37 @@ _DASH_STYLES = {
     "dashdot": Qt.DashDotLine,
     "dot": Qt.DotLine,
 }
+
+#: Samples inserted between each pair of source points when smoothing the
+#: spectral locus outline (see :func:`_smooth_curve`).
+_LOCUS_SAMPLES_PER_SEGMENT = 8
+
+
+def _smooth_curve(
+    points: list[tuple[float, float]],
+    samples_per_segment: int = _LOCUS_SAMPLES_PER_SEGMENT,
+) -> list[tuple[float, float]]:
+    """Resample ``points`` through a Catmull-Rom spline passing through them exactly.
+
+    wx draws the CIE 1931 outline with ``plot.PolySpline`` (a rounded spline
+    through the same points); pyqtgraph's ``PlotCurveItem`` only draws
+    straight segments, so this pre-smooths the polyline to match.
+
+    Args:
+        points (list[tuple[float, float]]): Source (x, y) points.
+        samples_per_segment (int): Interpolated samples per source segment.
+
+    Returns:
+        list[tuple[float, float]]: The smoothed, denser point list.
+    """
+    interp_x = CRInterpolation([p[0] for p in points])
+    interp_y = CRInterpolation([p[1] for p in points])
+    segments = len(points) - 1
+    count = segments * samples_per_segment + 1
+    return [
+        (interp_x(pos), interp_y(pos))
+        for pos in (i * segments / (count - 1) for i in range(count))
+    ]
 
 
 class CCXXPlotWidget(pg.PlotWidget):
@@ -162,11 +194,21 @@ class CCXXPlotWidget(pg.PlotWidget):
         self.setMouseEnabled(x=True, y=True)
         legend = plot_item.addLegend(offset=(-10, 10))
 
-        locus = [*colormath.cie1931_2_xy, colormath.cie1931_2_xy[0]]
+        locus = colormath.cie1931_2_xy
+        smoothed_locus = _smooth_curve(locus)
         self.addItem(
             pg.PlotCurveItem(
-                [p[0] for p in locus],
-                [p[1] for p in locus],
+                [p[0] for p in smoothed_locus],
+                [p[1] for p in smoothed_locus],
+                pen=pg.mkPen(_OUTLINE, width=1.75),
+            )
+        )
+        # Straight "line of purples" closing the outline between the
+        # spectral locus' two ends, same as wx's separate PolyLine.
+        self.addItem(
+            pg.PlotCurveItem(
+                [locus[0][0], locus[-1][0]],
+                [locus[0][1], locus[-1][1]],
                 pen=pg.mkPen(_OUTLINE, width=1.75),
             )
         )
