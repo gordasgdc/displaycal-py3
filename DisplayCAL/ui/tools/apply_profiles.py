@@ -18,13 +18,17 @@ Unlike the wx tray (Windows-only), the Qt tray icon is enabled on every
 platform: ``QSystemTrayIcon`` makes this essentially free, and it is the only
 way to see/exercise this daemon's UI outside of a Windows box.
 
-Deferred to follow-up issues (menu items are present but disabled): the
-Profile Associations, Fix Profile Associations and Exceptions dialogs, and the
-Windows device/process hot-plug monitoring thread
-(``_check_display_conf_thread``). Because that polling thread is not ported,
-this Qt build instead triggers an immediate (backgrounded) re-apply whenever
-the ``apply-profiles``/``reset-vcgt`` IPC command or a tray double-click asks
-for one, rather than only flipping a flag for a poller to notice later.
+Deferred to follow-up issues (menu items are present but disabled): the Fix
+Profile Associations and Exceptions dialogs, and the Windows device/process
+hot-plug monitoring thread (``_check_display_conf_thread``). Profile
+Associations itself is ported (see
+:mod:`DisplayCAL.ui.tools.profile_associations`), but wired up on Windows
+only -- the WCS/registry APIs it drives (and ``ProfileLoader.monitors``, the
+display list it reads) have no cross-platform equivalent. Because the
+hot-plug polling thread is not ported, this Qt build instead triggers an
+immediate (backgrounded) re-apply whenever the
+``apply-profiles``/``reset-vcgt`` IPC command or a tray double-click asks for
+one, rather than only flipping a flag for a poller to notice later.
 """
 
 from __future__ import annotations
@@ -299,8 +303,14 @@ class ApplyProfilesTrayIcon(QSystemTrayIcon):
         menu.addSeparator()
 
         associations_action = menu.addAction(lang.getstr("profile_associations"))
-        associations_action.setEnabled(False)
-        associations_action.setToolTip(_NOT_AVAILABLE_TOOLTIP)
+        if sys.platform == "win32":
+            associations_action.triggered.connect(pl._set_profile_associations)
+        else:
+            # ProfileAssociationsDialog drives Windows-only WCS/registry APIs
+            # (see DisplayCAL.ui.tools.profile_associations); the feature has
+            # no cross-platform equivalent to fall back to.
+            associations_action.setEnabled(False)
+            associations_action.setToolTip(_NOT_AVAILABLE_TOOLTIP)
 
         if sys.platform == "win32":
             display_settings_action = menu.addAction(
@@ -569,6 +579,22 @@ class QtProfileLoader(profile_loader.ProfileLoader):
         ):
             QMessageBox.critical(None, self.get_title(), "\n".join(errors))
         return errors
+
+    def _set_profile_associations(self, event: object = None) -> None:
+        """Open the Qt profile-associations dialog.
+
+        Only ever wired up on Windows (see module docstring); the dialog
+        itself would just show no displays anywhere else since
+        ``self.monitors`` stays empty off Windows.
+
+        Args:
+            event: Unused; kept for interface parity with the wx override.
+        """
+        print("Set profile associations")
+        from DisplayCAL.ui.tools.profile_associations import ProfileAssociationsDialog
+
+        dlg = ProfileAssociationsDialog(self)
+        dlg.exec()
 
     def exit(self, event: object = None) -> None:
         """Quit the daemon, confirming first unless the OS manages calibration.
