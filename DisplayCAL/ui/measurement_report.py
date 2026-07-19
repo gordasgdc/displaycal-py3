@@ -91,6 +91,7 @@ from DisplayCAL.ui.assets import get_theme_pixmap
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
 from DisplayCAL.ui import message_box
+from DisplayCAL.ui.tooltip_window import info_text_html
 from DisplayCAL.util_list import natsort_key_factory
 from DisplayCAL.worker import Worker, get_current_profile_path
 
@@ -703,7 +704,8 @@ class ReportPanel(QWidget):
             icon.setPixmap(pixmap)
         icon.setAlignment(Qt.AlignTop)
         info_row.addWidget(icon)
-        self.mr_settings_info_text = QLabel(lang.getstr("info.mr_settings"))
+        self.mr_settings_info_text = QLabel(info_text_html("info.mr_settings"))
+        self.mr_settings_info_text.setTextFormat(Qt.RichText)
         self.mr_settings_info_text.setWordWrap(True)
         self.mr_settings_info_text.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         info_row.addWidget(self.mr_settings_info_text, 1)
