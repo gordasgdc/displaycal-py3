@@ -169,7 +169,8 @@ class _ProfileBrowse(QWidget):
     def __init__(self, dialog_title: str = "", parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._dialog_title = dialog_title
-        self._committed = ""
+        self._current_path = ""
+        self._committed_text = ""
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self._combo = QComboBox()
@@ -190,7 +191,7 @@ class _ProfileBrowse(QWidget):
         Returns:
             str: The current path (may be empty).
         """
-        return self._combo.currentText()
+        return self._current_path
 
     @staticmethod
     def _display_name(path: str) -> str:
@@ -233,27 +234,43 @@ class _ProfileBrowse(QWidget):
     def set_path(self, path: str | None) -> None:
         """Set the current path without emitting :attr:`changed`.
 
+        The combo shows the friendly profile name for ``path`` (wx parity);
+        :meth:`path` keeps returning the real path regardless of what is
+        displayed.
+
         Args:
             path (str | None): The path to show (``None`` clears the field).
         """
         path = path or ""
         if path and self._combo.findData(path) == -1:
             self._combo.addItem(self._display_name(path), path)
-        self._committed = path
-        self._combo.setEditText(path)
+        self._current_path = path
+        self._committed_text = self._display_name(path) if path else ""
+        self._combo.setEditText(self._committed_text)
 
     def _on_activated(self, index: int) -> None:
         path = self._combo.itemData(index)
-        self._committed = path if path is not None else self._combo.currentText()
-        self._combo.setEditText(self._committed)
+        if path is None:
+            path = self._combo.currentText()
+        self._current_path = path
+        self._committed_text = self._display_name(path) if path else ""
+        self._combo.setEditText(self._committed_text)
         self.changed.emit()
 
     def _on_edit_finished(self) -> None:
         # editingFinished also fires on focus-out without changes; only react
-        # to an actual edit, mirroring the wx changeCallback.
-        if self._combo.currentText() != self._committed:
-            self._committed = self._combo.currentText()
-            self.changed.emit()
+        # to an actual edit, mirroring the wx changeCallback. A typed value
+        # is treated as a literal path (there is no name to resolve it from
+        # until it is committed).
+        text = self._combo.currentText()
+        if text == self._committed_text:
+            return
+        if text and self._combo.findData(text) == -1:
+            self._combo.addItem(self._display_name(text), text)
+        self._current_path = text
+        self._committed_text = self._display_name(text) if text else ""
+        self._combo.setEditText(self._committed_text)
+        self.changed.emit()
 
     def _on_browse(self) -> None:
         default_dir = os.path.dirname(self.path()) if self.path() else ""
