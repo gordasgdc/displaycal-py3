@@ -907,6 +907,10 @@ def _get_qt_main(module: str) -> Callable[[], int] | None:
         from DisplayCAL.ui.tools.scripting_client import main
 
         return main
+    if module == "apply-profiles":
+        from DisplayCAL.ui.tools.apply_profiles import main
+
+        return main
     return None
 
 

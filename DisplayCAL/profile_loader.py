@@ -2025,31 +2025,7 @@ class TaskBarIcon(SysTrayIcon):
             text = self.balloon_text
             flags = self.flags or flags
         if not text:
-            if "--force" not in sys.argv[1:] and calibration_management_isenabled():
-                text = lang.getstr("calibration.load.handled_by_os") + "\n"
-            else:
-                text = ""
-            if self.pl._component_name:
-                text += lang.getstr("app.detected", self.pl._component_name) + "\n"
-            text += lang.getstr("profile_loader.info", self.pl.reload_count)
-            for i, (display, _edid, _moninfo, device) in enumerate(self.pl.monitors):
-                devicekey = device.DeviceKey if device else None
-                key = devicekey or str(i)
-                (
-                    profile_key,
-                    mtime,
-                    desc,
-                ) = self.pl.profile_associations.get(key, (False, 0, ""))
-                if profile_key is False:
-                    desc = lang.getstr("unknown")
-                elif not profile_key:
-                    desc = lang.getstr("unassigned").lower()
-                if self.pl.setgammaramp_success.get(i) and self.pl._reset_gamma_ramps:
-                    desc = f"{lang.getstr('linear').capitalize()} / {desc}"
-                elif not self.pl.setgammaramp_success.get(i) or not profile_key:
-                    desc = f"{lang.getstr('unknown')} / {desc}"
-                display = display.replace("[PRIMARY]", lang.getstr("display.primary"))
-                text += f"\n{display}: {desc}"
+            text = self.pl.get_notification_text()
         if not show_notification:
             debug_print("[DEBUG] /show_notification")
             return
@@ -2067,17 +2043,16 @@ class ProfileLoader:
     """Profile loader class for Windows."""
 
     def __init__(self) -> None:
-        from DisplayCAL.wx_windows import BaseApp, wx
-
-        if not wx.GetApp():
-            app = BaseApp(0, clearSigInt=sys.platform != "win32")
-            BaseApp.register_exitfunc(self.shutdown)
-        else:
-            app = None
+        self._bootstrap_app()
         self.reload_count = 0
         self.lock = threading.Lock()
         self._is_other_running_lock = threading.Lock()
         self.monitoring = True
+        # Whether a persistent tray icon is active on this platform/toolkit.
+        # Set True by setup_taskbar_icon() (wx, win32-only) or overridden by
+        # toolkit subclasses (e.g. the Qt port, which has a tray on every
+        # platform).
+        self._tray_active = False
         self._active_displays = []
         self._display_changed_event = False
         self.monitors = []  # Display devices that can be represented as ON
@@ -2151,8 +2126,34 @@ class ProfileLoader:
         ):
             self.apply_profiles_and_warn_on_error()
 
+        self._setup_ui()
+
+    def _bootstrap_app(self) -> None:
+        """Ensure a running application object exists, and remember it.
+
+        Toolkit-specific hook: this default (wx) implementation creates a
+        ``BaseApp`` if one doesn't already exist. Overridden by toolkit
+        subclasses (e.g. the Qt port) where the application object is already
+        constructed by the caller before this class is instantiated.
+        """
+        from DisplayCAL.wx_windows import BaseApp, wx
+
+        if not wx.GetApp():
+            self._app = BaseApp(0, clearSigInt=sys.platform != "win32")
+            BaseApp.register_exitfunc(self.shutdown)
+        else:
+            self._app = None
+
+    def _setup_ui(self) -> None:
+        """Set up this platform/toolkit's persistent UI, if any.
+
+        Toolkit-specific hook, called once at the end of ``__init__``. This
+        default (wx) implementation reproduces the original Windows
+        taskbar-icon / macOS watch-loop dispatch. Overridden by toolkit
+        subclasses (e.g. the Qt port) to set up their own tray icon.
+        """
         if sys.platform == "win32":
-            self.setup_taskbar_icon(app)
+            self.setup_taskbar_icon(self._app)
         elif (
             sys.platform == "darwin"
             and config.getcfg("profile.load_on_login")
@@ -2179,6 +2180,7 @@ class ProfileLoader:
         self._tid = threading.current_thread().ident
 
         self.taskbar_icon = TaskBarIcon(self)
+        self._tray_active = True
 
         try:
             self.gdi32 = ctypes.windll.gdi32
@@ -2238,7 +2240,7 @@ class ProfileLoader:
         from DisplayCAL.util_os import dlopen, which
         from DisplayCAL.worker import Worker, get_argyll_util
 
-        if sys.platform == "win32":
+        if self._tray_active:
             self.lock.acquire()
 
         worker = Worker()
@@ -2426,7 +2428,7 @@ class ProfileLoader:
                         continue
                     results.append(display)
 
-        if sys.platform == "win32":
+        if self._tray_active:
             self.lock.release()
             if event:
                 self.notify(results, errors)
@@ -2878,6 +2880,43 @@ class ProfileLoader:
         if "--force" in sys.argv[1:]:
             title += " ({})".format(lang.getstr("forced"))
         return title
+
+    def get_notification_text(self) -> str:
+        """Build the default status notification text.
+
+        Reload count plus one "``display: profile desc``" line per monitor.
+        Toolkit-agnostic (used by wx's ``TaskBarIcon.show_notification`` and by
+        the Qt tray icon alike).
+
+        Returns:
+            str: The notification body text.
+        """
+        if "--force" not in sys.argv[1:] and calibration_management_isenabled():
+            text = lang.getstr("calibration.load.handled_by_os") + "\n"
+        else:
+            text = ""
+        if self._component_name:
+            text += lang.getstr("app.detected", self._component_name) + "\n"
+        text += lang.getstr("profile_loader.info", self.reload_count)
+        for i, (display, _edid, _moninfo, device) in enumerate(self.monitors):
+            devicekey = device.DeviceKey if device else None
+            key = devicekey or str(i)
+            (
+                profile_key,
+                mtime,
+                desc,
+            ) = self.profile_associations.get(key, (False, 0, ""))
+            if profile_key is False:
+                desc = lang.getstr("unknown")
+            elif not profile_key:
+                desc = lang.getstr("unassigned").lower()
+            if self.setgammaramp_success.get(i) and self._reset_gamma_ramps:
+                desc = f"{lang.getstr('linear').capitalize()} / {desc}"
+            elif not self.setgammaramp_success.get(i) or not profile_key:
+                desc = f"{lang.getstr('unknown')} / {desc}"
+            display = display.replace("[PRIMARY]", lang.getstr("display.primary"))
+            text += f"\n{display}: {desc}"
+        return text
 
     def _can_fix_profile_associations(self) -> bool:
         """Check whether we can 'fix' profile associations or not.
@@ -4149,6 +4188,15 @@ class ProfileLoader:
         if getcfg("profile_loader.fix_profile_associations"):
             self._reset_display_profile_associations()
         self.writecfg()
+        self._teardown_ui()
+
+    def _teardown_ui(self) -> None:
+        """Tear down this platform/toolkit's persistent UI, if any.
+
+        Toolkit-specific hook, called from :meth:`shutdown`. This default (wx)
+        implementation reproduces the original taskbar-icon/frame teardown.
+        Overridden by toolkit subclasses (e.g. the Qt port).
+        """
         if getattr(self, "taskbar_icon", None):
             if self.taskbar_icon.menu:
                 self.taskbar_icon.menu.Destroy()
@@ -4845,7 +4893,7 @@ class ProfileLoader:
             self._manual_restore = manual_restore
             self._reset_gamma_ramps = False
             print("Releasing lock")
-        self.taskbar_icon.set_visual_state()
+        self._refresh_visual_state()
         self.writecfg()
 
     def _set_reset_gamma_ramps(
@@ -4868,8 +4916,16 @@ class ProfileLoader:
             self._manual_restore = manual_restore
             self._reset_gamma_ramps = True
             print("Releasing lock")
-        self.taskbar_icon.set_visual_state()
+        self._refresh_visual_state()
         self.writecfg()
+
+    def _refresh_visual_state(self) -> None:
+        """Refresh the persistent UI's visual state (icon/tooltip), if any.
+
+        Toolkit-specific hook. This default (wx) implementation refreshes the
+        taskbar icon. Overridden by toolkit subclasses (e.g. the Qt port).
+        """
+        self.taskbar_icon.set_visual_state()
 
     def _should_apply_profiles(
         self,
