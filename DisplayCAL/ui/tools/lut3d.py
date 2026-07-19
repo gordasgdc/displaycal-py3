@@ -57,6 +57,7 @@ from DisplayCAL.argyll_names import VIDEO_ENCODINGS
 from DisplayCAL.config import (
     DEFAULTS,
     PROFILE_EXT,
+    get_data_path,
     get_verified_path,
     getcfg,
     setcfg,
@@ -191,6 +192,18 @@ class _ProfileBrowse(QWidget):
         """
         return self._combo.currentText()
 
+    def set_history(self, paths: list[str]) -> None:
+        """Seed the combo's drop-down list without changing the current text.
+
+        Args:
+            paths (list[str]): Paths to pre-populate the history with.
+        """
+        current = self._combo.currentText()
+        for path in paths:
+            if self._combo.findText(path) == -1:
+                self._combo.addItem(path)
+        self._combo.setEditText(current)
+
     def set_path(self, path: str | None) -> None:
         """Set the current path without emitting :attr:`changed`.
 
@@ -318,6 +331,9 @@ class LUT3DWindow(BaseWindow):
 
         # Row: input profile.
         self.input_profile_ctrl = _ProfileBrowse(lang.getstr("3dlut.input.profile"))
+        self.input_profile_ctrl.set_history(
+            get_data_path("ref", r"\.(icc|icm)$") or []
+        )
         self._add_row(
             QLabel(lang.getstr("3dlut.input.profile")), self.input_profile_ctrl
         )
