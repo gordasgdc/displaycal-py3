@@ -192,16 +192,42 @@ class _ProfileBrowse(QWidget):
         """
         return self._combo.currentText()
 
+    @staticmethod
+    def _display_name(path: str) -> str:
+        """Return a friendly display name for a path, wx ``GetName`` parity.
+
+        Args:
+            path (str): The file path to get the name for.
+
+        Returns:
+            str: The ICC profile description if available, else the file's
+                base name, translated.
+        """
+        name = None
+        if os.path.splitext(path)[1].lower() in (".icc", ".icm"):
+            try:
+                profile = ICCProfile(path)
+            except (OSError, ICCProfileInvalidError):
+                pass
+            else:
+                name = profile.getDescription()
+        if not name:
+            name = os.path.basename(path)
+        return lang.getstr(name)
+
     def set_history(self, paths: list[str]) -> None:
         """Seed the combo's drop-down list without changing the current text.
+
+        Each entry is shown by its friendly profile name (data holds the
+        real path), matching wx's ``SetHistory``/``GetName``.
 
         Args:
             paths (list[str]): Paths to pre-populate the history with.
         """
         current = self._combo.currentText()
         for path in paths:
-            if self._combo.findText(path) == -1:
-                self._combo.addItem(path)
+            if self._combo.findData(path) == -1:
+                self._combo.addItem(self._display_name(path), path)
         self._combo.setEditText(current)
 
     def set_path(self, path: str | None) -> None:
@@ -211,13 +237,15 @@ class _ProfileBrowse(QWidget):
             path (str | None): The path to show (``None`` clears the field).
         """
         path = path or ""
-        if path and self._combo.findText(path) == -1:
-            self._combo.addItem(path)
+        if path and self._combo.findData(path) == -1:
+            self._combo.addItem(self._display_name(path), path)
         self._committed = path
         self._combo.setEditText(path)
 
-    def _on_activated(self, _index: int) -> None:
-        self._committed = self._combo.currentText()
+    def _on_activated(self, index: int) -> None:
+        path = self._combo.itemData(index)
+        self._committed = path if path is not None else self._combo.currentText()
+        self._combo.setEditText(self._committed)
         self.changed.emit()
 
     def _on_edit_finished(self) -> None:
