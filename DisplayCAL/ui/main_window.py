@@ -6439,6 +6439,8 @@ class MainWindow(BaseWindow):
         locus_visible = mode in (0, 1) and bool(getcfg("show_advanced_options"))
         self.whitepoint_colortemp_locus_label.setVisible(locus_visible)
         self.whitepoint_colortemp_locus_ctrl.setVisible(locus_visible)
+        self.visual_whitepoint_editor_btn.setVisible(mode == 2)
+        self.whitepoint_measure_btn.setVisible(mode > 0)
 
     def _whitepoint_changed(self, *_args: object) -> None:
         """Persist the whitepoint mode + value to config."""

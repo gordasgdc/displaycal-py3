@@ -902,6 +902,23 @@ def test_whitepoint_locus_row_gated_by_advanced_options_and_mode(window):
     assert window.whitepoint_colortemp_locus_ctrl.isHidden() is True
 
 
+def test_whitepoint_editor_and_measure_btn_gated_by_mode(window):
+    window.whitepoint_ctrl.setCurrentIndex(0)  # native
+    window._apply_whitepoint_mode()
+    assert window.visual_whitepoint_editor_btn.isHidden() is True
+    assert window.whitepoint_measure_btn.isHidden() is True
+
+    window.whitepoint_ctrl.setCurrentIndex(1)  # color temperature
+    window._apply_whitepoint_mode()
+    assert window.visual_whitepoint_editor_btn.isHidden() is True
+    assert window.whitepoint_measure_btn.isHidden() is False
+
+    window.whitepoint_ctrl.setCurrentIndex(2)  # x,y chromaticity
+    window._apply_whitepoint_mode()
+    assert window.visual_whitepoint_editor_btn.isHidden() is False
+    assert window.whitepoint_measure_btn.isHidden() is False
+
+
 def test_whitepoint_locus_repopulates_from_config(window):
     setcfg("whitepoint.colortemp.locus", "T")
     window.update_calibration_controls()
