@@ -15,9 +15,14 @@ is itself only ever populated on ``sys.platform == "win32"``. The Qt tray only
 wires its "Profile associations" menu item up to this dialog on Windows; see
 :mod:`DisplayCAL.ui.tools.apply_profiles`.
 
-The "fix profile associations" checkbox is shown but stays disabled: toggling
-it on in wx opens ``FixProfileAssociationsDialog`` (still wx-only, follow-up
-issue #889), which cannot be constructed from this Qt process.
+The "fix profile associations" checkbox mirrors the tray menu item of the
+same name (see :mod:`DisplayCAL.ui.tools.apply_profiles`): both drive
+:meth:`QtProfileLoader._toggle_fix_profile_associations`, which pops up
+:class:`~DisplayCAL.ui.tools.fix_profile_associations.FixProfileAssociationsDialog`
+for confirmation. It stays disabled whenever
+``ProfileLoader._can_fix_profile_associations()`` is False, which in practice
+means always off Windows (no child display devices are ever enumerated
+there).
 """
 
 from __future__ import annotations
@@ -72,11 +77,6 @@ if sys.platform == "win32":
 
 if TYPE_CHECKING:
     from DisplayCAL.ui.tools.apply_profiles import QtProfileLoader
-
-#: Tooltip for the "fix profile associations" checkbox, which stays disabled
-#: until ``FixProfileAssociationsDialog`` is ported (issue #889).
-_FIX_ASSOCIATIONS_TOOLTIP = "Not yet available in the Qt build"
-
 
 class _CheckedEvent:
     """Duck-types wx's ``event.IsChecked()`` for ``ProfileLoader`` methods.
@@ -250,7 +250,9 @@ class ProfileAssociationsDialog(QDialog):
             bool(getcfg("profile_loader.fix_profile_associations"))
         )
         self.fix_profile_associations_cb.setEnabled(False)
-        self.fix_profile_associations_cb.setToolTip(_FIX_ASSOCIATIONS_TOOLTIP)
+        self.fix_profile_associations_cb.toggled.connect(
+            self._on_fix_profile_associations_toggled
+        )
 
         self.add_btn = QPushButton(lang.getstr("add"))
         self.add_btn.clicked.connect(self.add_profile)
@@ -323,6 +325,21 @@ class ProfileAssociationsDialog(QDialog):
         self.profile_info_btn.setEnabled(False)
         self.set_as_default_btn.setEnabled(False)
 
+    def _on_fix_profile_associations_toggled(self, checked: bool) -> None:
+        """Confirm and apply a change to the "fix profile associations" setting.
+
+        Args:
+            checked (bool): The new checked state requested by the user.
+        """
+        result = self.pl._toggle_fix_profile_associations(
+            _CheckedEvent(checked), self
+        )
+        self.fix_profile_associations_cb.blockSignals(True)
+        self.fix_profile_associations_cb.setChecked(result)
+        self.fix_profile_associations_cb.blockSignals(False)
+        if result == checked:
+            self.update_profiles(next_=True)
+
     def _update_auth_icons(self, auth_needed: bool) -> None:
         icon = (
             self.style().standardIcon(QStyle.StandardPixmap.SP_VistaShield)
@@ -352,6 +369,14 @@ class ProfileAssociationsDialog(QDialog):
         self.display_combo.setEnabled(bool(self.monitors))
         self.identify_btn.setEnabled(bool(self.monitors))
         self.add_btn.setEnabled(bool(self.monitors))
+        can_fix = self.pl._can_fix_profile_associations()
+        self.fix_profile_associations_cb.setEnabled(can_fix)
+        if can_fix:
+            self.fix_profile_associations_cb.blockSignals(True)
+            self.fix_profile_associations_cb.setChecked(
+                bool(getcfg("profile_loader.fix_profile_associations"))
+            )
+            self.fix_profile_associations_cb.blockSignals(False)
         self.update_profiles()
 
     def update_profiles(
