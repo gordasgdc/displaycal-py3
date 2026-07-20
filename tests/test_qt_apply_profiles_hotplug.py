@@ -102,8 +102,16 @@ def test_post_to_gui_thread_delayed_schedules_with_qtimer(qapp, monkeypatch):
     assert single_shot.call_args[0][0] == 1000
 
 
-def test_animate_busy_icon_is_a_noop(qapp, monkeypatch):
+def test_animate_busy_icon_steps_the_tray_animation(qapp, monkeypatch):
     pl = _make_pl(monkeypatch)
+    pl.tray = mock.Mock()
+    pl._animate_busy_icon()
+    pl.tray.animate.assert_called_once_with()
+
+
+def test_animate_busy_icon_without_a_tray_is_a_noop(qapp, monkeypatch):
+    pl = _make_pl(monkeypatch)
+    pl.tray = None
     assert pl._animate_busy_icon() is None
 
 

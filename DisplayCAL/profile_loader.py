@@ -4976,9 +4976,9 @@ class ProfileLoader:
         """Toolkit-specific hook: show a "processing" indicator while applying.
 
         This default (wx) implementation triggers the taskbar icon's
-        frame-by-frame animation. Overridden by toolkit subclasses that
-        render icon state statically instead (e.g. the Qt port -- see its
-        module docstring).
+        frame-by-frame animation. Overridden by toolkit subclasses with their
+        own equivalent (e.g. the Qt port's
+        ``ApplyProfilesTrayIcon.animate()``).
         """
         self.taskbar_icon.animate()
 
