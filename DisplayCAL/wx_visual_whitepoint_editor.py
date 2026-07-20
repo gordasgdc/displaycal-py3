@@ -2442,6 +2442,8 @@ class VisualWhitepointEditor(wx.Frame):
         """
         if self.IsFullScreen():
             self.ShowFullScreen(False)
+        if getattr(self, "_mgr", None):
+            self._mgr.UnInit()
         event.Skip()
 
     def OnKeyDown(self, event):
