@@ -20,10 +20,22 @@ platform: ``QSystemTrayIcon`` makes this essentially free, and it is the only
 way to see/exercise this daemon's UI outside of a Windows box.
 
 The Windows device/process hot-plug monitoring thread
-(``_check_display_conf_thread``) is not ported; this Qt build instead
-triggers an immediate (backgrounded) re-apply whenever the
-``apply-profiles``/``reset-vcgt`` IPC command or a tray double-click asks for
-one, rather than only flipping a flag for a poller to notice later. Profile
+(``ProfileLoader._check_display_conf``, started here as
+``_check_display_conf_thread``) *is* started on Windows, giving this build
+the same "reapply when displays change or other calibration software
+launches/exits" behavior as the wx build; only its handful of direct wx
+GUI-thread touchpoints (``wx.CallAfter``, wx window enumeration, the taskbar
+icon's busy animation) are overridden below via the toolkit hooks
+``ProfileLoader`` exposes for them
+(``_post_to_gui_thread``/``_post_to_gui_thread_delayed``,
+``_enumerate_own_top_level_windows``, ``_animate_busy_icon``,
+``_request_forced_shutdown``) -- the polling/decision logic itself is
+inherited unchanged, same as everything else. The
+``apply-profiles``/``reset-vcgt`` IPC commands and a tray double-click still
+also call ``QtProfileLoader.trigger_reapply()`` for an immediate
+(backgrounded) re-apply rather than waiting on the poller's ~3 second cycle;
+harmless on Windows (the two simply race on ``self.lock``) and still the only
+route to a reapply on the platforms where the poller doesn't run. Profile
 Associations and Fix Profile Associations (see
 :mod:`DisplayCAL.ui.tools.profile_associations` and
 :mod:`DisplayCAL.ui.tools.fix_profile_associations`) are both ported, but
@@ -37,8 +49,9 @@ from __future__ import annotations
 import os
 import sys
 import threading
+from typing import Callable
 
-from qtpy.QtCore import QObject, Qt, Signal
+from qtpy.QtCore import QObject, Qt, QTimer, Signal
 from qtpy.QtGui import QIcon
 from qtpy.QtWidgets import (
     QActionGroup,
@@ -73,6 +86,23 @@ class _NotifyBridge(QObject):
 
     #: Emitted with ``(results, errors, sticky, show_notification)``.
     requested = Signal(list, list, bool, bool)
+
+
+class _CallBridge(QObject):
+    """Marshals arbitrary callables onto the GUI thread.
+
+    Backs :meth:`QtProfileLoader._post_to_gui_thread`/
+    :meth:`~QtProfileLoader._post_to_gui_thread_delayed`, the toolkit hooks
+    the inherited hot-plug monitoring thread
+    (:meth:`~DisplayCAL.profile_loader.ProfileLoader._check_display_conf`,
+    running on a background thread) uses instead of calling ``wx.CallAfter``
+    directly. A plain ``QTimer.singleShot`` from that background thread would
+    not work: the timer would be constructed there and never fire, since that
+    thread runs no Qt event loop to deliver it.
+    """
+
+    #: Emitted with ``(func, args, delay_ms)``.
+    requested = Signal(object, tuple, int)
 
 
 class _ScriptingHost(ScriptingHostMixin, QWidget):
@@ -160,9 +190,9 @@ class _ScriptingHost(ScriptingHostMixin, QWidget):
                 pl._set_reset_gamma_ramps(None, len(data))
             else:
                 pl._set_manual_restore(None, len(data))
-            # No hot-plug polling thread exists in the Qt build (yet -- see
-            # module docstring), so trigger the reload right away instead of
-            # only flipping a flag for a poller to notice later.
+            # Trigger the reload right away instead of only flipping a flag
+            # for the hot-plug poller (Windows only -- see module docstring)
+            # to notice on its next ~3 second cycle.
             pl.trigger_reapply()
             return "ok"
         if data[0] == "notify" and (
@@ -484,6 +514,8 @@ class QtProfileLoader(profile_loader.ProfileLoader):
         self._notify_bridge.requested.connect(
             self._notify_on_gui_thread, Qt.QueuedConnection
         )
+        self._call_bridge = _CallBridge()
+        self._call_bridge.requested.connect(self._dispatch_call, Qt.QueuedConnection)
         if QSystemTrayIcon.isSystemTrayAvailable():
             self.tray = ApplyProfilesTrayIcon(self)
             self.tray.show()
@@ -495,7 +527,18 @@ class QtProfileLoader(profile_loader.ProfileLoader):
         self.host = _ScriptingHost(self)
         self.host.listen()
 
-        if (
+        if sys.platform == "win32":
+            # Matches wx's setup_taskbar_icon(): _look_for_known_processes()
+            # (reached from the monitoring thread started below, and from the
+            # tray menu's own _is_other_running() checks) excludes our own
+            # process by pid.
+            self._pid = os.getpid()
+            self._check_display_conf_thread = threading.Thread(
+                target=self._check_display_conf_wrapper,
+                name="DisplayConfigurationMonitoring",
+            )
+            self._check_display_conf_thread.start()
+        elif (
             sys.platform == "darwin"
             and config.getcfg("profile.load_on_login")
             and "--force" not in sys.argv[1:]
@@ -507,6 +550,75 @@ class QtProfileLoader(profile_loader.ProfileLoader):
                 name="MacOSVideoLUTWatch",
                 daemon=True,
             ).start()
+
+    def _dispatch_call(self, func: Callable, args: tuple, delay_ms: int) -> None:
+        """GUI-thread slot backing :class:`_CallBridge`.
+
+        Args:
+            func (Callable): The callable to run.
+            args (tuple): Positional arguments to pass to ``func``.
+            delay_ms (int): Delay in milliseconds before running ``func``;
+                0 runs it immediately.
+        """
+        if delay_ms:
+            QTimer.singleShot(delay_ms, lambda: func(*args))
+        else:
+            func(*args)
+
+    def _post_to_gui_thread(self, func: Callable, *args: object) -> None:
+        """Qt override: marshal ``func(*args)`` onto the GUI thread.
+
+        See :meth:`DisplayCAL.profile_loader.ProfileLoader._post_to_gui_thread`.
+        """
+        self._call_bridge.requested.emit(func, args, 0)
+
+    def _post_to_gui_thread_delayed(
+        self, delay_ms: int, func: Callable, *args: object
+    ) -> None:
+        """Qt override: marshal a delayed ``func(*args)`` call onto the GUI thread.
+
+        See
+        :meth:`DisplayCAL.profile_loader.ProfileLoader._post_to_gui_thread_delayed`.
+        """
+        self._call_bridge.requested.emit(func, args, delay_ms)
+
+    def _animate_busy_icon(self) -> None:
+        """Qt override: no-op, the Qt tray icon has no busy animation.
+
+        See the module docstring.
+        """
+
+    def _enumerate_own_top_level_windows(self) -> list:
+        r"""Qt override: list this process's own top-level, non-dialog widgets.
+
+        Mirrors the wx default's intent (notice when something external has
+        closed one of our windows, as a hint to comply and exit) using
+        ``QApplication.topLevelWidgets()`` instead of wx's window
+        enumeration; ``QDialog``\ s (Exceptions, Profile Associations, ...)
+        are excluded just like wx excludes ``wx.Dialog``\ s, so opening/
+        closing one of those doesn't look like an external close request.
+
+        Returns:
+            list: The process's own top-level, non-dialog widgets.
+        """
+        app = QApplication.instance()
+        if app is None:
+            return []
+        return [
+            widget
+            for widget in app.topLevelWidgets()
+            if not isinstance(widget, QDialog)
+        ]
+
+    def _request_forced_shutdown(self) -> None:
+        """Qt override: quit immediately, without the confirmation prompt.
+
+        See
+        :meth:`DisplayCAL.profile_loader.ProfileLoader._request_forced_shutdown`.
+        """
+        app = QApplication.instance()
+        if app is not None:
+            app.quit()
 
     def _teardown_ui(self) -> None:
         """Hide the tray icon and stop the IPC host."""
@@ -710,11 +822,18 @@ class QtProfileLoader(profile_loader.ProfileLoader):
         """Quit the daemon, confirming first unless the OS manages calibration.
 
         Args:
-            event: Unused; kept for interface parity with the wx override.
+            event: Truthy (including ``False``, as Qt's ``QAction.triggered``
+                passes it) when this is a real interactive trigger, e.g. the
+                tray menu's Quit action; ``None`` for programmatic/automated
+                callers (the hot-plug monitoring thread's ``--oneshot`` and
+                forced-shutdown paths, a fatal error) which have no user
+                present to answer a confirmation prompt and so always skip
+                it, mirroring the wx override's ``if event and ...`` gate.
         """
         print(f"Executing QtProfileLoader.exit({event})")
-        if not calibration_management_isenabled() or getcfg(
-            "profile_loader.fix_profile_associations"
+        if event is not None and (
+            not calibration_management_isenabled()
+            or getcfg("profile_loader.fix_profile_associations")
         ):
             result = QMessageBox.question(
                 None,

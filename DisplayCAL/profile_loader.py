@@ -2948,6 +2948,30 @@ class ProfileLoader:
 
     def _check_keep_running(self) -> bool:
         """Check if the application should keep running."""
+        numwindows = len(self._enumerate_own_top_level_windows())
+        if numwindows < self.numwindows:
+            # One of our windows has been closed by an external event
+            # (i.e. WM_CLOSE). This is a hint that something external is trying
+            # to get us to exit. Comply by closing our main top-level window to
+            # initiate clean shutdown.
+            print("Window count", self.numwindows, "->", numwindows)
+            return False
+        self.numwindows = numwindows
+        return True
+
+    def _enumerate_own_top_level_windows(self) -> list:
+        """Toolkit-specific hook: list this process's own top-level UI windows.
+
+        Used by :meth:`_check_keep_running` to notice when something external
+        (e.g. a Windows session shutdown/logoff sending ``WM_CLOSE``) has
+        closed one of our windows, as a hint that we should comply and exit.
+        This default (wx) implementation enumerates the current thread's
+        native windows plus wx's own top-level window list. Overridden by
+        toolkit subclasses (e.g. the Qt port).
+
+        Returns:
+            list: The window handles/objects currently considered "ours".
+        """
         windows = []
         # print '-' * 79
         with contextlib.suppress(pywintypes.error):
@@ -2963,16 +2987,7 @@ class ProfileLoader:
                 not in {"TaskBarNotification", "DisplayIdentification", "profile_info"}
             ]
         )
-        numwindows = len(windows)
-        if numwindows < self.numwindows:
-            # One of our windows has been closed by an external event
-            # (i.e. WM_CLOSE). This is a hint that something external is trying
-            # to get us to exit. Comply by closing our main top-level window to
-            # initiate clean shutdown.
-            print("Window count", self.numwindows, "->", numwindows)
-            return False
-        self.numwindows = numwindows
-        return True
+        return windows
 
     def _enumerate_own_windows_callback(self, hwnd: int, windowlist: list) -> None:
         """Callback for enumerating own windows.
@@ -3011,8 +3026,7 @@ class ProfileLoader:
             self._display_changed_event = True
             self._next = True
             if getattr(self, "profile_associations_dlg", None):
-                wx.CallAfter(
-                    wx.CallLater,
+                self._post_to_gui_thread_delayed(
                     1000,
                     lambda: (
                         self.profile_associations_dlg
@@ -3020,8 +3034,7 @@ class ProfileLoader:
                     ),
                 )
             if getattr(self, "fix_profile_associations_dlg", None):
-                wx.CallAfter(
-                    wx.CallLater,
+                self._post_to_gui_thread_delayed(
                     1000,
                     lambda: (
                         self.fix_profile_associations_dlg
@@ -3147,11 +3160,11 @@ class ProfileLoader:
         except Exception as exception:
             if self.lock.locked():
                 self.lock.release()
-            wx.CallAfter(self._handle_fatal_error, exception)
+            self._post_to_gui_thread(self._handle_fatal_error, exception)
 
     def _handle_fatal_error(self, exception: Exception) -> None:
         handle_error(exception)
-        wx.CallAfter(self.exit)
+        self._post_to_gui_thread(self.exit)
 
     def _check_display_conf(self) -> None:
         """Thread to monitor display configuration changes."""
@@ -3209,19 +3222,19 @@ class ProfileLoader:
                 profile_associations_changed,
             )
             if apply_profiles and not idle:
-                wx.CallAfter(lambda: self and self.taskbar_icon.animate())
+                self._post_to_gui_thread(self._animate_busy_icon)
             self.__apply_profiles = apply_profiles
             first_run = False
             if profile_associations_changed and not self._has_display_changed:
                 if getattr(self, "profile_associations_dlg", None):
-                    wx.CallAfter(
+                    self._post_to_gui_thread(
                         lambda: (
                             self.profile_associations_dlg
                             and self.profile_associations_dlg.update_profiles()
                         )
                     )
                 if getattr(self, "fix_profile_associations_dlg", None):
-                    wx.CallAfter(
+                    self._post_to_gui_thread(
                         lambda: (
                             self.fix_profile_associations_dlg
                             and self.fix_profile_associations_dlg.update()
@@ -3237,11 +3250,11 @@ class ProfileLoader:
             if locked:
                 print("DisplayConfigurationMonitoringThread: Released lock")
             if "--oneshot" in sys.argv[1:]:
-                wx.CallAfter(self.exit)
+                self._post_to_gui_thread(self.exit)
                 break
             if "--profile-associations" in sys.argv[1:]:
                 sys.argv.remove("--profile-associations")
-                wx.CallAfter(self._set_profile_associations, None)
+                self._post_to_gui_thread(self._set_profile_associations, None)
             # Wait three seconds
             timeout = 0
             while (
@@ -3253,7 +3266,7 @@ class ProfileLoader:
             ):
                 if round(timeout * 100) % 25 == 0 and not self._check_keep_running():
                     self.monitoring = False
-                    wx.CallAfter(lambda: self.frame and self.frame.Close(force=True))
+                    self._post_to_gui_thread(self._request_forced_shutdown)
                     break
                 time.sleep(0.1)
                 timeout += 0.1
@@ -4174,7 +4187,7 @@ class ProfileLoader:
             elif (
                 apply_profiles != self.__apply_profiles or profile_associations_changed
             ):
-                wx.CallAfter(lambda: self and self.taskbar_icon.set_visual_state())
+                self._post_to_gui_thread(self._refresh_visual_state)
 
     def shutdown(self) -> None:
         """Shut down the profile loader."""
@@ -4926,6 +4939,60 @@ class ProfileLoader:
         taskbar icon. Overridden by toolkit subclasses (e.g. the Qt port).
         """
         self.taskbar_icon.set_visual_state()
+
+    def _post_to_gui_thread(self, func: Callable, *args: object) -> None:
+        """Toolkit-specific hook: run ``func(*args)`` on the GUI thread, ASAP.
+
+        Used by the display-configuration monitoring thread
+        (:meth:`_check_display_conf` and friends) to safely touch UI state
+        from a background thread. This default (wx) implementation forwards
+        to ``wx.CallAfter``. Overridden by toolkit subclasses (e.g. the Qt
+        port).
+
+        Args:
+            func (Callable): The callable to run on the GUI thread.
+            *args (object): Positional arguments to pass to ``func``.
+        """
+        wx.CallAfter(func, *args)
+
+    def _post_to_gui_thread_delayed(
+        self, delay_ms: int, func: Callable, *args: object
+    ) -> None:
+        """Toolkit-specific hook: run ``func(*args)`` on the GUI thread after a delay.
+
+        This default (wx) implementation forwards to ``wx.CallLater``, itself
+        scheduled via ``wx.CallAfter`` since ``wx.CallLater`` must be
+        constructed on the GUI thread. Overridden by toolkit subclasses (e.g.
+        the Qt port).
+
+        Args:
+            delay_ms (int): The delay in milliseconds before ``func`` runs.
+            func (Callable): The callable to run on the GUI thread.
+            *args (object): Positional arguments to pass to ``func``.
+        """
+        wx.CallAfter(wx.CallLater, delay_ms, func, *args)
+
+    def _animate_busy_icon(self) -> None:
+        """Toolkit-specific hook: show a "processing" indicator while applying.
+
+        This default (wx) implementation triggers the taskbar icon's
+        frame-by-frame animation. Overridden by toolkit subclasses that
+        render icon state statically instead (e.g. the Qt port -- see its
+        module docstring).
+        """
+        self.taskbar_icon.animate()
+
+    def _request_forced_shutdown(self) -> None:
+        """Toolkit-specific hook: force-close on the GUI thread, no confirmation.
+
+        Used by :meth:`_check_display_conf` when
+        :meth:`_check_keep_running` notices something external (e.g. a
+        Windows session shutdown/logoff) asked us to exit. This default (wx)
+        implementation force-closes the persistent frame. Overridden by
+        toolkit subclasses (e.g. the Qt port).
+        """
+        if self.frame:
+            self.frame.Close(force=True)
 
     def _should_apply_profiles(
         self,
