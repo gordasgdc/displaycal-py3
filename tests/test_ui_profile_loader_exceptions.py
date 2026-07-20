@@ -3,6 +3,13 @@
 Drives ``DisplayCAL.ui.tools.profile_loader_exceptions.ProfileLoaderExceptionsDialog``
 headless via the shared offscreen ``QApplication`` fixture, the same pattern
 as ``tests/test_ui_fix_profile_associations.py``.
+
+Sample paths are built with ``os.path.join`` rather than hardcoded literals:
+the dialog round-trips paths through ``os.path.dirname``/``basename``/``join``/
+``normpath``, which on Windows (``ntpath``) do not treat ``/`` the same way
+``posixpath`` does on Linux/macOS -- a literal forward-slash path would
+silently pick up a mixed separator on ``join`` and stop matching its own dict
+key on Windows CI.
 """
 
 import os
@@ -17,6 +24,13 @@ os.environ.setdefault("QT_API", "pyside6")
 pytest.importorskip("qtpy")
 
 from DisplayCAL.ui.tools import profile_loader_exceptions as ple  # noqa: E402
+
+BAR_PATH = os.path.join("apps", "bar", "bar.exe")
+BAR_DIR = os.path.dirname(BAR_PATH)
+FOO_PATH = os.path.join("apps", "foo", "foo.exe")
+PROGRAM_FILES_PATH = os.path.join("apps", "program files", "foo", "foo.exe")
+NEW_PATH = os.path.join("apps", "new", "new.exe")
+KNOWN_APP_PATH = os.path.join("apps", "somewhere", "known.exe")
 
 
 @pytest.fixture(scope="session")
@@ -50,15 +64,15 @@ def test_construct_with_no_exceptions(qapp):
 
 def test_table_populated_sorted_by_key(qapp):
     exceptions = {
-        r"/apps/bar/bar.exe": (0, 1, r"/apps/bar/bar.exe"),
-        r"/apps/program files/foo/foo.exe": (1, 0, r"/apps/program files/foo/foo.exe"),
+        BAR_PATH.lower(): (0, 1, BAR_PATH),
+        PROGRAM_FILES_PATH.lower(): (1, 0, PROGRAM_FILES_PATH),
     }
     dialog = _make_dialog(qapp, exceptions=exceptions)
     try:
         assert dialog.table.rowCount() == 2
-        # Sorted by dict key, so "/apps/bar..." comes first.
+        # Sorted by dict key, so "apps/bar..." comes first.
         assert dialog.table.item(0, ple._COL_EXECUTABLE).text() == "bar.exe"
-        assert dialog.table.item(0, ple._COL_DIRECTORY).text() == r"/apps/bar"
+        assert dialog.table.item(0, ple._COL_DIRECTORY).text() == BAR_DIR
         assert dialog.table.item(1, ple._COL_EXECUTABLE).text() == "foo.exe"
         from qtpy.QtCore import Qt
 
@@ -76,7 +90,7 @@ def test_table_populated_sorted_by_key(qapp):
 
 
 def test_toggling_checkbox_updates_exceptions_and_enables_ok(qapp):
-    exceptions = {r"/apps/bar/bar.exe": (0, 0, r"/apps/bar/bar.exe")}
+    exceptions = {BAR_PATH.lower(): (0, 0, BAR_PATH)}
     dialog = _make_dialog(qapp, exceptions=exceptions)
     try:
         ok_button = dialog.buttons.button(dialog.buttons.StandardButton.Ok)
@@ -85,13 +99,13 @@ def test_toggling_checkbox_updates_exceptions_and_enables_ok(qapp):
 
         dialog.table.item(0, ple._COL_ENABLED).setCheckState(Qt.CheckState.Checked)
         assert ok_button.isEnabled()
-        assert dialog._exceptions[r"/apps/bar/bar.exe"] == (1, 0, r"/apps/bar/bar.exe")
+        assert dialog._exceptions[BAR_PATH.lower()] == (1, 0, BAR_PATH)
     finally:
         dialog.close()
 
 
 def test_selection_controls_button_state(qapp):
-    exceptions = {r"/apps/bar/bar.exe": (0, 0, r"/apps/bar/bar.exe")}
+    exceptions = {BAR_PATH.lower(): (0, 0, BAR_PATH)}
     dialog = _make_dialog(qapp, exceptions=exceptions)
     try:
         assert not dialog.browse_btn.isEnabled()
@@ -105,16 +119,16 @@ def test_selection_controls_button_state(qapp):
 
 def test_delete_removes_row_and_exception_and_enables_ok(qapp):
     exceptions = {
-        r"/apps/bar/bar.exe": (0, 0, r"/apps/bar/bar.exe"),
-        r"/apps/foo/foo.exe": (1, 0, r"/apps/foo/foo.exe"),
+        BAR_PATH.lower(): (0, 0, BAR_PATH),
+        FOO_PATH.lower(): (1, 0, FOO_PATH),
     }
     dialog = _make_dialog(qapp, exceptions=exceptions)
     try:
         dialog.table.selectRow(0)
         dialog._on_delete()
         assert dialog.table.rowCount() == 1
-        assert r"/apps/bar/bar.exe" not in dialog._exceptions
-        assert r"/apps/foo/foo.exe" in dialog._exceptions
+        assert BAR_PATH.lower() not in dialog._exceptions
+        assert FOO_PATH.lower() in dialog._exceptions
         ok_button = dialog.buttons.button(dialog.buttons.StandardButton.Ok)
         assert ok_button.isEnabled()
     finally:
@@ -127,7 +141,7 @@ def test_known_app_rejected_on_browse(qapp, monkeypatch):
         monkeypatch.setattr(
             ple.QFileDialog,
             "getOpenFileName",
-            staticmethod(lambda *a, **k: (r"/apps/somewhere/known.exe", "")),
+            staticmethod(lambda *a, **k: (KNOWN_APP_PATH, "")),
         )
         shown = {}
 
@@ -149,13 +163,12 @@ def test_add_new_executable(qapp, monkeypatch):
         monkeypatch.setattr(
             ple.QFileDialog,
             "getOpenFileName",
-            staticmethod(lambda *a, **k: (r"/apps/new/new.exe", "")),
+            staticmethod(lambda *a, **k: (NEW_PATH, "")),
         )
         dialog._on_add()
         assert dialog.table.rowCount() == 1
         assert dialog.table.item(0, ple._COL_EXECUTABLE).text() == "new.exe"
-        key = r"/apps/new/new.exe"
-        assert dialog._exceptions[key] == (1, 0, r"/apps/new/new.exe")
+        assert dialog._exceptions[NEW_PATH.lower()] == (1, 0, NEW_PATH)
         ok_button = dialog.buttons.button(dialog.buttons.StandardButton.Ok)
         assert ok_button.isEnabled()
     finally:
@@ -163,13 +176,13 @@ def test_add_new_executable(qapp, monkeypatch):
 
 
 def test_add_existing_selects_row_without_duplicating(qapp, monkeypatch):
-    exceptions = {r"/apps/new/new.exe": (1, 0, r"/apps/new/new.exe")}
+    exceptions = {NEW_PATH.lower(): (1, 0, NEW_PATH)}
     dialog = _make_dialog(qapp, exceptions=exceptions)
     try:
         monkeypatch.setattr(
             ple.QFileDialog,
             "getOpenFileName",
-            staticmethod(lambda *a, **k: (r"/apps/new/new.exe", "")),
+            staticmethod(lambda *a, **k: (NEW_PATH, "")),
         )
         dialog._on_add()
         assert dialog.table.rowCount() == 1
@@ -179,26 +192,26 @@ def test_add_existing_selects_row_without_duplicating(qapp, monkeypatch):
 
 
 def test_browse_edit_to_different_exe_drops_stale_entry(qapp, monkeypatch):
-    exceptions = {r"/apps/foo/foo.exe": (1, 0, r"/apps/foo/foo.exe")}
+    exceptions = {FOO_PATH.lower(): (1, 0, FOO_PATH)}
     dialog = _make_dialog(qapp, exceptions=exceptions)
     try:
         dialog.table.selectRow(0)
         monkeypatch.setattr(
             ple.QFileDialog,
             "getOpenFileName",
-            staticmethod(lambda *a, **k: (r"/apps/bar/bar.exe", "")),
+            staticmethod(lambda *a, **k: (BAR_PATH, "")),
         )
         dialog._on_browse()
         assert dialog.table.rowCount() == 1
         assert dialog.table.item(0, ple._COL_EXECUTABLE).text() == "bar.exe"
-        assert r"/apps/foo/foo.exe" not in dialog._exceptions
-        assert dialog._exceptions[r"/apps/bar/bar.exe"] == (1, 0, r"/apps/bar/bar.exe")
+        assert FOO_PATH.lower() not in dialog._exceptions
+        assert dialog._exceptions[BAR_PATH.lower()] == (1, 0, BAR_PATH)
     finally:
         dialog.close()
 
 
 def test_delete_key_shortcut_triggers_delete(qapp):
-    exceptions = {r"/apps/bar/bar.exe": (0, 0, r"/apps/bar/bar.exe")}
+    exceptions = {BAR_PATH.lower(): (0, 0, BAR_PATH)}
     dialog = _make_dialog(qapp, exceptions=exceptions)
     try:
         dialog.table.selectRow(0)
