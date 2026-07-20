@@ -8,27 +8,29 @@ loads calibration/profiles on login, normally registered as a startup task
 :class:`QtProfileLoader` subclasses the wx ``ProfileLoader`` and overrides only
 its small set of wx-specific hook methods (``_bootstrap_app``, ``_setup_ui``,
 ``_teardown_ui``, ``_refresh_visual_state``, ``notify``,
-``apply_profiles_and_warn_on_error``, ``exit``); everything else (state setup,
-``apply_profiles()``'s dispwin/colord/macOS-verify-retry loop,
-``_should_apply_profiles``, ``writecfg``, ``_macos_watch``,
-``_is_displaycal_running``, ...) is inherited unchanged, so the actual
-calibration-loading logic can never drift between the two UI toolkits.
+``apply_profiles_and_warn_on_error``, ``_toggle_fix_profile_associations``,
+``exit``); everything else (state setup, ``apply_profiles()``'s
+dispwin/colord/macOS-verify-retry loop, ``_should_apply_profiles``,
+``writecfg``, ``_macos_watch``, ``_is_displaycal_running``, ...) is inherited
+unchanged, so the actual calibration-loading logic can never drift between
+the two UI toolkits.
 
 Unlike the wx tray (Windows-only), the Qt tray icon is enabled on every
 platform: ``QSystemTrayIcon`` makes this essentially free, and it is the only
 way to see/exercise this daemon's UI outside of a Windows box.
 
-Deferred to follow-up issues (menu items are present but disabled): the Fix
-Profile Associations and Exceptions dialogs, and the Windows device/process
-hot-plug monitoring thread (``_check_display_conf_thread``). Profile
-Associations itself is ported (see
-:mod:`DisplayCAL.ui.tools.profile_associations`), but wired up on Windows
-only -- the WCS/registry APIs it drives (and ``ProfileLoader.monitors``, the
-display list it reads) have no cross-platform equivalent. Because the
-hot-plug polling thread is not ported, this Qt build instead triggers an
-immediate (backgrounded) re-apply whenever the
+Deferred to a follow-up issue (menu item is present but disabled): the
+Exceptions dialog. The Windows device/process hot-plug monitoring thread
+(``_check_display_conf_thread``) is also not ported; this Qt build instead
+triggers an immediate (backgrounded) re-apply whenever the
 ``apply-profiles``/``reset-vcgt`` IPC command or a tray double-click asks for
-one, rather than only flipping a flag for a poller to notice later.
+one, rather than only flipping a flag for a poller to notice later. Profile
+Associations and Fix Profile Associations (see
+:mod:`DisplayCAL.ui.tools.profile_associations` and
+:mod:`DisplayCAL.ui.tools.fix_profile_associations`) are both ported, but
+wired up on Windows only -- the WCS/registry APIs and device enumeration they
+drive (and ``ProfileLoader.monitors``, the display list they read) have no
+cross-platform equivalent.
 """
 
 from __future__ import annotations
@@ -41,6 +43,7 @@ from qtpy.QtGui import QIcon
 from qtpy.QtWidgets import (
     QActionGroup,
     QApplication,
+    QDialog,
     QMenu,
     QMessageBox,
     QSystemTrayIcon,
@@ -264,8 +267,14 @@ class ApplyProfilesTrayIcon(QSystemTrayIcon):
             lang.getstr("profile_loader.fix_profile_associations")
         )
         fix_action.setCheckable(True)
-        fix_action.setEnabled(False)
-        fix_action.setToolTip(_NOT_AVAILABLE_TOOLTIP)
+        if pl._can_fix_profile_associations():
+            fix_action.setChecked(
+                bool(getcfg("profile_loader.fix_profile_associations"))
+            )
+            fix_action.triggered.connect(self._on_fix_profile_associations_toggled)
+        else:
+            fix_action.setEnabled(False)
+            fix_action.setToolTip(_NOT_AVAILABLE_TOOLTIP)
 
         notifications_action = menu.addAction(lang.getstr("show_notifications"))
         notifications_action.setCheckable(True)
@@ -345,6 +354,22 @@ class ApplyProfilesTrayIcon(QSystemTrayIcon):
             checked (bool): The new checked state.
         """
         setcfg("profile_loader.tray_icon_animation_quality", 2 if checked else 0)
+
+    def _on_fix_profile_associations_toggled(self, checked: bool) -> None:
+        """Confirm and apply a change to the "fix profile associations" setting.
+
+        Mirrors wx's ``TaskBarIcon.CreatePopupMenu`` wiring the tray menu item
+        straight to ``ProfileLoader._toggle_fix_profile_associations``, with
+        no parent window (``QSystemTrayIcon`` isn't a ``QWidget``, so the
+        confirmation dialog is parentless here, unlike the one opened from
+        the profile-associations checkbox).
+
+        Args:
+            checked (bool): The new checked state requested by the user.
+        """
+        from DisplayCAL.ui.tools.profile_associations import _CheckedEvent
+
+        self.pl._toggle_fix_profile_associations(_CheckedEvent(checked))
 
     def _on_bitdepth(self, bits: int) -> None:
         """Set the quantization bit depth, mirroring wx's ``set_bitdepth``.
@@ -595,6 +620,58 @@ class QtProfileLoader(profile_loader.ProfileLoader):
 
         dlg = ProfileAssociationsDialog(self)
         dlg.exec()
+
+    def _toggle_fix_profile_associations(
+        self, event: object, parent: QWidget | None = None
+    ) -> bool:
+        """Toggle the fix profile associations setting (Qt override).
+
+        Overrides the inherited wx
+        :meth:`~DisplayCAL.profile_loader.ProfileLoader._toggle_fix_profile_associations`
+        to show
+        :class:`~DisplayCAL.ui.tools.fix_profile_associations.FixProfileAssociationsDialog`
+        instead of the wx dialog; the confirm/apply logic below (setcfg,
+        ``_set_display_profiles``/``_reset_display_profile_associations``,
+        ``writecfg``) is otherwise identical to the inherited wx version.
+
+        Args:
+            event: An object with an ``IsChecked()`` method -- see
+                :class:`DisplayCAL.ui.tools.profile_associations._CheckedEvent`
+                for the duck-typed adapter callers use when there's no real
+                Qt event.
+            parent (QWidget | None): Optional parent widget for the
+                confirmation dialog.
+
+        Returns:
+            bool: The new "fix profile associations" state.
+        """
+        print("Toggle fix profile associations", event.IsChecked())
+        if event.IsChecked():
+            from DisplayCAL.ui.tools.fix_profile_associations import (
+                FixProfileAssociationsDialog,
+            )
+
+            dlg = FixProfileAssociationsDialog(self, parent)
+            try:
+                result = dlg.exec()
+            finally:
+                dlg.close()
+            if result != QDialog.DialogCode.Accepted:
+                print("Cancelled toggling fix profile associations")
+                return False
+        if self.lock.locked():
+            print("Waiting to acquire lock...")
+        with self.lock:
+            print("Acquired lock")
+            setcfg("profile_loader.fix_profile_associations", int(event.IsChecked()))
+            if event.IsChecked():
+                self._set_display_profiles()
+            else:
+                self._reset_display_profile_associations()
+            self._manual_restore = True
+            self.writecfg()
+            print("Releasing lock")
+        return event.IsChecked()
 
     def exit(self, event: object = None) -> None:
         """Quit the daemon, confirming first unless the OS manages calibration.

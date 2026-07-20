@@ -84,14 +84,54 @@ def test_construct_with_no_monitors(qapp):
         dialog.close()
 
 
-def test_fix_profile_associations_checkbox_stays_disabled(qapp):
-    """FixProfileAssociationsDialog isn't ported yet (#889) -- keep it inert."""
+def test_fix_profile_associations_checkbox_disabled_when_unavailable(qapp):
+    """``_StubPL._can_fix_profile_associations()`` is False off Windows."""
     dialog = _make_dialog(qapp)
     try:
         assert not dialog.fix_profile_associations_cb.isEnabled()
-        assert dialog.fix_profile_associations_cb.toolTip() == (
-            pa._FIX_ASSOCIATIONS_TOOLTIP
-        )
+    finally:
+        dialog.close()
+
+
+def test_fix_profile_associations_checkbox_toggle_wired_up(qapp):
+    """Toggling the (enabled) checkbox drives ``pl._toggle_fix_profile_associations``."""
+
+    class _FixablePL(_StubPL):
+        def _can_fix_profile_associations(self):
+            return True
+
+        def _toggle_fix_profile_associations(self, event, parent=None):
+            calls.append((event.IsChecked(), parent))
+            return event.IsChecked()
+
+    calls = []
+    config.setcfg("profile_loader.fix_profile_associations", 0)
+    dialog = _make_dialog(qapp, pl=_FixablePL())
+    try:
+        assert dialog.fix_profile_associations_cb.isEnabled()
+        assert not dialog.fix_profile_associations_cb.isChecked()
+        dialog.fix_profile_associations_cb.setChecked(True)
+        assert calls == [(True, dialog)]
+        assert dialog.fix_profile_associations_cb.isChecked()
+    finally:
+        dialog.close()
+
+
+def test_fix_profile_associations_checkbox_reverts_on_cancel(qapp):
+    """A cancelled confirmation dialog reverts the checkbox's visual state."""
+
+    class _CancelledPL(_StubPL):
+        def _can_fix_profile_associations(self):
+            return True
+
+        def _toggle_fix_profile_associations(self, event, parent=None):
+            return False
+
+    config.setcfg("profile_loader.fix_profile_associations", 0)
+    dialog = _make_dialog(qapp, pl=_CancelledPL())
+    try:
+        dialog.fix_profile_associations_cb.setChecked(True)
+        assert not dialog.fix_profile_associations_cb.isChecked()
     finally:
         dialog.close()
 
