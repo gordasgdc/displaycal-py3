@@ -1115,6 +1115,63 @@ def test_visual_whitepoint_editor_measure_btn_missing_argyll_reenables_button(
     assert editor.measure_btn.isEnabled() is True
 
 
+def test_visual_whitepoint_editor_pin_btn_floats_and_docks_controls_panel(window):
+    # Issue #901: wx's AUI-managed controls pane can be pinned/floated into
+    # its own draggable window; Qt has no AUI-docking equivalent, so the
+    # ported pin button instead detaches the panel into a plain top-level
+    # window and re-embeds it on toggle.
+    window._visual_whitepoint_editor_btn_handler()
+    editor = window._visual_whitepoint_editor_window
+    assert editor.controls.window() is editor
+    assert editor._float_window is None
+
+    editor.pin_btn.setChecked(True)
+    assert editor._float_window is not None
+    assert editor.controls.window() is editor._float_window
+    assert editor.pin_btn.toolTip() == lang.getstr(
+        "whitepoint.visual_editor.panel.dock"
+    )
+
+    editor.pin_btn.setChecked(False)
+    assert editor._float_window is None
+    assert editor.controls.window() is editor
+    assert editor.pin_btn.toolTip() == lang.getstr(
+        "whitepoint.visual_editor.panel.float"
+    )
+
+
+def test_visual_whitepoint_editor_float_window_close_docks_instead_of_destroying(
+    window,
+):
+    # wx's close_pane_handler vetoes the floating pane's close and docks it
+    # back instead of destroying it; the Qt port's _FloatingControlsWindow
+    # mirrors that via its own closeEvent override.
+    window._visual_whitepoint_editor_btn_handler()
+    editor = window._visual_whitepoint_editor_window
+    editor.float_panel()
+    float_window = editor._float_window
+    assert float_window is not None
+
+    float_window.close()
+
+    assert editor._float_window is None
+    assert editor.controls.window() is editor
+    assert editor.pin_btn.isChecked() is False
+
+
+def test_visual_whitepoint_editor_close_docks_floating_panel(window):
+    window._visual_whitepoint_editor_btn_handler()
+    editor = window._visual_whitepoint_editor_window
+    editor.float_panel()
+    assert editor._float_window is not None
+
+    editor.close()
+
+    assert editor._float_window is None
+    # Re-open so later tests in this module still find a live singleton.
+    window._visual_whitepoint_editor_window = None
+
+
 def test_visual_whitepoint_editor_measure_consumer_sets_colortemp_whitepoint(window):
     window._visual_whitepoint_editor_btn_handler()
     editor = window._visual_whitepoint_editor_window

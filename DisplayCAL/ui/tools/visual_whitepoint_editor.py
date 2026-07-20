@@ -22,7 +22,11 @@ The embedded **Measure** button emits :attr:`VisualWhitepointEditorWindow
 (see ``_visual_whitepoint_editor_measure_handler``), mirroring how wx's button
 called back into the parent's ``ambient_measure_handler``. Still deliberately
 dropped: the network **pattern-generator** patch output (tracked separately).
-The custom wx spinners/sliders/AUI docking are replaced by native Qt widgets.
+The custom wx spinners/sliders are replaced by native Qt widgets; wx's
+AUI-managed pin/float pane has no docking-framework equivalent under Qt, so
+:meth:`VisualWhitepointEditorWindow.float_panel`/``dock_panel`` instead detach
+the controls panel into a plain top-level :class:`_FloatingControlsWindow`
+and re-embed it, toggled via the header row's pin button.
 """
 
 from __future__ import annotations
@@ -795,6 +799,35 @@ class _ProfileManager(QObject):
                 thread.join()
 
 
+class _FloatingControlsWindow(QWidget):
+    """Floating window that hosts the detached controls panel.
+
+    Qt port of wx's AUI-floated ``mainPanel`` pane (see wx's
+    ``PinButton(True)`` / ``float_pane_handler``). There is no AUI-docking
+    equivalent under Qt, so this is a plain top-level ``QWidget`` (no modal
+    dialog semantics, e.g. no Escape-to-close) that clicking its native close
+    button re-docks rather than destroys, mirroring wx's
+    ``close_pane_handler`` (which vetoes the close and docks the pane
+    instead).
+
+    Args:
+        editor (VisualWhitepointEditorWindow): The owning editor.
+    """
+
+    def __init__(self, editor: VisualWhitepointEditorWindow) -> None:
+        super().__init__(editor, Qt.Tool)
+        self._editor = editor
+
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 (Qt override)
+        """Dock the panel back into the editor instead of closing.
+
+        Args:
+            event (QCloseEvent): The Qt close event.
+        """
+        event.ignore()
+        self._editor.dock_panel()
+
+
 class VisualWhitepointEditorWindow(BaseWindow):
     """Standalone visual whitepoint editor window."""
 
@@ -824,6 +857,7 @@ class VisualWhitepointEditorWindow(BaseWindow):
         self.display_size_mm: dict[tuple, list[float]] = {}
         self.default_size = 300.0
         self._pm: _ProfileManager | None = None
+        self._float_window: _FloatingControlsWindow | None = None
 
         cfg_x, cfg_y, cfg_scale = (
             float(v)
@@ -861,7 +895,16 @@ class VisualWhitepointEditorWindow(BaseWindow):
         panel.setContentsMargins(12, 12, 12, 12)
         panel.setSpacing(10)
 
-        panel.addWidget(_section_label(lang.getstr("whitepoint")))
+        header_row = QHBoxLayout()
+        header_row.addWidget(_section_label(lang.getstr("whitepoint")))
+        header_row.addStretch(1)
+        self.pin_btn = _icon_button(
+            "button-pin", lang.getstr("whitepoint.visual_editor.panel.float")
+        )
+        self.pin_btn.setCheckable(True)
+        self.pin_btn.toggled.connect(self._on_pin_toggled)
+        header_row.addWidget(self.pin_btn)
+        panel.addLayout(header_row)
 
         self.hsv_wheel = HSVWheel(self)
         self.bright_ctrl = BrightCtrl(self, self.colour)
@@ -947,6 +990,8 @@ class VisualWhitepointEditorWindow(BaseWindow):
         panel.addStretch(1)
 
         self.bg_area = _BackgroundArea(central)
+        self.controls = controls
+        self._root_layout = root
         root.addWidget(controls, 0)
         root.addWidget(self.bg_area, 1)
         self.setCentralWidget(central)
@@ -1093,6 +1138,51 @@ class VisualWhitepointEditorWindow(BaseWindow):
         """
         slider.setValue(500)
 
+    # -- controls panel float/dock ------------------------------------------
+
+    def _on_pin_toggled(self, checked: bool) -> None:
+        """Float or dock the controls panel in response to the pin button.
+
+        Args:
+            checked (bool): True to float the panel, False to dock it.
+        """
+        if checked:
+            self.float_panel()
+        else:
+            self.dock_panel()
+
+    def float_panel(self) -> None:
+        """Detach the controls panel into its own top-level window."""
+        if self._float_window is not None:
+            return
+        self._root_layout.removeWidget(self.controls)
+        float_window = _FloatingControlsWindow(self)
+        layout = QVBoxLayout(float_window)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.controls)
+        self.controls.show()
+        self._float_window = float_window
+        top_left = self.mapToGlobal(QPoint(0, 0))
+        float_window.move(top_left.x() + 10, top_left.y() + 10)
+        float_window.resize(self.controls.sizeHint())
+        float_window.show()
+        self.pin_btn.setToolTip(lang.getstr("whitepoint.visual_editor.panel.dock"))
+
+    def dock_panel(self) -> None:
+        """Re-embed a floating controls panel back into the editor window."""
+        if self._float_window is None:
+            return
+        float_window = self._float_window
+        self._float_window = None
+        self.controls.setParent(None)
+        self._root_layout.insertWidget(0, self.controls, 0)
+        self.controls.show()
+        float_window.deleteLater()
+        self.pin_btn.blockSignals(True)
+        self.pin_btn.setChecked(False)
+        self.pin_btn.blockSignals(False)
+        self.pin_btn.setToolTip(lang.getstr("whitepoint.visual_editor.panel.float"))
+
     def apply_initial_whitepoint(self, r: int, g: int, b: int) -> None:
         """Seed the editor from a display profile's ``vcgt`` whitepoint.
 
@@ -1197,6 +1287,7 @@ class VisualWhitepointEditorWindow(BaseWindow):
         Args:
             event (QCloseEvent): The Qt close event.
         """
+        self.dock_panel()
         self._save_cfg()
         if self._pm is not None:
             self._pm.restore_display_profiles(wrapup=True, wait=True)
