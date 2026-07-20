@@ -1172,6 +1172,66 @@ def test_visual_whitepoint_editor_close_docks_floating_panel(window):
     window._visual_whitepoint_editor_window = None
 
 
+def test_visual_whitepoint_editor_fullscreen_btn_toggles_fullscreen(window):
+    # Issue #902: F11 and double-click had plumbing wired up but the editor
+    # could never actually be put into fullscreen; add an explicit toggle
+    # button next to the measurement-area controls as a reliable,
+    # discoverable entry point.
+    window._visual_whitepoint_editor_btn_handler()
+    editor = window._visual_whitepoint_editor_window
+    assert editor._fullscreen is False
+    assert editor.fullscreen_btn.isChecked() is False
+
+    editor.fullscreen_btn.click()
+    assert editor._fullscreen is True
+    assert editor.isFullScreen() is True
+    assert editor.fullscreen_btn.toolTip() == lang.getstr(
+        "whitepoint.visual_editor.exit_fullscreen"
+    )
+
+    editor.fullscreen_btn.click()
+    assert editor._fullscreen is False
+    assert editor.isFullScreen() is False
+    assert editor.fullscreen_btn.toolTip() == lang.getstr(
+        "whitepoint.visual_editor.fullscreen"
+    )
+
+
+def test_visual_whitepoint_editor_native_maximize_promotes_to_fullscreen(window):
+    # wx enters fullscreen via EVT_MAXIMIZE, fired when the user double-clicks
+    # the OS title bar or clicks the native maximize/zoom button. That
+    # gesture is handled entirely by the window manager and never reaches
+    # our own mouseDoubleClickEvent, so changeEvent() is the Qt hook that
+    # mirrors wx's maximize_handler -> ShowFullScreen(True).
+    from qtpy.QtCore import Qt
+
+    window._visual_whitepoint_editor_btn_handler()
+    editor = window._visual_whitepoint_editor_window
+    assert editor._fullscreen is False
+
+    editor.setWindowState(editor.windowState() | Qt.WindowState.WindowMaximized)
+
+    assert editor._fullscreen is True
+    assert editor.isFullScreen() is True
+    assert editor.fullscreen_btn.isChecked() is True
+
+
+def test_visual_whitepoint_editor_escape_exits_fullscreen(window):
+    from qtpy.QtCore import Qt
+    from qtpy.QtTest import QTest
+
+    window._visual_whitepoint_editor_btn_handler()
+    editor = window._visual_whitepoint_editor_window
+    editor.fullscreen_btn.click()
+    assert editor._fullscreen is True
+
+    QTest.keyClick(editor, Qt.Key_Escape)
+
+    assert editor._fullscreen is False
+    assert editor.isFullScreen() is False
+    assert editor.fullscreen_btn.isChecked() is False
+
+
 def test_visual_whitepoint_editor_measure_consumer_sets_colortemp_whitepoint(window):
     window._visual_whitepoint_editor_btn_handler()
     editor = window._visual_whitepoint_editor_window

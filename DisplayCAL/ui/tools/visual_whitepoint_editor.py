@@ -39,7 +39,7 @@ import threading
 from math import atan2, cos, pi, sin, sqrt
 from typing import TYPE_CHECKING, Callable, ClassVar
 
-from qtpy.QtCore import QObject, QPoint, QRect, Qt, Signal
+from qtpy.QtCore import QEvent, QObject, QPoint, QRect, Qt, Signal
 from qtpy.QtGui import QColor, QIcon, QImage, QLinearGradient, QPainter, QPen, QPixmap
 from qtpy.QtWidgets import (
     QGridLayout,
@@ -48,6 +48,7 @@ from qtpy.QtWidgets import (
     QPushButton,
     QSlider,
     QSpinBox,
+    QStyle,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -943,6 +944,25 @@ class VisualWhitepointEditorWindow(BaseWindow):
         panel.addLayout(reset_row)
 
         panel.addWidget(_section_label(lang.getstr("measureframe.title")))
+
+        fullscreen_row = QHBoxLayout()
+        fullscreen_row.addWidget(
+            QLabel(lang.getstr("whitepoint.visual_editor.fullscreen"))
+        )
+        fullscreen_row.addStretch(1)
+        self.fullscreen_btn = QToolButton()
+        self.fullscreen_btn.setIcon(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_TitleBarMaxButton)
+        )
+        self.fullscreen_btn.setAutoRaise(True)
+        self.fullscreen_btn.setCheckable(True)
+        self.fullscreen_btn.setToolTip(
+            lang.getstr("whitepoint.visual_editor.fullscreen")
+        )
+        self.fullscreen_btn.toggled.connect(self._on_fullscreen_toggled)
+        fullscreen_row.addWidget(self.fullscreen_btn)
+        panel.addLayout(fullscreen_row)
+
         area_grid = QGridLayout()
 
         self.area_size_slider = _slider(
@@ -1269,6 +1289,35 @@ class VisualWhitepointEditorWindow(BaseWindow):
         """
         self._set_fullscreen(not self._fullscreen)
 
+    def changeEvent(self, event: QEvent) -> None:  # noqa: N802 (Qt override)
+        """Promote a native maximize to real fullscreen.
+
+        Double-clicking the OS title bar (or clicking the native maximize /
+        zoom button) is delivered as a window-state change to ``Maximized``,
+        not an event our own :meth:`mouseDoubleClickEvent` ever sees (that
+        gesture is handled entirely by the OS window manager, outside Qt's
+        client-area event stream). wx achieves this via ``EVT_MAXIMIZE`` ->
+        ``ShowFullScreen(True)``; this is the Qt equivalent.
+
+        Args:
+            event (QEvent): The Qt change event.
+        """
+        if (
+            event.type() == QEvent.Type.WindowStateChange
+            and self.windowState() & Qt.WindowState.WindowMaximized
+            and not self._fullscreen
+        ):
+            self._set_fullscreen(True)
+        super().changeEvent(event)
+
+    def _on_fullscreen_toggled(self, checked: bool) -> None:
+        """React to the fullscreen button being clicked.
+
+        Args:
+            checked (bool): True to enter fullscreen, False to leave it.
+        """
+        self._set_fullscreen(checked)
+
     def _set_fullscreen(self, fullscreen: bool) -> None:
         """Enter or leave fullscreen.
 
@@ -1280,6 +1329,14 @@ class VisualWhitepointEditorWindow(BaseWindow):
             self.showFullScreen()
         else:
             self.showNormal()
+        self.fullscreen_btn.blockSignals(True)
+        self.fullscreen_btn.setChecked(fullscreen)
+        self.fullscreen_btn.blockSignals(False)
+        self.fullscreen_btn.setToolTip(
+            lang.getstr("whitepoint.visual_editor.exit_fullscreen")
+            if fullscreen
+            else lang.getstr("whitepoint.visual_editor.fullscreen")
+        )
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 (Qt override)
         """Persist settings and restore display calibration before closing.

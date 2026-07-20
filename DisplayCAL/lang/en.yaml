@@ -2662,6 +2662,10 @@
   Visual whitepoint editor
 "whitepoint.visual_editor.display_changed.warning": |-
   Attention: The display configuration has changed and the visual whitepoint editor may no longer be able to correctly restore display profiles. Please check display profile associations carefully after closing the editor and restart DisplayCAL.
+"whitepoint.visual_editor.exit_fullscreen": |-
+  Exit fullscreen
+"whitepoint.visual_editor.fullscreen": |-
+  Fullscreen
 "whitepoint.visual_editor.panel.dock": |-
   Attach panel to editor window
 "whitepoint.visual_editor.panel.float": |-
