@@ -19,9 +19,8 @@ Unlike the wx tray (Windows-only), the Qt tray icon is enabled on every
 platform: ``QSystemTrayIcon`` makes this essentially free, and it is the only
 way to see/exercise this daemon's UI outside of a Windows box.
 
-Deferred to a follow-up issue (menu item is present but disabled): the
-Exceptions dialog. The Windows device/process hot-plug monitoring thread
-(``_check_display_conf_thread``) is also not ported; this Qt build instead
+The Windows device/process hot-plug monitoring thread
+(``_check_display_conf_thread``) is not ported; this Qt build instead
 triggers an immediate (backgrounded) re-apply whenever the
 ``apply-profiles``/``reset-vcgt`` IPC command or a tray double-click asks for
 one, rather than only flipping a flag for a poller to notice later. Profile
@@ -35,6 +34,7 @@ cross-platform equivalent.
 
 from __future__ import annotations
 
+import os
 import sys
 import threading
 
@@ -306,8 +306,7 @@ class ApplyProfilesTrayIcon(QSystemTrayIcon):
         menu.addSeparator()
 
         exceptions_action = menu.addAction(lang.getstr("exceptions"))
-        exceptions_action.setEnabled(False)
-        exceptions_action.setToolTip(_NOT_AVAILABLE_TOOLTIP)
+        exceptions_action.triggered.connect(pl.set_exceptions)
 
         menu.addSeparator()
 
@@ -620,6 +619,40 @@ class QtProfileLoader(profile_loader.ProfileLoader):
 
         dlg = ProfileAssociationsDialog(self)
         dlg.exec()
+
+    def set_exceptions(self, event: object = None) -> None:
+        """Open the Qt exceptions dialog and persist any changes.
+
+        Mirrors wx's ``TaskBarIcon.set_exceptions``.
+
+        Args:
+            event: Unused; kept for interface parity with the wx override.
+        """
+        print("Menu command: Set exceptions")
+        from DisplayCAL.ui.tools.profile_loader_exceptions import (
+            ProfileLoaderExceptionsDialog,
+        )
+
+        dlg = ProfileLoaderExceptionsDialog(self._exceptions, self._known_apps)
+        result = dlg.exec()
+        if result == QDialog.DialogCode.Accepted:
+            exceptions = []
+            for key in dlg._exceptions:
+                enabled, reset, path = dlg._exceptions[key]
+                exceptions.append(f"{enabled:d}:{reset:d}:{path}")
+                print(
+                    f"Enabled={bool(enabled)}",
+                    "Action={}".format((reset and "Reset") or "Disable"),
+                    path,
+                )
+            if not exceptions:
+                print("Clearing exceptions")
+            setcfg("profile_loader.exceptions", ";".join(exceptions))
+            self._exceptions = dlg._exceptions
+            self._exception_names = {os.path.basename(key) for key in dlg._exceptions}
+            self.writecfg()
+        else:
+            print("Cancelled setting exceptions")
 
     def _toggle_fix_profile_associations(
         self, event: object, parent: QWidget | None = None
