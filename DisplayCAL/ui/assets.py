@@ -10,10 +10,15 @@ transition.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from qtpy.QtCore import Qt
 from qtpy.QtGui import QColor, QIcon, QImage, QPainter, QPixmap
 
 from DisplayCAL import config
+
+if TYPE_CHECKING:
+    from PIL.Image import Image as PILImage
 
 #: Icon sizes shipped under ``theme/icons``. Largest first so ``QIcon`` picks a
 #: high-resolution source to downscale from.
@@ -43,6 +48,49 @@ def get_theme_pixmap(size: int, name: str) -> QPixmap:
     if not path:
         return QPixmap()
     return QPixmap(path)
+
+
+def pil_to_qpixmap(img: PILImage) -> QPixmap:
+    """Convert a Pillow RGBA image to a QPixmap without touching ImageQt.
+
+    Args:
+        img (PILImage): A Pillow ``Image`` (any mode; converted to RGBA).
+
+    Returns:
+        QPixmap: The converted pixmap, detached from the source buffer.
+    """
+    img = img.convert("RGBA")
+    data = img.tobytes("raw", "RGBA")
+    qimage = QImage(data, img.width, img.height, QImage.Format.Format_RGBA8888)
+    return QPixmap.fromImage(qimage.copy())
+
+
+def rotate_hue(img: PILImage, fraction: float) -> PILImage:
+    """Rotate an RGBA image's hue by ``fraction`` of a full turn.
+
+    Qt/Pillow equivalent of wx ``Image.RotateHue``, whose ``angle`` argument
+    is likewise a fraction of 360 degrees. Used both by the progress dialog's
+    hue-cycled "processing" animation and by the apply-profiles tray icon's
+    busy-animation frames.
+
+    Args:
+        img (PILImage): A Pillow RGBA image.
+        fraction (float): The hue rotation, as a fraction of 360 degrees.
+
+    Returns:
+        PILImage: A new image with the rotated hue.
+    """
+    from PIL import Image as PILImageModule
+
+    img = img.convert("RGBA")
+    r, g, b, a = img.split()
+    h, s, v = PILImageModule.merge("RGB", (r, g, b)).convert("HSV").split()
+    shift = round(fraction * 255) % 256
+    if shift:
+        h = h.point(lambda x, shift=shift: (x + shift) % 256)
+    rgb = PILImageModule.merge("HSV", (h, s, v)).convert("RGB")
+    r2, g2, b2 = rgb.split()
+    return PILImageModule.merge("RGBA", (r2, g2, b2, a))
 
 
 def get_header_icon_pixmap() -> QPixmap:

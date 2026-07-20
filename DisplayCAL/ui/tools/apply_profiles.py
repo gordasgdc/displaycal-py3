@@ -69,7 +69,7 @@ from DisplayCAL.config import getcfg, setcfg
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.profile_loader import calibration_management_isenabled
 from DisplayCAL.ui.application import Application
-from DisplayCAL.ui.assets import get_theme_pixmap
+from DisplayCAL.ui.assets import get_theme_pixmap, pil_to_qpixmap, rotate_hue
 from DisplayCAL.ui.scripting import ScriptingHostMixin
 
 _BITDEPTHS = (8, 10, 12, 14, 16)
@@ -218,17 +218,18 @@ class _ScriptingHost(ScriptingHostMixin, QWidget):
 class ApplyProfilesTrayIcon(QSystemTrayIcon):
     """Qt tray icon for the apply-profiles daemon.
 
-    Qt counterpart of :class:`DisplayCAL.profile_loader.TaskBarIcon`. Unlike
-    that class, this one has no frame-by-frame animation (see module
-    docstring's list of deferred follow-ups) -- icons are static per-state.
+    Qt counterpart of :class:`DisplayCAL.profile_loader.TaskBarIcon`,
+    including its frame-by-frame busy animation (see :meth:`animate`).
 
     Args:
         pl (QtProfileLoader): The owning profile loader.
     """
 
     def __init__(self, pl: QtProfileLoader) -> None:
-        self._idle_icon = QIcon(get_theme_pixmap(16, "apply-profiles-tray"))
-        super().__init__(self._idle_icon)
+        self._icon_index = 0
+        self._active_icons: list[QIcon] = []
+        self._build_active_icons()
+        super().__init__(self._active_icons[0])
         self.pl = pl
         self._reset_icon = QIcon(get_theme_pixmap(16, "apply-profiles-reset"))
         self._error_icon = QIcon(get_theme_pixmap(16, "apply-profiles-error"))
@@ -242,6 +243,25 @@ class ApplyProfilesTrayIcon(QSystemTrayIcon):
         self.activated.connect(self._on_activated)
         self._rebuild_menu()
         self.set_visual_state()
+
+    def _build_active_icons(self) -> None:
+        """(Re)build the busy-animation frame list from the current cfg.
+
+        Mirrors wx's ``TaskBarIcon.set_icons``: 1/4/8 frames depending on
+        ``profile_loader.tray_icon_animation_quality`` (0/1/2), each the base
+        tray icon with its hue rotated by an even fraction of the full circle.
+        """
+        from PIL import Image
+
+        anim_quality = getcfg("profile_loader.tray_icon_animation_quality")
+        numframes = 8 if anim_quality == 2 else 4 if anim_quality == 1 else 1
+        path = config.get_data_path("theme/icons/16x16/apply-profiles-tray.png")
+        base = Image.open(path).convert("RGBA")
+        self._active_icons = [
+            QIcon(pil_to_qpixmap(rotate_hue(base, i / numframes)))
+            for i in range(numframes)
+        ]
+        self._icon_index = 0
 
     # -- menu ----------------------------------------------------------
 
@@ -377,12 +397,15 @@ class ApplyProfilesTrayIcon(QSystemTrayIcon):
             pl._refresh_visual_state()
 
     def _on_animation_toggled(self, checked: bool) -> None:
-        """Persist the tray-icon-animation cfg toggle (a visual no-op for now).
+        """Persist the tray-icon-animation cfg toggle and rebuild its frames.
+
+        Mirrors wx's ``TaskBarIcon.set_animation``.
 
         Args:
             checked (bool): The new checked state.
         """
         setcfg("profile_loader.tray_icon_animation_quality", 2 if checked else 0)
+        self._build_active_icons()
 
     def _on_fix_profile_associations_toggled(self, checked: bool) -> None:
         """Confirm and apply a change to the "fix profile associations" setting.
@@ -448,9 +471,30 @@ class ApplyProfilesTrayIcon(QSystemTrayIcon):
         elif pl._reset_gamma_ramps:
             icon = self._reset_icon
         else:
-            icon = self._idle_icon
+            icon = self._active_icons[self._icon_index]
         self.setIcon(icon)
         self.setToolTip(pl.get_title())
+
+    def animate(self) -> None:
+        """Step the busy-animation frame, mirroring wx's ``TaskBarIcon.animate``.
+
+        Advances through ``self._active_icons`` one frame at a time,
+        rescheduling itself on a :class:`QTimer` until it reaches the last
+        frame, then resets back to frame 0. Called by
+        :meth:`QtProfileLoader._animate_busy_icon` (from the hot-plug
+        monitoring thread) each time it notices profiles should be applied
+        and the system isn't idle.
+        """
+        if not self.pl.monitoring:
+            return
+        numframes = len(self._active_icons)
+        if self._icon_index < numframes - 1:
+            self._icon_index += 1
+        else:
+            self._icon_index = 0
+        self.set_visual_state()
+        if self._icon_index > 0:
+            QTimer.singleShot(int(200 / numframes), self.animate)
 
     def show_status(
         self,
@@ -583,10 +627,13 @@ class QtProfileLoader(profile_loader.ProfileLoader):
         self._call_bridge.requested.emit(func, args, delay_ms)
 
     def _animate_busy_icon(self) -> None:
-        """Qt override: no-op, the Qt tray icon has no busy animation.
+        """Qt override: step the tray icon's busy-animation frame.
 
-        See the module docstring.
+        See :meth:`ApplyProfilesTrayIcon.animate` and
+        :meth:`DisplayCAL.profile_loader.ProfileLoader._animate_busy_icon`.
         """
+        if self.tray is not None:
+            self.tray.animate()
 
     def _enumerate_own_top_level_windows(self) -> list:
         r"""Qt override: list this process's own top-level, non-dialog widgets.

@@ -21,10 +21,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from qtpy.QtCore import QRectF, Qt, QTimer
-from qtpy.QtGui import QBrush, QColor, QImage, QLinearGradient, QPainter, QPixmap
+from qtpy.QtGui import QBrush, QColor, QLinearGradient, QPainter, QPixmap
 from qtpy.QtWidgets import QWidget
 
 from DisplayCAL.config import get_data_path
+from DisplayCAL.ui.assets import pil_to_qpixmap, rotate_hue
 
 if TYPE_CHECKING:
     from PIL.Image import Image
@@ -71,21 +72,6 @@ INDETERMINATE_BAR_GRADIENTS = [
     ("#00AADD", "#003366"),
     ("#00BBEE", "#002255"),
 ]
-
-
-def _pil_to_qpixmap(img: Image) -> QPixmap:
-    """Convert a Pillow RGBA image to a QPixmap without touching ImageQt.
-
-    Args:
-        img (Image): A Pillow ``Image`` (any mode; converted to RGBA).
-
-    Returns:
-        QPixmap: The converted pixmap, detached from the source buffer.
-    """
-    img = img.convert("RGBA")
-    data = img.tobytes("raw", "RGBA")
-    qimage = QImage(data, img.width, img.height, QImage.Format.Format_RGBA8888)
-    return QPixmap.fromImage(qimage.copy())
 
 
 def _scale_alpha(img: Image, factor: float) -> Image:
@@ -188,32 +174,6 @@ def _adjust_min_max(img: Image, minvalue: float = 0.0, maxvalue: float = 1.0) ->
     return PILImage.merge("RGBA", (r, g, b, a))
 
 
-def _rotate_hue(img: Image, fraction: float) -> Image:
-    """Rotate an RGBA image's hue by ``fraction`` of a full turn.
-
-    Qt/Pillow equivalent of wx ``Image.RotateHue``, whose ``angle`` argument
-    is likewise a fraction of 360 degrees.
-
-    Args:
-        img: A Pillow RGBA image.
-        fraction (float): The hue rotation, as a fraction of 360 degrees.
-
-    Returns:
-        Image: A new image with the rotated hue.
-    """
-    from PIL import Image as PILImage
-
-    img = img.convert("RGBA")
-    r, g, b, a = img.split()
-    h, s, v = PILImage.merge("RGB", (r, g, b)).convert("HSV").split()
-    shift = round(fraction * 255) % 256
-    if shift:
-        h = h.point(lambda x, shift=shift: (x + shift) % 256)
-    rgb = PILImage.merge("HSV", (h, s, v)).convert("RGB")
-    r2, g2, b2 = rgb.split()
-    return PILImage.merge("RGBA", (r2, g2, b2, a))
-
-
 def _processing_frames() -> list[QPixmap]:
     """Build the 137-frame "processing" (shutter + jet) animation for progress_type 0.
 
@@ -261,15 +221,15 @@ def _processing_frames() -> list[QPixmap]:
     # Steady state: hue-cycle the jet frames, ramping up then holding.
     for i in range(41):
         idx = 19 + i
-        frames[idx] = _rotate_hue(frames[idx], 0.05 * (i / 50.0))
+        frames[idx] = rotate_hue(frames[idx], 0.05 * (i / 50.0))
     for i in range(len(frames) - 60):
         idx = 60 + i
-        frames[idx] = _rotate_hue(frames[idx], 0.05)
+        frames[idx] = rotate_hue(frames[idx], 0.05)
 
     # Fade out by playing the fade-in/steady frames back in reverse.
     frames.extend(reversed(frames[:60]))
 
-    return [_pil_to_qpixmap(frame) for frame in frames]
+    return [pil_to_qpixmap(frame) for frame in frames]
 
 
 def _patch_frames() -> list[QPixmap]:
@@ -309,7 +269,7 @@ def _patch_frames() -> list[QPixmap]:
         idx = 36 + i
         frames[idx] = _scale_alpha(frames[idx], 1 - i / 26.0)
 
-    return [_pil_to_qpixmap(frame) for frame in frames]
+    return [pil_to_qpixmap(frame) for frame in frames]
 
 
 def get_progress_bitmaps(progress_type: int) -> list[QPixmap]:
