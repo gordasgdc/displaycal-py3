@@ -540,6 +540,25 @@ def _icon_button(name: str, tooltip: str) -> QToolButton:
     return button
 
 
+class _PatchWidget(QWidget):
+    """The measurement-area patch, outlined with a nested dark/light marker.
+
+    Qt port of wx's ``newColourPanel``, created with ``style=wx.SIMPLE_BORDER``
+    so the measurement area stays visible even when the patch and surrounding
+    background colours are identical (e.g. the default all-white values).
+    """
+
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802 (Qt override)
+        """Paint the background fill, then the outline marker on top.
+
+        Args:
+            event (QPaintEvent): The Qt paint event.
+        """
+        super().paintEvent(event)
+        painter = QPainter(self)
+        _draw_nested_markers(painter, self.rect().adjusted(2, 2, -3, -3))
+
+
 class _BackgroundArea(QWidget):
     """The surrounding background with the centred foreground colour patch.
 
@@ -550,7 +569,7 @@ class _BackgroundArea(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setAutoFillBackground(True)
-        self.patch = QWidget(self)
+        self.patch = _PatchWidget(self)
         self.patch.setAutoFillBackground(True)
         self._scale = 1.0
         self._x = 0.5
@@ -1260,14 +1279,6 @@ class VisualWhitepointEditorWindow(BaseWindow):
             self._set_fullscreen(not self._fullscreen)
         else:
             super().keyPressEvent(event)
-
-    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:  # noqa: N802 (Qt override)
-        """Toggle fullscreen on double-click.
-
-        Args:
-            event (QMouseEvent): The Qt mouse event.
-        """
-        self._set_fullscreen(not self._fullscreen)
 
     def _set_fullscreen(self, fullscreen: bool) -> None:
         """Enter or leave fullscreen.
