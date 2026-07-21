@@ -3,9 +3,12 @@
 Exercises ``DisplayCAL.ui.patterngenerator_setup``: the pure
 ``prisma_upload_filename`` helper, ``PrismaHostDialog``'s discovery/
 connectivity-check flow, ``connect_madvr``'s fast/slow/cancel paths,
-``connect_patterngenerator``'s dispatch, and ``Lut3DAPIInstallController``.
-Real sockets/madTPG are never touched -- ``Worker.madtpg_connect`` and the
-pattern generator's own ``listen``/``announce``/``connect`` are stubbed with
+``connect_patterngenerator``'s dispatch, ``connect_live_patterngenerator``'s
+already-connected/wait/cancel paths (Resolve/Web @ localhost/Chromecast, used
+by the visual whitepoint editor's live patch streaming), and
+``Lut3DAPIInstallController``. Real sockets/madTPG are never touched --
+``Worker.madtpg_connect``/``Worker.setup_patterngenerator`` and the pattern
+generator's own ``listen``/``announce``/``connect``/``wait`` are stubbed with
 fakes. See ``DisplayCAL/ui/MAINFRAME_PORT_PLAN.md``.
 """
 
@@ -292,6 +295,120 @@ class TestConnectPatterngenerator:
         result = pgs.connect_patterngenerator(worker, None, "title")
 
         assert result is False
+
+
+class _FakeLivePatternGenerator:
+    """Minimal stand-in for a Resolve/Web/Chromecast server-style client.
+
+    Those classes signal "connected" by having ``wait()`` set a ``conn``
+    attribute (absent until then), unlike Prisma's ``connect()``-based
+    ``GenHTTPPatternGeneratorClient``.
+    """
+
+    def __init__(self, wait_func=None) -> None:
+        self.listening = False
+        self._wait_func = wait_func or (lambda pg: None)
+
+    def wait(self) -> None:
+        self._wait_func(self)
+
+
+class TestConnectLivePatterngenerator:
+    def test_already_connected_skips_dialog(self, qapp, worker, monkeypatch):
+        fake_pg = _FakeLivePatternGenerator()
+        fake_pg.conn = True
+        monkeypatch.setattr(
+            worker, "setup_patterngenerator", lambda logfile=None: None
+        )
+        worker.patterngenerator = fake_pg
+        monkeypatch.setattr(
+            pgs.QProgressDialog,
+            "exec_",
+            lambda self: (_ for _ in ()).throw(AssertionError("dialog shown")),
+        )
+
+        result = pgs.connect_live_patterngenerator(worker, None, "title")
+
+        assert result is True
+
+    def test_setup_exception_shows_critical_and_returns_false(
+        self, qapp, worker, monkeypatch
+    ):
+        def _raise(logfile=None):
+            raise Error("boom")
+
+        monkeypatch.setattr(worker, "setup_patterngenerator", _raise)
+        shown = []
+        monkeypatch.setattr(
+            pgs.QMessageBox, "critical", lambda *a, **k: shown.append(a[2])
+        )
+
+        result = pgs.connect_live_patterngenerator(worker, None, "title")
+
+        assert result is False
+        assert shown == ["boom"]
+
+    def test_wait_success_returns_true(self, qapp, worker, monkeypatch):
+        def _wait(pg):
+            time.sleep(0.1)
+            pg.conn = True
+
+        fake_pg = _FakeLivePatternGenerator(_wait)
+        monkeypatch.setattr(
+            worker,
+            "setup_patterngenerator",
+            lambda logfile=None: setattr(worker, "patterngenerator", fake_pg),
+        )
+
+        result = pgs.connect_live_patterngenerator(worker, None, "title")
+
+        assert result is True
+        assert hasattr(fake_pg, "conn")
+
+    def test_wait_failure_shows_error_and_returns_false(
+        self, qapp, worker, monkeypatch
+    ):
+        def _wait(pg):
+            raise OSError("connection refused")
+
+        fake_pg = _FakeLivePatternGenerator(_wait)
+        monkeypatch.setattr(
+            worker,
+            "setup_patterngenerator",
+            lambda logfile=None: setattr(worker, "patterngenerator", fake_pg),
+        )
+        shown = []
+        monkeypatch.setattr(
+            pgs.QMessageBox, "critical", lambda *a, **k: shown.append(a[2])
+        )
+
+        result = pgs.connect_live_patterngenerator(worker, None, "title")
+
+        assert result is False
+        assert shown == ["connection refused"]
+
+    def test_cancel_stops_listening_and_returns_false(self, qapp, worker, monkeypatch):
+        def _wait(pg):
+            time.sleep(0.3)
+            pg.conn = True
+
+        fake_pg = _FakeLivePatternGenerator(_wait)
+        monkeypatch.setattr(
+            worker,
+            "setup_patterngenerator",
+            lambda logfile=None: setattr(worker, "patterngenerator", fake_pg),
+        )
+
+        def _fake_exec(self):
+            self.canceled.emit()
+            return 0
+
+        monkeypatch.setattr(pgs.QProgressDialog, "exec_", _fake_exec)
+
+        result = pgs.connect_live_patterngenerator(worker, None, "title")
+
+        assert result is False
+        assert fake_pg.listening is False
 
 
 class TestLut3DAPIInstallController:

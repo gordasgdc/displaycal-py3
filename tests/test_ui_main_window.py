@@ -1232,6 +1232,111 @@ def test_visual_whitepoint_editor_measurement_area_patch_has_visible_border(wind
     assert border_colour != center_colour
 
 
+class _FakePatternGenerator:
+    """Minimal stand-in for a connected network pattern-generator client."""
+
+    def __init__(self) -> None:
+        self.sent = []
+        self.disconnected = False
+
+    def send(self, rgb, bgrgb, x=0, y=0, w=1, h=1) -> None:
+        self.sent.append((rgb, bgrgb, x, y, w, h))
+
+    def disconnect_client(self) -> None:
+        self.disconnected = True
+
+
+def test_visual_whitepoint_editor_live_patterngenerator_connected_hides_local_patch(
+    window, monkeypatch
+):
+    # Issue #879: when the configured display is a network pattern-generator
+    # destination (Resolve here), the editor should stream to it instead of
+    # painting a local patch.
+    fake_pg = _FakePatternGenerator()
+    monkeypatch.setattr(mw.config, "get_display_name", lambda *a, **k: "Resolve")
+    monkeypatch.setattr(mw, "connect_live_patterngenerator", lambda *a, **k: True)
+    window.worker.patterngenerator = fake_pg
+
+    window._visual_whitepoint_editor_btn_handler()
+    editor = window._visual_whitepoint_editor_window
+
+    assert editor is not None
+    assert editor._patterngenerator is fake_pg
+    assert editor.bg_area.isVisible() is False
+
+
+def test_visual_whitepoint_editor_live_patterngenerator_cancelled_does_not_open(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw.config, "get_display_name", lambda *a, **k: "Resolve")
+    monkeypatch.setattr(mw, "connect_live_patterngenerator", lambda *a, **k: False)
+
+    window._visual_whitepoint_editor_btn_handler()
+
+    assert window._visual_whitepoint_editor_window is None
+
+
+class _FakeMadTPG:
+    def __init__(self, fullscreen: bool = True) -> None:
+        self.calls = []
+        self._fullscreen = fullscreen
+
+    def set_device_gamma_ramp(self, ramp) -> None:
+        self.calls.append(("set_device_gamma_ramp", ramp))
+
+    def disable_3dlut(self) -> None:
+        self.calls.append(("disable_3dlut",))
+
+    def is_fullscreen(self) -> bool:
+        return self._fullscreen
+
+    def leave_fullscreen(self) -> None:
+        self.calls.append(("leave_fullscreen",))
+
+
+def test_visual_whitepoint_editor_madvr_disables_gamma_ramp_3dlut_and_fullscreen(
+    window, monkeypatch
+):
+    # Mirrors wx's visual_whitepoint_editor_handler madVR branch: madTPG's
+    # own gamma ramp/3D LUT/fullscreen state must be cleared first so it
+    # doesn't fight the editor's own patch output.
+    fake_pg = _FakePatternGenerator()
+    fake_madtpg = _FakeMadTPG(fullscreen=True)
+    monkeypatch.setattr(mw.config, "get_display_name", lambda *a, **k: "madVR")
+    monkeypatch.setattr(mw, "connect_patterngenerator", lambda *a, **k: True)
+    window.worker.patterngenerator = fake_pg
+    window.worker.madtpg = fake_madtpg
+
+    window._visual_whitepoint_editor_btn_handler()
+
+    assert ("set_device_gamma_ramp", None) in fake_madtpg.calls
+    assert ("disable_3dlut",) in fake_madtpg.calls
+    assert ("leave_fullscreen",) in fake_madtpg.calls
+    assert window._visual_whitepoint_editor_window is not None
+
+
+def test_visual_whitepoint_editor_prisma_disable_processing_error_shows_critical(
+    window, monkeypatch
+):
+    class _FailingPrisma(_FakePatternGenerator):
+        def disable_processing(self) -> None:
+            raise OSError("prisma unreachable")
+
+    fake_pg = _FailingPrisma()
+    monkeypatch.setattr(mw.config, "get_display_name", lambda *a, **k: "Prisma")
+    monkeypatch.setattr(mw, "connect_patterngenerator", lambda *a, **k: True)
+    window.worker.patterngenerator = fake_pg
+    shown = []
+    monkeypatch.setattr(
+        mw.message_box, "critical", lambda *a, **k: shown.append(a[2])
+    )
+
+    window._visual_whitepoint_editor_btn_handler()
+
+    assert shown == ["prisma unreachable"]
+    assert window._visual_whitepoint_editor_window is None
+
+
 def test_visual_whitepoint_editor_measure_consumer_sets_colortemp_whitepoint(window):
     window._visual_whitepoint_editor_btn_handler()
     editor = window._visual_whitepoint_editor_window
