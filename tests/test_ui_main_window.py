@@ -1208,6 +1208,30 @@ def test_visual_whitepoint_editor_escape_exits_fullscreen(window):
     assert editor.isFullScreen() is False
 
 
+def test_visual_whitepoint_editor_measurement_area_patch_has_visible_border(window):
+    # The patch and its surrounding background default to the same colour
+    # (both white), which made the measurement-area rectangle controlled by
+    # the Size/X/Y sliders effectively invisible; wx avoids this with a
+    # ``wx.SIMPLE_BORDER`` outline on its equivalent panel, so the Qt patch
+    # paints a nested dark/light marker border regardless of fill colour.
+    window._visual_whitepoint_editor_btn_handler()
+    editor = window._visual_whitepoint_editor_window
+    assert editor.colour.r == editor._bgcolour.r
+    assert editor.colour.g == editor._bgcolour.g
+    assert editor.colour.b == editor._bgcolour.b
+
+    patch = editor.bg_area.patch
+    geo = patch.geometry()
+    pixmap = editor.bg_area.grab()
+    image = pixmap.toImage()
+    ratio = pixmap.devicePixelRatio()
+    y = int(geo.center().y() * ratio)
+    border_colour = image.pixelColor(int((geo.left() + 1) * ratio), y)
+    center_colour = image.pixelColor(int(geo.center().x() * ratio), y)
+
+    assert border_colour != center_colour
+
+
 def test_visual_whitepoint_editor_measure_consumer_sets_colortemp_whitepoint(window):
     window._visual_whitepoint_editor_btn_handler()
     editor = window._visual_whitepoint_editor_window
