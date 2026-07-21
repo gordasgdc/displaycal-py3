@@ -1,4 +1,4 @@
-"""Pattern generator connection setup (madVR / Prisma) — Qt port.
+"""Pattern generator connection setup (madVR / Prisma / live) — Qt port.
 
 Qt port of the madVR and Prisma branches of
 ``MainFrame.setup_patterngenerator`` (``display_cal.py:10738-11065``): connects
@@ -9,14 +9,15 @@ last item on the "MainFrame parity-hardening" remaining-gaps list
 ``install_via_api`` branch, previously a "not available in this Qt build yet"
 notice).
 
-Only the two branches :meth:`~DisplayCAL.ui.main_window.MainWindow
-._install_3dlut` actually reaches are ported here. wx's Resolve / "Web @
-localhost" / ``Chromecast *`` branch (and the final "no LUT access" error
-branch) belong to the still-unported *live* pattern-generator measurement
-flow (``visual_whitepoint_editor_handler``, ``luminance_measure_handler``,
-``MainFrame.setup_measurement``'s pattern-generator path), not the 3D LUT
-install offer, and are left for a future session if that flow is ever
-ported.
+:func:`connect_patterngenerator` covers the two branches
+:meth:`~DisplayCAL.ui.main_window.MainWindow._install_3dlut` reaches (madVR,
+Prisma). :func:`connect_live_patterngenerator` separately ports the Resolve /
+"Web @ localhost" / ``Chromecast *`` branch (``display_cal.py:11042-11089``)
+for the visual whitepoint editor's live patch-streaming flow
+(:mod:`DisplayCAL.ui.tools.visual_whitepoint_editor`) -- unlike the
+madVR/Prisma flow this waits for an *incoming* connection from the
+destination rather than dialing out, so it drives ``patterngenerator.wait()``
+on a background thread instead of ``connect()``.
 
 Prisma discovery/connectivity reuses
 :class:`DisplayCAL.patterngenerators.PrismaPatternGeneratorClient` directly
@@ -43,7 +44,7 @@ import sys
 from time import localtime, strftime
 from typing import Callable
 
-from qtpy.QtCore import QObject, Qt, QThread, Signal
+from qtpy.QtCore import QObject, Qt, QThread, QTimer, Signal
 from qtpy.QtWidgets import (
     QComboBox,
     QDialog,
@@ -62,6 +63,7 @@ from DisplayCAL.config import getcfg, setcfg
 from DisplayCAL.debughelpers import Error, Info
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.ui import message_box
+from DisplayCAL.util_io import LineCache
 from DisplayCAL.worker import Worker
 
 
@@ -358,6 +360,86 @@ def connect_patterngenerator(
     if display_name == "madVR":
         return connect_madvr(worker, parent, title)
     return False
+
+
+def connect_live_patterngenerator(
+    worker: Worker, parent: QWidget | None, title: str = APPNAME
+) -> bool:
+    """Connect to a pattern generator for live measurement patch output.
+
+    Qt port of the Resolve / "Web @ localhost" / ``Chromecast *`` branch of
+    ``MainFrame.setup_patterngenerator`` (``display_cal.py:11042-11089``),
+    used by the visual whitepoint editor's live patch streaming
+    (:mod:`DisplayCAL.ui.tools.visual_whitepoint_editor`). Unlike
+    :func:`connect_patterngenerator` (madVR/Prisma, which dials out), these
+    destinations accept an *incoming* connection, so this instantiates the
+    client via :meth:`Worker.setup_patterngenerator` and then waits on a
+    background thread, showing the client's own log output (e.g. "waiting
+    for connection host:port") in a cancellable progress dialog.
+
+    Returns:
+        bool: True once ``worker.patterngenerator`` is connected, False if
+            setup failed or the user cancelled.
+    """
+    logfile = LineCache(3)
+    try:
+        worker.setup_patterngenerator(logfile)
+    except Exception as exception:  # noqa: BLE001 (reported to the user below)
+        message_box.critical(parent, title, str(exception))
+        return False
+    patterngenerator = worker.patterngenerator
+    if hasattr(patterngenerator, "conn"):
+        return True
+
+    progress = QProgressDialog("", lang.getstr("cancel"), 0, 0, parent)
+    progress.setWindowTitle(title)
+    progress.setWindowModality(Qt.WindowModal)
+    progress.setMinimumDuration(0)
+    progress.setAutoClose(False)
+    progress.setAutoReset(False)
+
+    thread = _CallThread(patterngenerator.wait)
+    cancelled = False
+    finished_naturally = False
+
+    def _on_cancel() -> None:
+        # Same "who closed the dialog" race as connect_madvr's _on_cancel.
+        nonlocal cancelled
+        if finished_naturally:
+            return
+        cancelled = True
+        patterngenerator.listening = False
+
+    def _on_thread_finished() -> None:
+        nonlocal finished_naturally
+        finished_naturally = True
+        progress.close()
+
+    def _poll_log() -> None:
+        line = logfile.read()
+        if line:
+            progress.setLabelText(line)
+
+    timer = QTimer(progress)
+    timer.timeout.connect(_poll_log)
+    timer.start(100)
+
+    progress.canceled.connect(_on_cancel)
+    thread.finished.connect(_on_thread_finished)
+    thread.start()
+    if thread.isFinished():
+        _on_thread_finished()
+    else:
+        progress.exec_()
+    timer.stop()
+    thread.wait()
+
+    if cancelled:
+        return False
+    if isinstance(thread.result, Exception):
+        message_box.critical(parent, title, str(thread.result))
+        return False
+    return hasattr(patterngenerator, "conn")
 
 
 class Lut3DAPIInstallController(QObject):

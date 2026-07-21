@@ -20,8 +20,18 @@ enumerated (e.g. headless).
 The embedded **Measure** button emits :attr:`VisualWhitepointEditorWindow
 .measure_requested`, driven by :class:`DisplayCAL.ui.main_window.MainWindow`
 (see ``_visual_whitepoint_editor_measure_handler``), mirroring how wx's button
-called back into the parent's ``ambient_measure_handler``. Still deliberately
-dropped: the network **pattern-generator** patch output (tracked separately).
+called back into the parent's ``ambient_measure_handler``.
+
+When a network **pattern generator** (madVR, Prisma, Resolve, Web @
+localhost, Chromecast) is configured, :meth:`VisualWhitepointEditorWindow
+.set_patterngenerator` is called by :class:`~DisplayCAL.ui.main_window
+.MainWindow` after connecting (see :mod:`DisplayCAL.ui.patterngenerator_setup`).
+The local background/patch area is then hidden and :class:`_PatternGeneratorStreamer`
+streams the current colour and measurement-area geometry to it on a
+background thread, debounced with a ``threading.Event`` -- a direct port of
+wx's ``update_patterngenerator`` thread (``wx_visual_whitepoint_editor.py``
+lines 116-138, 2401-2426), since the network client's own ``send()`` call can
+block on I/O and must not run on the GUI thread.
 The custom wx spinners/sliders are replaced by native Qt widgets; wx's
 AUI-managed pin/float pane has no docking-framework equivalent under Qt, so
 :meth:`VisualWhitepointEditorWindow.float_panel`/``dock_panel`` instead detach
@@ -37,6 +47,7 @@ import re
 import sys
 import threading
 from math import atan2, cos, pi, sin, sqrt
+from time import sleep
 from typing import TYPE_CHECKING, Callable, ClassVar
 
 from qtpy.QtCore import QObject, QPoint, QRect, Qt, Signal
@@ -95,6 +106,11 @@ try:
     from DisplayCAL import real_display_size_mm
 except ImportError:  # pragma: no cover - optional native helper
     real_display_size_mm = None
+
+try:
+    from DisplayCAL.chromecast_pattern_generator import ChromeCastPatternGenerator
+except ImportError:  # pragma: no cover - optional dependency
+    ChromeCastPatternGenerator = None
 
 #: Colour attribute names in spin-box order (RGB then HSV).
 COLOUR_ATTRIBUTES = ("r", "g", "b", "h", "s", "v")
@@ -847,6 +863,71 @@ class _FloatingControlsWindow(QWidget):
         self._editor.dock_panel()
 
 
+class _PatternGeneratorStreamer:
+    """Streams the current colour/geometry to a network pattern generator.
+
+    Port of wx's module-level ``update_patterngenerator`` thread + the
+    ``update_patterngenerator_event`` debounce (``wx_visual_whitepoint_editor.py``
+    lines 116-138, 2401-2426): runs on a dedicated background thread since
+    ``patterngenerator.send()`` can block on network I/O, woken by
+    :meth:`update` rather than polling.
+
+    Args:
+        window (VisualWhitepointEditorWindow): The owning editor, queried for
+            the current foreground/background colour.
+        patterngenerator: A pattern-generator client exposing
+            ``send(rgb, bgrgb, x=, y=, w=, h=)``.
+    """
+
+    def __init__(self, window: VisualWhitepointEditorWindow, patterngenerator) -> None:
+        self._window = window
+        self._patterngenerator = patterngenerator
+        self._event = threading.Event()
+        self._running = True
+        self._config = (0.0, 0.0, 1.0)
+        self._thread = threading.Thread(
+            target=self._run,
+            name="VisualWhitepointEditorPatternGeneratorUpdateThread",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def update(self, x: float, y: float, size: float) -> None:
+        """Queue a new colour/geometry send.
+
+        Args:
+            x (float): Patch horizontal position (0..1).
+            y (float): Patch vertical position (0..1).
+            size (float): Patch size (0..1, fraction of the display).
+        """
+        self._config = (x, y, size)
+        self._event.set()
+
+    def stop(self) -> None:
+        """Stop the background thread (does not disconnect the client)."""
+        self._running = False
+        self._event.set()
+
+    def _run(self) -> None:
+        while self._running:
+            if self._event.wait(0.05):
+                self._event.clear()
+                if not self._running:
+                    break
+                x, y, size = self._config
+                colour = self._window.colour
+                bgcolour = self._window._bgcolour
+                self._patterngenerator.send(
+                    (colour.r / 255.0, colour.g / 255.0, colour.b / 255.0),
+                    (bgcolour.r / 255.0, bgcolour.g / 255.0, bgcolour.b / 255.0),
+                    x=x,
+                    y=y,
+                    w=size,
+                    h=size,
+                )
+            sleep(0.05)
+
+
 class VisualWhitepointEditorWindow(BaseWindow):
     """Standalone visual whitepoint editor window."""
 
@@ -877,6 +958,8 @@ class VisualWhitepointEditorWindow(BaseWindow):
         self.default_size = 300.0
         self._pm: _ProfileManager | None = None
         self._float_window: _FloatingControlsWindow | None = None
+        self._patterngenerator = None
+        self._streamer: _PatternGeneratorStreamer | None = None
 
         cfg_x, cfg_y, cfg_scale = (
             float(v)
@@ -1050,6 +1133,7 @@ class VisualWhitepointEditorWindow(BaseWindow):
             spin.blockSignals(False)
         self._setting_spins = False
         self.set_panel_colours()
+        self._update_patterngenerator()
 
     def set_panel_colours(self) -> None:
         """Repaint the foreground patch and background from the colours."""
@@ -1128,6 +1212,37 @@ class VisualWhitepointEditorWindow(BaseWindow):
         x = self.area_x_slider.value() / 1000.0
         y = self.area_y_slider.value() / 1000.0
         self.bg_area.set_layout(self.default_size, scale, x, y)
+        self._update_patterngenerator()
+
+    def _update_patterngenerator(self) -> None:
+        """Push the current colour/geometry to the pattern generator, if any.
+
+        Port of wx's ``update_patterngenerator`` instance method
+        (``wx_visual_whitepoint_editor.py`` lines 2401-2426): same
+        size/x/y normalisation, computed from the slider ranges rather than
+        the already-normalised values :meth:`_on_area` uses, so a patch
+        pinned to the disc edge stays fully on-screen.
+        """
+        if self._streamer is None:
+            return
+        size = min(
+            self.area_size_slider.value()
+            / float(
+                self.area_size_slider.maximum() - self.area_size_slider.minimum()
+            ),
+            1,
+        )
+        x = max(
+            self.area_x_slider.value() / float(self.area_x_slider.maximum())
+            * (1 - size),
+            0,
+        )
+        y = max(
+            self.area_y_slider.value() / float(self.area_y_slider.maximum())
+            * (1 - size),
+            0,
+        )
+        self._streamer.update(x, y, size)
 
     def _on_measure(self) -> None:
         """Persist the current colour/geometry and request a measurement.
@@ -1147,6 +1262,32 @@ class VisualWhitepointEditorWindow(BaseWindow):
             DEFAULTS["dimensions.measureframe.whitepoint.visual_editor"].split(",")[2]
         )
         self.area_size_slider.setValue(round(scale * 100))
+
+    def set_patterngenerator(self, patterngenerator) -> None:
+        """Attach or detach a network pattern generator for patch output.
+
+        Port of the ``patterngenerator`` constructor argument wx's
+        ``VisualWhitepointEditor`` takes (``wx_visual_whitepoint_editor.py``
+        lines 1948-2209): while attached, the local background/patch area is
+        hidden (mirrors wx's ``self.bgPanel.Show(not patterngenerator)``) and
+        the current colour + measurement-area geometry stream to the
+        generator via :class:`_PatternGeneratorStreamer`. Called by
+        :class:`DisplayCAL.ui.main_window.MainWindow` after connecting (see
+        :mod:`DisplayCAL.ui.patterngenerator_setup`) since, unlike wx, this
+        window is a reused singleton rather than constructed fresh per open.
+
+        Args:
+            patterngenerator: A pattern-generator client exposing
+                ``send(rgb, bgrgb, x=, y=, w=, h=)``, or None to detach.
+        """
+        if self._streamer is not None:
+            self._streamer.stop()
+            self._streamer = None
+        self._patterngenerator = patterngenerator
+        self.bg_area.setVisible(patterngenerator is None)
+        if patterngenerator is not None:
+            self._streamer = _PatternGeneratorStreamer(self, patterngenerator)
+            self._update_patterngenerator()
 
     @staticmethod
     def _center_slider(slider: QSlider) -> None:
@@ -1302,6 +1443,22 @@ class VisualWhitepointEditorWindow(BaseWindow):
         self._save_cfg()
         if self._pm is not None:
             self._pm.restore_display_profiles(wrapup=True, wait=True)
+        if self._streamer is not None:
+            self._streamer.stop()
+            self._streamer = None
+        # Only Chromecast disconnects on close (a per-session device
+        # connection); Prisma/Resolve/Web stay connected for reuse, mirroring
+        # wx's ``Bind(wx.EVT_CLOSE, self.patterngenerator_disconnect)``, which
+        # is likewise only wired up for ``ChromeCastPatternGenerator``.
+        if (
+            self._patterngenerator is not None
+            and ChromeCastPatternGenerator is not None
+            and isinstance(self._patterngenerator, ChromeCastPatternGenerator)
+        ):
+            try:
+                self._patterngenerator.disconnect_client()
+            except Exception as exception:  # noqa: BLE001 (best-effort cleanup)
+                print(exception)
         super().closeEvent(event)
 
     def _save_cfg(self) -> None:

@@ -253,7 +253,11 @@ from DisplayCAL.ui.measurement_flow import (
 )
 from DisplayCAL.ui.measurement_report import ReportPanel
 from DisplayCAL.ui.measurement_sanity_dialog import MeasurementSanityDialog
-from DisplayCAL.ui.patterngenerator_setup import Lut3DAPIInstallController
+from DisplayCAL.ui.patterngenerator_setup import (
+    Lut3DAPIInstallController,
+    connect_live_patterngenerator,
+    connect_patterngenerator,
+)
 from DisplayCAL.ui.profile_finish_dialog import ProfileFinishDialog
 from DisplayCAL.ui.profile_install_window import (
     InstallProfileWindow,
@@ -6628,8 +6632,45 @@ class MainWindow(BaseWindow):
         Qt port of ``visual_whitepoint_editor_handler``: reuses a single
         window instance, matching the ``_gamap_window`` /
         ``_testchart_editor_window`` singleton precedent elsewhere on this
-        window.
+        window. Unlike wx (which constructs a fresh frame per open with the
+        pattern generator baked in), the connection is (re-)established here
+        on every open and pushed into the existing window via
+        :meth:`~DisplayCAL.ui.tools.visual_whitepoint_editor
+        .VisualWhitepointEditorWindow.set_patterngenerator`, since the
+        configured display (and thus destination) can change between opens.
         """
+        title = lang.getstr("whitepoint.visual_editor")
+        display_name = config.get_display_name(None, True)
+        patterngenerator = None
+        if display_name in ("Prisma", "madVR"):
+            connected = connect_patterngenerator(self.worker, self, title)
+            if connected is None or connected is False:
+                return
+        elif display_name in (
+            "Resolve",
+            "Web @ localhost",
+        ) or display_name.startswith("Chromecast "):
+            if not connect_live_patterngenerator(self.worker, self, title):
+                return
+        if display_name == "madVR":
+            self.worker.madtpg.set_device_gamma_ramp(None)
+            self.worker.madtpg.disable_3dlut()
+            if self.worker.madtpg.is_fullscreen():
+                self.worker.madtpg.leave_fullscreen()
+        elif display_name == "Prisma":
+            try:
+                self.worker.patterngenerator.disable_processing()
+            except OSError as exception:
+                message_box.critical(self, APPNAME, str(exception))
+                return
+        if display_name in (
+            "madVR",
+            "Prisma",
+            "Resolve",
+            "Web @ localhost",
+        ) or display_name.startswith("Chromecast "):
+            patterngenerator = self.worker.patterngenerator
+
         window = self._visual_whitepoint_editor_window
         if window is None:
             window = VisualWhitepointEditorWindow()
@@ -6637,6 +6678,7 @@ class MainWindow(BaseWindow):
                 self._visual_whitepoint_editor_measure_handler
             )
             self._visual_whitepoint_editor_window = window
+        window.set_patterngenerator(patterngenerator)
         window.show()
         window.raise_()
         window.activateWindow()
