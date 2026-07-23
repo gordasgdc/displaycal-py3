@@ -15,8 +15,11 @@ preferably use py2exe. Please note that bdist_bbfreeze and py2app
 
 IMPORTANT NOTE:
 If called from within the installed package, should only be used to
-uninstall (setup.py uninstall --record=INSTALLED_FILES), otherwise use
-native_build.py in the root directory of the source tar.gz/zip
+uninstall (setup.py uninstall --record=INSTALLED_FILES). Otherwise, a
+plain `pip install .`/`python -m build` in the root directory of the
+source tar.gz/zip already routes here through the thin root `setup.py`;
+for native-packaging/freeze commands (py2app, py2exe, bdist_deb, inno,
+0install, ...) use `native_build.py` there instead.
 
 """
 
