@@ -14,12 +14,19 @@ sniff `sys.argv` for native-packaging/freeze commands (`py2app`,
 by invoking `native_build.py` directly. Its only other job is making
 sure the couple of `dist/` files that `DisplayCAL/setup.py`'s
 `data_files` unconditionally references (`dist/copyright` and the
-appdata.xml) exist before the real build runs, by delegating to
-`native_build.py`'s existing `appdata`/`buildservice` template
-generation instead of duplicating it.
+appdata.xml) exist before the real build runs.
+
+`native_build.py`'s `buildservice` flag also generates the copyright
+file, but as a side effect of a much bigger "create RPM/DEB/PKGBUILD
+control files" block that needs template files not worth requiring
+here, so the copyright file is generated directly instead, reusing
+`native_build.py`'s own `replace_placeholders()`. Only the `appdata`
+flag (safe on its own, no extra template requirements) is reused for
+the appdata.xml.
 """
 
 import sys
+import time
 from pathlib import Path
 
 pydir = Path(__file__).resolve().parent
@@ -34,10 +41,19 @@ def setup() -> None:
 
     argv = sys.argv
     try:
-        sys.argv = [argv[0], "appdata", "buildservice"]
+        sys.argv = [argv[0], "appdata"]
         native_build.setup()
     finally:
         sys.argv = argv
+
+    # native_build.setup() just populated NAME/DOMAIN/AUTHOR/... as module
+    # globals (used by replace_placeholders()'s template mapping), so this
+    # has to run after it, not before.
+    native_build.replace_placeholders(
+        pydir / "misc" / "debian.copyright",
+        pydir / "dist" / "copyright",
+        int(time.time()),
+    )
 
     from DisplayCAL.setup import setup as real_setup
 
