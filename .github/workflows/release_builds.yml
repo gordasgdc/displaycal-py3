@@ -147,7 +147,12 @@ jobs:
       - name: Install Python dependencies
         run: |
           uv pip install --system --compile-bytecode -r requirements.txt -r requirements-dev.txt
-          uv pip install --system "setuptools<82"
+          # Needs a floor too, not just the <82 ceiling: the macOS python.org
+          # build bundles a much older setuptools that already satisfies "<82"
+          # on its own, so an upper-bound only constraint leaves that ancient
+          # version in place instead of upgrading it, and it predates
+          # SPDX-string `project.license` support.
+          uv pip install --system "setuptools>=75,<82"
 
       - name: Build DisplayCAL
         run: |
