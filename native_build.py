@@ -572,6 +572,25 @@ def setup():
         if len(sys.argv) == 1 or (len(sys.argv) == 2 and dry_run):
             return
 
+    if "manifest" in sys.argv[1:]:
+        # MANIFEST.in's contents depend on the `attrs` dict DisplayCAL/setup.py's
+        # setup() assembles (data_files, packages, ...), so the regeneration
+        # itself has to run there, not here.
+        from DisplayCAL.setup import setup as real_setup
+
+        real_argv = sys.argv
+        sys.argv = [real_argv[0], "generate_manifest_in"] + (
+            ["--dry-run"] if dry_run else []
+        )
+        try:
+            real_setup()
+        finally:
+            sys.argv = real_argv
+        sys.argv.remove("manifest")
+
+        if len(sys.argv) == 1 or (len(sys.argv) == 2 and dry_run):
+            return
+
     create_appdata = (
         (appdata or "install" in sys.argv[1:] or "sdist" in sys.argv[1:])
         and not help
