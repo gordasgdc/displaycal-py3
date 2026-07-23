@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import ctypes.util
 import functools
 import os
@@ -10,57 +9,12 @@ import platform
 import shutil
 import sys
 from configparser import ConfigParser
-from distutils.util import get_platform
 from fnmatch import fnmatch
+from sysconfig import get_platform
 from time import strftime
 
 from py2exe import freeze
 
-
-# Borrowed from setuptools
-def _find_all_simple(path: str) -> list[str]:
-    """Find all files under 'path'.
-
-    Args:
-        path (str): The directory path to search for files.
-
-    Returns:
-        list[str]: A list of full filenames found under the specified path.
-    """
-    results = (
-        os.path.join(base, file)
-        for base, dirs, files in os.walk(path, followlinks=True)
-        for file in files
-    )
-    return filter(os.path.isfile, results)
-
-
-def findall(directory: str = os.curdir) -> list[str]:
-    """Find all files under 'dir' and return the list of full filenames.
-
-    Unless dir is '.', return full filenames with dir prepended.
-
-    Args:
-        directory (str, optional): The directory path to search for files.
-            Defaults to the current directory.
-
-    Returns:
-        list[str]: A list of full filenames found under the specified
-            directory.
-    """
-    files = _find_all_simple(directory)
-    if directory == os.curdir:
-        make_rel = functools.partial(os.path.relpath, start=directory)
-        files = map(make_rel, files)
-    return list(files)
-
-
-import distutils.filelist
-
-distutils.filelist.findall = findall  # Fix findall bug in distutils
-
-
-bits = platform.architecture()[0][:2]
 pypath = os.path.abspath(__file__)
 pydir = os.path.dirname(pypath)
 source_dir = os.path.dirname(pydir)
@@ -73,15 +27,7 @@ sys.path.append(source_dir)
 from DisplayCAL.meta import (
     APPSTREAM_ID,
     AUTHOR,
-    AUTHOR_ASCII,
-    AUTHOR_EMAIL,
-    DESCRIPTION,
-    DEVELOPMENT_HOME_PAGE,
-    DOMAIN,
-    LONG_DESCRIPTION,
     NAME,
-    PY_MAXVERSION,
-    PY_MINVERSION,
     VERSION_STRING,
     VERSION_TUPLE,
     script2pywname,
@@ -339,9 +285,7 @@ def build_py2exe() -> None:
     use_sdl = False
     sys.path.insert(1, os.path.join(pydir, "..", "util"))
 
-    setuptools = True
     debug = False
-    dry_run = False
     # do_full_install = False
 
     doc = "."
@@ -355,11 +299,6 @@ def build_py2exe() -> None:
     else:
         print("WARNING: cacert.pem from certifi project not found!")
 
-    # on Mac OS X and Windows, we want data files in the package dir
-    # (package_data will be ignored when using py2exe)
-    package_data = {
-        NAME: ["theme/icons/22x22/*.png", "theme/icons/24x24/*.png"],
-    }
     scripts = get_scripts()
     # Doc files
     data_files = []
@@ -485,95 +424,14 @@ def build_py2exe() -> None:
                     desktopicons,
                 )
             )
-    ext_modules = []
-    requires = []
-    requires.append("pywin32 (>= 213.0)")
-    packages = [NAME, f"{NAME}.lib", f"{NAME}.lib.agw"]
-    # On Windows we want separate libraries
-    packages.extend(
-        [
-            f"{NAME}.lib{bits}",
-            f"{NAME}.lib{bits}.python{sys.version_info[0]}{sys.version_info[1]}",
-        ]
-    )
-
+    # `attrs` only carries the fields py2exe_kwargs (further below) actually
+    # reads: name/version/classifiers/description/license/entry_points/
+    # package_data/etc. all live in pyproject.toml's `[project]` table (see
+    # DisplayCAL/setup.py's own `attrs`), and were never passed to a real
+    # setup() call from here to begin with.
     attrs = {
-        "author": AUTHOR_ASCII,
-        "author_email": AUTHOR_EMAIL,
-        "classifiers": [
-            "Development Status :: 5 - Production/Stable",
-            "Environment :: MacOS X",
-            "Environment :: Win32 (MS Windows)",
-            "Environment :: X11 Applications",
-            "Intended Audience :: End Users/Desktop",
-            "License :: OSI Approved :: GNU General Public License v3 "
-            "or later (GPLv3+)",
-            "Operating System :: OS Independent",
-            "Programming Language :: Python :: 3.9",
-            "Programming Language :: Python :: 3.10",
-            "Programming Language :: Python :: 3.11",
-            "Programming Language :: Python :: 3.12",
-            "Programming Language :: Python :: 3.13",
-            "Programming Language :: Python :: 3.14",
-            "Topic :: Multimedia :: Graphics",
-        ],
         "data_files": data_files,
-        "description": DESCRIPTION,
-        "download_url": f"{DEVELOPMENT_HOME_PAGE}/releases/download/"
-        f"{VERSION_STRING}/{NAME}-{VERSION_STRING}.tar.gz",
-        "ext_modules": ext_modules,
-        "license": "GPL v3",
-        "long_description": LONG_DESCRIPTION,
-        "long_description_content_type": "text/x-rst",
-        "name": NAME,
-        "packages": packages,
-        "package_data": package_data,
-        "package_dir": {NAME: NAME},
-        "platforms": [
-            "Python >= {} <= {}".format(
-                ".".join(str(n) for n in PY_MINVERSION),
-                ".".join(str(n) for n in PY_MAXVERSION),
-            ),
-            "Linux/Unix with X11",
-            "Mac OS X >= 10.4",
-            "Windows 2000 and newer",
-        ],
-        "requires": requires,
-        "provides": [NAME],
-        "scripts": [],
-        "url": f"https://{DOMAIN}/",
-        "version": msiversion if "bdist_msi" in sys.argv[1:] else VERSION_STRING,
     }
-    if setuptools:
-        attrs["entry_points"] = {
-            "gui_scripts": [
-                "{} = {}.main:main{}".format(
-                    script,
-                    NAME,
-                    (
-                        ""
-                        if script == NAME.lower()
-                        else script[len(NAME) :].lower().replace("-", "_")
-                    ),
-                )
-                for script, desc in scripts
-            ]
-        }
-        attrs["exclude_package_data"] = {}
-        attrs["include_package_data"] = False
-        install_requires = [req.replace("(", "").replace(")", "") for req in requires]
-        attrs["install_requires"] = install_requires
-        attrs["zip_safe"] = False
-    else:
-        attrs["scripts"].extend(
-            os.path.join("scripts", script)
-            for script, desc in [
-                script_desc
-                for script_desc in scripts
-                if script_desc[0] != f"{NAME.lower()}-apply-profiles"
-                or sys.platform != "darwin"
-            ]
-        )
 
     from winmanifest_util import getmanifestxml
 
@@ -748,90 +606,7 @@ def build_py2exe() -> None:
         attrs["options"]["py2exe"].update(
             {"bundle_files": 3, "compressed": 0, "optimize": 0, "skip_archive": 1}
         )
-    if setuptools:
-        attrs["setup_requires"] = ["py2exe"]
     attrs["zipfile"] = os.path.join("lib", "library.zip")
-
-    # To have a working sdist and bdist_rpm when using distutils,
-    # we go to the length of generating MANIFEST.in from scratch everytime,
-    # using the information available from setup.
-    manifest_in = ["# This file will be re-generated by setup.py - do not edit"]
-    manifest_in.extend(
-        [
-            "include LICENSE.txt",
-            "include MANIFEST",
-            "include MANIFEST.in",
-            "include README.html",
-            "include README-fr.html",
-            "include CHANGES.html",
-            f"include {NAME}*.pyw",
-            f"include {NAME}-*.pyw",
-            f"include {NAME}-*.py",
-            "include use-distutils",
-            f"include {NAME}/VERSION",
-        ]
-    )
-    manifest_in.append("include " + os.path.basename(sys.argv[0]))
-    manifest_in.append(
-        "include " + os.path.splitext(os.path.basename(sys.argv[0]))[0] + ".cfg"
-    )
-    for _datadir, datafiles in attrs.get("data_files", []):
-        for datafile in datafiles:
-            datafile_relpath = None
-            with contextlib.suppress(ValueError):
-                datafile_relpath = os.path.relpath(
-                    os.path.sep.join(datafile.split("/")), source_dir
-                )
-            manifest_in.append(f"include {datafile_relpath or datafile}")
-    for extmod in attrs.get("ext_modules", []):
-        manifest_in.extend(
-            f"include {os.path.sep.join(src.split('/'))}" for src in extmod.sources
-        )
-    for pkg in attrs.get("packages", []):
-        pkg = os.path.join(*pkg.split("."))
-        pkgdir = os.path.sep.join(attrs.get("package_dir", {}).get(pkg, pkg).split("/"))
-        manifest_in.append("include " + os.path.join(pkgdir, "*.py"))
-        # manifest_in.append("include " + os.path.join(pkgdir, "*.pyd"))
-        # manifest_in.append("include " + os.path.join(pkgdir, "*.so"))
-        for obj in attrs.get("package_data", {}).get(pkg, []):
-            print(f"obj: {obj}")
-            manifest_in.append(f"include {os.path.sep.join([pkgdir, *obj.split('/')])}")
-    manifest_in.extend(
-        "include {}".format(os.path.join(*pymod.split(".")))
-        for pymod in attrs.get("py_modules", [])
-    )
-    manifest_in.append(
-        "include {}".format(os.path.join(NAME, "theme", "theme-info.txt"))
-    )
-    manifest_in.append(
-        "recursive-include {} {} {}".format(
-            os.path.join(NAME, "theme", "icons"), "*.icns", "*.ico"
-        )
-    )
-    manifest_in.append("include {}".format(os.path.join("man", "*.1")))
-    manifest_in.append("recursive-include misc *")
-    # if skip_instrument_conf_files:
-    #     manifest_in.extend(
-    #         [
-    #             "exclude misc/Argyll",
-    #             "exclude misc/*.rules",
-    #             "exclude misc/*.usermap",
-    #         ]
-    #     )
-    manifest_in.append("include {}".format(os.path.join("screenshots", "*.png")))
-    manifest_in.append("include {}".format(os.path.join("scripts", "*")))
-    manifest_in.append("include {}".format(os.path.join("tests", "*")))
-    manifest_in.append("recursive-include theme *")
-    manifest_in.append("recursive-include util *.cmd *.py *.sh")
-    manifest_in.append("global-exclude *~")
-    manifest_in.append("global-exclude *.backup")
-    manifest_in.append("global-exclude *.bak")
-    manifest_in.append("global-exclude */__pycache__/*")
-    if not dry_run:
-        with open("MANIFEST.in", "w") as manifest:
-            manifest.write("\n".join(manifest_in))
-        if os.path.exists("MANIFEST"):
-            os.remove("MANIFEST")
 
     py2exe_kwargs = {
         "console": attrs["console"],
