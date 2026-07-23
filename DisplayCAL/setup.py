@@ -16,7 +16,7 @@ preferably use py2exe. Please note that bdist_bbfreeze and py2app
 IMPORTANT NOTE:
 If called from within the installed package, should only be used to
 uninstall (setup.py uninstall --record=INSTALLED_FILES), otherwise use
-the wrapper script in the root directory of the source tar.gz/zip
+native_build.py in the root directory of the source tar.gz/zip
 
 """
 

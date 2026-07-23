@@ -162,7 +162,7 @@ source ./.venv/bin/activate
 Now you can generate the app:
 
 ```shell
-python setup.py py2app
+python native_build.py py2app
 ```
 
 That should generate a folder under `dist` with a name similar to
