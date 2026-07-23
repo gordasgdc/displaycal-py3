@@ -15,8 +15,11 @@ preferably use py2exe. Please note that bdist_bbfreeze and py2app
 
 IMPORTANT NOTE:
 If called from within the installed package, should only be used to
-uninstall (setup.py uninstall --record=INSTALLED_FILES), otherwise use
-the wrapper script in the root directory of the source tar.gz/zip
+uninstall (setup.py uninstall --record=INSTALLED_FILES). Otherwise, a
+plain `pip install .`/`python -m build` in the root directory of the
+source tar.gz/zip already routes here through the thin root `setup.py`;
+for native-packaging/freeze commands (py2app, py2exe, bdist_deb, inno,
+0install, ...) use `native_build.py` there instead.
 
 """
 
@@ -1603,6 +1606,7 @@ def setup() -> None:
                 f"include {NAME}*.pyw",
                 f"include {NAME}-*.pyw",
                 f"include {NAME}-*.py",
+                "include native_build.py",
             ]
         )
         for _datadir, datafiles in attrs.get("data_files", []):

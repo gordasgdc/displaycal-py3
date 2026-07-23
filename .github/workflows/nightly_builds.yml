@@ -83,7 +83,7 @@ jobs:
       - name: Build DisplayCAL
         run: |
           uv build
-          $version = Get-Content VERSION
+          $version = Get-Content DisplayCAL\VERSION
           echo "VERSION=$version" >> $env:GITHUB_ENV
           $wheel_file = Get-ChildItem dist\*.whl | Select-Object -First 1
           uv pip install --system $wheel_file
@@ -96,7 +96,7 @@ jobs:
 
       - name: Create INNO script
         run: |
-          python setup.py inno
+          python native_build.py inno
           $iss_file = Get-ChildItem dist\*.iss
           echo "iss_file=$iss_file"
 
@@ -176,8 +176,12 @@ jobs:
           uv pip install --system --compile-bytecode -r requirements.txt -r requirements-dev.txt
           # Pre-install build-system.requires so uv build --no-build-isolation
           # doesn't need to hit the network a second time (avoids transient
-          # PyPI timeouts seen on the Intel runner).
-          uv pip install --system "setuptools<82"
+          # PyPI timeouts seen on the Intel runner). Needs a floor too, not just
+          # the <82 ceiling: the macOS python.org build bundles a much older
+          # setuptools that already satisfies "<82" on its own, so an upper-bound
+          # only constraint leaves that ancient version in place instead of
+          # upgrading it, and it predates SPDX-string `project.license` support.
+          uv pip install --system "setuptools>=75,<82"
 
       # - name: Patch Version String
       #   run: |
@@ -189,7 +193,7 @@ jobs:
       - name: Build DisplayCAL
         run: |
           uv build --no-build-isolation;
-          version=$(cat VERSION)
+          version=$(cat DisplayCAL/VERSION)
           echo "VERSION=${version}" >> $GITHUB_ENV
           uv pip install --system ./dist/displaycal-${version}-*.whl --force-reinstall;
 
@@ -202,7 +206,7 @@ jobs:
         run: |
           # Use x86_64 for Intel or arm64 for Apple Silicon
           TARGET_ARCH="${{ matrix.architecture == 'x64' && 'x86_64' || 'arm64' }}"
-          python setup.py py2app --arch=$TARGET_ARCH
+          python native_build.py py2app --arch=$TARGET_ARCH
 
       - name: Force Ad-Hoc Signing
         run: |
@@ -278,7 +282,7 @@ jobs:
 
       - name: Build macOS DMG
         run: |
-          version=$(cat VERSION)
+          version=$(cat DisplayCAL/VERSION)
           build_folder=$(ls dist | grep -i py2app.macosx)
           TARGET_ARCH="${{ matrix.architecture == 'x64' && 'x86_64' || 'arm64' }}"
 
@@ -368,7 +372,7 @@ jobs:
       - name: Build DisplayCAL wheel
         run: |
           uv build
-          VERSION=$(cat VERSION)
+          VERSION=$(cat DisplayCAL/VERSION)
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
 
       - name: Create package staging directory

@@ -186,7 +186,7 @@ To build the installer for your own use you can follow these steps:
 4- Generate the Inno Setup script:
 
    ```shell
-   python setup.py inno
+   python native_build.py inno
    ```
 
    This will generate a file called `DisplayCAL-Setup-py2exe.win-amd64-py3.11.iss`

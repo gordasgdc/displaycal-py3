@@ -63,12 +63,12 @@ clean-all: clean
 	-rm -Rf $(VIRTUALENV_DIR)
 
 html:
-	./setup.py readme
+	./native_build.py readme
 
 py2app:
 	@printf "\n\033[36m--- $@: Generating macOS APP ---\033[0m\n"
 	@source ./$(VIRTUALENV_DIR)/bin/activate; \
-	ACOSX_DEPLOYMENT_TARGE=11.0 ARCHFLAGS="-arch $(TARGET_ARCH)" python setup.py py2app --arch=$(TARGET_ARCH); \
+	ACOSX_DEPLOYMENT_TARGE=11.0 ARCHFLAGS="-arch $(TARGET_ARCH)" python native_build.py py2app --arch=$(TARGET_ARCH); \
 	for APP_PATH in dist/*/DisplayCAL-*/*.app; do \
 		echo "Signing $$APP_PATH..."; \
 		find "$$APP_PATH" -type f -name "*.dylib" -exec codesign --remove-signature {} +; \

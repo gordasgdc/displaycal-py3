@@ -128,7 +128,7 @@ DisplayCAL = [
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
 optional-dependencies.test = { file = ["requirements-dev.txt"] }
-version = { file = ["VERSION"] }
+version = { file = ["DisplayCAL/VERSION"] }
 
 [tool.black]
 line-length = 88
