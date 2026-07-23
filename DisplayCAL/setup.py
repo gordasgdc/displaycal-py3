@@ -86,10 +86,8 @@ from DisplayCAL.meta import (
     AUTHOR,
     AUTHOR_ASCII,
     AUTHOR_EMAIL,
-    DESCRIPTION,
     DEVELOPMENT_HOME_PAGE,
     DOMAIN,
-    LONG_DESCRIPTION,
     NAME,
     PY_MAXVERSION,
     PY_MINVERSION,
@@ -995,35 +993,19 @@ def setup() -> None:
 
     packages = [NAME, f"{NAME}.lib", f"{NAME}.lib.agw"]
 
+    # name/version/description/license/classifiers/readme/entry_points
+    # (gui_scripts) live in pyproject.toml's [project] table, which always
+    # wins over the corresponding keys here (setuptools applies it on top of
+    # whatever `distutils.core.setup(**attrs)`/`setuptools.setup(**attrs)` is
+    # given, confirmed empirically via sdist/wheel METADATA), so they are not
+    # duplicated in this dict.
     attrs = {
         "author": AUTHOR_ASCII,
         "author_email": AUTHOR_EMAIL,
-        "classifiers": [
-            "Development Status :: 5 - Production/Stable",
-            "Environment :: MacOS X",
-            "Environment :: Win32 (MS Windows)",
-            "Environment :: X11 Applications",
-            "Intended Audience :: End Users/Desktop",
-            "License :: OSI Approved :: GNU General Public License v3 "
-            "or later (GPLv3+)",
-            "Operating System :: OS Independent",
-            "Programming Language :: Python :: 3.9",
-            "Programming Language :: Python :: 3.10",
-            "Programming Language :: Python :: 3.11",
-            "Programming Language :: Python :: 3.12",
-            "Programming Language :: Python :: 3.13",
-            "Programming Language :: Python :: 3.14",
-            "Topic :: Multimedia :: Graphics",
-        ],
         "data_files": data_files,
-        "description": DESCRIPTION,
         "download_url": f"{DEVELOPMENT_HOME_PAGE}/releases/download/"
         f"{VERSION_STRING}/{NAME}-{VERSION_STRING}.tar.gz",
         "ext_modules": ext_modules,
-        "license": "GPL v3",
-        "long_description": LONG_DESCRIPTION,
-        "long_description_content_type": "text/x-rst",
-        "name": NAME,
         "packages": packages,
         "package_data": package_data,
         "package_dir": {NAME: NAME},
@@ -1044,20 +1026,8 @@ def setup() -> None:
     }
 
     if setuptools:
-        attrs["entry_points"] = {
-            "gui_scripts": [
-                "{} = {}.main:main{}".format(
-                    script,
-                    NAME,
-                    (
-                        ""
-                        if script == NAME.lower()
-                        else script[len(NAME) :].lower().replace("-", "_")
-                    ),
-                )
-                for script, desc in scripts
-            ]
-        }
+        # gui_scripts entry points live in pyproject.toml's
+        # [project.gui-scripts] table, which wins over anything set here.
         attrs["exclude_package_data"] = {NAME: []}
         attrs["include_package_data"] = (
             sys.platform in ("darwin", "win32") and not do_py2app
