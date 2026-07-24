@@ -6,6 +6,17 @@ the deliverable requested by #917: assess maintained alternatives to
 migration plan. It does not change `DisplayCAL/freeze.py`, `DisplayCAL/setup.py`,
 or `native_build.py`.
 
+**Sequencing note (maintainer decision, 2026-07-24):** DisplayCAL 4.x drops
+wx entirely and ships Qt-only. That changes this evaluation materially, wx
+bundling is currently the single biggest source of manual hook work for
+every candidate below, and it's going away regardless of which freeze tool
+is picked. The recommendation in this document (§5) is written for a
+**Qt-only** target and assumes the actual freeze-tooling migration happens
+*after* wx is fully removed from the codebase, not before. Attempting this
+migration while wx and Qt still coexist (the current `DISPLAYCAL_UI=qt`
+additive state) would mean paying the wx-bundling cost twice: once now,
+and again when wx is deleted. See §2 and §6 for how this affects scoping.
+
 ## 1. What's actually live today
 
 `DisplayCAL/setup.py` and `native_build.py` implement four freeze paths as
@@ -30,9 +41,16 @@ surrounding scaffolding.
 
 ## 2. Constraints specific to this codebase
 
-- **Two GUI toolkits in one codebase.** wx and Qt (PySide6) coexist per the
-  4.0 migration (`DISPLAYCAL_UI=qt`), so whatever freeze tool is picked needs
-  working Qt plugin bundling *and* wx bundling, not just one.
+- **wx is transitional, Qt is the long-term target.** Today, wx and Qt
+  (PySide6) coexist per the 4.0 migration (`DISPLAYCAL_UI=qt`), and 4.x is
+  planned to drop wx entirely. That means "does this tool bundle wx well"
+  is a question worth answering only if the migration lands *before* wx is
+  removed; if it lands after (the recommended order, see the sequencing
+  note above), wx bundling quality drops out of the decision entirely and
+  the only hook quality that matters is Qt/PySide6, which is where all
+  three candidates below are strongest anyway. This is the single biggest
+  way the picture in this document differs from a "freeze tooling in
+  isolation" evaluation.
 - **Many entry points, not one binary.** `get_scripts()` in `freeze.py`/
   `setup.py` enumerates ~10 standalone tools (3DLUT maker, curve viewer,
   profile info, scripting client, synthprofile, testchart editor,
@@ -62,24 +80,29 @@ surrounding scaffolding.
 
 ### PyInstaller
 Actively maintained, by far the largest hook ecosystem and community, has an
-in-tree PySide6 hook (Qt's own docs point to it) and community wx hooks.
-Already has a **half-started integration in this repo** (`bdist_pyi` in
+in-tree PySide6 hook (Qt's own docs point to it). Already has a
+**half-started integration in this repo** (`bdist_pyi` in
 `native_build.py`), so picking it would reuse, rather than discard, existing
 work. Pure bundler (no C toolchain needed at build time). Windows ARM64:
-supported as a packaging target for a while now.
+supported as a packaging target for a while now. wx hooks exist in the
+community but are irrelevant if this migration lands post-wx-removal (see
+sequencing note above).
 
 ### Nuitka
 Actively maintained, compiles to C rather than just bundling the
 interpreter, meaningfully smaller/faster output, Qt recommends it (or
-PyInstaller) directly in their own deployment docs. Downsides for us
-specifically: requires a working C/C++ toolchain in every build environment
-(new CI dependency on all three OSes), noticeably longer build times, and,
-critically, **standalone/onefile mode does not yet work on native Windows
-ARM64** (lacks binary dependency analysis there as of mid-2026) - the
-exact target we currently limp along for with a source-built py2exe. That
-alone is close to disqualifying unless we're willing to cross-compile
-win-arm64 from an x64 host, which is extra complexity this evaluation
-shouldn't wave away.
+PyInstaller) directly in their own deployment docs, for a Qt-only codebase
+this endorsement carries more weight than it did in the dual-toolkit
+framing. Downsides for us specifically: requires a working C/C++ toolchain
+in every build environment (new CI dependency on all three OSes), noticeably
+longer build times, and, critically, **standalone/onefile mode does not yet
+work on native Windows ARM64** (lacks binary dependency analysis there as of
+mid-2026) - the exact target we currently limp along for with a
+source-built py2exe. That alone is close to disqualifying unless we're
+willing to cross-compile win-arm64 from an x64 host, which is extra
+complexity this evaluation shouldn't wave away. This ARM64 gap is
+independent of the wx/Qt question, it doesn't improve just because wx is
+gone.
 
 ### cx_Freeze
 Actively maintained (8.6.x shipping regularly through 2026), has in-tree
@@ -91,17 +114,19 @@ ARM64 MSI support landed for Python 3.13+, which happens to line up with
 what `release_builds.yml` already uses for the arm64 runner
 (`python-version: '3.13'`) - a real point in its favor, but this specific
 claim came from web search rather than a build we've run, and needs
-verification with a PoC before being load-bearing for a decision. Fewer
-third-party hooks than PyInstaller, so wx bundling may need more manual
-`include_files`/`packages` work (same category of manual work the current
-`config["excludes"]`/`package_data` dance in `freeze.py` already does, so
-not a new class of problem).
+verification with a PoC before being load-bearing for a decision. Its
+narrower third-party hook catalog compared to PyInstaller was previously
+flagged as a wx-bundling risk; with wx out of the picture (post-4.x) that
+concern mostly evaporates since its in-tree PySide6 hook is the only one
+that matters.
 
 ### Briefcase (BeeWare)
-Ruled out. Briefcase's GUI story is built around Toga; wxPython isn't a
-supported backend, and adopting it would mean re-architecting the UI layer,
-not swapping a build tool. Out of scope for #917, which is explicitly about
-freeze tooling, not a GUI rewrite.
+Ruled out regardless of the wx/Qt question. Briefcase is a much larger
+commitment than a freeze-tool swap, it dictates project layout and how the
+app is packaged end to end, not just how it's frozen, and DisplayCAL's
+many hand-built standalone-tool bundles (§2) don't map cleanly onto its
+single-app model. Out of scope for #917, which is about freeze tooling,
+not a packaging-workflow rewrite.
 
 ### PyOxidizer
 Ruled out. Development has stalled for years; not a "maintained alternative"
@@ -114,21 +139,26 @@ PyInstaller is chosen, not a reason on its own to choose it.
 
 ## 4. Comparison summary
 
+Evaluated for the post-wx-removal (Qt-only) target, per the sequencing note
+above:
+
 | | PyInstaller | Nuitka | cx_Freeze |
 |---|---|---|---|
 | Maintenance | Active, largest community | Active | Active |
 | Qt (PySide6) hook | In-tree, mature | Plugin, Qt-recommended | In-tree |
-| wx hook | Community, workable | Manual | Manual (same effort as today) |
 | Build-time C toolchain | No | Yes (new CI dependency) | No |
 | Windows ARM64 (standalone) | Supported | **Not yet supported** | Supported (Python >= 3.13, needs verification) |
 | API shape vs. current code | Spec-file / CLI | CLI / setup.py plugin | `setup(executables=[...])`, closest match to current `Target` pattern |
 | Existing work to build on | Partial `bdist_pyi` skeleton | None | None |
 | Output size/speed | Baseline | Smaller/faster (compiled) | Baseline |
 
+(wx hook quality dropped from this table, see §2, it only matters if the
+migration is done before wx is removed, which is not the recommended order.)
+
 ## 5. Recommendation
 
 Evaluate **cx_Freeze first**, with **PyInstaller as the fallback** if cx_Freeze's
-wx/Qt hook coverage or Windows ARM64 story doesn't hold up in practice.
+Qt hook coverage or Windows ARM64 story doesn't hold up in practice.
 Reasoning:
 
 - It's the smallest structural change from `freeze.py`/`setup.py`'s existing
@@ -139,6 +169,9 @@ Reasoning:
   already targets (Python 3.13 on `windows-11-arm`), unlike Nuitka which is
   presently not viable there.
 - No new C/C++ toolchain requirement in CI, unlike Nuitka.
+- With wx gone, its narrower hook catalog (previously a wx-bundling risk
+  relative to PyInstaller) stops mattering, its PySide6 hook is in-tree
+  either way.
 
 Nuitka remains attractive for output quality (smaller, faster binaries) and
 is worth a second look once/if its Windows ARM64 standalone support matures,
@@ -146,20 +179,28 @@ but it isn't a safe pick today given our ARM64 requirement.
 
 This recommendation should not be treated as final until backed by a PoC
 (see open questions below); it's a starting point for the next issue,
-not authorization to start ripping out `py2app`/`py2exe` yet.
+not authorization to start ripping out `py2app`/`py2exe` yet. It also
+assumes wx has already been removed by the time that PoC work starts, per
+the sequencing note, if that turns out not to be true, re-add the wx hook
+comparison this version dropped.
 
 ## 6. Proposed migration plan (one platform at a time, per the issue)
 
-1. **Delete the dead paths first** (`bdist_bbfreeze`, `bdist_pyi` skeleton)
+0. **Sequencing gate**: don't start the PoC steps below until wx has been
+   fully removed from the codebase (4.x). Doing this cleanup today
+   (step 1) doesn't depend on that, it's independent of which GUI toolkit
+   is in use.
+1. **Delete the dead paths now** (`bdist_bbfreeze`, `bdist_pyi` skeleton)
    as a small, independent cleanup, same spirit as #916. Low risk, shrinks
-   the surface area before touching anything live.
-2. **macOS PoC**: build the main app bundle only (skip the per-tool symlink
-   farm initially) with cx_Freeze, verify Qt plugin bundling and wx both
-   start correctly, verify codesigning/notarization still works with
-   cx_Freeze's `.app` output shape.
-3. **Windows PoC**: build x64 first (wheel exists), then validate the
-   win-arm64 story that's currently a build-from-source workaround for
-   py2exe.
+   the surface area before touching anything live, and doesn't need to wait
+   on the wx removal.
+2. **macOS PoC** (post-wx-removal): build the main app bundle with
+   cx_Freeze, verify Qt plugin bundling starts correctly, verify
+   codesigning/notarization still works with cx_Freeze's `.app` output
+   shape.
+3. **Windows PoC** (post-wx-removal): build x64 first (wheel exists), then
+   validate the win-arm64 story that's currently a build-from-source
+   workaround for py2exe.
 4. Only after both PoCs pass: port `create_app_symlinks()`/per-tool icon
    handling, replace `py2app`/`py2exe` in `native_build.py` and the
    `release_builds.yml`/`nightly_builds.yml` workflows, drop
@@ -173,15 +214,15 @@ not authorization to start ripping out `py2app`/`py2exe` yet.
 - Does cx_Freeze's win-arm64 MSI support actually work end-to-end on the
   `windows-11-arm` GitHub runner, or only in theory? (The claim above came
   from web search, not a build we've run.)
-- Does cx_Freeze bundle wx cleanly out of the box, or does it need the same
-  amount of manual `excludes`/`packages` tuning `freeze.py` already has for
-  py2exe?
 - Can cx_Freeze reproduce the multi-`.app`-bundle-from-one-freeze trick
   `create_app_symlinks()` relies on, or does each tool need its own freeze
   invocation (build-time cost)?
 - What does cx_Freeze do with the Qt plugin directory by default, does it
   still need a `copy_qt_plugins()`-equivalent, or is that handled by its
   in-tree hook?
+- If the wx removal (4.x) slips and this migration ends up needing to
+  happen while wx is still present, re-add the wx-bundling comparison this
+  revision dropped from §3/§4 before treating §5's recommendation as final.
 
 ## Sources
 
