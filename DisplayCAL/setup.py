@@ -5,13 +5,12 @@ with the --use-distutils option, otherwise it will try to use setuptools
 by default).
 
 Also supported in addition to standard distutils/setuptools commands,
-are the bdist_bbfreeze, py2app and py2exe commands (if the appropriate
-packages are installed), which makes this file your all-around building/
-bundling powerhouse for DisplayCAL. In the case of py2exe, special care
-is taken of Python 2.6+ and the Microsoft.VC90.CRT assembly dependency,
-so if building an executable on Windows with Python 2.6+ you should
-preferably use py2exe. Please note that bdist_bbfreeze and py2app
-*require* setuptools.
+are the py2app and py2exe commands (if the appropriate packages are
+installed), which makes this file your all-around building/bundling
+powerhouse for DisplayCAL. In the case of py2exe, special care is taken
+of Python 2.6+ and the Microsoft.VC90.CRT assembly dependency, so if
+building an executable on Windows with Python 2.6+ you should preferably
+use py2exe. Please note that py2app *requires* setuptools.
 
 IMPORTANT NOTE:
 If called from within the installed package, should only be used to
@@ -311,10 +310,7 @@ def create_app_symlinks(dist_dir: str, scripts: list[tuple[str, str]]) -> None:
                             os.path.join(tool_contents, entry, f"{script}.icns"),
                         )
                         continue
-                    if subentry == script:
-                        # PyInstaller: move binary from main app's MacOS to tool app's MacOS
-                        os.rename(src, tgt)
-                    elif (
+                    if (
                         entry == "MacOS"
                         and not has_tool_script
                         and subentry != appname
@@ -480,7 +476,6 @@ def setup() -> None:
     """Setup function for DisplayCAL."""
     print("***", os.path.abspath(sys.argv[0]), " ".join(sys.argv[1:]))
 
-    bdist_bbfreeze = "bdist_bbfreeze" in sys.argv[1:]
     bdist_dumb = "bdist_dumb" in sys.argv[1:]
     bdist_win = "bdist_msi" in sys.argv[1:] or "bdist_wininst" in sys.argv[1:]
     debug = 0
@@ -508,7 +503,7 @@ def setup() -> None:
     sdist = "sdist" in sys.argv[1:]
     setuptools = None
     skip_postinstall = "--skip-postinstall" in sys.argv[1:]
-    use_distutils = not bdist_bbfreeze and not do_py2app
+    use_distutils = not do_py2app
     use_setuptools = (
         not use_distutils
         or "--use-setuptools" in sys.argv[1:]
@@ -640,7 +635,7 @@ def setup() -> None:
     # sys.argv.append("--record=" + "INSTALLED_FILES")
 
     if sys.platform in ("darwin", "win32") or "bdist_egg" in sys.argv[1:]:
-        doc = data = "." if do_py2app or do_py2exe or bdist_bbfreeze else NAME
+        doc = data = "." if do_py2app or do_py2exe else NAME
     else:
         # Linux/Unix
         data = NAME
@@ -1050,9 +1045,6 @@ def setup() -> None:
                 or sys.platform != "darwin"
             ]
         )
-
-    if bdist_bbfreeze:
-        attrs["setup_requires"] = ["bbfreeze"]
 
     if "bdist_wininst" in sys.argv[1:]:
         attrs["scripts"].append(os.path.join("util", f"{NAME}_postinstall.py"))
@@ -1651,19 +1643,6 @@ def setup() -> None:
                     os.remove("MANIFEST")
             return
 
-        if bdist_bbfreeze:
-            i = sys.argv.index("bdist_bbfreeze")
-            if "-d" not in sys.argv[i + 1 :] and "--dist-dir" not in sys.argv[i + 1 :]:
-                dist_dir = os.path.join(
-                    pydir,
-                    "..",
-                    "dist",
-                    f"bbfreeze.{get_platform()}-py{sys.version_info[0]}.{sys.version_info[1]}",
-                )
-                sys.argv.insert(i + 1, f"--dist-dir={dist_dir}")
-            if "egg_info" not in sys.argv[1:i]:
-                sys.argv.insert(i, "egg_info")
-
         if do_py2app or do_py2exe:
             sys.path.insert(1, pydir)
             i = sys.argv.index("py2app" if do_py2app else "py2exe")
@@ -1740,14 +1719,11 @@ def setup() -> None:
                 ),
             )
 
-        if (bdist_bbfreeze and sys.platform == "win32") or do_py2exe:
+        if do_py2exe:
             from vc90crt import vc90crt_copy_files
 
-            if do_py2exe:
-                vc90crt_copy_files(dist_dir)
-                vc90crt_copy_files(os.path.join(dist_dir, "lib"))
-            else:
-                vc90crt_copy_files(os.path.join(dist_dir, NAME + "-" + VERSION_STRING))
+            vc90crt_copy_files(dist_dir)
+            vc90crt_copy_files(os.path.join(dist_dir, "lib"))
 
         if do_full_install and not is_rpm_build and not skip_postinstall:
             from DisplayCAL.postinstall import postinstall

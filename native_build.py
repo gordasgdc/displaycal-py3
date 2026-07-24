@@ -355,23 +355,19 @@ def replace_placeholders(
 
 
 def setup():
+    bdist_cmd = None
+
     if sys.platform == "darwin":
         bdist_cmd = "py2app"
     elif sys.platform == "win32":
         bdist_cmd = "py2exe"
-    else:
-        bdist_cmd = "bdist_bbfreeze"
 
     if "bdist_standalone" in sys.argv[1:]:
         i = sys.argv.index("bdist_standalone")
         sys.argv = sys.argv[:i] + sys.argv[i + 1 :]
 
-        if bdist_cmd not in sys.argv[1:i]:
+        if bdist_cmd and bdist_cmd not in sys.argv[1:i]:
             sys.argv.insert(i, bdist_cmd)
-    elif "bdist_bbfreeze" in sys.argv[1:]:
-        bdist_cmd = "bdist_bbfreeze"
-    elif "bdist_pyi" in sys.argv[1:]:
-        bdist_cmd = "pyi"
     elif "py2app" in sys.argv[1:]:
         bdist_cmd = "py2app"
     elif "py2exe" in sys.argv[1:]:
@@ -382,13 +378,11 @@ def setup():
     bdist_appdmg = "bdist_appdmg" in sys.argv[1:]
     bdist_pkg = "bdist_pkg" in sys.argv[1:]
     bdist_deb = "bdist_deb" in sys.argv[1:]
-    bdist_pyi = "bdist_pyi" in sys.argv[1:]
     buildservice = "buildservice" in sys.argv[1:]
     setup_cfg = None
     dry_run = "-n" in sys.argv[1:] or "--dry-run" in sys.argv[1:]
     help = False
     inno = "inno" in sys.argv[1:]
-    onefile = "-F" in sys.argv[1:] or "--onefile" in sys.argv[1:]
     purge = "purge" in sys.argv[1:]
     purge_dist = "purge_dist" in sys.argv[1:]
     use_setuptools = "--use-setuptools" in sys.argv[1:]
@@ -513,8 +507,8 @@ def setup():
     )
 
     if purge or purge_dist:
-        # remove the "build", "DisplayCAL.egg-info" and
-        # "pyinstaller/bincache*" directories and their contents recursively
+        # remove the "build" and "DisplayCAL.egg-info" directories and their
+        # contents recursively
 
         if dry_run:
             print("dry run - nothing will be removed")
@@ -522,10 +516,8 @@ def setup():
         paths = []
 
         if purge:
-            paths += (
-                glob.glob(str(Path(pydir, "build")))
-                + glob.glob(str(Path(pydir, NAME + ".egg-info")))
-                + glob.glob(str(Path(pydir, "pyinstaller", "bincache*")))
+            paths += glob.glob(str(Path(pydir, "build"))) + glob.glob(
+                str(Path(pydir, NAME + ".egg-info"))
             )
             sys.argv.remove("purge")
 
@@ -676,18 +668,8 @@ def setup():
         i = sys.argv.index("bdist_deb")
         sys.argv = sys.argv[:i] + bdist_args + sys.argv[i + 1 :]
 
-    if bdist_pyi:
-        i = sys.argv.index("bdist_pyi")
-        sys.argv = sys.argv[:i] + sys.argv[i + 1 :]
-
-        if "-F" in sys.argv[1:]:
-            sys.argv.remove("-F")
-
-        if "--onefile" in sys.argv[1:]:
-            sys.argv.remove("--onefile")
-
     if inno and sys.platform == "win32":
-        tmpl_types = ["pyi" if bdist_pyi else bdist_cmd]
+        tmpl_types = [bdist_cmd]
 
         if zeroinstall:
             tmpl_types.extend(["0install", "0install-per-user"])
@@ -1059,23 +1041,6 @@ def setup():
 
     if setup_cfg or ("bdist_msi" in sys.argv[1:] and use_setuptools):
         shutil.copy2(Path(pydir, "setup.cfg.backup"), Path(pydir, "setup.cfg"))
-
-    if bdist_pyi:
-        # create an executable using pyinstaller
-        retcode = subprocess.call(
-            [
-                sys.executable,
-                Path(pydir, "pyinstaller", "pyinstaller.py"),
-                "--workpath",
-                Path(pydir, "build", f"pyi.{get_platform()}-{sys.version_info[0]}.{sys.version_info[1]}"),
-                "--distpath",
-                Path(pydir, "dist", f"pyi.{get_platform()}-{sys.version_info[0]}.{sys.version_info[1]}"),
-                Path(pydir, "misc", f"{NAME}.pyi.spec"),
-            ]
-        )
-
-        if retcode != 0:
-            sys.exit(retcode)
 
     if zeroinstall:
         from xml.dom import minidom
