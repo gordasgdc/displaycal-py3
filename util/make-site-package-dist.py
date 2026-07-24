@@ -6,7 +6,7 @@ import os
 import shutil
 import subprocess as sp
 import sys
-from distutils.sysconfig import get_python_lib
+import sysconfig
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -132,7 +132,7 @@ def copy(src, dst):
 
 
 # Collect packages
-python_lib = get_python_lib(True)
+python_lib = sysconfig.get_path("platlib")
 for pkg_name in pkgs:
     data = pkgs[pkg_name]
     print("Checking for package: %s" % pkg_name)
