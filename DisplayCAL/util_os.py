@@ -410,7 +410,7 @@ def getenvu(name: str, default: None | str = None) -> str:
         ctypes.windll.kernel32.GetEnvironmentVariableW(name, buffer, length)
         return buffer.value
     var = os.getenv(name, default)
-    return var if isinstance(var, str) else var.encode(fs_enc)
+    return var if var is None or isinstance(var, str) else var.decode(fs_enc)
 
 
 def getgroups(username: None | str = None, names_only: bool = False) -> list[str]:
@@ -689,7 +689,7 @@ def putenvu(name: str, value: str) -> None:
     if sys.platform == "win32" and isinstance(value, str):
         ctypes.windll.kernel32.SetEnvironmentVariableW(str(name), value)
     else:
-        os.environ[name] = value.encode(fs_enc)
+        os.environ[name] = value if isinstance(value, str) else value.decode(fs_enc)
 
 
 def parse_reparse_buffer(buf):
@@ -833,7 +833,7 @@ def readlink(path: str):
         ending = offset + result["substitute_name_length"]
         rpath = result["buffer"][offset:ending].decode("UTF-16-LE")
     else:
-        rpath = result["buffer"]
+        rpath = result["buffer"].decode("UTF-16-LE")
     if len(rpath) > 4 and rpath[0:4] == "\\??\\":
         rpath = rpath[4:]
     return rpath

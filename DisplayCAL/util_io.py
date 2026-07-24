@@ -81,8 +81,10 @@ class EncodedWriter:
         if self.data_encoding and not isinstance(data, str):
             data = data.decode(self.data_encoding, self.errors)
         if self.file_encoding and isinstance(data, str):
-            data = data.encode(self.file_encoding, self.errors)
-        self.file.write(data.decode())
+            data = data.encode(self.file_encoding, self.errors).decode(
+                self.file_encoding, self.errors
+            )
+        self.file.write(data)
 
 
 class Files:

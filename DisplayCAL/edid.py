@@ -774,7 +774,7 @@ def parse_edid_basic_display_parameters(edid: bytes) -> dict:
         "max_h_size_cm": edid[MAX_H_SIZE_CM],
         "max_v_size_cm": edid[MAX_V_SIZE_CM],
     }
-    if edid[GAMMA] != b"\xff":
+    if edid[GAMMA] != 0xFF:
         result["gamma"] = edid[GAMMA] / 100.0 + 1
     result["features"] = edid[FEATURES]
     return result
@@ -878,7 +878,7 @@ def parse_color_point_data(block: bytes) -> dict:
         result[f"white_y_{block[i]}"] = white_y
         if "white_y" not in result:
             result["white_y"] = white_y
-        if block[i + 4] != "\xff":
+        if block[i + 4] != 0xFF:
             gamma = block[i + 4] / 100.0 + 1
             result[f"gamma_{block[i]}"] = gamma
             if "gamma" not in result:

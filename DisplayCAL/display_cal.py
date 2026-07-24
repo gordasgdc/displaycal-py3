@@ -11180,6 +11180,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             stdout, stderr = p.communicate()
             returncode = self._measureframe_subprocess.returncode
             del self._measureframe_subprocess
+            stderr = safe_str(stderr)
         return returncode, stderr
 
     def measureframe_consumer(
@@ -11202,7 +11203,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             if returncode != 0 and stderr and stderr.strip():
                 InfoDialog(
                     self,
-                    msg=str(stderr.strip()),
+                    msg=stderr.strip(),
                     ok=lang.getstr("ok"),
                     bitmap=get_icon(32, "dialog-error"),
                 )

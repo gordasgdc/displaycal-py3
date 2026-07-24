@@ -477,8 +477,8 @@ class PrismaPatternGeneratorClient(GenHTTPPatternGeneratorClient):
                             f"{cast} from {addr[0]}:{addr[1]}: {data}"
                         )
                     if data.startswith(self.prod_oem):
-                        name = data[8:32].rstrip(b"\0")
-                        serial = data[32:].rstrip(b"\0")
+                        name = data[8:32].rstrip(b"\0").decode("utf-8", "replace")
+                        serial = data[32:].rstrip(b"\0").decode("utf-8", "replace")
                         self.prismas[addr[0]] = {"serial": serial, "name": name}
                         self._dispatch_event(
                             "on_client_added", (addr, self.prismas[addr[0]])
@@ -652,8 +652,8 @@ class PrismaPatternGeneratorClient(GenHTTPPatternGeneratorClient):
             components = urllib.parse.urlparse(url)
             # api = components.path[1:]
             query = urllib.parse.parse_qs(components.query)
-            if b"m" in query:
-                method = query[b"m"][0]
+            if "m" in query:
+                method = query["m"][0]
                 if data.get(method) == "Error" and "msg" in data:
                     raise http.client.HTTPException(f"{self.host}: {data['msg']}")
             for key in validate:

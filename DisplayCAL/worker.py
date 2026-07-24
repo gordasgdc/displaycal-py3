@@ -2070,7 +2070,7 @@ class Sudo:
         if p.exitstatus != 0:
             return (
                 StringWithLengthOverride(
-                    p.before.strip().decode(ENC, "replace")
+                    p.before.strip()
                     or (f"sudo exited prematurely with status {p.exitstatus}"),
                     0,
                 ),
@@ -7581,23 +7581,15 @@ BEGIN_DATA
                 context = cmdfiles if first else cmdfile
                 if sys.platform == "win32":
                     context.write("@echo off\n")
-                    context.write(
-                        f"PATH {os.path.dirname(cmd)};%PATH%\n".encode(
-                            ENC, "safe_asciize"
-                        )
-                    )
-                    cmdfiles.write('pushd "%~dp0"\n'.encode(ENC, "safe_asciize"))
+                    context.write(f"PATH {os.path.dirname(cmd)};%PATH%\n")
+                    cmdfiles.write('pushd "%~dp0"\n')
                     if cmdname in (
                         get_argyll_utilname("dispcal"),
                         get_argyll_utilname("dispread"),
                     ):
                         cmdfiles.write("color 07\n")
                 else:
-                    context.write(
-                        f"PATH={os.path.dirname(cmd)}:$PATH\n".encode(
-                            ENC, "safe_asciize"
-                        )
-                    )
+                    context.write(f"PATH={os.path.dirname(cmd)}:$PATH\n")
                     if sys.platform == "darwin" and config.mac_create_app:
                         cmdfiles.write('pushd "`dirname \\"$0\\"`/../../.."\n')
                     else:
@@ -7614,10 +7606,7 @@ BEGIN_DATA
                     os.chmod(cmdfilename, 0o755)  # noqa: S103
                     os.chmod(allfilename, 0o755)  # noqa: S103
                 cmdfiles.write(
-                    " ".join(quote_args(cmdline))
-                    .replace(cmd, cmdname)
-                    .encode(ENC, "safe_asciize")
-                    + b"\n"
+                    " ".join(quote_args(cmdline)).replace(cmd, cmdname) + "\n"
                 )
                 if sys.platform == "win32":
                     cmdfiles.write("set exitcode=%errorlevel%\n")
@@ -7674,7 +7663,7 @@ BEGIN_DATA
                         appfilename = os.path.join(
                             working_dir, f"{working_basename}.{cmdname}.app"
                         )
-                        cmdargs = ["osacompile", *script, appfilename.decode()]
+                        cmdargs = ["osacompile", *script, appfilename]
                         p = sp.Popen(
                             cmdargs, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE
                         )
@@ -7793,7 +7782,10 @@ BEGIN_DATA
                     stdout = sp.PIPE
                 if sudo:
                     stdin = tempfile.SpooledTemporaryFile()  # noqa: SIM115
-                    stdin.write(self.pwd.encode(ENC, "replace") + os.linesep)
+                    stdin.write(
+                        self.pwd.encode(ENC, "replace")
+                        + os.linesep.encode(ENC, "replace")
+                    )
                     stdin.seek(0)
                 else:
                     stdin = sp.PIPE
@@ -8176,7 +8168,7 @@ BEGIN_DATA
                 retcode = self.retcode
                 self.exec_cmd(
                     "chown",
-                    ["-R", getpass.getuser().decode(FS_ENC), working_dir],
+                    ["-R", getpass.getuser(), working_dir],
                     capture_output=capture_output,
                     skip_scripts=True,
                     asroot=True,

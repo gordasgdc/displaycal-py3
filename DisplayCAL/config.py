@@ -1338,7 +1338,7 @@ def runtimeconfig(pyfile: str) -> str:
         runtype = PYEXT
     for dir_ in sys.path:
         if not isinstance(dir_, str):
-            dir_ = dir_.encode(FS_ENC)
+            dir_ = dir_.decode(FS_ENC)
         dir_ = os.path.abspath(os.path.join(dir_, APPNAME))
         if dir_ not in DATA_DIRS and os.path.isdir(dir_):
             DATA_DIRS.append(dir_)

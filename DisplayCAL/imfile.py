@@ -229,7 +229,7 @@ class Image:
                 # Pad lines with binary zeros so they end on 4-byte boundaries
                 scanline = scanline.ljust(math.ceil(len(scanline) / 4.0) * 4, b"\0")
             imgdata.append(scanline)
-        imgdata = "".join(imgdata)
+        imgdata = b"".join(imgdata)
         if optimize:
             # Optimize for single color
             imgdata *= dimensions[0]
@@ -250,17 +250,19 @@ class Image:
             struct.pack(">I", 256 + 128)
         )  # Industry-specific section header length
         stream.write(struct.pack(">I", 0))  # User-defined data length
-        stream.write(safe_str(stream.name or b"").ljust(100, b"\0")[-100:])  # File name
+        stream.write(
+            safe_str(stream.name or "").encode().ljust(100, b"\0")[-100:]
+        )  # File name
         # Date & timestamp
         tzoffset = round(
             (time.mktime(time.localtime()) - time.mktime(time.gmtime())) / 60.0 / 60.0
         )
         tzoffset = b"%.2i" % tzoffset if tzoffset < 0 else b"+%.2i" % tzoffset
         stream.write(
-            time.strftime("%Y:%m:%d:%H:%M:%S").encode() + tzoffset.encode() + b"\0\0"
+            time.strftime("%Y:%m:%d:%H:%M:%S").encode() + tzoffset + b"\0\0"
         )
         stream.write(
-            safe_str(f"{APPNAME} {VERSION_STRING}".encode()).ljust(100, b"\0")
+            f"{APPNAME} {VERSION_STRING}".encode().ljust(100, b"\0")
         )  # Creator
         stream.write(b"\0" * 200)  # Project
         stream.write(b"\0" * 200)  # Copyright
@@ -352,8 +354,8 @@ class Image:
         # SMPTE time code
         stream.write(
             b"".join(
-                chr(int(str(v), 16)).encode()
-                for v in self.extrainfo.get("timecode", [b"ff"] * 4)
+                chr(int(v.decode("ascii") if isinstance(v, bytes) else str(v), 16)).encode()
+                for v in self.extrainfo.get("timecode", ["ff"] * 4)
             )
         )
         stream.write(b"\xff" * 4)  # User bits
@@ -378,7 +380,7 @@ class Image:
         stream.write(b"\0" * 76)  # Reserved
 
         # Padding so image data begins at 8K boundary
-        stream.write("\0" * 6144)
+        stream.write(b"\0" * 6144)
 
         # Write image data
         stream.write(imgdata)
