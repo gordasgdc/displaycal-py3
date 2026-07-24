@@ -8,9 +8,8 @@ sys.stdout = sys.stderr
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from DisplayCAL import colormath as cm
-from DisplayCAL import config
+from DisplayCAL import config, worker
 from DisplayCAL import localization as lang
-from DisplayCAL import worker
 from DisplayCAL.icc_profile import ICCProfile, get_display_profile
 from DisplayCAL.wx_windows import BaseApp, wx
 

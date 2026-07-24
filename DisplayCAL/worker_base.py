@@ -841,13 +841,13 @@ class Xicclu(WorkerBase):
         self.errors = self.stderr.readlines()
         self.stderr.close()
         if self.sessionlogfile and self.errors:
-            self.sessionlogfile.write(b"\n".join(self.errors))
+            self.sessionlogfile.write(safe_str(b"\n".join(self.errors)))
         if self.logfile:
-            self.logfile.write(b"\n")
+            self.logfile.write("\n")
         self.closed = True
         if p.returncode and raise_exception:
             # Error
-            raise OSError(b"\n".join(self.errors))
+            raise OSError(safe_str(b"\n".join(self.errors)))
 
     def exit(self, raise_exception=True):
         """Exit the xicclu worker process.

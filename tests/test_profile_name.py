@@ -10,8 +10,9 @@ import os
 
 import pytest
 
-from DisplayCAL import config, profile_name as pn
+from DisplayCAL import config
 from DisplayCAL import localization as lang
+from DisplayCAL import profile_name as pn
 from DisplayCAL.cgats import CGATSError
 
 
@@ -69,9 +70,7 @@ class TestExpandProfileName:
         assert name == "D6500"
 
     def test_whitepoint_xy(self):
-        name = pn.expand_profile_name(
-            "%wp", _ctx(whitepoint="0.31,0.32", do_cal=True)
-        )
+        name = pn.expand_profile_name("%wp", _ctx(whitepoint="0.31,0.32", do_cal=True))
         assert name == "0.31x 0.32y"
 
     def test_whitepoint_dropped_without_cal(self):
@@ -278,9 +277,7 @@ class TestTestchartRecommendationAutoOptimize:
 
 
 class TestTestchartPatchesAmountForAuto:
-    @pytest.mark.parametrize(
-        "auto,expected", [(1, 34), (2, 79), (3, 115), (4, 175)]
-    )
+    @pytest.mark.parametrize("auto,expected", [(1, 34), (2, 79), (3, 115), (4, 175)])
     def test_fixed_lookup_table(self, auto, expected):
         assert pn.testchart_patches_amount_for_auto(auto) == expected
 
@@ -303,13 +300,9 @@ class TestSuggestedProfileTypeForAuto:
         assert pn.suggested_profile_type_for_auto(2, "S", False) == "X"
 
     def test_low_auto_suggests_curve_matrix(self, monkeypatch):
-        monkeypatch.setattr(
-            pn, "getcfg", lambda key: "" if key == "trc" else None
-        )
+        monkeypatch.setattr(pn, "getcfg", lambda key: "" if key == "trc" else None)
         assert pn.suggested_profile_type_for_auto(1, "X", False) == "s"
-        monkeypatch.setattr(
-            pn, "getcfg", lambda key: "2.2" if key == "trc" else None
-        )
+        monkeypatch.setattr(pn, "getcfg", lambda key: "2.2" if key == "trc" else None)
         assert pn.suggested_profile_type_for_auto(1, "X", False) == "S"
 
     def test_low_auto_no_change_when_already_curve_matrix(self):
@@ -386,15 +379,15 @@ class TestCalibrationMeasurementPatches:
 
 class TestLoadTestchartFromFile:
     def test_loads_bundled_ti1(self):
-        path = os.path.join(
-            os.path.dirname(config.__file__), "ti1", "ccxx.ti1"
-        )
+        path = os.path.join(os.path.dirname(config.__file__), "ti1", "ccxx.ti1")
         ti1 = pn.load_testchart_from_file(path)
         assert ti1.queryv1("NUMBER_OF_SETS")
 
     def test_missing_fields_raise_cgats_error(self, tmp_path):
         bogus = tmp_path / "bogus.ti1"
-        bogus.write_text("CTI1\nBEGIN_DATA_FORMAT\nEND_DATA_FORMAT\nBEGIN_DATA\nEND_DATA\n")
+        bogus.write_text(
+            "CTI1\nBEGIN_DATA_FORMAT\nEND_DATA_FORMAT\nBEGIN_DATA\nEND_DATA\n"
+        )
         with pytest.raises(CGATSError):
             pn.load_testchart_from_file(str(bogus))
 

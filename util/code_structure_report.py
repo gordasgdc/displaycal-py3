@@ -1,14 +1,14 @@
-import os
 import importlib
 import inspect
+import os
 import pkgutil
-from inspect import isfunction, isclass, ismethod
+from inspect import isclass, isfunction, ismethod
 
 import DisplayCAL
 
 
 def main():
-    """count the number of lines each method and function takes and report them, so we can see the progress.
+    """Count the number of lines each method and function takes and report them, so we can see the progress.
 
     The motivation of this script was to prove that for some code paths the functions/methods are extremely long (I saw
     function more than 5000+ lines of code, this is one single function, and yes this script was to prove that it really

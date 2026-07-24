@@ -150,7 +150,11 @@ def measured_tone_response(
 
 
 def _forward_tone_response(
-    profile: ICCProfile, worker: Worker, intent: str, order: str, direction: str,
+    profile: ICCProfile,
+    worker: Worker,
+    intent: str,
+    order: str,
+    direction: str,
     size: int,
 ) -> dict[str, list[tuple[float, float]]]:
     """Forward measurement: input device value → measured luminance.
@@ -180,9 +184,7 @@ def _forward_tone_response(
     return curves
 
 
-def _neutral_lab_ramp(
-    profile: ICCProfile, intent: str, size: int
-) -> list[list[float]]:
+def _neutral_lab_ramp(profile: ICCProfile, intent: str, size: int) -> list[list[float]]:
     """Build the neutral L* target ramp fed to the profile inverse.
 
     Args:
@@ -213,7 +215,11 @@ def _neutral_lab_ramp(
 
 
 def _inverse_tone_response(
-    profile: ICCProfile, worker: Worker, intent: str, order: str, direction: str,
+    profile: ICCProfile,
+    worker: Worker,
+    intent: str,
+    order: str,
+    direction: str,
     size: int,
 ) -> dict[str, list[tuple[float, float]]]:
     """Inverse/backward measurement: target luminance → device value.
@@ -232,12 +238,19 @@ def _inverse_tone_response(
     """
     lab_ramp = _neutral_lab_ramp(profile, intent, size)
     odata = worker.xicclu(
-        profile, lab_ramp, intent, direction, order, pcs="l",
+        profile,
+        lab_ramp,
+        intent,
+        direction,
+        order,
+        pcs="l",
         get_clip=direction == "if",
     )
-    odata = _clean_inverse_output(odata, size) if direction == "if" else [
-        list(values[:3]) for values in odata
-    ]
+    odata = (
+        _clean_inverse_output(odata, size)
+        if direction == "if"
+        else [list(values[:3]) for values in odata]
+    )
 
     curves = {"R": [], "G": [], "B": []}
     for j, sample in enumerate(odata):
@@ -248,9 +261,7 @@ def _inverse_tone_response(
     return curves
 
 
-def _clean_inverse_output(
-    odata: list[list[float]], size: int
-) -> list[list[float]]:
+def _clean_inverse_output(odata: list[list[float]], size: int) -> list[list[float]]:
     """Resolve clipped samples for the ``if`` direction and drop clip flags.
 
     Mirrors the effective behaviour of the clipping pass in
@@ -682,9 +693,7 @@ def install_vcgt(profile: ICCProfile, worker: Worker) -> None:
         if isinstance(cmd, Exception):
             raise cmd
         if cmd:
-            result = worker.exec_cmd(
-                cmd, args, capture_output=True, skip_scripts=True
-            )
+            result = worker.exec_cmd(cmd, args, capture_output=True, skip_scripts=True)
             if isinstance(result, Exception):
                 raise result
             if not result:

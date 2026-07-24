@@ -17,7 +17,7 @@ def main():
                 profile = iccp.ICCProfile(os.path.join(p, f))
             except Exception:
                 pass
-            if not "clrt" in profile.tags:
+            if "clrt" not in profile.tags:
                 continue
             print(f)
             print(profile.connectionColorSpace)

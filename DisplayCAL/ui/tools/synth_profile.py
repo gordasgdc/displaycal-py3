@@ -43,7 +43,6 @@ from qtpy.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
-    QMessageBox,
     QPushButton,
     QRadioButton,
     QScrollArea,
@@ -80,10 +79,10 @@ from DisplayCAL.icc_profile import (
 )
 from DisplayCAL.log import LOG
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
-from DisplayCAL.ui import message_box
 from DisplayCAL.util_decimal import stripzeros
 from DisplayCAL.util_dict import dict_sort
 from DisplayCAL.util_io import Files
@@ -356,9 +355,7 @@ class SynthICCWindow(BaseWindow):
         self._add_color_spins(grid, "black", black_row, black=True)
 
         # Chromatic-adaptation button under the grid.
-        self.chromatic_adaptation_btn = QPushButton(
-            lang.getstr("chromatic_adaptation")
-        )
+        self.chromatic_adaptation_btn = QPushButton(lang.getstr("chromatic_adaptation"))
         self.chromatic_adaptation_btn.setEnabled(False)
         self.chromatic_adaptation_btn.clicked.connect(self._on_chromatic_adaptation)
         grid.addWidget(self.chromatic_adaptation_btn, black_row + 1, 1, 1, 3)
@@ -433,9 +430,7 @@ class SynthICCWindow(BaseWindow):
         row.addWidget(self.trc_gamma_label)
         self.trc_gamma_ctrl = QComboBox()
         self.trc_gamma_ctrl.setEditable(True)
-        self.trc_gamma_ctrl.addItems(
-            [f"{v / 10:.1f}" for v in range(10, 31, 2)]
-        )
+        self.trc_gamma_ctrl.addItems([f"{v / 10:.1f}" for v in range(10, 31, 2)])
         self.trc_gamma_ctrl.setFixedWidth(80)
         self.trc_gamma_ctrl.activated.connect(lambda _i: self._on_trc_gamma())
         self.trc_gamma_ctrl.lineEdit().editingFinished.connect(self._on_trc_gamma)
@@ -502,7 +497,9 @@ class SynthICCWindow(BaseWindow):
         self.hdr_minmll_row = QWidget()
         minmll_layout = QHBoxLayout(self.hdr_minmll_row)
         minmll_layout.setContentsMargins(0, 0, 0, 0)
-        minmll_layout.addWidget(QLabel(lang.getstr("mastering_display_black_luminance")))
+        minmll_layout.addWidget(
+            QLabel(lang.getstr("mastering_display_black_luminance"))
+        )
         self.lut3d_hdr_minmll_ctrl = self._spin(0.0, 0.1, 0.0001, 4, width=85)
         self.lut3d_hdr_minmll_ctrl.valueChanged.connect(self._on_hdr_minmll)
         minmll_layout.addWidget(self.lut3d_hdr_minmll_ctrl)
@@ -546,9 +543,7 @@ class SynthICCWindow(BaseWindow):
         self.lut3d_hdr_ambient_luminance_ctrl = self._spin(
             0.01, 10000.0, 0.01, 2, width=85
         )
-        self.lut3d_hdr_ambient_luminance_ctrl.valueChanged.connect(
-            self._on_hdr_ambient
-        )
+        self.lut3d_hdr_ambient_luminance_ctrl.valueChanged.connect(self._on_hdr_ambient)
         ambient_layout.addWidget(self.lut3d_hdr_ambient_luminance_ctrl)
         ambient_layout.addWidget(QLabel("cd/m²"))
         ambient_layout.addStretch(1)
@@ -579,9 +574,7 @@ class SynthICCWindow(BaseWindow):
         self.black_output_offset_ctrl = QSlider(Qt.Horizontal)
         self.black_output_offset_ctrl.setRange(0, 100)
         self.black_output_offset_ctrl.setFixedWidth(160)
-        self.black_output_offset_ctrl.valueChanged.connect(
-            self._on_black_offset_slider
-        )
+        self.black_output_offset_ctrl.valueChanged.connect(self._on_black_offset_slider)
         row.addWidget(self.black_output_offset_ctrl)
         self.black_output_offset_intctrl = QSpinBox()
         self.black_output_offset_intctrl.setRange(0, 100)
@@ -1145,9 +1138,7 @@ class SynthICCWindow(BaseWindow):
                     self._set_spin(f"black_{component}", xyY[i])
         self.enable_btns()
 
-    def parse_xy(
-        self, name: str | None = None, set_blackpoint: bool = False
-    ) -> None:
+    def parse_xy(self, name: str | None = None, set_blackpoint: bool = False) -> None:
         """Recompute primaries' XYZ from chromaticities and the white point.
 
         Args:
@@ -1430,9 +1421,7 @@ class SynthICCWindow(BaseWindow):
                 self.profile_class_ctrl.setCurrentText(self.profile_classes[b"scnr"])
                 self.tech_ctrl.setCurrentText(self.tech["vidc"])
                 self.ciis_ctrl.setCurrentText(self.ciis["fpce"])
-            elif (
-                self.profile_class_ctrl.currentText() == self.profile_classes[b"scnr"]
-            ):
+            elif self.profile_class_ctrl.currentText() == self.profile_classes[b"scnr"]:
                 self.profile_class_ctrl.setCurrentText(self.profile_classes[b"mntr"])
                 self.tech_ctrl.setCurrentText(self.tech[""])
                 self.ciis_ctrl.setCurrentText(self.ciis[""])
@@ -1478,9 +1467,7 @@ class SynthICCWindow(BaseWindow):
         cat_ctrl.setCurrentText(cat_choices_ab[self.cat])
         layout.addWidget(cat_ctrl)
 
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-        )
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.button(QDialogButtonBox.Ok).setText(lang.getstr("apply"))
         buttons.button(QDialogButtonBox.Cancel).setText(lang.getstr("cancel"))
         buttons.accepted.connect(dlg.accept)
@@ -1692,8 +1679,10 @@ class SynthICCWindow(BaseWindow):
             # SMPTE 2084 or HLG
             hdr_format = "PQ" if trc == -2084 else "HLG"
             minmll = getcfg("3dlut.hdr_minmll")
-            maxmll = getcfg("3dlut.hdr_maxmll") if rolloff else getcfg(
-                "synthprofile.luminance"
+            maxmll = (
+                getcfg("3dlut.hdr_maxmll")
+                if rolloff
+                else getcfg("synthprofile.luminance")
             )
             if rgb:
                 if trc == -2084:

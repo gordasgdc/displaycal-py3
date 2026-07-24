@@ -7,9 +7,9 @@ def create_cubic_grid(
 ):
     grid = []
     step = 100.0 / res
-    for i in range(0, res + 1):
-        for j in range(0, res + 1):
-            for k in range(0, res + 1):
+    for i in range(res + 1):
+        for j in range(res + 1):
+            for k in range(res + 1):
                 outer = []
                 inner = []
                 for n in (i, j, k):
@@ -25,9 +25,9 @@ def create_cubic_grid(
                         grid.append(v)
     step = 100.0 / (res * 2)
     if hires_outergamut:
-        for i in range(0, res * 2 + 1):
-            for j in range(0, res * 2 + 1):
-                for k in range(0, res * 2 + 1):
+        for i in range(res * 2 + 1):
+            for j in range(res * 2 + 1):
+                for k in range(res * 2 + 1):
                     outer = []
                     for n in (i, j, k):
                         if 0 in (i, j, k) and (
@@ -51,8 +51,8 @@ def create_cubic_grid(
                         grid.append(outer)
     step = 100.0 / (res * 4)
     if hires_inneraxis:
-        for i in range(0, res * 4 - 1):
-            for j in range(0, 3):
+        for i in range(res * 4 - 1):
+            for j in range(3):
                 v = [i * step] * 3
                 v[j] += step * 2
                 if v not in grid:

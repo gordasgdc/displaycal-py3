@@ -1,6 +1,6 @@
 import os
-from subprocess import Popen
 import sys
+from subprocess import Popen
 
 import pytest
 
@@ -12,7 +12,6 @@ from DisplayCAL.argyll import (
     get_argyll_version_string,
     verbose_print,
 )
-
 from DisplayCAL.dev.mocks import check_call, check_call_str
 from tests.data.argyll_sp_data import SUBPROCESS_COM
 
@@ -130,6 +129,7 @@ def test_verbose_print_verbose_with_an_if_statement(
     assert capsys.readouterr().out == (
         " ".join(cond1_value if test_value else cond2_value) + "\n"
     )
+
 
 @pytest.mark.parametrize("setup_debug_level", [1], indirect=True)
 def test_debug_print_debug_level_skipped(setup_argyll, setup_debug_level, capsys):

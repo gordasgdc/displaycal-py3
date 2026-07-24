@@ -584,7 +584,7 @@ def build_cal_from_profile(
                 b'KEYWORD "TARGET_BLACK_BRIGHTNESS"',
                 b'TARGET_BLACK_BRIGHTNESS "%s"' % option[1:],
             ),
-        }.get(option[0:1], None)
+        }.get(option[0:1])
         if to_extend:
             cal_lines.extend(to_extend)
             continue

@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
-from copy import deepcopy
 import os
 import sys
+from copy import deepcopy
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from DisplayCAL.colormath import (
     RGB2XYZ,
-    convert_range,
     get_rgb_space,
     get_whitepoint,
-    special_pow,
 )
 from DisplayCAL.icc_profile import (
-    create_synthetic_clut_profile,
     ICCProfile,
     LUT16Type,
     XYZType,
+    create_synthetic_clut_profile,
 )
 
 
@@ -100,19 +98,19 @@ def create_rendering_intent_test_profile(
                             (clutres - 1, 0, clutres - 1),
                             (clutres - 1, clutres - 1, 0),
                         ):
-                            if (R, G, B) == (0, clutres - 1, clutres - 1):
+                            if (0, clutres - 1, clutres - 1) == (R, G, B):
                                 # Map C -> R
                                 if tagname == "B2A":
                                     triplet = (65535, 0, 0)
                                 else:
                                     triplet = RGB2XYZ(1, 0, 0, scale=32768)
-                            elif (R, G, B) == (clutres - 1, 0, clutres - 1):
+                            elif (clutres - 1, 0, clutres - 1) == (R, G, B):
                                 # Map M -> G
                                 if tagname == "B2A":
                                     triplet = (0, 65535, 0)
                                 else:
                                     triplet = RGB2XYZ(0, 1, 0, scale=32768)
-                            elif (R, G, B) == (clutres - 1, clutres - 1, 0):
+                            elif (clutres - 1, clutres - 1, 0) == (R, G, B):
                                 # Map Y -> B
                                 if tagname == "B2A":
                                     triplet = (0, 0, 65535)
@@ -120,13 +118,12 @@ def create_rendering_intent_test_profile(
                                     triplet = RGB2XYZ(0, 0, 1, scale=32768)
                             elif (R, G, B) != RGB:
                                 triplet = [0, 0, 0]
+                            elif tagname == "B2A":
+                                # White RGB
+                                triplet = [65535] * 3
                             else:
-                                if tagname == "B2A":
-                                    # White RGB
-                                    triplet = [65535] * 3
-                                else:
-                                    # White XYZ D50
-                                    triplet = get_whitepoint("D50", 32768)
+                                # White XYZ D50
+                                triplet = get_whitepoint("D50", 32768)
                             tag.clut[block][B] = triplet
                     block += 1
             tag.clut_writepng(filename[:-3] + tagname + "%i.CLUT.png" % i)

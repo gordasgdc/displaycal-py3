@@ -7,7 +7,6 @@ compensation sync. No display or QApplication is needed.
 
 from DisplayCAL import gamap_settings as gs
 
-
 # -- viewcond_items -----------------------------------------------------------
 
 
@@ -91,9 +90,7 @@ def test_default_intent_items_matches_valid_values():
 def test_b2a_hires_size_items_matches_valid_values():
     from DisplayCAL import config
 
-    assert (
-        gs.b2a_hires_size_items() == config.VALID_VALUES["profile.b2a.hires.size"]
-    )
+    assert gs.b2a_hires_size_items() == config.VALID_VALUES["profile.b2a.hires.size"]
 
 
 # -- gamap_enabled ------------------------------------------------------------

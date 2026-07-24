@@ -59,9 +59,7 @@ def _make_tray(qapp, monkeypatch):
     return tray
 
 
-@pytest.mark.parametrize(
-    "quality, expected_numframes", [(0, 1), (1, 4), (2, 8)]
-)
+@pytest.mark.parametrize("quality, expected_numframes", [(0, 1), (1, 4), (2, 8)])
 def test_build_active_icons_frame_count_follows_animation_quality(
     qapp, monkeypatch, quality, expected_numframes
 ):

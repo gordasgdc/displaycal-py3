@@ -50,7 +50,9 @@ def test_decide_presentation_dry_run_calls_pending():
     assert mode is mf.PresentationMode.CALL_PENDING
 
 
-@pytest.mark.parametrize("display_name", ["Resolve", "Prisma", "Chromecast 1", "Prisma 2"])
+@pytest.mark.parametrize(
+    "display_name", ["Resolve", "Prisma", "Chromecast 1", "Prisma 2"]
+)
 def test_decide_presentation_networked_virtual_still_shows_frame(display_name):
     """Networked virtual displays are excluded from the direct-call shortcut."""
     mode = mf.decide_presentation(

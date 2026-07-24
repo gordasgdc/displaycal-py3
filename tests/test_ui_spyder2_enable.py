@@ -19,11 +19,12 @@ os.environ.setdefault("QT_API", "pyside6")
 
 pytest.importorskip("qtpy")
 
+from qtpy.QtWidgets import QMessageBox  # noqa: E402
+
 from DisplayCAL import config  # noqa: E402
 from DisplayCAL import localization as lang  # noqa: E402
-from DisplayCAL.worker import Worker  # noqa: E402
-
 from DisplayCAL.ui import spyder2_enable as s2  # noqa: E402
+from DisplayCAL.worker import Worker  # noqa: E402
 
 
 @pytest.fixture(scope="session")
@@ -99,7 +100,9 @@ class TestEnableSpyder2:
             return True
 
         monkeypatch.setattr(Worker, "exec_cmd", fake_exec_cmd)
-        monkeypatch.setattr(Worker, "spyder2_firmware_exists", lambda self, scope=None: True)
+        monkeypatch.setattr(
+            Worker, "spyder2_firmware_exists", lambda self, scope=None: True
+        )
         result = s2._enable_spyder2(worker, "/tmp/installer.exe", True)
         assert result is True
         assert seen["cmd"] == "/bin/spyd2en"
@@ -110,9 +113,13 @@ class TestEnableSpyder2:
         monkeypatch.setattr(s2, "get_argyll_util", lambda name: "/bin/spyd2en")
         seen = {}
         monkeypatch.setattr(
-            Worker, "exec_cmd", lambda self, cmd, args, **k: seen.setdefault("args", list(args)) or True
+            Worker,
+            "exec_cmd",
+            lambda self, cmd, args, **k: seen.setdefault("args", list(args)) or True,
         )
-        monkeypatch.setattr(Worker, "spyder2_firmware_exists", lambda self, scope=None: True)
+        monkeypatch.setattr(
+            Worker, "spyder2_firmware_exists", lambda self, scope=None: True
+        )
         s2._enable_spyder2(worker, None, True)
         assert seen["args"] == ["-v"]
 
@@ -155,7 +162,9 @@ class TestEnableSpyder2Producer:
     def test_given_path_enables_directly(self, qapp, worker, monkeypatch):
         seen = []
         monkeypatch.setattr(
-            s2, "_enable_spyder2", lambda w, path, asroot: seen.append((path, asroot)) or True
+            s2,
+            "_enable_spyder2",
+            lambda w, path, asroot: seen.append((path, asroot)) or True,
         )
         result = s2._enable_spyder2_producer(worker, "/tmp/x.exe", True)
         assert result is True
@@ -181,7 +190,9 @@ class TestEnableSpyder2Producer:
         self, qapp, worker, monkeypatch
     ):
         monkeypatch.setattr(sys, "platform", "darwin")
-        monkeypatch.setattr(s2, "safe_glob", lambda pattern: ["/Applications/Spyder2/Spyder.lib"])
+        monkeypatch.setattr(
+            s2, "safe_glob", lambda pattern: ["/Applications/Spyder2/Spyder.lib"]
+        )
         monkeypatch.setattr(s2, "_enable_spyder2", lambda w, path, asroot: True)
         monkeypatch.setattr(
             Worker, "download", lambda self, *a, **k: pytest.fail("should not download")
@@ -217,7 +228,9 @@ class TestEnableSpyder2Producer:
 
 
 class TestSpyder2EnableController:
-    def test_missing_argyll_bin_finishes_without_dialog(self, qapp, worker, monkeypatch):
+    def test_missing_argyll_bin_finishes_without_dialog(
+        self, qapp, worker, monkeypatch
+    ):
         monkeypatch.setattr(s2, "check_set_argyll_bin", lambda: False)
         opened = []
         monkeypatch.setattr(
@@ -271,10 +284,12 @@ class TestSpyder2EnableController:
             return s2.QDialog.Accepted
 
         monkeypatch.setattr(s2._EnableSpyder2Dialog, "exec_", _fake_exec)
-        monkeypatch.setattr(s2, "_enable_spyder2_producer", lambda w, path, asroot: True)
+        monkeypatch.setattr(
+            s2, "_enable_spyder2_producer", lambda w, path, asroot: True
+        )
         shown = []
         monkeypatch.setattr(
-            s2.QMessageBox,
+            QMessageBox,
             "information",
             lambda *a, **k: shown.append("info"),
         )
@@ -287,7 +302,9 @@ class TestSpyder2EnableController:
         assert shown == ["info"]
         assert isinstance(worker.password_prompt, s2.PasswordPromptAdapter)
 
-    def test_failure_shows_error_and_finishes_attempted(self, qapp, worker, monkeypatch):
+    def test_failure_shows_error_and_finishes_attempted(
+        self, qapp, worker, monkeypatch
+    ):
         monkeypatch.setattr(s2, "check_set_argyll_bin", lambda: True)
 
         def _fake_exec(self):
@@ -295,12 +312,12 @@ class TestSpyder2EnableController:
             return s2.QDialog.Accepted
 
         monkeypatch.setattr(s2._EnableSpyder2Dialog, "exec_", _fake_exec)
-        monkeypatch.setattr(s2, "_enable_spyder2_producer", lambda w, path, asroot: False)
+        monkeypatch.setattr(
+            s2, "_enable_spyder2_producer", lambda w, path, asroot: False
+        )
         worker.errors = []
         shown = []
-        monkeypatch.setattr(
-            s2.QMessageBox, "critical", lambda *a, **k: shown.append(a[2])
-        )
+        monkeypatch.setattr(QMessageBox, "critical", lambda *a, **k: shown.append(a[2]))
         controller = s2.Spyder2EnableController(worker, None)
         results = []
         controller.finished.connect(lambda attempted: results.append(attempted))
@@ -320,9 +337,7 @@ class TestSpyder2EnableController:
         exc = Exception("spyd2en crashed")
         monkeypatch.setattr(s2, "_enable_spyder2_producer", lambda w, path, asroot: exc)
         shown = []
-        monkeypatch.setattr(
-            s2.QMessageBox, "critical", lambda *a, **k: shown.append(a[2])
-        )
+        monkeypatch.setattr(QMessageBox, "critical", lambda *a, **k: shown.append(a[2]))
         controller = s2.Spyder2EnableController(worker, None)
         results = []
         controller.finished.connect(lambda attempted: results.append(attempted))
@@ -339,14 +354,16 @@ class TestSpyder2EnableController:
             return s2.QDialog.Accepted
 
         monkeypatch.setattr(s2._EnableSpyder2Dialog, "exec_", _fake_exec)
-        monkeypatch.setattr(s2, "_enable_spyder2_producer", lambda w, path, asroot: None)
         monkeypatch.setattr(
-            s2.QMessageBox,
+            s2, "_enable_spyder2_producer", lambda w, path, asroot: None
+        )
+        monkeypatch.setattr(
+            QMessageBox,
             "information",
             lambda *a, **k: pytest.fail("should not show a dialog"),
         )
         monkeypatch.setattr(
-            s2.QMessageBox,
+            QMessageBox,
             "critical",
             lambda *a, **k: pytest.fail("should not show a dialog"),
         )
@@ -373,7 +390,7 @@ class TestSpyder2EnableController:
             return True
 
         monkeypatch.setattr(s2, "_enable_spyder2_producer", fake_producer)
-        monkeypatch.setattr(s2.QMessageBox, "information", lambda *a, **k: None)
+        monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: None)
         controller = s2.Spyder2EnableController(worker, None)
         results = []
         controller.finished.connect(lambda attempted: results.append(attempted))

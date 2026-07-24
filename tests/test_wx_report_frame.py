@@ -1,5 +1,4 @@
-from DisplayCAL.dev.mocks import check_call, check_call_str
-from tests.data.display_data import DisplayData
+from DisplayCAL.dev.mocks import check_call_str
 
 
 def test_update_estimated_measurement_time_1(setup_argyll):
@@ -8,9 +7,10 @@ def test_update_estimated_measurement_time_1(setup_argyll):
     ReportFrame.update_estimated_measurement_time() method raising
     TypeError.
     """
+    import wx
+
     from DisplayCAL.config import initcfg
     from DisplayCAL.wx_report_frame import ReportFrame
-    import wx
 
     initcfg()
     app = wx.GetApp() or wx.App()

@@ -140,8 +140,6 @@ def get_edid_windows(display_no: int, device: str) -> bytes:
     Returns:
         bytes: The EDID data.
     """
-    edid = None
-
     if not device:
         # The ordering will work as long as Argyll continues using EnumDisplayMonitors
         monitors = util_win.get_real_display_devices_info()
@@ -377,7 +375,7 @@ def get_display_name_from_system_profiler(width: int, height: int) -> str | None
                     continue
                 # findall captures every (w, h) pair in strings like
                 # "1920 x 1080 (3840 x 2160 HiDPI)" or "spdisplays_3840x2160"
-                for w, h in re.findall(r"(\d+)\s*[xX×]\s*(\d+)", resolution):
+                for w, h in re.findall(r"(\d+)\s*[xX×]\s*(\d+)", resolution):  # noqa: RUF001
                     if int(w) == width and int(h) == height:
                         return name
     return None
@@ -429,11 +427,11 @@ def get_edid_from_xrandr(display_no: int) -> bytes:
                     break
             if found_display and b"EDID" in line:
                 found_edid = True
-            if not found_display:
-                if (name + b" connected") in line:
-                    found_display = True
-                elif (b", Output " + name + b" connected") in line:
-                    found_display = True
+            if not found_display and (
+                (name + b" connected") in line
+                or (b", Output " + name + b" connected") in line
+            ):
+                found_display = True
 
         hex_data = b"".join(edid_data)
         if hex_data:
@@ -774,7 +772,7 @@ def parse_edid_basic_display_parameters(edid: bytes) -> dict:
         "max_h_size_cm": edid[MAX_H_SIZE_CM],
         "max_v_size_cm": edid[MAX_V_SIZE_CM],
     }
-    if edid[GAMMA] != b"\xff":
+    if edid[GAMMA] != 0xFF:
         result["gamma"] = edid[GAMMA] / 100.0 + 1
     result["features"] = edid[FEATURES]
     return result
@@ -878,7 +876,7 @@ def parse_color_point_data(block: bytes) -> dict:
         result[f"white_y_{block[i]}"] = white_y
         if "white_y" not in result:
             result["white_y"] = white_y
-        if block[i + 4] != "\xff":
+        if block[i + 4] != 0xFF:
             gamma = block[i + 4] / 100.0 + 1
             result[f"gamma_{block[i]}"] = gamma
             if "gamma" not in result:

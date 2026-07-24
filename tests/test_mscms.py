@@ -1,5 +1,4 @@
 # Standard Library Imports
-import sys
 from queue import Empty
 from unittest.mock import patch
 

@@ -42,9 +42,7 @@ def _reset_attribute(qapp):
     QApplication.setAttribute(Qt.AA_DontUseNativeDialogs, False)
 
 
-@pytest.mark.parametrize(
-    "name", ["warning", "question", "critical", "information"]
-)
+@pytest.mark.parametrize("name", ["warning", "question", "critical", "information"])
 def test_wrapper_forwards_to_qmessagebox(qapp, monkeypatch, name):
     calls = []
 

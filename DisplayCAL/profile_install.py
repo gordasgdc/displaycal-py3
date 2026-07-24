@@ -108,10 +108,7 @@ def resolve_install_scope_options(
     """
     non_windows_dispwin_ok = sys.platform != "win32" and argyll_version >= [1, 1, 0]
     offer_non_user_scopes = (
-        (
-            (sys.platform == "darwin" or non_windows_dispwin_ok)
-            and is_superuser_or_sudo
-        )
+        ((sys.platform == "darwin" or non_windows_dispwin_ok) and is_superuser_or_sudo)
         or (
             sys.platform == "win32"
             and windows_version is not None

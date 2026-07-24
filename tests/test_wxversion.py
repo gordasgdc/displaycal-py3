@@ -1,7 +1,8 @@
 import os
-import pytest
 import sys
 import tempfile
+
+import pytest
 
 from DisplayCAL import wx_version
 
@@ -154,7 +155,7 @@ def test_check_installed(
 
 
 def test_select_consecutive(setup_tests):
-    """check for exception when incompatible versions are requested."""
+    """Check for exception when incompatible versions are requested."""
     wx_version.select("2.4")
     with pytest.raises(wx_version.VersionError) as cm:
         wx_version.select("2.5")

@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 
 import os
-from binascii import hexlify
 import sys
+from binascii import hexlify
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from DisplayCAL import xrandr
 from DisplayCAL.icc_profile import ICCProfile
-from DisplayCAL.real_display_size_mm import real_display_size_mm
 
 for i in range(5):
     # Show ICC info for first five screens / outputs

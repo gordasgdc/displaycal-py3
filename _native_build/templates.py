@@ -132,9 +132,9 @@ def format_changelog(changelog, fmt="appstream"):
 
 
 def replace_placeholders(
-    tmpl_path: Path, out_path: Path, lastmod_time= 0, iterable=None
+    tmpl_path: Path, out_path: Path, lastmod_time=0, iterable=None
 ):
-    with open(str(tmpl_path), "r", encoding="UTF-8") as tmpl:
+    with open(str(tmpl_path), encoding="UTF-8") as tmpl:
         tmpl_data = tmpl.read()
 
     if Path(tmpl_path).name.startswith("debian"):
@@ -223,7 +223,7 @@ def replace_placeholders(
     out_path = Path(out_path)
 
     if out_path.is_file():
-        with open(str(out_path), "r", encoding="UTF-8") as out:
+        with open(str(out_path), encoding="UTF-8") as out:
             data = out.read()
 
         if data == tmpl_data:

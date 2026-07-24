@@ -89,10 +89,10 @@ from DisplayCAL.cgats import CGATS, CGATSError
 from DisplayCAL.config import DEFAULTS, get_argyll_data_dir, getcfg, setcfg
 from DisplayCAL.edid import PNP_ID_CACHE, get_manufacturer_name
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.assets import get_theme_pixmap
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
-from DisplayCAL.ui import message_box
 from DisplayCAL.ui.measurement_flow import observer_items
 from DisplayCAL.ui.tooltip_window import TooltipWindow, info_text_html
 from DisplayCAL.util_str import safe_str
@@ -247,7 +247,9 @@ class _PreviewDialog(QDialog):
 
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Discard)
         buttons.button(QDialogButtonBox.Save).setText(lang.getstr("save"))
-        buttons.button(QDialogButtonBox.Discard).setText(lang.getstr("testchart.discard"))
+        buttons.button(QDialogButtonBox.Discard).setText(
+            lang.getstr("testchart.discard")
+        )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -366,8 +368,7 @@ class CreateCorrectionWindow(BaseWindow):
         row = QHBoxLayout()
         self.correction_type_matrix = QRadioButton(lang.getstr("matrix"))
         self.correction_type_spectral = QRadioButton(
-            lang.getstr("spectral")
-            + " (i1 DisplayPro, ColorMunki Display, Spyder4/5)"
+            lang.getstr("spectral") + " (i1 DisplayPro, ColorMunki Display, Spyder4/5)"
         )
         group = QButtonGroup(self)
         group.addButton(self.correction_type_matrix)

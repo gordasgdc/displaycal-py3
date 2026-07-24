@@ -14,12 +14,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from DisplayCAL import audio
-from DisplayCAL import config
-from DisplayCAL import gamap_settings
+from DisplayCAL import audio, config, gamap_settings, report
 from DisplayCAL import localization as lang
 from DisplayCAL import lut3d_settings as l3d
-from DisplayCAL import report
 from DisplayCAL.config import getcfg, setcfg
 from DisplayCAL.worker import Worker
 
@@ -174,7 +171,10 @@ def stub_worker(monkeypatch):
     # file's 2-item stub list. Same "unmocked hardware call" trap as
     # tests/test_ui_colorimeter_correction_window.py; stub it outright so
     # this file never depends on that always resolving cleanly.
-    monkeypatch.setattr(Worker, "get_instrument_measurement_modes", lambda self, *a, **k: {})
+    monkeypatch.setattr(
+        Worker, "get_instrument_measurement_modes", lambda self, *a, **k: {}
+    )
+
     # begin_measurement()/_begin_report_measurement()/_begin_testchart_measurement()
     # all unconditionally call self._preinit_measurement_sounds() first thing,
     # which on macOS (sys.platform == "darwin") does a real, non-dummy
@@ -212,16 +212,17 @@ def test_instrument_items_falls_back_to_raw_name():
 
 def test_calibration_quality_slider_roundtrip():
     for level in mw.CALIBRATION_QUALITY_LEVELS:
-        assert mw.slider_to_calibration_quality(
-            mw.calibration_quality_to_slider(level)
-        ) == level
+        assert (
+            mw.slider_to_calibration_quality(mw.calibration_quality_to_slider(level))
+            == level
+        )
 
 
 def test_profile_quality_slider_roundtrip():
     for level in mw.PROFILE_QUALITY_LEVELS:
-        assert mw.slider_to_profile_quality(
-            mw.profile_quality_to_slider(level)
-        ) == level
+        assert (
+            mw.slider_to_profile_quality(mw.profile_quality_to_slider(level)) == level
+        )
 
 
 def test_calibration_quality_unknown_falls_back_to_default():
@@ -457,7 +458,7 @@ def test_display_lut_link_ctrl_unlinked_allows_independent_selection(
 
 
 def test_display_lut_row_hidden_on_macos_and_windows(window, monkeypatch):
-    """wx never shows this row on darwin/win32, regardless of capability."""
+    """Wx never shows this row on darwin/win32, regardless of capability."""
     setcfg("use_separate_lut_access", 1)
     window.worker.lut_access = [True, False]
     for platform in ("darwin", "win32"):
@@ -558,9 +559,7 @@ def test_measurement_mode_ctrl_handler_skips_dialog_when_choice_hidden(
     assert calls == []
 
 
-def test_measurement_mode_ctrl_handler_skips_dialog_when_bpc_auto(
-    window, monkeypatch
-):
+def test_measurement_mode_ctrl_handler_skips_dialog_when_bpc_auto(window, monkeypatch):
     _prime_bpc_choice_conditions(window, monkeypatch, "c")
     setcfg("calibration.black_point_correction.auto", 1)
     calls = []
@@ -575,9 +574,7 @@ def test_measurement_mode_ctrl_handler_skips_dialog_when_bpc_auto(
     assert calls == []
 
 
-def test_measurement_mode_ctrl_handler_skips_dialog_when_bpc_zero(
-    window, monkeypatch
-):
+def test_measurement_mode_ctrl_handler_skips_dialog_when_bpc_zero(window, monkeypatch):
     _prime_bpc_choice_conditions(window, monkeypatch, "c")
     monkeypatch.setattr(window, "get_black_point_correction", lambda: "0.0")
     calls = []
@@ -636,9 +633,7 @@ def test_confirm_bpc_choice_keep_current_leaves_bpc_unchanged(window, monkeypatc
     assert updated == []
 
 
-def test_confirm_bpc_choice_checkbox_persists_regardless_of_button(
-    window, monkeypatch
-):
+def test_confirm_bpc_choice_checkbox_persists_regardless_of_button(window, monkeypatch):
     setcfg("calibration.black_point_correction_choice.show", 1)
     monkeypatch.setattr(mw, "QMessageBox", _FakeBpcChoiceMessageBox)
     _FakeBpcChoiceMessageBox.clicked_role = "reject"
@@ -680,9 +675,7 @@ def test_confirm_bpc_choice_marks_settings_changed_when_cal_unchanged(
     assert marked == [True]
 
 
-def test_confirm_bpc_choice_skips_mark_when_cal_already_changed(
-    window, monkeypatch
-):
+def test_confirm_bpc_choice_skips_mark_when_cal_already_changed(window, monkeypatch):
     setcfg("calibration.black_point_correction", 0.0)
     monkeypatch.setattr(mw, "QMessageBox", _FakeBpcChoiceMessageBox)
     _FakeBpcChoiceMessageBox.clicked_role = "accept"
@@ -768,17 +761,15 @@ def test_colorimeter_correction_info_btn_handler_noop_without_file(window):
 
 
 def test_observer_ctrl_lives_on_calibration_tab(window):
-    """wx puts ``observer_ctrl`` on the Calibration tab (``main.xrc``
+    """Wx puts ``observer_ctrl`` on the Calibration tab (``main.xrc``
     ``calibration_settings_panel``), not Display & Instrument; a regression
     guard for that layout-parity mistake."""
     assert window._panels["calibration"].isAncestorOf(window.observer_ctrl)
-    assert not window._panels["display_instrument"].isAncestorOf(
-        window.observer_ctrl
-    )
+    assert not window._panels["display_instrument"].isAncestorOf(window.observer_ctrl)
 
 
 def test_calibration_tab_control_order_matches_wx(window):
-    """wx's ``main.xrc`` orders the ambient-adjust row before black-point
+    """Wx's ``main.xrc`` orders the ambient-adjust row before black-point
     correction; guard against the two being swapped again."""
     from qtpy.QtCore import QPoint
 
@@ -838,9 +829,7 @@ def test_action_buttons_mutually_exclusive_calibrate_only(window):
     assert window.profile_btn.isEnabled() is True
 
 
-def test_action_buttons_mutually_exclusive_update_existing_profile(
-    window, monkeypatch
-):
+def test_action_buttons_mutually_exclusive_update_existing_profile(window, monkeypatch):
     # "Update existing calibration" against a file that resolves to an ICC
     # profile shows "Calibrate only" instead of "Calibrate & Profile".
     monkeypatch.setattr(config, "is_profile", lambda *a, **k: True)
@@ -1327,9 +1316,7 @@ def test_visual_whitepoint_editor_prisma_disable_processing_error_shows_critical
     monkeypatch.setattr(mw, "connect_patterngenerator", lambda *a, **k: True)
     window.worker.patterngenerator = fake_pg
     shown = []
-    monkeypatch.setattr(
-        mw.message_box, "critical", lambda *a, **k: shown.append(a[2])
-    )
+    monkeypatch.setattr(mw.message_box, "critical", lambda *a, **k: shown.append(a[2]))
 
     window._visual_whitepoint_editor_btn_handler()
 
@@ -1601,7 +1588,9 @@ def test_profile_type_ctrl_no_recommendation_dialog_for_ccxx_testchart(
     monkeypatch.setattr(mw.config, "is_ccxx_testchart", lambda *a, **k: True)
     questions = []
     monkeypatch.setattr(
-        mw.QMessageBox, "question", lambda *a, **k: questions.append(a) or mw.QMessageBox.Ok
+        mw.QMessageBox,
+        "question",
+        lambda *a, **k: questions.append(a) or mw.QMessageBox.Ok,
     )
 
     window.profile_type_ctrl.setCurrentIndex(2)  # LabLUT ("l"), user click
@@ -1620,7 +1609,9 @@ def test_profile_type_ctrl_internal_reentry_skips_recommendation_dialog(
     setcfg("profile.type", "S")
     questions = []
     monkeypatch.setattr(
-        mw.QMessageBox, "question", lambda *a, **k: questions.append(a) or mw.QMessageBox.Ok
+        mw.QMessageBox,
+        "question",
+        lambda *a, **k: questions.append(a) or mw.QMessageBox.Ok,
     )
 
     window.testchart_patches_amount_ctrl.setValue(10)  # nudges profile.type to "X"
@@ -1682,9 +1673,7 @@ def test_check_lut3d_bpc_keep_current_leaves_bpc(window, monkeypatch):
 def test_check_handler_bpc_change_triggers_bpc_warning(window, monkeypatch):
     setcfg("3dlut.create", 1)
     checked = []
-    monkeypatch.setattr(
-        window, "_check_lut3d_bpc", lambda: checked.append(True)
-    )
+    monkeypatch.setattr(window, "_check_lut3d_bpc", lambda: checked.append(True))
 
     window._check_handler("profile.black_point_compensation", True)
 
@@ -1694,9 +1683,7 @@ def test_check_handler_bpc_change_triggers_bpc_warning(window, monkeypatch):
 def test_check_handler_lut3d_create_change_triggers_bpc_warning(window, monkeypatch):
     setcfg("profile.black_point_compensation", 1)
     checked = []
-    monkeypatch.setattr(
-        window, "_check_lut3d_bpc", lambda: checked.append(True)
-    )
+    monkeypatch.setattr(window, "_check_lut3d_bpc", lambda: checked.append(True))
 
     window._check_handler("3dlut.create", True)
 
@@ -1705,9 +1692,7 @@ def test_check_handler_lut3d_create_change_triggers_bpc_warning(window, monkeypa
 
 def test_check_handler_unrelated_key_does_not_trigger_bpc_warning(window, monkeypatch):
     checked = []
-    monkeypatch.setattr(
-        window, "_check_lut3d_bpc", lambda: checked.append(True)
-    )
+    monkeypatch.setattr(window, "_check_lut3d_bpc", lambda: checked.append(True))
 
     window._check_handler("calibration.interactive_display_adjustment", True)
 
@@ -1750,10 +1735,16 @@ def test_testchart_patch_sequence_persists(window):
 def test_testchart_patch_sequence_row_gated_by_advanced_options(window):
     setcfg("show_advanced_options", 0)
     window._update_advanced_options_visibility()
-    assert window._profiling_form.isRowVisible(window.testchart_patch_sequence_ctrl) is False
+    assert (
+        window._profiling_form.isRowVisible(window.testchart_patch_sequence_ctrl)
+        is False
+    )
     setcfg("show_advanced_options", 1)
     window._update_advanced_options_visibility()
-    assert window._profiling_form.isRowVisible(window.testchart_patch_sequence_ctrl) is True
+    assert (
+        window._profiling_form.isRowVisible(window.testchart_patch_sequence_ctrl)
+        is True
+    )
 
 
 def test_gamap_btn_handler_opens_window(window):
@@ -1792,8 +1783,11 @@ def test_gamap_window_b2a_quality_changed_updates_bpc_and_lut3d(window):
         window._gamap_window.b2a_quality_changed.emit()
         # _update_bpc / _update_lut3d_b2a_controls both ran without error and
         # left the checkbox in a config-derived (not stale) enabled state.
-        assert window.black_point_compensation_cb.isEnabled() == gamap_settings.compute_bpc_enabled(
-            "l", bool(getcfg("profile.b2a.hires")), getcfg("profile.quality.b2a")
+        assert (
+            window.black_point_compensation_cb.isEnabled()
+            == gamap_settings.compute_bpc_enabled(
+                "l", bool(getcfg("profile.b2a.hires")), getcfg("profile.quality.b2a")
+            )
         )
     finally:
         window._gamap_window.close()
@@ -1835,9 +1829,7 @@ def test_ccxx_import_action_handler_refreshes_after_finish(window, monkeypatch):
     assert window._ccxx_import_controller is None
 
 
-def test_ccxx_upload_action_handler_clears_controller_after_finish(
-    window, monkeypatch
-):
+def test_ccxx_upload_action_handler_clears_controller_after_finish(window, monkeypatch):
     from DisplayCAL.ui import colorimeter_correction_io as ccio
 
     def fake_run(self, path=None):
@@ -1862,7 +1854,9 @@ def test_verification_tab_embeds_report_panel(window):
 def test_measurement_report_btn_handler_runs_report_no_alt(window, monkeypatch):
     calls = []
     monkeypatch.setattr(
-        window, "_on_report_measure_requested", lambda self_check=False: calls.append(self_check)
+        window,
+        "_on_report_measure_requested",
+        lambda self_check=False: calls.append(self_check),
     )
     monkeypatch.setattr(
         mw.QApplication, "keyboardModifiers", staticmethod(lambda: mw.Qt.NoModifier)
@@ -1876,7 +1870,9 @@ def test_measurement_report_btn_handler_runs_report_self_check_with_alt(
 ):
     calls = []
     monkeypatch.setattr(
-        window, "_on_report_measure_requested", lambda self_check=False: calls.append(self_check)
+        window,
+        "_on_report_measure_requested",
+        lambda self_check=False: calls.append(self_check),
     )
     monkeypatch.setattr(
         mw.QApplication, "keyboardModifiers", staticmethod(lambda: mw.Qt.AltModifier)
@@ -2178,9 +2174,7 @@ def test_report_measurement_finished_exception_shows_error_and_wraps_up(
     assert wrapup_calls == [(exc,)]
 
 
-def test_report_measurement_finished_incomplete_wraps_up_silently(
-    window, monkeypatch
-):
+def test_report_measurement_finished_incomplete_wraps_up_silently(window, monkeypatch):
     errors = []
     monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
     wrapup_calls = []
@@ -2999,7 +2993,9 @@ def test_current_cal_choice_embed_current_returns_none(window, monkeypatch):
     monkeypatch.setattr(mw.config, "is_uncalibratable_display", lambda: False)
     setcfg("calibration.file", None)
     monkeypatch.setattr(
-        mw.preflight_checks, "resolve_cal_choice_info", lambda worker: _cal_choice_info()
+        mw.preflight_checks,
+        "resolve_cal_choice_info",
+        lambda worker: _cal_choice_info(),
     )
     _FakeCalChoiceDialog.answer = mw.QDialog.Accepted
     _FakeCalChoiceDialog.embed = True
@@ -3018,7 +3014,9 @@ def test_current_cal_choice_no_embed_resets_video_lut(window, monkeypatch):
     monkeypatch.setattr(mw.config, "is_uncalibratable_display", lambda: False)
     setcfg("calibration.file", None)
     monkeypatch.setattr(
-        mw.preflight_checks, "resolve_cal_choice_info", lambda worker: _cal_choice_info()
+        mw.preflight_checks,
+        "resolve_cal_choice_info",
+        lambda worker: _cal_choice_info(),
     )
     _FakeCalChoiceDialog.answer = mw.QDialog.Accepted
     _FakeCalChoiceDialog.embed = False
@@ -3135,9 +3133,7 @@ class _FakeTwoButtonMessageBox:
         return None
 
     def clickedButton(self):
-        role = {"accept": self.AcceptRole, "reject": self.RejectRole}[
-            self.clicked_role
-        ]
+        role = {"accept": self.AcceptRole, "reject": self.RejectRole}[self.clicked_role]
         return self._buttons[role]
 
 
@@ -3156,12 +3152,9 @@ class _FakeBpcChoiceMessageBox(_FakeTwoButtonMessageBox):
     def exec_(self):
         if self.check_clicked:
             self._checkbox.setChecked(True)
-        return None
 
 
-def test_profile_btn_handler_stashes_apply_calibration_and_begins(
-    window, monkeypatch
-):
+def test_profile_btn_handler_stashes_apply_calibration_and_begins(window, monkeypatch):
     monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
     monkeypatch.setattr(window, "_check_show_macos_bugs_warning", lambda *a, **k: None)
     monkeypatch.setattr(window, "_check_overwrite", lambda *a, **k: True)
@@ -3574,9 +3567,7 @@ def test_calibrate_only_trc_loads_cal_and_shows_completion(window, monkeypatch):
     window.worker.dispcal_create_fast_matrix_shaper = False
     monkeypatch.setattr(window, "update_calibration_file_ctrl", lambda: None)
     load_calls = []
-    monkeypatch.setattr(
-        window, "_load_cal", lambda **kwargs: load_calls.append(kwargs)
-    )
+    monkeypatch.setattr(window, "_load_cal", lambda **kwargs: load_calls.append(kwargs))
     infos = []
     monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: infos.append(a))
 
@@ -3634,10 +3625,9 @@ def test_load_cal_autoload_on_runs_dispwin(window, monkeypatch, tmp_path):
     monkeypatch.setattr(
         window.worker,
         "prepare_dispwin",
-        lambda cal, profile_path, install: prepare_calls.append(
-            (cal, profile_path, install)
-        )
-        or ("dispwin", ["-v"]),
+        lambda cal, profile_path, install: (
+            prepare_calls.append((cal, profile_path, install)) or ("dispwin", ["-v"])
+        ),
     )
     exec_calls = []
     monkeypatch.setattr(
@@ -3773,7 +3763,9 @@ def test_profile_build_finished_incomplete_silent_on_dry_run(window, monkeypatch
     assert infos == []
 
 
-def test_profile_build_finished_invalid_profile_shows_error(window, monkeypatch, tmp_path):
+def test_profile_build_finished_invalid_profile_shows_error(
+    window, monkeypatch, tmp_path
+):
     bogus = tmp_path / "bogus.icc"
     bogus.write_bytes(b"not a profile")
     errors = []
@@ -3897,7 +3889,9 @@ def test_toggle_calibration_preview_loads_new_profile_when_checked(
     monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
     calls = []
     monkeypatch.setattr(
-        window.worker, "prepare_dispwin", lambda cal, *a, **k: calls.append(cal) or ("dispwin", [])
+        window.worker,
+        "prepare_dispwin",
+        lambda cal, *a, **k: calls.append(cal) or ("dispwin", []),
     )
     monkeypatch.setattr(window.worker, "exec_cmd", lambda *a, **k: True)
 
@@ -3913,7 +3907,9 @@ def test_toggle_calibration_preview_reverts_when_unchecked(
     monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
     calls = []
     monkeypatch.setattr(
-        window.worker, "prepare_dispwin", lambda cal, *a, **k: calls.append(cal) or ("dispwin", [])
+        window.worker,
+        "prepare_dispwin",
+        lambda cal, *a, **k: calls.append(cal) or ("dispwin", []),
     )
     monkeypatch.setattr(window.worker, "exec_cmd", lambda *a, **k: True)
 
@@ -4208,7 +4204,9 @@ def test_offer_install_3dlut_declines_does_not_install(window, monkeypatch, tmp_
     monkeypatch.setattr(mw, "QMessageBox", _FakeTwoButtonMessageBox)
     _FakeTwoButtonMessageBox.clicked_role = "reject"
     installed = []
-    monkeypatch.setattr(window, "_install_3dlut", lambda *a, **k: installed.append(True))
+    monkeypatch.setattr(
+        window, "_install_3dlut", lambda *a, **k: installed.append(True)
+    )
 
     window._offer_install_3dlut()
 
@@ -4332,9 +4330,7 @@ def test_install_3dlut_plain_format_prompts_and_copies(window, monkeypatch, tmp_
 def test_install_3dlut_cancelled_prompt_does_not_copy(window, monkeypatch, tmp_path):
     src = tmp_path / "lut.cube"
     src.write_bytes(b"lut data")
-    monkeypatch.setattr(
-        window, "_prompt_3dlut_copy_destination", lambda fmt, path: ""
-    )
+    monkeypatch.setattr(window, "_prompt_3dlut_copy_destination", lambda fmt, path: "")
     copies = []
     monkeypatch.setattr(
         mw.lut3d_settings, "install_via_copy", lambda *a, **k: copies.append(a)
@@ -4392,9 +4388,7 @@ def test_prompt_3dlut_copy_destination_plain_uses_save_dialog_with_extension(
     window, monkeypatch, tmp_path
 ):
     chosen = str(tmp_path / "installed")
-    monkeypatch.setattr(
-        mw.QFileDialog, "getSaveFileName", lambda *a, **k: (chosen, "")
-    )
+    monkeypatch.setattr(mw.QFileDialog, "getSaveFileName", lambda *a, **k: (chosen, ""))
 
     result = window._prompt_3dlut_copy_destination("eeColor", "/tmp/lut-3d.txt")
 
@@ -4442,7 +4436,9 @@ def test_apply_lut3d_path_sets_lut3d_path_and_devlink(window, tmp_path):
     )
 
 
-def test_apply_lut3d_path_refreshes_report_panel_on_change(window, tmp_path, monkeypatch):
+def test_apply_lut3d_path_refreshes_report_panel_on_change(
+    window, tmp_path, monkeypatch
+):
     cal_path = tmp_path / "test2.cal"
     cal_path.write_bytes(b"")
     setcfg("calibration.file", str(cal_path))
@@ -4542,7 +4538,9 @@ def test_profile_build_finished_3dlut_create_on_chains_instead_of_profile_offer(
     )
     questions = []
     monkeypatch.setattr(
-        mw.QMessageBox, "question", lambda *a, **k: questions.append(a) or mw.QMessageBox.Yes
+        mw.QMessageBox,
+        "question",
+        lambda *a, **k: questions.append(a) or mw.QMessageBox.Yes,
     )
 
     window._on_profile_build_finished(srgb_profile_path)
@@ -4569,7 +4567,9 @@ def test_profile_build_finished_3dlut_create_off_shows_profile_offer_as_before(
     window._on_profile_build_finished(srgb_profile_path)
 
     assert chained == []
-    assert _FakeProfileFinishDialog.instances  # the plain profile-install offer was shown
+    assert (
+        _FakeProfileFinishDialog.instances
+    )  # the plain profile-install offer was shown
 
 
 def test_update_action_buttons_shows_lut3d_create_btn_when_manual(window):
@@ -5093,7 +5093,9 @@ def test_delete_calibration_handler_confirmed_removes_file(
     assert getcfg("settings.changed") == 1
 
 
-def test_delete_calibration_handler_unchecked_file_is_kept(window, monkeypatch, tmp_path):
+def test_delete_calibration_handler_unchecked_file_is_kept(
+    window, monkeypatch, tmp_path
+):
     cal_dir = tmp_path / "session"
     cal_dir.mkdir()
     cal_file = cal_dir / "test.cal"
@@ -5140,10 +5142,10 @@ def test_settings_stack_is_wrapped_in_scroll_area(window):
 
 def test_calibration_tab_has_info_panel_text(window):
     lang.init()
-    labels = [lbl.text() for lbl in window._panels["calibration"].findChildren(mw.QLabel)]
-    assert any(
-        "<b>Calibration</b> is done by" in text for text in labels
-    )
+    labels = [
+        lbl.text() for lbl in window._panels["calibration"].findChildren(mw.QLabel)
+    ]
+    assert any("<b>Calibration</b> is done by" in text for text in labels)
 
 
 def test_profiling_tab_has_info_panel_text(window):
@@ -5301,12 +5303,10 @@ def test_trc_dependent_rows_hidden_for_as_measured_regardless_of_advanced(window
         setcfg("show_advanced_options", advanced)
         window._apply_trc_mode()
         assert (
-            window._calibration_form.isRowVisible(window._quality_row_widget)
-            is False
+            window._calibration_form.isRowVisible(window._quality_row_widget) is False
         )
         assert (
-            window._calibration_form.isRowVisible(window._ambient_row_widget)
-            is False
+            window._calibration_form.isRowVisible(window._ambient_row_widget) is False
         )
         assert (
             window._calibration_form.isRowVisible(window.black_output_offset_ctrl)
@@ -5328,9 +5328,7 @@ def test_trc_typed_gamma_row_needs_advanced_options(window):
     assert window.trc_textctrl.isHidden() is True
     assert window.trc_type_ctrl.isHidden() is True
     assert (
-        window._calibration_form.isRowVisible(
-            window._black_point_correction_row_widget
-        )
+        window._calibration_form.isRowVisible(window._black_point_correction_row_widget)
         is False
     )
     # The calibration-speed row only needs a non-"as measured" TRC, not advanced.
@@ -5341,9 +5339,7 @@ def test_trc_typed_gamma_row_needs_advanced_options(window):
     assert window.trc_textctrl.isHidden() is False
     assert window.trc_type_ctrl.isHidden() is False
     assert (
-        window._calibration_form.isRowVisible(
-            window._black_point_correction_row_widget
-        )
+        window._calibration_form.isRowVisible(window._black_point_correction_row_widget)
         is True
     )
     # Auto is off by default, so the manual slider/spinbox show within the row.
@@ -5354,9 +5350,7 @@ def test_trc_typed_gamma_row_needs_advanced_options(window):
     # (and the auto checkbox itself) visible.
     window.black_point_correction_auto_cb.setChecked(True)
     assert (
-        window._calibration_form.isRowVisible(
-            window._black_point_correction_row_widget
-        )
+        window._calibration_form.isRowVisible(window._black_point_correction_row_widget)
         is True
     )
     assert window.black_point_correction_ctrl.isHidden() is True
@@ -5398,9 +5392,7 @@ def test_show_advanced_options_gates_display_delay_override_rows(window):
     setcfg("show_advanced_options", 0)
     window._update_advanced_options_visibility()
     assert window._delay_form.isRowVisible(window._override_delay_row_widget) is False
-    assert (
-        window._delay_form.isRowVisible(window._override_settle_row_widget) is False
-    )
+    assert window._delay_form.isRowVisible(window._override_settle_row_widget) is False
 
     setcfg("show_advanced_options", 1)
     window._update_advanced_options_visibility()
@@ -5413,9 +5405,7 @@ def test_show_advanced_options_hides_settle_override_for_old_argyll(window):
     setcfg("show_advanced_options", 1)
     window._update_advanced_options_visibility()
     assert window._delay_form.isRowVisible(window._override_delay_row_widget) is True
-    assert (
-        window._delay_form.isRowVisible(window._override_settle_row_widget) is False
-    )
+    assert window._delay_form.isRowVisible(window._override_settle_row_widget) is False
 
 
 def test_update_controls_resyncs_advanced_options_menu_action(window):
@@ -5691,9 +5681,7 @@ def test_measurement_file_check_auto_toggle_persists_when_confirmed(
     assert getcfg("ti3.check_sanity.auto") == 0
 
 
-def test_measurement_file_check_auto_toggle_reverts_when_cancelled(
-    window, monkeypatch
-):
+def test_measurement_file_check_auto_toggle_reverts_when_cancelled(window, monkeypatch):
     monkeypatch.setattr(
         mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.Cancel
     )
@@ -5703,15 +5691,11 @@ def test_measurement_file_check_auto_toggle_reverts_when_cancelled(
     assert window.measurement_file_check_auto_action.isChecked() is False
 
 
-def test_measurement_file_check_auto_toggle_off_skips_confirmation(
-    window, monkeypatch
-):
+def test_measurement_file_check_auto_toggle_off_skips_confirmation(window, monkeypatch):
     setcfg("ti3.check_sanity.auto", 1)
     window.measurement_file_check_auto_action.setChecked(True)
     calls = []
-    monkeypatch.setattr(
-        mw.QMessageBox, "question", lambda *a, **k: calls.append(True)
-    )
+    monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: calls.append(True))
     window.measurement_file_check_auto_action.setChecked(False)
     assert calls == []
     assert getcfg("ti3.check_sanity.auto") == 0
@@ -5779,9 +5763,7 @@ def test_confirm_overwrite_profile_declined(window, monkeypatch):
     assert window._confirm_overwrite_profile("/x.icc") is False
 
 
-def test_create_profile_action_handler_argyll_bin_missing_is_noop(
-    window, monkeypatch
-):
+def test_create_profile_action_handler_argyll_bin_missing_is_noop(window, monkeypatch):
     monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: False)
     run_calls = []
     monkeypatch.setattr(
@@ -5791,13 +5773,9 @@ def test_create_profile_action_handler_argyll_bin_missing_is_noop(
     assert run_calls == []
 
 
-def test_create_profile_action_handler_macos_bugs_warning_cancels(
-    window, monkeypatch
-):
+def test_create_profile_action_handler_macos_bugs_warning_cancels(window, monkeypatch):
     monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
-    monkeypatch.setattr(
-        window, "_check_show_macos_bugs_warning", lambda *a, **k: False
-    )
+    monkeypatch.setattr(window, "_check_show_macos_bugs_warning", lambda *a, **k: False)
     run_calls = []
     monkeypatch.setattr(
         window, "_run_create_profile", lambda *a, **k: run_calls.append(True)
@@ -5822,9 +5800,7 @@ def test_create_profile_action_handler_cancelled_open_dialog_is_noop(
     assert run_calls == []
 
 
-def test_create_profile_action_handler_runs_with_selected_paths(
-    window, monkeypatch
-):
+def test_create_profile_action_handler_runs_with_selected_paths(window, monkeypatch):
     monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
     monkeypatch.setattr(window, "_check_show_macos_bugs_warning", lambda *a, **k: None)
     monkeypatch.setattr(
@@ -5861,9 +5837,7 @@ def test_build_file_menu_matches_wx_xrc_order(window):
         "",  # BaseWindow's end separator
         "menuitem.quit",
     ]
-    actual = [
-        lang.getstr(key) if key else "" for key in expected
-    ]
+    actual = [lang.getstr(key) if key else "" for key in expected]
     texts = [action.text() for action in window._file_menu.actions()]
     assert texts == actual
     assert window._file_menu.actions()[0].shortcut().toString() == "Ctrl+O"
@@ -5877,9 +5851,9 @@ def test_select_install_profile_action_handler_cancelled_dialog_is_noop(
     )
     load_calls = []
     monkeypatch.setattr(
-        mw, "InstallProfileWindow", lambda: SimpleNamespace(
-            load_profile=lambda p: load_calls.append(p)
-        )
+        mw,
+        "InstallProfileWindow",
+        lambda: SimpleNamespace(load_profile=lambda p: load_calls.append(p)),
     )
     window._select_install_profile_action_handler()
     assert load_calls == []
@@ -5956,8 +5930,9 @@ def test_create_profile_from_edid_action_handler_cancelled_save_dialog_is_noop(
     window, monkeypatch
 ):
     monkeypatch.setattr(
-        window.worker, "get_display_edid", lambda: {"monitor_name": "Foo",
-                                                      "product_id": 1}
+        window.worker,
+        "get_display_edid",
+        lambda: {"monitor_name": "Foo", "product_id": 1},
     )
     monkeypatch.setattr(
         mw.QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: ("", ""))
@@ -5977,8 +5952,9 @@ def test_create_profile_from_edid_action_handler_write_access_denied_shows_error
 ):
     save_path = str(tmp_path / "edid.icc")
     monkeypatch.setattr(
-        window.worker, "get_display_edid", lambda: {"monitor_name": "Foo",
-                                                      "product_id": 1}
+        window.worker,
+        "get_display_edid",
+        lambda: {"monitor_name": "Foo", "product_id": 1},
     )
     monkeypatch.setattr(
         mw.QFileDialog,
@@ -6482,9 +6458,7 @@ def test_profile_hires_b2a_action_handler_no_profile_selected_is_noop(
     assert controller_calls == []
 
 
-def test_profile_hires_b2a_action_handler_missing_a2b_shows_error(
-    window, monkeypatch
-):
+def test_profile_hires_b2a_action_handler_missing_a2b_shows_error(window, monkeypatch):
     profile = SimpleNamespace(tags={})
     monkeypatch.setattr(window, "_select_profile_for_hires_b2a", lambda: profile)
     errors = []
@@ -6593,7 +6567,9 @@ def test_specplot_action_handler_cancelled_dialog_is_noop(window, monkeypatch):
     assert ran == []
 
 
-def test_specplot_action_handler_missing_util_shows_error(window, monkeypatch, tmp_path):
+def test_specplot_action_handler_missing_util_shows_error(
+    window, monkeypatch, tmp_path
+):
     monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
     path = str(tmp_path / "sample.sp")
     monkeypatch.setattr(
@@ -6658,9 +6634,7 @@ def test_on_specplot_finished_exception_shows_error_and_wraps_up(window, monkeyp
     errors = []
     monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
     wrapup_calls = []
-    monkeypatch.setattr(
-        window.worker, "wrapup", lambda *a, **k: wrapup_calls.append(a)
-    )
+    monkeypatch.setattr(window.worker, "wrapup", lambda *a, **k: wrapup_calls.append(a))
     window._on_specplot_finished(RuntimeError("specplot boom"))
     assert errors
     assert "specplot boom" in errors[0][2]
@@ -6671,9 +6645,7 @@ def test_on_specplot_finished_success_wraps_up(window, monkeypatch):
     errors = []
     monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
     wrapup_calls = []
-    monkeypatch.setattr(
-        window.worker, "wrapup", lambda *a, **k: wrapup_calls.append(a)
-    )
+    monkeypatch.setattr(window.worker, "wrapup", lambda *a, **k: wrapup_calls.append(a))
     window._on_specplot_finished(True)
     assert errors == []
     assert wrapup_calls == [(False,)]
@@ -6726,9 +6698,7 @@ def test_setup_ccxx_measurement_prompts_for_save_path_when_unset(
     assert prompted == [True]
 
 
-def test_setup_ccxx_measurement_save_path_still_empty_after_prompt(
-    window, monkeypatch
-):
+def test_setup_ccxx_measurement_save_path_still_empty_after_prompt(window, monkeypatch):
     monkeypatch.setattr(mw.config, "is_ccxx_testchart", lambda *a, **k: True)
     setcfg("profile.save_path", "")
     monkeypatch.setattr(window, "_profile_save_path_btn_handler", lambda: None)
@@ -6764,9 +6734,7 @@ def test_measure_testchart_action_handler_ccxx_setup_failure_is_noop(
     assert restored == [True]
 
 
-def test_measure_testchart_action_handler_no_argyll_bin_restores(
-    window, monkeypatch
-):
+def test_measure_testchart_action_handler_no_argyll_bin_restores(window, monkeypatch):
     monkeypatch.setattr(window, "_setup_ccxx_measurement", lambda: True)
     monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: False)
     restored = []
@@ -6801,9 +6769,7 @@ def test_measure_testchart_action_handler_overwrite_declined_restores(
     assert restored == [True]
 
 
-def test_measure_testchart_action_handler_ccxx_uses_linear_cal(
-    window, monkeypatch
-):
+def test_measure_testchart_action_handler_ccxx_uses_linear_cal(window, monkeypatch):
     monkeypatch.setattr(window, "_setup_ccxx_measurement", lambda: True)
     monkeypatch.setattr(mw, "check_set_argyll_bin", lambda: True)
     monkeypatch.setattr(window, "_check_overwrite", lambda *a, **k: True)
@@ -6990,9 +6956,7 @@ def test_measure_testchart_finished_falsy_result_is_silent(window, monkeypatch):
     assert restored == [True]
 
 
-def test_measure_testchart_finished_success_non_ccxx_offers_folder(
-    window, monkeypatch
-):
+def test_measure_testchart_finished_success_non_ccxx_offers_folder(window, monkeypatch):
     monkeypatch.setattr(window, "_check_copy_ti3", lambda: True)
     monkeypatch.setattr(window.worker, "wrapup", lambda **kwargs: None)
     monkeypatch.setattr(mw.config, "is_ccxx_testchart", lambda *a, **k: False)
@@ -7140,9 +7104,7 @@ def test_restore_measurement_mode_and_testchart_restores_observer(window):
     assert getcfg("observer.backup", False) in (False, None, "")
 
 
-def test_restore_measurement_mode_and_testchart_restores_testchart(
-    window, monkeypatch
-):
+def test_restore_measurement_mode_and_testchart_restores_testchart(window, monkeypatch):
     setcfg("testchart.file.backup", "/path/to.ti1")
     calls = []
     monkeypatch.setattr(window, "_set_testchart", lambda path=None: calls.append(path))
@@ -7293,9 +7255,7 @@ def test_run_post_launch_checks_skips_to_instrument_setup_when_disabled(
     assert calls == [True]
 
 
-def test_on_update_check_finished_chains_when_silent_and_not_found(
-    window, monkeypatch
-):
+def test_on_update_check_finished_chains_when_silent_and_not_found(window, monkeypatch):
     calls = []
     monkeypatch.setattr(
         window,
@@ -7306,9 +7266,7 @@ def test_on_update_check_finished_chains_when_silent_and_not_found(
     assert calls == [True]
 
 
-def test_on_update_check_finished_does_not_chain_when_update_found(
-    window, monkeypatch
-):
+def test_on_update_check_finished_does_not_chain_when_update_found(window, monkeypatch):
     monkeypatch.setattr(
         window,
         "_run_instrument_setup_and_donation_check",
@@ -7339,7 +7297,9 @@ def test_instrument_setup_spyder2_needed_runs_wizard(window, monkeypatch):
         ),
     )
     calls = []
-    monkeypatch.setattr(window, "_enable_spyder2", lambda recheck: calls.append(recheck))
+    monkeypatch.setattr(
+        window, "_enable_spyder2", lambda recheck: calls.append(recheck)
+    )
     window._run_instrument_setup_and_donation_check()
     assert calls == [False]
 
@@ -7508,9 +7468,7 @@ def test_enable_spyder2_action_triggers_wizard_without_recheck(window, monkeypat
     assert calls == [False]
 
 
-def test_show_donation_message_if_needed_shows_dialog_when_flagged(
-    window, monkeypatch
-):
+def test_show_donation_message_if_needed_shows_dialog_when_flagged(window, monkeypatch):
     from DisplayCAL import instrument_setup as isetup
 
     monkeypatch.setattr(isetup, "should_show_donation_message", lambda: True)
@@ -8098,9 +8056,7 @@ def test_install_argyll_instrument_conf_handler_uninstall_runs_producer(
 def test_install_argyll_instrument_conf_handler_auth_exception_shows_error(
     window, monkeypatch
 ):
-    monkeypatch.setattr(
-        window.worker, "authenticate", lambda cmd: RuntimeError("boom")
-    )
+    monkeypatch.setattr(window.worker, "authenticate", lambda cmd: RuntimeError("boom"))
     errors = []
     monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: errors.append(a))
     controller_calls = []
@@ -8151,9 +8107,7 @@ def test_on_install_argyll_instrument_conf_finished_success_shows_info(
     window, monkeypatch
 ):
     infos = []
-    monkeypatch.setattr(
-        mw.QMessageBox, "information", lambda *a, **k: infos.append(a)
-    )
+    monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: infos.append(a))
     refresh_calls = []
     monkeypatch.setattr(
         window,
@@ -8183,9 +8137,7 @@ def test_install_argyll_instrument_drivers_handler_dialog_rejected_is_noop(
     assert controller_calls == []
 
 
-def test_install_argyll_instrument_drivers_handler_runs_producer(
-    window, monkeypatch
-):
+def test_install_argyll_instrument_drivers_handler_runs_producer(window, monkeypatch):
     _FakeInstrumentDriversConfirmDialog.answer = mw.QDialog.Accepted
     _FakeInstrumentDriversConfirmDialog.launch = True
     monkeypatch.setattr(
@@ -8259,9 +8211,7 @@ def test_show_curves_action_handler_seeds_current_calibration_file(
         setcfg("calibration.file", original)
 
 
-def test_show_log_window_action_toggled_on_drains_buffer_and_shows(
-    window, monkeypatch
-):
+def test_show_log_window_action_toggled_on_drains_buffer_and_shows(window, monkeypatch):
     mw.LOGBUFFER.truncate(0)
     mw.LOGBUFFER.write(b"hello from the log buffer")
     logged = []
@@ -8318,9 +8268,7 @@ def test_uniformity_action_calls_dialog_handler(window, monkeypatch):
     assert calls == [True]
 
 
-def test_report_uniformity_action_handler_cancelled_dialog_is_noop(
-    window, monkeypatch
-):
+def test_report_uniformity_action_handler_cancelled_dialog_is_noop(window, monkeypatch):
     monkeypatch.setattr(mw.QDialog, "exec_", lambda self: mw.QDialog.Rejected)
     controller_calls = []
     monkeypatch.setattr(
@@ -8445,9 +8393,7 @@ def test_on_report_finished_shows_output_text(window, monkeypatch):
     assert shown == [True]
 
 
-def test_update_measurement_report_action_cancelled_dialog_is_noop(
-    window, monkeypatch
-):
+def test_update_measurement_report_action_cancelled_dialog_is_noop(window, monkeypatch):
     monkeypatch.setattr(
         mw.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: ("", ""))
     )
@@ -8501,9 +8447,7 @@ def test_update_measurement_report_action_shows_error_on_failure(
 
 
 def test_language_menu_lists_all_ldict_languages_sorted(window):
-    expected = sorted(
-        lang.LDICT[lcode].get("!language", "") for lcode in lang.LDICT
-    )
+    expected = sorted(lang.LDICT[lcode].get("!language", "") for lcode in lang.LDICT)
     actual = [action.text() for action in window._language_menu.actions()]
     assert actual == expected
 
@@ -8564,7 +8508,6 @@ def test_set_language_action_handler_skips_restart_when_declined(window, monkeyp
         assert restarted == []
     finally:
         setcfg("lang", original)
-
 
     def test_reject_with_do_not_show_again_clears_flag(self, window):
         setcfg("show_donation_message", 1)

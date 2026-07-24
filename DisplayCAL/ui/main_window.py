@@ -128,6 +128,7 @@ from typing import TYPE_CHECKING, Callable
 from qtpy.QtCore import QEvent, QSize, Qt, QThread, QTimer, Signal
 from qtpy.QtGui import QAction, QActionGroup, QColor, QIcon, QPainter, QPixmap
 from qtpy.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QCheckBox,
     QComboBox,
@@ -146,7 +147,6 @@ from qtpy.QtWidgets import (
     QProgressDialog,
     QPushButton,
     QRadioButton,
-    QApplication,
     QScrollArea,
     QSizePolicy,
     QSlider,
@@ -167,12 +167,11 @@ from DisplayCAL import (
     lut3d_settings,
     preflight_checks,
     profile_finish,
+    report,
 )
-from DisplayCAL.log import LOGBUFFER
-from DisplayCAL import measurement_report as measurement_report_pipeline
 from DisplayCAL import localization as lang
+from DisplayCAL import measurement_report as measurement_report_pipeline
 from DisplayCAL import profile_name as profile_name_mod
-from DisplayCAL import report
 from DisplayCAL.argyll import (
     argyll_version_at_least,
     check_argyll_bin,
@@ -208,10 +207,11 @@ from DisplayCAL.icc_profile import (
     TextType,
     VideoCardGammaType,
 )
-from DisplayCAL.meta import DEVELOPMENT_HOME_PAGE, DOMAIN
+from DisplayCAL.log import LOGBUFFER
+from DisplayCAL.meta import DEVELOPMENT_HOME_PAGE, DOMAIN, VERSION_STRING
 from DisplayCAL.meta import NAME as APPNAME
-from DisplayCAL.meta import VERSION_STRING
 from DisplayCAL.options import TEST
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.about_window import AboutWindow
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import (
@@ -220,7 +220,6 @@ from DisplayCAL.ui.assets import (
     get_theme_pixmap,
     get_themed_pixmap,
 )
-from DisplayCAL.ui.theme import is_dark
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.ccxx_plot_window import CCXXPlotWindow
 from DisplayCAL.ui.colorimeter_correction_io import (
@@ -242,7 +241,6 @@ from DisplayCAL.ui.measure_frame import (
     default_measureframe_size,
     resolve_screen_size_mm,
 )
-from DisplayCAL.ui import message_box
 from DisplayCAL.ui.measurement_flow import (
     MeasurementFlow,
     PresentationMode,
@@ -265,7 +263,7 @@ from DisplayCAL.ui.profile_install_window import (
 )
 from DisplayCAL.ui.progress_dialog import ProgressDialog
 from DisplayCAL.ui.spyder2_enable import Spyder2EnableController
-from DisplayCAL.ui.tooltip_window import TooltipWindow, info_text_html
+from DisplayCAL.ui.theme import is_dark
 from DisplayCAL.ui.tools.curve_viewer import CurveViewerWindow
 from DisplayCAL.ui.tools.log_window import LogWindow
 from DisplayCAL.ui.tools.lut3d import LUT3DWindow
@@ -273,8 +271,9 @@ from DisplayCAL.ui.tools.profile_info import ProfileInfoWindow
 from DisplayCAL.ui.tools.synth_profile import SynthICCWindow
 from DisplayCAL.ui.tools.testchart_editor import TestchartEditorWindow
 from DisplayCAL.ui.tools.visual_whitepoint_editor import VisualWhitepointEditorWindow
-from DisplayCAL.ui.update_check_window import UpdateCheckController
+from DisplayCAL.ui.tooltip_window import TooltipWindow, info_text_html
 from DisplayCAL.ui.untethered_window import UntetheredWindow
+from DisplayCAL.ui.update_check_window import UpdateCheckController
 from DisplayCAL.ui.worker_runner import (
     AdjustmentController,
     PasswordPromptAdapter,
@@ -573,7 +572,9 @@ class _DeleteConfirmationDialog(QDialog):
     file list doesn't grow the dialog unboundedly.
     """
 
-    def __init__(self, related_files: dict[str, bool], parent: QWidget | None = None) -> None:
+    def __init__(
+        self, related_files: dict[str, bool], parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle(APPNAME)
         layout = QVBoxLayout(self)
@@ -1044,7 +1045,9 @@ def lut3d_format_items(argyll_version: str = "0.0.0") -> list[tuple[str, str]]:
     ]
 
 
-def lut3d_rendering_intent_items(argyll_version: str = "0.0.0") -> list[tuple[str, str]]:
+def lut3d_rendering_intent_items(
+    argyll_version: str = "0.0.0",
+) -> list[tuple[str, str]]:
     """Return ``(config value, label)`` pairs for the 3D LUT rendering intents.
 
     Mirrors ``LUT3DMixin.lut3d_setup_language``: "Perceptual, LUT proof"
@@ -1060,8 +1063,7 @@ def lut3d_rendering_intent_items(argyll_version: str = "0.0.0") -> list[tuple[st
 def lut3d_size_items() -> list[tuple[int, str]]:
     """Return ``(config value, label)`` pairs for the 3D LUT sizes."""
     return [
-        (size, f"{size}x{size}x{size}")
-        for size in config.VALID_VALUES["3dlut.size"]
+        (size, f"{size}x{size}x{size}") for size in config.VALID_VALUES["3dlut.size"]
     ]
 
 
@@ -1338,9 +1340,9 @@ class MainWindow(BaseWindow):
         #: (the report flow doesn't fit :class:`MeasurementAction`, so it can't
         #: thread this through the pending-function args like ``begin_measurement``
         #: does).
-        self._pending_report_context: measurement_report_pipeline.ReportContext | None = (
-            None
-        )
+        self._pending_report_context: (
+            measurement_report_pipeline.ReportContext | None
+        ) = None
         self._pending_report_save_path: str | None = None
         self._pending_report_ti1_path: str | None = None
         #: Whether the pending report run is a self-check (Alt+Measure) --
@@ -1492,7 +1494,9 @@ class MainWindow(BaseWindow):
 
         testchart_set_action = QAction(lang.getstr("testchart.set"), self)
         testchart_set_action.triggered.connect(self._testchart_btn_handler)
-        self._file_menu.insertAction(self._file_menu_end_separator, testchart_set_action)
+        self._file_menu.insertAction(
+            self._file_menu_end_separator, testchart_set_action
+        )
 
         testchart_edit_action = QAction(lang.getstr("testchart.edit"), self)
         testchart_edit_action.triggered.connect(self._create_testchart_btn_handler)
@@ -1501,9 +1505,7 @@ class MainWindow(BaseWindow):
         )
 
         profile_save_path_action = QAction(lang.getstr("profile.set_save_path"), self)
-        profile_save_path_action.triggered.connect(
-            self._profile_save_path_btn_handler
-        )
+        profile_save_path_action.triggered.connect(self._profile_save_path_btn_handler)
         self._file_menu.insertAction(
             self._file_menu_end_separator, profile_save_path_action
         )
@@ -1512,7 +1514,9 @@ class MainWindow(BaseWindow):
 
         create_profile_action = QAction(lang.getstr("create_profile"), self)
         create_profile_action.triggered.connect(self._create_profile_action_handler)
-        self._file_menu.insertAction(self._file_menu_end_separator, create_profile_action)
+        self._file_menu.insertAction(
+            self._file_menu_end_separator, create_profile_action
+        )
 
         create_profile_from_edid_action = QAction(
             lang.getstr("create_profile_from_edid"), self
@@ -1612,9 +1616,10 @@ class MainWindow(BaseWindow):
             except create_profile.CreateProfileError as exception:
                 message_box.critical(self, APPNAME, str(exception))
                 return
-            if not create_profile.has_calibration_curves(
-                item.ti3_lines
-            ) and not self._confirm_ti3_no_cal_info():
+            if (
+                not create_profile.has_calibration_curves(item.ti3_lines)
+                and not self._confirm_ti3_no_cal_info()
+            ):
                 return
             collected.append(item)
         if not collected:
@@ -1796,9 +1801,7 @@ class MainWindow(BaseWindow):
             controller = self._ensure_run_controller()
             controller.run(
                 self.worker.calculate_gamut,
-                lambda result: self._create_profile_from_edid_finish(
-                    result, profile
-                ),
+                lambda result: self._create_profile_from_edid_finish(result, profile),
                 wargs=(profile_save_path,),
                 progress_msg=lang.getstr("gamut.view.create"),
                 pauseable=False,
@@ -2281,9 +2284,7 @@ class MainWindow(BaseWindow):
             f"&{lang.getstr('menu.tools')}"
         )
 
-        detect_action = tools_menu.addAction(
-            lang.getstr("detect_displays_and_ports")
-        )
+        detect_action = tools_menu.addAction(lang.getstr("detect_displays_and_ports"))
         detect_action.triggered.connect(self.detect_displays_and_ports_btn_handler)
 
         tools_menu.addSeparator()
@@ -2334,10 +2335,8 @@ class MainWindow(BaseWindow):
             )
         if (sys.platform == "win32" and sys.getwindowsversion() >= (6,)) or TEST:
             # Windows Vista and newer can uninstall the Argyll CMS instrument driver
-            self.uninstall_argyll_instrument_drivers_action = (
-                instrument_menu.addAction(
-                    lang.getstr("argyll.instrument.drivers.uninstall")
-                )
+            self.uninstall_argyll_instrument_drivers_action = instrument_menu.addAction(
+                lang.getstr("argyll.instrument.drivers.uninstall")
             )
             self.uninstall_argyll_instrument_drivers_action.triggered.connect(
                 lambda: self._install_argyll_instrument_drivers_action_handler(True)
@@ -2376,9 +2375,7 @@ class MainWindow(BaseWindow):
         create_action = ccxx_menu.addAction(
             lang.getstr("colorimeter_correction.create")
         )
-        create_action.triggered.connect(
-            self.colorimeter_correction_create_btn_handler
-        )
+        create_action.triggered.connect(self.colorimeter_correction_create_btn_handler)
         upload_action = ccxx_menu.addAction(
             lang.getstr("colorimeter_correction.upload")
         )
@@ -2388,9 +2385,7 @@ class MainWindow(BaseWindow):
         measurement_report_action = report_menu.addAction(
             lang.getstr("measurement_report")
         )
-        measurement_report_action.triggered.connect(
-            self.measurement_report_btn_handler
-        )
+        measurement_report_action.triggered.connect(self.measurement_report_btn_handler)
         uniformity_action = report_menu.addAction(lang.getstr("report.uniformity"))
         uniformity_action.triggered.connect(self._report_uniformity_action_handler)
         update_report_action = report_menu.addAction(
@@ -2519,9 +2514,7 @@ class MainWindow(BaseWindow):
         )
         box.setIcon(QMessageBox.Warning)
         box.setText(lang.getstr("warning.system_file", filename))
-        continue_button = box.addButton(
-            lang.getstr("continue"), QMessageBox.AcceptRole
-        )
+        continue_button = box.addButton(lang.getstr("continue"), QMessageBox.AcceptRole)
         box.addButton(lang.getstr("cancel"), QMessageBox.RejectRole)
         message_box.exec_box(box)
         return box.clickedButton() is continue_button
@@ -2795,15 +2788,13 @@ class MainWindow(BaseWindow):
         writes to :data:`DisplayCAL.log.LOGBUFFER` regardless of UI toolkit.
         """
         LOGBUFFER.seek(0)
-        msg = "".join(
-            line.decode("UTF-8", "replace") for line in LOGBUFFER
-        ).rstrip()
+        msg = "".join(line.decode("UTF-8", "replace") for line in LOGBUFFER).rstrip()
         LOGBUFFER.truncate(0)
         if msg:
             self._log_window.Log(msg)
 
     def _log_autoshow_toggled(self, checked: bool) -> None:
-        """"Show log window automatically" toggle (Tools menu).
+        """ "Show log window automatically" toggle (Tools menu).
 
         Direct port of wx's ``infoframe_autoshow_handler``.
         """
@@ -2929,9 +2920,7 @@ class MainWindow(BaseWindow):
 
         help_menu.addSeparator()
         website_action = help_menu.addAction(lang.getstr("go_to_website"))
-        website_action.triggered.connect(
-            lambda: launch_file(f"https://{DOMAIN}/")
-        )
+        website_action.triggered.connect(lambda: launch_file(f"https://{DOMAIN}/"))
         support_action = help_menu.addAction(lang.getstr("help_support"))
         support_action.triggered.connect(
             lambda: launch_file(f"{DEVELOPMENT_HOME_PAGE}/issues")
@@ -3110,9 +3099,7 @@ class MainWindow(BaseWindow):
         self.show_advanced_options_action.setChecked(show_advanced)
 
         self._apply_whitepoint_mode()
-        self._profiling_form.setRowVisible(
-            self._profile_type_row_widget, show_advanced
-        )
+        self._profiling_form.setRowVisible(self._profile_type_row_widget, show_advanced)
         self._testchart_patch_sequence_row_gate()
         self._calibration_form.setRowVisible(
             self._black_luminance_row_widget, show_advanced
@@ -3124,9 +3111,7 @@ class MainWindow(BaseWindow):
         )
         self._delay_form.setRowVisible(
             self._override_settle_row_widget,
-            show_advanced
-            and not_untethered
-            and getcfg("argyll.version") >= "1.7",
+            show_advanced and not_untethered and getcfg("argyll.version") >= "1.7",
         )
 
         display_name = config.get_display_name(None, True)
@@ -3296,9 +3281,7 @@ class MainWindow(BaseWindow):
         """
         return get_themed_pixmap(size, name, is_dark(self))
 
-    def _themed_icon(
-        self, widget: QToolButton | QLabel, size: int, name: str
-    ) -> None:
+    def _themed_icon(self, widget: QToolButton | QLabel, size: int, name: str) -> None:
         """Apply a themed icon/pixmap to ``widget`` now and on theme changes.
 
         :meth:`_pixmap` bakes the recolor decision into a plain ``QPixmap`` at
@@ -3517,9 +3500,7 @@ class MainWindow(BaseWindow):
         # above this combo, so a per-row "Display" label would just repeat it.
         display_form.addRow("", self.display_ctrl)
         self.display_lut_ctrl = QComboBox()
-        self.display_lut_ctrl.currentIndexChanged.connect(
-            self.display_lut_ctrl_handler
-        )
+        self.display_lut_ctrl.currentIndexChanged.connect(self.display_lut_ctrl_handler)
         display_form.addRow(lang.getstr("lut_access"), self.display_lut_ctrl)
         self._display_lut_form = display_form
         display_row.addLayout(display_form, 1)
@@ -3528,9 +3509,7 @@ class MainWindow(BaseWindow):
         self.display_lut_link_ctrl.setCheckable(True)
         self.display_lut_link_ctrl.setAutoRaise(True)
         self.display_lut_link_ctrl.setToolTip(lang.getstr("display_lut.link"))
-        self.display_lut_link_ctrl.toggled.connect(
-            self.display_lut_link_ctrl_handler
-        )
+        self.display_lut_link_ctrl.toggled.connect(self.display_lut_link_ctrl_handler)
         # Unlike the other icons here, this one's icon name depends on toggle
         # state, not just the theme; re-derive it from the current state
         # (rather than baking in whichever state was current when the OS
@@ -3707,9 +3686,7 @@ class MainWindow(BaseWindow):
         ):
             self._output_levels_group.addButton(button)
             output_levels_row.addWidget(button)
-        self._output_levels_group.buttonToggled.connect(
-            self._output_levels_changed
-        )
+        self._output_levels_group.buttonToggled.connect(self._output_levels_changed)
         output_levels_row.addStretch(1)
         self._output_levels_row_widget = self._wrap(output_levels_row)
         outer.addWidget(self._output_levels_row_widget)
@@ -3769,13 +3746,9 @@ class MainWindow(BaseWindow):
 
         self.display_tech_info_show_btn = QToolButton()
         self.display_tech_info_show_btn.setAutoRaise(True)
-        self.display_tech_info_show_btn.setToolButtonStyle(
-            Qt.ToolButtonTextBesideIcon
-        )
+        self.display_tech_info_show_btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self._themed_icon(self.display_tech_info_show_btn, 16, "info")
-        self.display_tech_info_show_btn.setText(
-            lang.getstr("info.display_tech.show")
-        )
+        self.display_tech_info_show_btn.setText(lang.getstr("info.display_tech.show"))
         self.display_tech_info_show_btn.clicked.connect(
             self._display_tech_info_show_btn_handler
         )
@@ -3892,7 +3865,9 @@ class MainWindow(BaseWindow):
         self.whitepoint_y_ctrl.valueChanged.connect(self._whitepoint_changed)
         self.whitepoint_ctrl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.visual_whitepoint_editor_btn = self._tool_button(
-            "color", "whitepoint.visual_editor", self._visual_whitepoint_editor_btn_handler
+            "color",
+            "whitepoint.visual_editor",
+            self._visual_whitepoint_editor_btn_handler,
         )
         self.whitepoint_measure_btn = self._tool_button(
             "stock_3d-color-picker",
@@ -3960,9 +3935,7 @@ class MainWindow(BaseWindow):
         self.black_luminance_measure_btn = self._tool_button(
             "palette-black",
             "measure",
-            lambda: self._luminance_measure_btn_handler(
-                "black_luminance_measure_btn"
-            ),
+            lambda: self._luminance_measure_btn_handler("black_luminance_measure_btn"),
         )
         black_luminance_row = QHBoxLayout()
         black_luminance_row.addWidget(self.black_luminance_ctrl, 1)
@@ -4018,9 +3991,7 @@ class MainWindow(BaseWindow):
         self.ambient_adjust_cb = QCheckBox(
             lang.getstr("calibration.ambient_viewcond_adjust")
         )
-        self._add_check(
-            self.ambient_adjust_cb, "calibration.ambient_viewcond_adjust"
-        )
+        self._add_check(self.ambient_adjust_cb, "calibration.ambient_viewcond_adjust")
         self.ambient_adjust_textctrl = QDoubleSpinBox()
         self.ambient_adjust_textctrl.setRange(0.0, 999999.0)
         self.ambient_adjust_textctrl.setDecimals(2)
@@ -4064,7 +4035,9 @@ class MainWindow(BaseWindow):
         self.black_point_correction_intctrl.valueChanged.connect(
             self._black_point_correction_intctrl_changed
         )
-        self.black_point_rate_label = QLabel(lang.getstr("calibration.black_point_rate"))
+        self.black_point_rate_label = QLabel(
+            lang.getstr("calibration.black_point_rate")
+        )
         self.black_point_rate_ctrl = QSlider(Qt.Horizontal)
         self.black_point_rate_ctrl.setRange(5, 2000)
         self.black_point_rate_ctrl.setValue(400)
@@ -4093,9 +4066,7 @@ class MainWindow(BaseWindow):
         black_point_correction_row.addWidget(self.black_point_rate_label)
         black_point_correction_row.addWidget(self.black_point_rate_ctrl)
         black_point_correction_row.addWidget(self.black_point_rate_floatctrl)
-        self._black_point_correction_row_widget = self._wrap(
-            black_point_correction_row
-        )
+        self._black_point_correction_row_widget = self._wrap(black_point_correction_row)
         form.addRow(
             lang.getstr("calibration.black_point_correction"),
             self._black_point_correction_row_widget,
@@ -4122,9 +4093,7 @@ class MainWindow(BaseWindow):
 
         outer.addLayout(form)
         outer.addWidget(
-            self._build_info_panel(
-                ("dialog-information", "info.calibration_settings")
-            ),
+            self._build_info_panel(("dialog-information", "info.calibration_settings")),
             1,
         )
         return panel
@@ -4219,9 +4188,7 @@ class MainWindow(BaseWindow):
         patches_row.addWidget(self.testchart_patches_amount_ctrl, 1)
         patches_row.addWidget(self.testchart_patches_amount)
         self._patches_row_widget = self._wrap(patches_row)
-        form.addRow(
-            lang.getstr("testchart.patches_amount"), self._patches_row_widget
-        )
+        form.addRow(lang.getstr("testchart.patches_amount"), self._patches_row_widget)
 
         # Patch sequence (gated by show_advanced_options, like wx).
         self.testchart_patch_sequence_ctrl = QComboBox()
@@ -4262,9 +4229,7 @@ class MainWindow(BaseWindow):
 
         outer.addLayout(form)
         outer.addWidget(
-            self._build_info_panel(
-                ("dialog-information", "info.profile_settings")
-            ),
+            self._build_info_panel(("dialog-information", "info.profile_settings")),
             1,
         )
         return panel
@@ -4400,9 +4365,7 @@ class MainWindow(BaseWindow):
         self.lut3d_hdr_minmll_ctrl.setDecimals(4)
         self.lut3d_hdr_minmll_ctrl.setSingleStep(0.0001)
         self.lut3d_hdr_minmll_ctrl.setSuffix(" cd/m²")
-        self.lut3d_hdr_minmll_ctrl.valueChanged.connect(
-            self._lut3d_hdr_minmll_changed
-        )
+        self.lut3d_hdr_minmll_ctrl.valueChanged.connect(self._lut3d_hdr_minmll_changed)
         form.addRow(
             lang.getstr("mastering_display_black_luminance"),
             self.lut3d_hdr_minmll_ctrl,
@@ -4412,9 +4375,7 @@ class MainWindow(BaseWindow):
         self.lut3d_hdr_maxmll_ctrl.setRange(100, 10000)
         self.lut3d_hdr_maxmll_ctrl.setDecimals(0)
         self.lut3d_hdr_maxmll_ctrl.setSuffix(" cd/m²")
-        self.lut3d_hdr_maxmll_ctrl.valueChanged.connect(
-            self._lut3d_hdr_maxmll_changed
-        )
+        self.lut3d_hdr_maxmll_ctrl.valueChanged.connect(self._lut3d_hdr_maxmll_changed)
         self.lut3d_hdr_maxmll_alt_clip_cb = QCheckBox(lang.getstr("adjust_rolloff"))
         self.lut3d_hdr_maxmll_alt_clip_cb.toggled.connect(
             self._lut3d_hdr_maxmll_alt_clip_changed
@@ -4542,9 +4503,7 @@ class MainWindow(BaseWindow):
             "3dlut.rendering_intent",
             lut3d_rendering_intent_items(getcfg("argyll.version")),
         )
-        form.addRow(
-            lang.getstr("rendering_intent"), self.lut3d_rendering_intent_ctrl
-        )
+        form.addRow(lang.getstr("rendering_intent"), self.lut3d_rendering_intent_ctrl)
 
         # Format + (madVR-only) HDR display sub-mode.
         self.lut3d_format_ctrl = QComboBox()
@@ -4619,9 +4578,7 @@ class MainWindow(BaseWindow):
 
         outer.addLayout(form)
         outer.addWidget(
-            self._build_info_panel(
-                ("dialog-information", "info.3dlut_settings")
-            ),
+            self._build_info_panel(("dialog-information", "info.3dlut_settings")),
             1,
         )
         return panel
@@ -4843,7 +4800,8 @@ class MainWindow(BaseWindow):
         self.profile_btn.setEnabled(profile_show and has_devices)
         self.lut3d_create_btn.setVisible(lut3d_create_show)
         self.lut3d_create_btn.setEnabled(
-            config.is_profile() and getcfg("calibration.file", False) not in self.presets
+            config.is_profile()
+            and getcfg("calibration.file", False) not in self.presets
         )
         self.measurement_report_btn.setVisible(mr_btn_show)
         self._update_measurement_report_btn_enabled()
@@ -4934,9 +4892,7 @@ class MainWindow(BaseWindow):
         self.min_display_update_delay_ms_ctrl.setEnabled(override_delay)
         self.min_display_update_delay_ms_label.setEnabled(override_delay)
 
-        override_settle = bool(
-            int(getcfg("measure.override_display_settle_time_mult"))
-        )
+        override_settle = bool(int(getcfg("measure.override_display_settle_time_mult")))
         self.override_display_settle_time_mult_cb.setChecked(override_settle)
         self.display_settle_time_mult_ctrl.setValue(
             _as_float(getcfg("measure.display_settle_time_mult")) or 1.0
@@ -4954,8 +4910,7 @@ class MainWindow(BaseWindow):
         )
         self.ffp_insertion_level_ctrl.setValue(
             round(
-                (_as_float(getcfg("patterngenerator.ffp_insertion.level")) or 0.0)
-                * 100
+                (_as_float(getcfg("patterngenerator.ffp_insertion.level")) or 0.0) * 100
             )
         )
 
@@ -5014,9 +4969,7 @@ class MainWindow(BaseWindow):
             if 0 < number <= len(names):
                 target = names[number - 1]
         index = (
-            lut_items.index(target)
-            if target in lut_items
-            else (0 if lut_items else -1)
+            lut_items.index(target) if target in lut_items else (0 if lut_items else -1)
         )
         self.display_lut_ctrl.setCurrentIndex(index)
         self.display_lut_ctrl.setEnabled(not linked and bool(lut_items))
@@ -5183,7 +5136,7 @@ class MainWindow(BaseWindow):
             self.lut3d_trc_gamma_type_ctrl.setCurrentIndex(
                 lut3d_settings.TRC_GAMMA_TYPE_BA.get(trc_gamma_type, 0)
             )
-            outoffset = int(round(float(trc_output_offset) * 100))
+            outoffset = round(float(trc_output_offset) * 100)
             self.lut3d_trc_black_output_offset_ctrl.setValue(outoffset)
             self.lut3d_trc_black_output_offset_intctrl.setValue(outoffset)
 
@@ -5230,7 +5183,9 @@ class MainWindow(BaseWindow):
 
             self._sync_value_combo("3dlut.rendering_intent", cast=str)
             self._sync_lut3d_format_ctrl()
-            self.lut3d_hdr_display_ctrl.setCurrentIndex(int(getcfg("3dlut.hdr_display")))
+            self.lut3d_hdr_display_ctrl.setCurrentIndex(
+                int(getcfg("3dlut.hdr_display"))
+            )
             self._sync_value_combo("3dlut.size", cast=int)
             self._sync_value_combo("3dlut.bitdepth.input", cast=int)
             self._sync_value_combo("3dlut.bitdepth.output", cast=int)
@@ -5345,9 +5300,7 @@ class MainWindow(BaseWindow):
         )
         output_value = getcfg("3dlut.encoding.output")
         if output_value in output_codes:
-            self.encoding_output_ctrl.setCurrentIndex(
-                output_codes.index(output_value)
-            )
+            self.encoding_output_ctrl.setCurrentIndex(output_codes.index(output_value))
         self.encoding_output_ctrl.blockSignals(False)
         self.encoding_output_ctrl.setEnabled(file_format not in ("dcl", "madVR"))
 
@@ -5442,9 +5395,7 @@ class MainWindow(BaseWindow):
         self._lut3d_form.setRowVisible(self._lut3d_hdr_sat_row_widget, v.hdr_sat_hue)
         self._lut3d_form.setRowVisible(self._lut3d_hdr_hue_row_widget, v.hdr_sat_hue)
         self._lut3d_form.setRowVisible(self.lut3d_hdr_minmll_ctrl, v.hdr_minmll)
-        self._lut3d_form.setRowVisible(
-            self._lut3d_hdr_maxmll_row_widget, v.hdr_maxmll
-        )
+        self._lut3d_form.setRowVisible(self._lut3d_hdr_maxmll_row_widget, v.hdr_maxmll)
         self.lut3d_hdr_maxmll_alt_clip_cb.setVisible(v.hdr_maxmll_alt_clip)
         self._lut3d_form.setRowVisible(
             self._lut3d_hdr_diffuse_white_row_widget, v.hdr_diffuse_white
@@ -5506,7 +5457,10 @@ class MainWindow(BaseWindow):
         ):
             tf = profile.tags.rTRC.get_transfer_function(outoffset=1.0)
             changed = setcfg_cond(
-                tf[0][0].startswith("Gamma"), "3dlut.trc_gamma", round(tf[0][1], 2), True
+                tf[0][0].startswith("Gamma"),
+                "3dlut.trc_gamma",
+                round(tf[0][1], 2),
+                True,
             )
             if changed:
                 self.update_lut3d_controls()
@@ -6172,10 +6126,9 @@ class MainWindow(BaseWindow):
         )
         if not path:
             return
-        if (
-            getcfg("colorimeter_correction_matrix_file").split(":")[0] != "AUTO"
-            or path not in (self._ccmx_catalog.cached_paths or [])
-        ):
+        if getcfg("colorimeter_correction_matrix_file").split(":")[
+            0
+        ] != "AUTO" or path not in (self._ccmx_catalog.cached_paths or []):
             setcfg("colorimeter_correction_matrix_file", ":" + path)
         self.update_colorimeter_correction_matrix_ctrl_items(warn_on_mismatch=True)
 
@@ -6266,9 +6219,7 @@ class MainWindow(BaseWindow):
         try:
             index = self.worker.instruments.index(instrument)
         except ValueError:
-            message_box.critical(
-                self, APPNAME, lang.getstr("not_found", instrument)
-            )
+            message_box.critical(self, APPNAME, lang.getstr("not_found", instrument))
             return
 
         instrument_cfgname = (
@@ -6684,7 +6635,7 @@ class MainWindow(BaseWindow):
         window.activateWindow()
 
     def _visual_whitepoint_editor_measure_handler(self) -> None:
-        """"Measure" button handler inside the visual whitepoint editor.
+        """ "Measure" button handler inside the visual whitepoint editor.
 
         Qt port of the ``visual_whitepoint_editor_measure_btn`` branch of
         wx's ``ambient_measure_handler``: runs ``spotread`` in emissive mode
@@ -6735,17 +6686,13 @@ class MainWindow(BaseWindow):
             if isinstance(result, Exception):
                 message_box.critical(self, APPNAME, str(result))
             return
-        text = re.sub(
-            r"[^\t\n\r\x20-\x7f]", "", "".join(self.worker.output)
-        ).strip()
+        text = re.sub(r"[^\t\n\r\x20-\x7f]", "", "".join(self.worker.output)).strip()
         if getcfg("whitepoint.colortemp.locus") == "T":
             k_match = re.search(
                 r"Planckian temperature += (\d+(?:\.\d+)?)K", text, re.I
             )
         else:
-            k_match = re.search(
-                r"Daylight temperature += (\d+(?:\.\d+)?)K", text, re.I
-            )
+            k_match = re.search(r"Daylight temperature += (\d+(?:\.\d+)?)K", text, re.I)
         xyz_match = re.search(
             r"XYZ: (\d+(?:\.\d+)) (\d+(?:\.\d+)) (\d+(?:\.\d+))", text
         )
@@ -6851,17 +6798,13 @@ class MainWindow(BaseWindow):
             if isinstance(result, Exception):
                 message_box.critical(self, APPNAME, str(result))
             return
-        text = re.sub(
-            r"[^\t\n\r\x20-\x7f]", "", "".join(self.worker.output)
-        ).strip()
+        text = re.sub(r"[^\t\n\r\x20-\x7f]", "", "".join(self.worker.output)).strip()
         if getcfg("whitepoint.colortemp.locus") == "T":
             k_match = re.search(
                 r"Planckian temperature += (\d+(?:\.\d+)?)K", text, re.I
             )
         else:
-            k_match = re.search(
-                r"Daylight temperature += (\d+(?:\.\d+)?)K", text, re.I
-            )
+            k_match = re.search(r"Daylight temperature += (\d+(?:\.\d+)?)K", text, re.I)
         yxy_match = re.search(
             r"Yxy: (\d+(?:\.\d+)) (\d+(?:\.\d+)) (\d+(?:\.\d+))", text
         )
@@ -6980,7 +6923,7 @@ class MainWindow(BaseWindow):
         window.activateWindow()
 
     def _luminance_patch_measure_handler(self, evtobjname: str) -> None:
-        """"Measure" button handler inside the on-screen luminance patch.
+        """ "Measure" button handler inside the on-screen luminance patch.
 
         Qt port of the branch of wx's ``ambient_measure_handler`` reached
         from the ad-hoc patch frame's own Measure button
@@ -7034,9 +6977,7 @@ class MainWindow(BaseWindow):
             if isinstance(result, Exception):
                 message_box.critical(self, APPNAME, str(result))
             return
-        text = re.sub(
-            r"[^\t\n\r\x20-\x7f]", "", "".join(self.worker.output)
-        ).strip()
+        text = re.sub(r"[^\t\n\r\x20-\x7f]", "", "".join(self.worker.output)).strip()
         xyz_match = re.search(
             r"XYZ: (\d+(?:\.\d+)) (\d+(?:\.\d+)) (\d+(?:\.\d+))", text
         )
@@ -7079,9 +7020,7 @@ class MainWindow(BaseWindow):
         (:meth:`_update_testchart_meas_time`) was already wired in Session 9.
         """
         quality = slider_to_calibration_quality(self.calibration_quality_ctrl.value())
-        patches = profile_name_mod.calibration_measurement_patches(
-            self.worker, quality
-        )
+        patches = profile_name_mod.calibration_measurement_patches(self.worker, quality)
         estimate = profile_name_mod.estimate_measurement_time(
             self.worker, patches, which="cal"
         )
@@ -7089,7 +7028,9 @@ class MainWindow(BaseWindow):
         self.cal_meas_time.setStyleSheet(
             "color: #FF3300;"
             if estimate.hours is not None and estimate.hours > 7
-            else "color: #F07F00;" if estimate.is_long() else ""
+            else "color: #F07F00;"
+            if estimate.is_long()
+            else ""
         )
 
     # -- Profiling handlers -----------------------------------------------
@@ -7575,9 +7516,9 @@ class MainWindow(BaseWindow):
                 ),
             )
             return
-        if ("A2B0" in profile.tags and not isinstance(profile.tags.A2B0, LUT16Type)) or (
-            "A2B1" in profile.tags and not isinstance(profile.tags.A2B1, LUT16Type)
-        ):
+        if (
+            "A2B0" in profile.tags and not isinstance(profile.tags.A2B0, LUT16Type)
+        ) or ("A2B1" in profile.tags and not isinstance(profile.tags.A2B1, LUT16Type)):
             message_box.critical(
                 self,
                 APPNAME,
@@ -7631,9 +7572,7 @@ class MainWindow(BaseWindow):
             current_button = box.addButton(
                 lang.getstr("profile.current"), QMessageBox.AcceptRole
             )
-            browse_button = box.addButton(
-                lang.getstr("browse"), QMessageBox.ActionRole
-            )
+            browse_button = box.addButton(lang.getstr("browse"), QMessageBox.ActionRole)
             box.addButton(lang.getstr("cancel"), QMessageBox.RejectRole)
             message_box.exec_box(box)
             clicked = box.clickedButton()
@@ -7772,9 +7711,7 @@ class MainWindow(BaseWindow):
         setcfg("measurement.save_path", path)
         setcfg(
             "measurement.name.expanded",
-            measurement_report_pipeline.compute_ccxx_measurement_basename(
-                self.worker
-            ),
+            measurement_report_pipeline.compute_ccxx_measurement_basename(self.worker),
         )
         return True
 
@@ -8003,7 +7940,9 @@ class MainWindow(BaseWindow):
                 ti3
             )
             loaded.profile.tags.targ = TextType(tag_data, b"targ")
-            loaded.profile.tags.DevD = loaded.profile.tags.CIED = loaded.profile.tags.targ
+            loaded.profile.tags.DevD = loaded.profile.tags.CIED = (
+                loaded.profile.tags.targ
+            )
             tmp_path = os.path.join(tmp_working_dir, os.path.basename(path))
             loaded.profile.write(tmp_path)
             self._run_create_profile([tmp_path], skip_ti3_check=True)
@@ -8317,8 +8256,7 @@ class MainWindow(BaseWindow):
         ti1_path = f"{filename}.ti1"
         if (
             ext.lower() in (".icc", ".icm")
-            and getcfg("testchart.patch_sequence")
-            != "optimize_display_response_delay"
+            and getcfg("testchart.patch_sequence") != "optimize_display_response_delay"
             and os.path.isfile(ti1_path)
         ):
             path = ti1_path
@@ -8375,9 +8313,7 @@ class MainWindow(BaseWindow):
         setcfg("testchart.file", path)
         if path not in self._testchart_paths:
             self._set_testcharts(path)
-        index = calibration_file.index_fallback_ignorecase(
-            self._testchart_paths, path
-        )
+        index = calibration_file.index_fallback_ignorecase(self._testchart_paths, path)
         self.testchart_ctrl.blockSignals(True)
         self.testchart_ctrl.setCurrentIndex(max(index, 0))
         self.testchart_ctrl.setToolTip(path)
@@ -8397,9 +8333,7 @@ class MainWindow(BaseWindow):
         self._mark_profile_settings_changed()
         self._apply_testchart_patches_amount(value, from_user_event=True)
 
-    def _apply_testchart_patches_amount(
-        self, auto: int, from_user_event: bool
-    ) -> None:
+    def _apply_testchart_patches_amount(self, auto: int, from_user_event: bool) -> None:
         """Recompute the patch count and (on user changes) nudge profile type.
 
         Port of ``testchart_patches_amount_ctrl_handler``'s non-dialog body.
@@ -8446,7 +8380,9 @@ class MainWindow(BaseWindow):
         self.testchart_meas_time.setStyleSheet(
             "color: #FF3300;"
             if estimate.hours is not None and estimate.hours > 7
-            else "color: #F07F00;" if estimate.is_long() else ""
+            else "color: #F07F00;"
+            if estimate.is_long()
+            else ""
         )
 
     def _profile_name_info_btn_handler(self) -> None:
@@ -8520,7 +8456,9 @@ class MainWindow(BaseWindow):
                 self.profile_name_textctrl.text(), self._profile_name_context()
             )
             if not profile_name_mod.is_valid_profile_name(profile_name):
-                self.profile_name_textctrl.setText(str(DEFAULTS.get("profile.name", "")))
+                self.profile_name_textctrl.setText(
+                    str(DEFAULTS.get("profile.name", ""))
+                )
                 profile_name = profile_name_mod.expand_profile_name(
                     self.profile_name_textctrl.text(), self._profile_name_context()
                 )
@@ -8534,9 +8472,7 @@ class MainWindow(BaseWindow):
     def _profile_name_context(self) -> profile_name_mod.ProfileNameContext:
         """Resolve the current widget/worker state into a :class:`ProfileNameContext`."""
         edid = self.worker.get_display_edid() if self.worker.displays else {}
-        do_cal = bool(
-            self.interactive_adjustment_cb.isChecked() or self.get_trc()
-        )
+        do_cal = bool(self.interactive_adjustment_cb.isChecked() or self.get_trc())
         return profile_name_mod.ProfileNameContext(
             computer_name=platform.node() or None,
             display_win32_short=self.worker.get_display_name_short(False, False)
@@ -8662,9 +8598,10 @@ class MainWindow(BaseWindow):
             return
         if not self._check_overwrite(".cal"):
             return
-        if getcfg("profile.update") or self.worker.dispcal_create_fast_matrix_shaper:
-            if not self._check_overwrite(PROFILE_EXT):
-                return
+        if (
+            getcfg("profile.update") or self.worker.dispcal_create_fast_matrix_shaper
+        ) and not self._check_overwrite(PROFILE_EXT):
+            return
         self.begin_measurement(MeasurementAction.CALIBRATE)
 
     def _fast_matrix_shaper_choice(
@@ -8788,12 +8725,16 @@ class MainWindow(BaseWindow):
                 + str(getcfg("calibration.file", False)),
             )
             return
-        if profile_in.is_same(profile_out, force_calculation=True) and message_box.question(
-            self,
-            APPNAME,
-            lang.getstr("error.source_dest_same"),
-            QMessageBox.Ok | QMessageBox.Cancel,
-        ) != QMessageBox.Ok:
+        if (
+            profile_in.is_same(profile_out, force_calculation=True)
+            and message_box.question(
+                self,
+                APPNAME,
+                lang.getstr("error.source_dest_same"),
+                QMessageBox.Ok | QMessageBox.Cancel,
+            )
+            != QMessageBox.Ok
+        ):
             return
 
         path = self.worker.lut3d_get_filename()
@@ -8802,13 +8743,17 @@ class MainWindow(BaseWindow):
                 self, APPNAME, lang.getstr("error.access_denied.write", path)
             )
             return
-        if os.path.isfile(path) and message_box.warning(
-            self,
-            APPNAME,
-            lang.getstr("dialog.confirm_overwrite", path),
-            QMessageBox.Ok | QMessageBox.Cancel,
-            QMessageBox.Cancel,
-        ) != QMessageBox.Ok:
+        if (
+            os.path.isfile(path)
+            and message_box.warning(
+                self,
+                APPNAME,
+                lang.getstr("dialog.confirm_overwrite", path),
+                QMessageBox.Ok | QMessageBox.Cancel,
+                QMessageBox.Cancel,
+            )
+            != QMessageBox.Ok
+        ):
             return
 
         apply_cal = bool(
@@ -8942,7 +8887,9 @@ class MainWindow(BaseWindow):
             return
         self._install_3dlut(lut3d_path, file_format, is_prisma)
 
-    def _install_3dlut(self, lut3d_path: str, file_format: str, is_prisma: bool) -> None:
+    def _install_3dlut(
+        self, lut3d_path: str, file_format: str, is_prisma: bool
+    ) -> None:
         """Route an accepted 3D LUT install offer to its destination.
 
         Qt port of ``profile_finish_action``'s ``install_3dlut_api`` branch
@@ -9058,9 +9005,7 @@ class MainWindow(BaseWindow):
         box.setWindowTitle(APPNAME)
         box.setIcon(QMessageBox.Warning)
         box.setText(lang.getstr("black_point_compensation.3dlut.warning"))
-        turn_off_button = box.addButton(
-            lang.getstr("turn_off"), QMessageBox.AcceptRole
-        )
+        turn_off_button = box.addButton(lang.getstr("turn_off"), QMessageBox.AcceptRole)
         box.addButton(lang.getstr("setting.keep_current"), QMessageBox.RejectRole)
         message_box.exec_box(box)
         if box.clickedButton() is turn_off_button:
@@ -9197,7 +9142,9 @@ class MainWindow(BaseWindow):
             silent=True,
         )
 
-    def _load_cal(self, cal: str | None = None, silent: bool = True) -> bool | Exception:
+    def _load_cal(
+        self, cal: str | None = None, silent: bool = True
+    ) -> bool | Exception:
         """Load a calibration onto the video card gamma table.
 
         Qt port of ``MainFrame.load_cal``, minus the curve-viewer preview
@@ -9652,9 +9599,7 @@ class MainWindow(BaseWindow):
             pauseable=False,
         )
 
-    def _on_profile_build_finished(
-        self, result: object, success_msg: str = ""
-    ) -> None:
+    def _on_profile_build_finished(self, result: object, success_msg: str = "") -> None:
         """Report the outcome of the ``colprof`` run and offer to install it.
 
         Ports ``profile_finish`` in full via :mod:`DisplayCAL.profile_finish`
@@ -10018,9 +9963,7 @@ class MainWindow(BaseWindow):
             )
         elif getcfg("trc"):
             self._load_cal(silent=True)
-            message_box.information(
-                self, APPNAME, lang.getstr("calibration.complete")
-            )
+            message_box.information(self, APPNAME, lang.getstr("calibration.complete"))
 
     # -- calibration/profile-file header bar --------------------------------
 
@@ -10147,9 +10090,7 @@ class MainWindow(BaseWindow):
         if is_profile:
             calibration_file.apply_icc_profile_load_defaults(path, is_preset)
             options_dispcal, options_colprof = get_options_from_profile(profile)
-            match = calibration_file.match_display_and_instrument(
-                profile, self.worker
-            )
+            match = calibration_file.match_display_and_instrument(profile, self.worker)
             display_match = match.display_index is not None
             instrument_match = match.instrument_match
             has_instrument_id = match.has_instrument_id
@@ -10319,8 +10260,8 @@ class MainWindow(BaseWindow):
             self._archive_import_progress.close()
             self._archive_import_progress = None
         if not result or isinstance(result, Exception):
-            message = str(result) if isinstance(result, Exception) else lang.getstr(
-                "error"
+            message = (
+                str(result) if isinstance(result, Exception) else lang.getstr("error")
             )
             message_box.critical(self, self.windowTitle(), message)
             self.worker.wrapup(False)
@@ -10445,8 +10386,8 @@ class MainWindow(BaseWindow):
             self._archive_progress.close()
             self._archive_progress = None
         if not result or isinstance(result, Exception):
-            message = str(result) if isinstance(result, Exception) else lang.getstr(
-                "error"
+            message = (
+                str(result) if isinstance(result, Exception) else lang.getstr("error")
             )
             message_box.critical(self, self.windowTitle(), message)
 

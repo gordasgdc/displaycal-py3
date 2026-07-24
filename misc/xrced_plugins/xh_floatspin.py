@@ -1,8 +1,7 @@
-import wx
-import wx.xrc as xrc
+from wx import xrc
 
 try:
-    import wx.lib.agw.floatspin as floatspin
+    from wx.lib.agw import floatspin
 except ImportError:
     from DisplayCAL import floatspin
 

@@ -6,7 +6,7 @@ from unittest import mock
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
 
-from DisplayCAL import real_display_size_mm, argyll, config
+from DisplayCAL import argyll, config, real_display_size_mm
 from DisplayCAL.dev.mocks import check_call
 from tests.data.display_data import DisplayData
 
@@ -25,11 +25,15 @@ def patch_subprocess_on_rdsmm(monkeypatch, patch_subprocess):
 
 def test_real_display_size_mm(clear_displays):
     """Test real_display_size_mm() function."""
-    with check_call(
-        real_display_size_mm, "_enumerate_displays", DisplayData.enumerate_displays()
+    with (
+        check_call(
+            real_display_size_mm,
+            "_enumerate_displays",
+            DisplayData.enumerate_displays(),
+        ),
+        check_call(config, "getcfg", DisplayData.CFG_DATA, call_count=2),
     ):
-        with check_call(config, "getcfg", DisplayData.CFG_DATA, call_count=2):
-            display_size = real_display_size_mm.real_display_size_mm(0)
+        display_size = real_display_size_mm.real_display_size_mm(0)
     assert display_size != (0, 0)
     assert display_size[0] > 1
     assert display_size[1] > 1
@@ -37,11 +41,15 @@ def test_real_display_size_mm(clear_displays):
 
 def test_xrandr_output_x_id_1(clear_displays):
     """Test GetXRandROutputXID() function."""
-    with check_call(
-        real_display_size_mm, "_enumerate_displays", DisplayData.enumerate_displays()
+    with (
+        check_call(
+            real_display_size_mm,
+            "_enumerate_displays",
+            DisplayData.enumerate_displays(),
+        ),
+        check_call(config, "getcfg", DisplayData.CFG_DATA, call_count=2),
     ):
-        with check_call(config, "getcfg", DisplayData.CFG_DATA, call_count=2):
-            result = real_display_size_mm.get_xrandr_output_xid(0)
+        result = real_display_size_mm.get_xrandr_output_xid(0)
     assert result != 0
 
 
@@ -209,22 +217,30 @@ def test__enumerate_displays_without_a_proper_dispwin_output_with_partial_match(
 
 def test_get_display(clear_displays):
     """Test DisplayCAL.real_display_size_mm.get_display() function."""
-    with check_call(
-        real_display_size_mm, "_enumerate_displays", DisplayData.enumerate_displays()
+    with (
+        check_call(
+            real_display_size_mm,
+            "_enumerate_displays",
+            DisplayData.enumerate_displays(),
+        ),
+        check_call(config, "getcfg", DisplayData.CFG_DATA, call_count=2),
     ):
-        with check_call(config, "getcfg", DisplayData.CFG_DATA, call_count=2):
-            display = real_display_size_mm.get_display()
+        display = real_display_size_mm.get_display()
     assert real_display_size_mm._displays is not None
     assert isinstance(display, dict)
 
 
 def test_get_x_display(clear_displays):
     """Test DisplayCAL.real_display_size_mm.get_x_display() function."""
-    with check_call(
-        real_display_size_mm, "_enumerate_displays", DisplayData.enumerate_displays()
+    with (
+        check_call(
+            real_display_size_mm,
+            "_enumerate_displays",
+            DisplayData.enumerate_displays(),
+        ),
+        check_call(config, "getcfg", DisplayData.CFG_DATA, call_count=2),
     ):
-        with check_call(config, "getcfg", DisplayData.CFG_DATA, call_count=2):
-            display = real_display_size_mm.get_x_display(0)
+        display = real_display_size_mm.get_x_display(0)
     assert isinstance(display, tuple)
     assert len(display) == 3
 
@@ -238,11 +254,15 @@ def test_get_x_display(clear_displays):
 )
 def test_get_x_icc_profile_atom_id(clear_displays, function) -> None:
     """Test DisplayCAL.real_display_size_mm.get_x_icc_profile_atom_id() function."""
-    with check_call(
-        real_display_size_mm, "_enumerate_displays", DisplayData.enumerate_displays()
+    with (
+        check_call(
+            real_display_size_mm,
+            "_enumerate_displays",
+            DisplayData.enumerate_displays(),
+        ),
+        check_call(config, "getcfg", DisplayData.CFG_DATA, call_count=2),
     ):
-        with check_call(config, "getcfg", DisplayData.CFG_DATA, call_count=2):
-            result = function(0)
+        result = function(0)
     assert result is not None
     assert isinstance(result, int)
 
@@ -265,18 +285,20 @@ def test_get_dispwin_output_dispwin_path_is_none_returns_empty_bytes(
         return None
 
     monkeypatch.setattr(
-        "DisplayCAL.real_display_size_mm.argyll.get_argyll_util", patched_get_argyll_util
+        "DisplayCAL.real_display_size_mm.argyll.get_argyll_util",
+        patched_get_argyll_util,
     )
     assert real_display_size_mm.get_dispwin_output() == b""
 
 
 @pytest.mark.parametrize(
-    "dispwin_data_file_name", [
+    "dispwin_data_file_name",
+    [
         "dispwin_output_1.txt",
         "dispwin_output_2.txt",
         "dispwin_output_3.txt",
         "dispwin_output_4.txt",
-    ]
+    ],
 )
 def test_get_dispwin_output_returns_dispwin_output_as_bytes(
     clear_displays, data_files, patch_subprocess_on_rdsmm, dispwin_data_file_name

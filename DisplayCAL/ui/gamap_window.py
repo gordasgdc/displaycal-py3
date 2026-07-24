@@ -59,15 +59,14 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from DisplayCAL import config
-from DisplayCAL import gamap_settings
+from DisplayCAL import config, gamap_settings
 from DisplayCAL import localization as lang
 from DisplayCAL.config import DEFAULTS, get_data_path, getcfg, setcfg
 from DisplayCAL.icc_profile import ICCProfile, ICCProfileInvalidError
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
-from DisplayCAL.ui import message_box
 from DisplayCAL.ui.measurement_report import _FileBrowse
 from DisplayCAL.util_list import natsort_key_factory
 
@@ -126,9 +125,7 @@ class GamapWindow(BaseWindow):
 
         b2a_low_row = QHBoxLayout()
         self.low_quality_b2a_cb = QCheckBox(lang.getstr("profile.quality.b2a.low"))
-        self.low_quality_b2a_cb.setToolTip(
-            lang.getstr("profile.quality.b2a.low.info")
-        )
+        self.low_quality_b2a_cb.setToolTip(lang.getstr("profile.quality.b2a.low.info"))
         self.low_quality_b2a_cb.toggled.connect(self._low_quality_b2a_toggled)
         b2a_low_row.addWidget(self.low_quality_b2a_cb)
         b2a_low_row.addStretch(1)
@@ -295,14 +292,10 @@ class GamapWindow(BaseWindow):
         self.low_quality_b2a_cb.setEnabled(not hires)
         if hires:
             if triggered == "smooth":
-                setcfg(
-                    "profile.b2a.hires.smooth", int(self.b2a_smooth_cb.isChecked())
-                )
+                setcfg("profile.b2a.hires.smooth", int(self.b2a_smooth_cb.isChecked()))
             else:
                 self.b2a_smooth_cb.blockSignals(True)
-                self.b2a_smooth_cb.setChecked(
-                    bool(getcfg("profile.b2a.hires.smooth"))
-                )
+                self.b2a_smooth_cb.setChecked(bool(getcfg("profile.b2a.hires.smooth")))
                 self.b2a_smooth_cb.blockSignals(False)
         else:
             self.b2a_smooth_cb.blockSignals(True)
@@ -484,9 +477,7 @@ class GamapWindow(BaseWindow):
                                 if current_profile.profileClass == b"prtr"
                                 else "mt"
                             )
-                            self._select_by_data(
-                                self.gamap_out_viewcond_ctrl, new_out
-                            )
+                            self._select_by_data(self.gamap_out_viewcond_ctrl, new_out)
                             self._out_viewcond_changed(
                                 self.gamap_out_viewcond_ctrl.currentIndex(),
                                 user_event=False,
@@ -536,9 +527,7 @@ class GamapWindow(BaseWindow):
             self.b2a_hires_cb.setEnabled(
                 enable_gamap and not self.low_quality_b2a_cb.isChecked()
             )
-            self._select_by_data(
-                self.b2a_size_ctrl, getcfg("profile.b2a.hires.size")
-            )
+            self._select_by_data(self.b2a_size_ctrl, getcfg("profile.b2a.hires.size"))
             self.b2a_size_ctrl.setEnabled(b2a_hires)
             self.b2a_smooth_cb.setChecked(
                 b2a_hires and bool(getcfg("profile.b2a.hires.smooth"))

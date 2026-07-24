@@ -113,8 +113,9 @@ def test_close_stops_refresh_timer(qapp):
 
 
 def test_ok_cancel_buttons_present(qapp):
-    from DisplayCAL import localization as lang
     from qtpy.QtWidgets import QDialogButtonBox
+
+    from DisplayCAL import localization as lang
 
     dialog = _make_dialog(qapp)
     try:

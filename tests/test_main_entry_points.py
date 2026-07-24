@@ -18,9 +18,7 @@ def _displaycal_entry_points():
                 yield ep
 
 
-@pytest.mark.parametrize(
-    "ep", list(_displaycal_entry_points()), ids=lambda ep: ep.name
-)
+@pytest.mark.parametrize("ep", list(_displaycal_entry_points()), ids=lambda ep: ep.name)
 def test_entry_point_resolves_to_callable(ep):
     """Every declared displaycal-* entry point must load to a callable."""
     target = ep.load()

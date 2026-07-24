@@ -158,8 +158,8 @@ def test_animator_plays_all_frames_then_finishes(qapp, fast_animator):
 
 
 def test_animator_finishes_immediately_with_no_frames(qapp, monkeypatch):
-    monkeypatch.setattr(startup, "load_anim_frames", lambda: [])
-    monkeypatch.setattr(startup, "load_version_frames", lambda: [])
+    monkeypatch.setattr(startup, "load_anim_frames", list)
+    monkeypatch.setattr(startup, "load_version_frames", list)
     splash = startup.QSplashScreen(startup.splash_pixmap())
     animator = startup._SplashAnimator(splash, "hello")
     finished = []
@@ -175,8 +175,8 @@ def test_animator_finishes_immediately_with_no_frames(qapp, monkeypatch):
 def _fast_controller_animation(monkeypatch):
     """Skip real frame assets/timing so controller tests focus on the wiring."""
     monkeypatch.setattr(startup, "_FRAME_INTERVAL_MS", 0)
-    monkeypatch.setattr(startup, "load_anim_frames", lambda: [])
-    monkeypatch.setattr(startup, "load_version_frames", lambda: [])
+    monkeypatch.setattr(startup, "load_anim_frames", list)
+    monkeypatch.setattr(startup, "load_version_frames", list)
 
 
 def test_controller_enumerates_and_calls_ready(qapp, _fast_controller_animation):
@@ -217,7 +217,7 @@ def test_controller_waits_for_animation_even_if_enumeration_is_instant(
     frame = QPixmap(4, 4)
     frame.fill()
     monkeypatch.setattr(startup, "load_anim_frames", lambda: [frame] * 4)
-    monkeypatch.setattr(startup, "load_version_frames", lambda: [])
+    monkeypatch.setattr(startup, "load_version_frames", list)
 
     worker = _FakeWorker()
     ready = []

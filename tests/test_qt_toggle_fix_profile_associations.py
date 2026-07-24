@@ -50,9 +50,9 @@ def _make_pl(monkeypatch):
     monkeypatch.setattr(pl, "get_title", lambda: "DisplayCAL Apply Profiles")
     monkeypatch.setattr(pl, "writecfg", lambda *a, **k: None)
     monkeypatch.setattr(
-        pl, "_set_display_profiles", lambda dry_run=False: calls.__setitem__(
-            "set", calls["set"] + 1
-        )
+        pl,
+        "_set_display_profiles",
+        lambda dry_run=False: calls.__setitem__("set", calls["set"] + 1),
     )
     monkeypatch.setattr(
         pl,

@@ -37,7 +37,9 @@ def test_get_progress_bitmaps_frame_counts(qapp, progress_type, expected_count):
     frames = pw.get_progress_bitmaps(progress_type)
     assert len(frames) == expected_count
     assert all(not frame.isNull() for frame in frames)
-    assert all(frame.size().width() == 200 and frame.size().height() == 200 for frame in frames)
+    assert all(
+        frame.size().width() == 200 and frame.size().height() == 200 for frame in frames
+    )
 
 
 def _avg_brightness(pixmap):
@@ -67,5 +69,6 @@ def test_processing_frames_shutter_closes_monotonically(qapp):
     # allow a small tolerance for encoding/rounding noise between them.
     tolerance = 0.1
     assert all(
-        brightness[i] >= brightness[i + 1] - tolerance for i in range(len(brightness) - 1)
+        brightness[i] >= brightness[i + 1] - tolerance
+        for i in range(len(brightness) - 1)
     ), brightness

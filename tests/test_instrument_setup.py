@@ -80,7 +80,8 @@ class TestResolveInstrumentSetupNeeds:
         setcfg("colorimeter_correction_matrix_file", "AUTO:")
         worker = FakeWorker(instruments=["Spyder2"], spyder2_firmware=False)
         needs = isetup.resolve_instrument_setup_needs(
-            worker, ["Spyder2"]  # already covered, so "icd" is False too
+            worker,
+            ["Spyder2"],  # already covered, so "icd" is False too
         )
         assert needs.needs_spyder2_enable is True
         assert needs.recheck_after_spyder2 is False

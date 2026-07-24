@@ -1,6 +1,5 @@
 import pytest
 
-
 from DisplayCAL.colormath import Matrix3x3
 
 
@@ -9,7 +8,7 @@ def test_matrix3x3_does_not_initialize_as_identity_matrix():
 
     TODO: This is for future.
     """
-    assert Matrix3x3() !=  Matrix3x3([[1, 0, 0],[0, 1, 0],[0, 0, 1]])
+    assert Matrix3x3() != Matrix3x3([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
 
 
 @pytest.mark.parametrize(

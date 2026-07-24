@@ -41,9 +41,14 @@ from dataclasses import dataclass
 import requests
 
 from DisplayCAL.argyll import get_argyll_latest_version
-from DisplayCAL.meta import DEVELOPMENT_HOME_PAGE, DOMAIN, GITHUB_API_URL
+from DisplayCAL.meta import (
+    DEVELOPMENT_HOME_PAGE,
+    DOMAIN,
+    GITHUB_API_URL,
+    VERSION_TUPLE,
+    get_latest_changelog_entry,
+)
 from DisplayCAL.meta import NAME as APPNAME
-from DisplayCAL.meta import VERSION_TUPLE, get_latest_changelog_entry
 from DisplayCAL.worker import http_request
 
 #: ArgyllCMS's own project site, used as the "go to website" fallback since

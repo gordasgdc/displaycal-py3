@@ -71,11 +71,11 @@ from DisplayCAL.icc_profile import (
     VideoCardGammaType,
 )
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import get_theme_pixmap
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
-from DisplayCAL.ui import message_box
 from DisplayCAL.util_decimal import stripzeros
 from DisplayCAL.util_os import waccess
 from DisplayCAL.worker import Worker, get_current_profile_path
@@ -376,9 +376,7 @@ class LUT3DWindow(BaseWindow):
 
         # Row: input profile.
         self.input_profile_ctrl = _ProfileBrowse(lang.getstr("3dlut.input.profile"))
-        self.input_profile_ctrl.set_history(
-            get_data_path("ref", r"\.(icc|icm)$") or []
-        )
+        self.input_profile_ctrl.set_history(get_data_path("ref", r"\.(icc|icm)$") or [])
         self._add_row(
             QLabel(lang.getstr("3dlut.input.profile")), self.input_profile_ctrl
         )
@@ -532,7 +530,9 @@ class LUT3DWindow(BaseWindow):
         none_layout = QHBoxLayout(none_row)
         none_layout.setContentsMargins(0, 0, 0, 0)
         self.lut3d_trc_apply_none_ctrl = QRadioButton(lang.getstr("unmodified"))
-        self.lut3d_trc_apply_none_ctrl.toggled.connect(self.lut3d_trc_apply_ctrl_handler)
+        self.lut3d_trc_apply_none_ctrl.toggled.connect(
+            self.lut3d_trc_apply_ctrl_handler
+        )
         self._trc_apply_group.addButton(self.lut3d_trc_apply_none_ctrl)
         none_layout.addWidget(self.lut3d_trc_apply_none_ctrl)
         self.lut3d_input_value_clipping_bmp = QLabel()
@@ -930,7 +930,9 @@ class LUT3DWindow(BaseWindow):
         self.encoding_input_ctrl.clear()
         self.encoding_output_ctrl.clear()
         for i, encoding in enumerate(config.VALID_VALUES["3dlut.encoding.input"]):
-            self.encoding_input_ctrl.addItem(lang.getstr(f"3dlut.encoding.type_{encoding}"))
+            self.encoding_input_ctrl.addItem(
+                lang.getstr(f"3dlut.encoding.type_{encoding}")
+            )
             self.encoding_input_ab[i] = encoding
             self.encoding_input_ba[encoding] = i
         for o, encoding in enumerate(config.VALID_VALUES["3dlut.encoding.output"]):
@@ -946,9 +948,7 @@ class LUT3DWindow(BaseWindow):
         """Persist and apply the abstract-profile checkbox state."""
         if self._updating:
             return
-        setcfg(
-            "3dlut.use_abstract_profile", int(self.abstract_profile_cb.isChecked())
-        )
+        setcfg("3dlut.use_abstract_profile", int(self.abstract_profile_cb.isChecked()))
         self.abstract_profile_ctrl.setEnabled(
             bool(getcfg("3dlut.use_abstract_profile"))
         )
@@ -1401,9 +1401,7 @@ class LUT3DWindow(BaseWindow):
         """Select the tone-curve combo entry matching the current TRC config."""
         trc = getcfg("3dlut.trc")
         if trc.startswith("smpte2084"):
-            self.lut3d_trc_ctrl.setCurrentIndex(
-                2 if trc == "smpte2084.hardclip" else 3
-            )
+            self.lut3d_trc_ctrl.setCurrentIndex(2 if trc == "smpte2084.hardclip" else 3)
         elif trc == "hlg":
             self.lut3d_trc_ctrl.setCurrentIndex(4)
         elif (
@@ -1873,9 +1871,7 @@ class LUT3DWindow(BaseWindow):
         """Persist the rendering-intent selection."""
         self.lut3d_set_option(
             "3dlut.rendering_intent",
-            self.rendering_intents_ab[
-                self.lut3d_rendering_intent_ctrl.currentIndex()
-            ],
+            self.rendering_intents_ab[self.lut3d_rendering_intent_ctrl.currentIndex()],
         )
         self.lut3d_show_input_value_clipping_warning(True)
 
@@ -2083,9 +2079,7 @@ class LUT3DWindow(BaseWindow):
             return
         self.worker.interactive = False
         self.lut3d_create_btn.setEnabled(False)
-        self._progress = QProgressDialog(
-            lang.getstr("3dlut.create"), "", 0, 0, self
-        )
+        self._progress = QProgressDialog(lang.getstr("3dlut.create"), "", 0, 0, self)
         self._progress.setWindowTitle(self.windowTitle())
         self._progress.setCancelButton(None)
         self._progress.setWindowModality(Qt.WindowModal)
@@ -2150,9 +2144,11 @@ class LUT3DWindow(BaseWindow):
         Returns:
             bool | Exception: ``True`` on success, or the raised exception.
         """
-        apply_cal = profile_out and isinstance(
-            profile_out.tags.get("vcgt"), VideoCardGammaType
-        ) and getcfg("3dlut.output.profile.apply_cal")
+        apply_cal = (
+            profile_out
+            and isinstance(profile_out.tags.get("vcgt"), VideoCardGammaType)
+            and getcfg("3dlut.output.profile.apply_cal")
+        )
         if getcfg("3dlut.apply_trc"):
             trc = getcfg("3dlut.trc")
             if trc.startswith("smpte2084") or trc == "hlg":

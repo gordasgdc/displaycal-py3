@@ -472,9 +472,7 @@ class BrightCtrl(QWidget):
         height = rect.height()
         y = round(self._colour.v / 255.0 * (height - 6))
         y = height - 4 - 1 - y
-        _draw_nested_markers(
-            painter, QRect(rect.x() - 1, y, rect.width() + 2, 6)
-        )
+        _draw_nested_markers(painter, QRect(rect.x() - 1, y, rect.width() + 2, 6))
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 (Qt override)
         """Set the value from the press position.
@@ -592,9 +590,7 @@ class _BackgroundArea(QWidget):
         self._y = 0.5
         self._default_size = 300.0
 
-    def set_layout(
-        self, default_size: float, scale: float, x: float, y: float
-    ) -> None:
+    def set_layout(self, default_size: float, scale: float, x: float, y: float) -> None:
         """Store the patch geometry parameters and re-place the patch.
 
         Args:
@@ -963,9 +959,9 @@ class VisualWhitepointEditorWindow(BaseWindow):
 
         cfg_x, cfg_y, cfg_scale = (
             float(v)
-            for v in getcfg(
-                "dimensions.measureframe.whitepoint.visual_editor"
-            ).split(",")
+            for v in getcfg("dimensions.measureframe.whitepoint.visual_editor").split(
+                ","
+            )
         )
 
         self._build_ui(cfg_x, cfg_y, cfg_scale)
@@ -1227,18 +1223,18 @@ class VisualWhitepointEditorWindow(BaseWindow):
             return
         size = min(
             self.area_size_slider.value()
-            / float(
-                self.area_size_slider.maximum() - self.area_size_slider.minimum()
-            ),
+            / float(self.area_size_slider.maximum() - self.area_size_slider.minimum()),
             1,
         )
         x = max(
-            self.area_x_slider.value() / float(self.area_x_slider.maximum())
+            self.area_x_slider.value()
+            / float(self.area_x_slider.maximum())
             * (1 - size),
             0,
         )
         y = max(
-            self.area_y_slider.value() / float(self.area_y_slider.maximum())
+            self.area_y_slider.value()
+            / float(self.area_y_slider.maximum())
             * (1 - size),
             0,
         )
@@ -1527,9 +1523,7 @@ def main() -> int:
 
     app = Application(sys.argv)
     worker = Worker()
-    worker.enumerate_displays_and_ports(
-        check_lut_access=False, enumerate_ports=False
-    )
+    worker.enumerate_displays_and_ports(check_lut_access=False, enumerate_ports=False)
     window = VisualWhitepointEditorWindow()
     app.top_window = window
     window.show()

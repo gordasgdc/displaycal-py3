@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-from glob import glob
 import os
 import re
 import shutil
 import sys
+from glob import glob
 
-from DisplayCAL.meta import NAME as APPNAME, DOMAIN, script2pywname
+from DisplayCAL.meta import DOMAIN, script2pywname
+from DisplayCAL.meta import NAME as APPNAME
 
 
 def zeroinstall_desktop(datadir="/usr/share"):

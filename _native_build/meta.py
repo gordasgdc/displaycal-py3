@@ -38,25 +38,24 @@ def load() -> None:
 
     # Do not remove the following seemingly unused variable,
     # I know that it seems silly, but for now we need it
-    import DisplayCAL
     from DisplayCAL.meta import (
-        NAME,
-        NAME_HTML,
+        APPSTREAM_ID,
         AUTHOR,
         AUTHOR_EMAIL,
         DESCRIPTION,
-        LONG_DESCRIPTION,
         DOMAIN,
+        LONG_DESCRIPTION,
+        NAME,
+        NAME_HTML,
         PY_MAXVERSION,
         PY_MINVERSION,
-        VERSION_STRING,
         VERSION_LIN,
         VERSION_MAC,
         VERSION_SRC,
+        VERSION_STRING,
         VERSION_TUPLE,
         VERSION_WIN,
         WX_MINVERSION,
-        APPSTREAM_ID,
         get_latest_changelog_entry,
     )
 

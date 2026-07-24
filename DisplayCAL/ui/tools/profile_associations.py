@@ -78,6 +78,7 @@ if sys.platform == "win32":
 if TYPE_CHECKING:
     from DisplayCAL.ui.tools.apply_profiles import QtProfileLoader
 
+
 class _CheckedEvent:
     """Duck-types wx's ``event.IsChecked()`` for ``ProfileLoader`` methods.
 
@@ -331,9 +332,7 @@ class ProfileAssociationsDialog(QDialog):
         Args:
             checked (bool): The new checked state requested by the user.
         """
-        result = self.pl._toggle_fix_profile_associations(
-            _CheckedEvent(checked), self
-        )
+        result = self.pl._toggle_fix_profile_associations(_CheckedEvent(checked), self)
         self.fix_profile_associations_cb.blockSignals(True)
         self.fix_profile_associations_cb.setChecked(result)
         self.fix_profile_associations_cb.blockSignals(False)
@@ -469,8 +468,8 @@ class ProfileAssociationsDialog(QDialog):
                 display_desc = display.replace(
                     "[PRIMARY]", lang.getstr("display.primary")
                 )
-                self._identification_overlays[display] = (
-                    _DisplayIdentificationOverlay(display_desc, rect)
+                self._identification_overlays[display] = _DisplayIdentificationOverlay(
+                    display_desc, rect
                 )
 
     def show_profile_info(self) -> None:
@@ -548,17 +547,14 @@ class ProfileAssociationsDialog(QDialog):
         table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.Stretch
-        )
+        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         table.setColumnWidth(1, 210)
         for i, (desc, profile) in enumerate(profiles):
             table.setItem(i, 0, QTableWidgetItem(desc))
             table.setItem(i, 1, QTableWidgetItem(profile))
 
         buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok
-            | QDialogButtonBox.StandardButton.Cancel
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
         ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
         ok_button.setEnabled(False)
@@ -567,9 +563,7 @@ class ProfileAssociationsDialog(QDialog):
         table.itemSelectionChanged.connect(
             lambda: ok_button.setEnabled(bool(table.selectedItems()))
         )
-        table.doubleClicked.connect(
-            lambda _i: table.selectedItems() and dlg.accept()
-        )
+        table.doubleClicked.connect(lambda _i: table.selectedItems() and dlg.accept())
 
         layout = QVBoxLayout(dlg)
         layout.addWidget(QLabel(lang.getstr("profile.choose")))

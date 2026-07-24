@@ -39,14 +39,11 @@ from weakref import WeakValueDictionary
 
 from DisplayCAL.util_dict import dict_sort
 
-
 if sys.platform == "win32":
     import winreg
 
-    import pywintypes
-
     try:
-        import win32api
+        import win32api  # noqa: F401  # availability checked via sys.modules below
         import win32gui
     except ImportError:
         pass
@@ -105,11 +102,8 @@ elif sys.platform == "win32":
     from DisplayCAL import util_win
     from DisplayCAL.mscms import WCSManagerProxy
 
-    if sys.getwindowsversion() < (6,):
-        # WCS only available under Vista and later
-        mscms = None
-    else:
-        mscms = WCSManagerProxy()
+    # WCS only available under Vista and later
+    mscms = None if sys.getwindowsversion() < (6,) else WCSManagerProxy()
 
 
 if TYPE_CHECKING:
@@ -3452,7 +3446,7 @@ def uInt16Number_tohex(num: int) -> bytes:  # noqa: N802
     Returns:
         bytes: The 2-byte hex representation of the number.
     """
-    return struct.pack(">H", round(num))
+    return struct.pack(">H", round(num))  # num can be float despite the type hint
 
 
 def uInt32Number(binaryString: bytes) -> int:  # noqa: N802, N803
@@ -3476,7 +3470,7 @@ def uInt32Number_tohex(num: int) -> bytes:  # noqa: N802
     Returns:
         bytes: The 4-byte hex representation of the number.
     """
-    return struct.pack(">I", round(num))
+    return struct.pack(">I", round(num))  # num can be float despite the type hint
 
 
 def uInt64Number(binaryString: bytes) -> int:  # noqa: N802, N803
@@ -3500,7 +3494,7 @@ def uInt64Number_tohex(num: int) -> bytes:  # noqa: N802
     Returns:
         bytes: The 8-byte hex representation of the number.
     """
-    return struct.pack(">Q", round(num))
+    return struct.pack(">Q", round(num))  # num can be float despite the type hint
 
 
 def uInt8Number(binaryString: bytes) -> int:  # noqa: N802, N803
@@ -3524,7 +3518,7 @@ def uInt8Number_tohex(num: int) -> bytes:  # noqa: N802
     Returns:
         bytes: The 1-byte hex representation of the number.
     """
-    return struct.pack(">H", round(num))[1:2]
+    return struct.pack(">H", round(num))[1:2]  # num can be float despite the type hint
 
 
 def videoCardGamma(  # noqa: N802
@@ -6331,8 +6325,8 @@ class MultiLocalizedUnicodeType(ICCProfileTag, AODict):  # ICC v4
             record = records[:record_size]
             if len(record) < 12:
                 continue
-            record_language_code = record[:2]
-            record_country_code = record[2:4]
+            record_language_code = record[:2].decode("ascii", "replace")
+            record_country_code = record[2:4].decode("ascii", "replace")
             record_length = uInt32Number(record[4:8])
             record_offset = uInt32Number(record[8:12])
             self.add_localized_string(
@@ -6356,13 +6350,13 @@ class MultiLocalizedUnicodeType(ICCProfileTag, AODict):  # ICC v4
         # TODO: Needs some work re locales
         # (currently if en-UK or en-US is not found, simply the first entry
         # is returned)
-        if b"en" in self:
-            for country_code in (b"UK", b"US"):
-                if country_code in self[b"en"]:
-                    return self[b"en"][country_code]
-            if self[b"en"]:
+        if "en" in self:
+            for country_code in ("UK", "US"):
+                if country_code in self["en"]:
+                    return self["en"][country_code]
+            if self["en"]:
                 # return first value
-                return next(iter(self[b"en"].values()))
+                return next(iter(self["en"].values()))
             return ""
         if len(self):
             # return first value of the first dictionary
@@ -6416,7 +6410,7 @@ class MultiLocalizedUnicodeType(ICCProfileTag, AODict):  # ICC v4
         offsets = []
         for language_code in self:
             for country_code in self[language_code]:
-                tag_data.append(language_code + country_code)
+                tag_data.append((language_code + country_code).encode("ascii"))
                 data = self[language_code][country_code].encode("UTF-16-BE")
                 if data in storage:
                     offset, record_length = offsets[storage.index(data)]
@@ -10234,10 +10228,7 @@ class ICCProfile:
                     countries = tag[language]
                     for country in countries:
                         value = countries[country]
-                        country = country.decode()
-                        if country.strip("\0 "):
-                            country = "/" + country
-                        language = language.decode()
+                        country = "/" + country if country.strip("\0 ") else ""
                         info[f"    {language}{country}"] = value
             elif isinstance(tag, NamedColor2Type):
                 info[name] = ""

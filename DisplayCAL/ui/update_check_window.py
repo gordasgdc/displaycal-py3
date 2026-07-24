@@ -26,6 +26,8 @@ checks both channels in one pass.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from qtpy.QtCore import QObject, QThread, Signal
 from qtpy.QtWidgets import (
     QCheckBox,
@@ -70,7 +72,7 @@ class _CallThread(QThread):
 class _UpdateAvailableDialog(QDialog):
     """Show a newer version's changelog and let the user get it or dismiss."""
 
-    _TITLES = {"app": APPNAME, "argyll": "ArgyllCMS"}
+    _TITLES: ClassVar[dict[str, str]] = {"app": APPNAME, "argyll": "ArgyllCMS"}
 
     def __init__(
         self, result: uc.UpdateCheckResult, parent: QWidget | None = None

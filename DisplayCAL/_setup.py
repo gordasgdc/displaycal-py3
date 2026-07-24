@@ -337,7 +337,6 @@ def create_app_symlinks(dist_dir: str, scripts: list[tuple[str, str]]) -> None:
             elif entry == "Info.plist":
                 with open(
                     os.path.join(dist_dir, main_contents_rel, entry),
-                    "r",
                     encoding="utf-8",
                 ) as info_in:
                     info_xml = info_in.read()
@@ -937,8 +936,8 @@ def _configure_py2app(
         f"{NAME}-{VERSION_STRING}",
     )
     import py2app.build_app as py2app_build_app
-    from py2app.build_app import py2app as py2app_cls
     from py2app import util as py2app_util
+    from py2app.build_app import py2app as py2app_cls
 
     def _skip_codesign_adhoc(bundle: str) -> None:
         print(f"Skipping ad-hoc codesign for bundle: {bundle}")
@@ -1338,7 +1337,9 @@ def _write_manifest_in(
         "include {}".format(os.path.join(*pymod.split(".")))
         for pymod in attrs.get("py_modules", [])
     )
-    manifest_in.append("include {}".format(os.path.join(NAME, "theme", "theme-info.txt")))
+    manifest_in.append(
+        "include {}".format(os.path.join(NAME, "theme", "theme-info.txt"))
+    )
     manifest_in.append(
         "recursive-include {} {} {}".format(
             os.path.join(NAME, "theme", "icons"), "*.icns", "*.ico"
@@ -1605,11 +1606,13 @@ def main() -> None:
         if not os.path.isdir(pil_dylibs):
             import PIL
 
-            pil_installed_dylibs = os.path.join(os.path.dirname(PIL.__file__), ".dylibs")
+            pil_installed_dylibs = os.path.join(
+                os.path.dirname(PIL.__file__), ".dylibs"
+            )
             print("Copying", pil_installed_dylibs, "->", pil_dylibs)
             shutil.copytree(pil_installed_dylibs, pil_dylibs)
             # ADD THIS: Remove existing signatures so the later deep-sign works properly
-            for root, dirs, files in os.walk(pil_dylibs):
+            for root, _dirs, files in os.walk(pil_dylibs):
                 for file in files:
                     if file.endswith(".dylib"):
                         os.system(

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import configparser
 import io
-import pathlib
 import os
+import pathlib
 import shutil
 import sys
 import tempfile
@@ -25,6 +25,8 @@ from DisplayCAL.dev.mocks import check_call_str
 from DisplayCAL.icc_profile import ICCProfile, LUT16Type
 from DisplayCAL.meta import DOMAIN
 from DisplayCAL.worker import (
+    Sudo,
+    Worker,
     add_keywords_to_cgats,
     check_cal_isfile,
     check_create_dir,
@@ -35,8 +37,6 @@ from DisplayCAL.worker import (
     extract_device_gray_primaries,
     get_argyll_version_string,
     get_options_from_profile,
-    Sudo,
-    Worker,
 )
 from tests.data.display_data import DisplayData
 
@@ -156,16 +156,18 @@ def test_worker_get_instrument_features():
 
 
 def test_worker_instrument_supports_css_1():
-    """testing if Worker.instrument_supports_ccss is working properly"""
+    """Testing if Worker.instrument_supports_ccss is working properly"""
     worker = Worker()
     result = worker.instrument_supports_ccss()
     expected_result = None
     assert result == expected_result
 
+
 # @pytest.mark.skip(reason="Test segfaults with python 3.12 - further investigation required.")
 def test_generate_b2a_from_inverse_table(data_files, setup_argyll):
     """Test Worker.generate_B2A_from_inverse_table() method"""
     import wx
+
     from DisplayCAL.argyll import ARGYLL_UTILS
     from DisplayCAL.config import setcfg, writecfg
 
@@ -602,8 +604,8 @@ class _FakeSudoProcess:
 
 def test_sudo_authenticate_uses_prompt_seam(monkeypatch):
     """Sudo.authenticate() calls a given prompt callable instead of the wx dialog."""
-    from DisplayCAL import worker as worker_module
     from DisplayCAL import wexpect
+    from DisplayCAL import worker as worker_module
 
     sudo = Sudo()
     sudo.sudo = "/usr/bin/sudo"
@@ -657,8 +659,8 @@ def test_sudo_authenticate_prompt_cancel_returns_false(monkeypatch):
 
 def test_sudo_authenticate_prompt_retries_on_rejected_password(monkeypatch):
     """A rejected password re-prompts with the sudo error prepended."""
-    from DisplayCAL import worker as worker_module
     from DisplayCAL import wexpect
+    from DisplayCAL import worker as worker_module
 
     sudo = Sudo()
     sudo.sudo = "/usr/bin/sudo"
@@ -910,7 +912,7 @@ def test_prepare_colprof_for_271(monkeypatch, data_path):
     assert isinstance(data_path, pathlib.Path)
 
     def patched_getcfg(key):
-        """patched getcfg()"""
+        """Patched getcfg()"""
         cfg = {
             "argyll.version": "2.3.1",
             "profile.name.expanded": "test_profile",
@@ -1020,7 +1022,7 @@ def test_get_argyll_version_string_returns_a_proper_value():
     config.initcfg()
     app = wx.GetApp() or wx.App()
 
-    assert "0.0.0" != get_argyll_version_string(name="ccxxmake", silent=False)
+    assert get_argyll_version_string(name="ccxxmake", silent=False) != "0.0.0"
 
 
 def test_get_argyll_latest_version_returns_str():
@@ -1031,7 +1033,7 @@ def test_get_argyll_latest_version_returns_str():
 
 @pytest.mark.skipif(
     os.getenv("GITHUB_ACTIONS") == "true",
-    reason="Test is randomly failing on CI machines."
+    reason="Test is randomly failing on CI machines.",
 )
 def test_get_argyll_latest_version_returns_latest_argyll_cms_version():
     """get_argyll_latest_version() returns the latest argyll cms version."""
@@ -1106,6 +1108,7 @@ def test_get_technology_strings_without_argyll_returns_from_argyll_17():
         "s": "DLP Projector RGBCMY Filter Wheel",
         "u": "Unknown",
     }
+
 
 @pytest.mark.skipif(
     os.getenv("GITHUB_ACTIONS") == "true" and sys.platform in ("linux", "win32"),
@@ -1206,8 +1209,20 @@ def _build_matrix_from_primaries(RGB_XYZ, remaining, white_scale=1.0):
             X, Y, Z = colormath.blend_blackpoint(X, Y, Z, XYZbp, (0, 0, 0), XYZwp)
         xy.append(colormath.XYZ2xyY(*(v / 100 for v in (X, Y, Z)))[:2])
     profile = ICCProfile.from_chromaticities(
-        xy[0][0], xy[0][1], xy[1][0], xy[1][1], xy[2][0], xy[2][1],
-        xy[3][0], xy[3][1], 2.2, "t", "c", None, None, cat="Bradford",
+        xy[0][0],
+        xy[0][1],
+        xy[1][0],
+        xy[1][1],
+        xy[2][0],
+        xy[2][1],
+        xy[3][0],
+        xy[3][1],
+        2.2,
+        "t",
+        "c",
+        None,
+        None,
+        cat="Bradford",
     )
     if white_scale != 1.0:
         # Make the matrix map device (1, 1, 1) to a brighter-than-media white,
@@ -1401,7 +1416,9 @@ def _make_worker_for_cal_test(monkeypatch):
     def fake_safe_send(data):
         worker.safe_send_calls.append(data)
 
-    monkeypatch.setattr(worker, "do_instrument_calibration", fake_do_instrument_calibration)
+    monkeypatch.setattr(
+        worker, "do_instrument_calibration", fake_do_instrument_calibration
+    )
     monkeypatch.setattr(worker, "safe_send", fake_safe_send)
     return worker
 
@@ -1453,7 +1470,9 @@ def test_check_instrument_calibration_failure_allows_retry_dialog(monkeypatch):
     worker.check_instrument_calibration(COLORMUNKI_CAL_MSG)
     assert worker.safe_send_calls == [" "]
     # Calibration fails: reset state so the NEXT prompt opens the dialog again
-    worker._last_calibration_msg = None  # mirrors what do_instrument_calibration does on cancel
+    worker._last_calibration_msg = (
+        None  # mirrors what do_instrument_calibration does on cancel
+    )
     worker.check_instrument_calibration(COLORMUNKI_CAL_MSG)
     assert len(worker.do_instrument_calibration_calls) == 2
     assert worker.do_instrument_calibration_calls[1] is False

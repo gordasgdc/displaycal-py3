@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import sys
 from typing import TypedDict
 
@@ -6,10 +7,7 @@ import pytest
 from _pytest.fixtures import SubRequest
 
 from DisplayCAL.cgats import CGATS, stable_sort_by_l
-from DisplayCAL.config import get_current_profile
 from DisplayCAL.dev.mocks import check_call
-from DisplayCAL.util_io import LineBufferedStream, Files
-from DisplayCAL.worker import FilteredStream
 
 
 def test_cgats_with_sample_data_1(data_files):

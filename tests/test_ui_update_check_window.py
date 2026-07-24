@@ -21,7 +21,6 @@ from DisplayCAL import config  # noqa: E402
 from DisplayCAL import localization as lang  # noqa: E402
 from DisplayCAL import update_check as uc  # noqa: E402
 from DisplayCAL.config import getcfg, setcfg  # noqa: E402
-
 from DisplayCAL.ui import update_check_window as ucw  # noqa: E402
 
 
@@ -146,9 +145,7 @@ class TestUpdateCheckController:
 
     def test_finds_argyll_update_shows_dialog(self, qapp, monkeypatch):
         monkeypatch.setattr(uc, "check_app_update", lambda: None)
-        monkeypatch.setattr(
-            uc, "check_argyll_update", lambda *_a: _ARGYLL_RESULT
-        )
+        monkeypatch.setattr(uc, "check_argyll_update", lambda *_a: _ARGYLL_RESULT)
         shown = []
         monkeypatch.setattr(
             ucw._UpdateAvailableDialog,
@@ -178,9 +175,7 @@ class TestUpdateCheckController:
         assert _spin_until(qapp, lambda: results)
         assert results == [False]
 
-    def test_nothing_found_not_silent_shows_up_to_date_dialog(
-        self, qapp, monkeypatch
-    ):
+    def test_nothing_found_not_silent_shows_up_to_date_dialog(self, qapp, monkeypatch):
         monkeypatch.setattr(uc, "check_app_update", lambda: None)
         monkeypatch.setattr(uc, "check_argyll_update", lambda *_a: None)
         calls = []

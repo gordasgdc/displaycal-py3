@@ -1,5 +1,4 @@
 import pytest
-import sys
 
 from DisplayCAL import demjson_compat
 from DisplayCAL.demjson_compat import decode, encode

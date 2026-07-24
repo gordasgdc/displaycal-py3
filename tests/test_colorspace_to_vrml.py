@@ -47,8 +47,9 @@ def test_color_space_to_vrml_init_data_arg_is_skipped():
 
     py_error_message = {
         9: "__init__() missing 1 required positional argument: 'data'",
-    }.get(sys.version_info.minor,
-        "ColorSpaceToVRML.__init__() missing 1 required positional argument: 'data'"
+    }.get(
+        sys.version_info.minor,
+        "ColorSpaceToVRML.__init__() missing 1 required positional argument: 'data'",
     )
     assert str(cm.value) == py_error_message
 
@@ -177,8 +178,9 @@ def test_color_space_to_vrml_colorspace_is_read_only(get_cgats_data):
     py_error_message = {
         9: "can't set attribute",
         10: "can't set attribute 'colorspace'",
-    }.get(sys.version_info.minor,
-        "property 'colorspace' of 'ColorSpaceToVRML' object has no setter"
+    }.get(
+        sys.version_info.minor,
+        "property 'colorspace' of 'ColorSpaceToVRML' object has no setter",
     )
     assert str(cm.value) == py_error_message
 
@@ -279,7 +281,7 @@ def test_color_space_to_vrml_generate_vrml(
 ):
     """ColorSpaceToVRML.generate_vrml() returns a VRML string."""
     vrml_file_path = data_files[vrml_filename]
-    with open(vrml_file_path, "r", encoding="utf-8") as f:
+    with open(vrml_file_path, encoding="utf-8") as f:
         expected_vrml = f.read()
     obj = colorspace_class(
         data=get_cgats_data,
@@ -314,4 +316,4 @@ def test_color_space_to_vrml_valid_color_space_names_is_correct():
         "RGB",
         "xyY",
     )
-    assert ColorSpaceToVRML.VALID_COLOR_SPACE_NAMES == expected_names
+    assert expected_names == ColorSpaceToVRML.VALID_COLOR_SPACE_NAMES

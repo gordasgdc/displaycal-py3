@@ -15,8 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, 5th Floor, Boston, MA 02110-1301, USA
 
-"""
-winresource.py
+"""winresource.py
 
 Read and write resources from/to Win32 PE files.
 
@@ -42,7 +41,6 @@ ERROR_RESOURCE_LANG_NOT_FOUND = 1815
 
 
 class File:
-
     """Win32 PE file class."""
 
     def __init__(self, filename):

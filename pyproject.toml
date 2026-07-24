@@ -235,9 +235,12 @@ extend-ignore = [
     "PLR0915",  # Too many statements
     "PLR2004",  # Magic value comparison
     "PERF203",  # Try..except in loop, TODO: Re-enable this later on...
+    "PYI041",  # Redundant numeric union (e.g. int | float)
+    "RUF057",  # Unnecessary round(), doesn't account for int | float type hints
     "RUF100",  # Unused noqa
     "S105",  # Hardcoded password
     "S110",  # try..except..pass
+    "S311",  # Suspicious non-cryptographic random usage
     "S603",  # Subprocess without shell=True
 ]
 

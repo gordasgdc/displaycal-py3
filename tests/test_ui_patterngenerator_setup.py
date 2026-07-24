@@ -25,13 +25,14 @@ os.environ.setdefault("QT_API", "pyside6")
 
 pytest.importorskip("qtpy")
 
+from qtpy.QtWidgets import QMessageBox  # noqa: E402
+
 from DisplayCAL import config  # noqa: E402
 from DisplayCAL import localization as lang  # noqa: E402
 from DisplayCAL.config import getcfg, setcfg  # noqa: E402
 from DisplayCAL.debughelpers import Error, Info  # noqa: E402
-from DisplayCAL.worker import Worker  # noqa: E402
-
 from DisplayCAL.ui import patterngenerator_setup as pgs  # noqa: E402
+from DisplayCAL.worker import Worker  # noqa: E402
 
 
 @pytest.fixture(scope="session")
@@ -211,9 +212,7 @@ class TestConnectMadvr:
     def test_fast_failure_shows_error(self, qapp, worker, monkeypatch):
         monkeypatch.setattr(worker, "madtpg_connect", lambda: False)
         shown = []
-        monkeypatch.setattr(
-            pgs.QMessageBox, "critical", lambda *a, **k: shown.append(a[2])
-        )
+        monkeypatch.setattr(QMessageBox, "critical", lambda *a, **k: shown.append(a[2]))
 
         result = pgs.connect_madvr(worker, None, "title")
 
@@ -317,9 +316,7 @@ class TestConnectLivePatterngenerator:
     def test_already_connected_skips_dialog(self, qapp, worker, monkeypatch):
         fake_pg = _FakeLivePatternGenerator()
         fake_pg.conn = True
-        monkeypatch.setattr(
-            worker, "setup_patterngenerator", lambda logfile=None: None
-        )
+        monkeypatch.setattr(worker, "setup_patterngenerator", lambda logfile=None: None)
         worker.patterngenerator = fake_pg
         monkeypatch.setattr(
             pgs.QProgressDialog,
@@ -339,9 +336,7 @@ class TestConnectLivePatterngenerator:
 
         monkeypatch.setattr(worker, "setup_patterngenerator", _raise)
         shown = []
-        monkeypatch.setattr(
-            pgs.QMessageBox, "critical", lambda *a, **k: shown.append(a[2])
-        )
+        monkeypatch.setattr(QMessageBox, "critical", lambda *a, **k: shown.append(a[2]))
 
         result = pgs.connect_live_patterngenerator(worker, None, "title")
 
@@ -378,9 +373,7 @@ class TestConnectLivePatterngenerator:
             lambda logfile=None: setattr(worker, "patterngenerator", fake_pg),
         )
         shown = []
-        monkeypatch.setattr(
-            pgs.QMessageBox, "critical", lambda *a, **k: shown.append(a[2])
-        )
+        monkeypatch.setattr(QMessageBox, "critical", lambda *a, **k: shown.append(a[2]))
 
         result = pgs.connect_live_patterngenerator(worker, None, "title")
 
@@ -412,13 +405,17 @@ class TestConnectLivePatterngenerator:
 
 
 class TestLut3DAPIInstallController:
-    def test_cancelled_connect_finishes_without_install(self, qapp, worker, monkeypatch):
+    def test_cancelled_connect_finishes_without_install(
+        self, qapp, worker, monkeypatch
+    ):
         monkeypatch.setattr(pgs, "connect_patterngenerator", lambda *a, **k: None)
         installed = []
         monkeypatch.setattr(
             worker, "install_3dlut", lambda *a, **k: installed.append(True)
         )
-        controller = pgs.Lut3DAPIInstallController(worker, "/tmp/lut.3dlut", False, None)
+        controller = pgs.Lut3DAPIInstallController(
+            worker, "/tmp/lut.3dlut", False, None
+        )
         results = []
         controller.finished.connect(lambda: results.append(True))
 
@@ -433,7 +430,9 @@ class TestLut3DAPIInstallController:
         monkeypatch.setattr(
             worker, "install_3dlut", lambda *a, **k: installed.append(True)
         )
-        controller = pgs.Lut3DAPIInstallController(worker, "/tmp/lut.3dlut", False, None)
+        controller = pgs.Lut3DAPIInstallController(
+            worker, "/tmp/lut.3dlut", False, None
+        )
         results = []
         controller.finished.connect(lambda: results.append(True))
 
@@ -449,9 +448,11 @@ class TestLut3DAPIInstallController:
         )
         shown = []
         monkeypatch.setattr(
-            pgs.QMessageBox, "information", lambda *a, **k: shown.append(a[2])
+            QMessageBox, "information", lambda *a, **k: shown.append(a[2])
         )
-        controller = pgs.Lut3DAPIInstallController(worker, "/tmp/lut.3dlut", False, None)
+        controller = pgs.Lut3DAPIInstallController(
+            worker, "/tmp/lut.3dlut", False, None
+        )
         results = []
         controller.finished.connect(lambda: results.append(True))
 
@@ -470,7 +471,7 @@ class TestLut3DAPIInstallController:
             "install_3dlut",
             lambda path, filename: received.append((path, filename)) or Info("ok"),
         )
-        monkeypatch.setattr(pgs.QMessageBox, "information", lambda *a, **k: None)
+        monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: None)
         controller = pgs.Lut3DAPIInstallController(worker, "/tmp/lut.3dlut", True, None)
         results = []
         controller.finished.connect(lambda: results.append(True))
@@ -486,10 +487,10 @@ class TestLut3DAPIInstallController:
             worker, "install_3dlut", lambda path, filename: Error("nope")
         )
         shown = []
-        monkeypatch.setattr(
-            pgs.QMessageBox, "critical", lambda *a, **k: shown.append(a[2])
+        monkeypatch.setattr(QMessageBox, "critical", lambda *a, **k: shown.append(a[2]))
+        controller = pgs.Lut3DAPIInstallController(
+            worker, "/tmp/lut.3dlut", False, None
         )
-        controller = pgs.Lut3DAPIInstallController(worker, "/tmp/lut.3dlut", False, None)
         results = []
         controller.finished.connect(lambda: results.append(True))
 

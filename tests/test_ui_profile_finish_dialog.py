@@ -44,7 +44,9 @@ def worker():
 @pytest.fixture
 def fixed_scope_options(monkeypatch):
     """Force a deterministic, non-empty scope choice regardless of the host."""
-    monkeypatch.setattr(pfd.pi, "resolve_install_scope_options", lambda **kw: ["u", "l"])
+    monkeypatch.setattr(
+        pfd.pi, "resolve_install_scope_options", lambda **kw: ["u", "l"]
+    )
 
 
 def _make_dialog(qapp, worker, **overrides):
@@ -107,9 +109,7 @@ def test_gamut_grid_shows_only_populated_columns(qapp, worker):
 
 
 def test_gamut_grid_shows_both_columns(qapp, worker):
-    dialog = _make_dialog(
-        qapp, worker, cinfo=["99.9% sRGB"], vinfo=["87.3% sRGB"]
-    )
+    dialog = _make_dialog(qapp, worker, cinfo=["99.9% sRGB"], vinfo=["87.3% sRGB"])
     try:
         labels = [label.text() for label in dialog.findChildren(pfd.QLabel)]
         assert any("99.9% sRGB" in t for t in labels)
@@ -198,9 +198,7 @@ def test_no_scope_options_forces_user_scope(qapp, worker, monkeypatch):
         dialog.deleteLater()
 
 
-def test_scope_buttons_built_from_resolved_options(
-    qapp, worker, fixed_scope_options
-):
+def test_scope_buttons_built_from_resolved_options(qapp, worker, fixed_scope_options):
     config.setcfg("profile.install_scope", "u")
     dialog = _make_dialog(qapp, worker, installable=True)
     try:
@@ -211,9 +209,7 @@ def test_scope_buttons_built_from_resolved_options(
         dialog.deleteLater()
 
 
-def test_selecting_scope_button_persists_config(
-    qapp, worker, fixed_scope_options
-):
+def test_selecting_scope_button_persists_config(qapp, worker, fixed_scope_options):
     config.setcfg("profile.install_scope", "u")
     dialog = _make_dialog(qapp, worker, installable=True)
     try:

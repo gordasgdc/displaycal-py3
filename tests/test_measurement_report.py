@@ -95,7 +95,9 @@ class TestDefaultReportFilename:
             "Measurement", "3.9.16", 'DELL:U2410/2*?"<>|', "2026-07-04 12-30"
         )
         # The whole run of unsafe chars collapses to a single underscore.
-        assert name == "Measurement Report 3.9.16 - DELL_U2410_2_ - 2026-07-04 12-30.html"
+        assert (
+            name == "Measurement Report 3.9.16 - DELL_U2410_2_ - 2026-07-04 12-30.html"
+        )
 
     def test_timestamp_defaults_to_now(self):
         name = mr.default_report_filename("Measurement", "3.9.16", "DELL U2410")
@@ -429,7 +431,9 @@ class TestFinalizeMeasurementReport:
                 self.key = key
 
         monkeypatch.setattr(
-            mr.report, "create", lambda save_path, *a, **kw: open(save_path, "w").close()
+            mr.report,
+            "create",
+            lambda save_path, *a, **kw: open(save_path, "w").close(),
         )
         save_path = str(tmp_path / "report.html")
 

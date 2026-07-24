@@ -6,14 +6,14 @@ from time import sleep
 
 import pytest
 
+from DisplayCAL import config, worker
 from DisplayCAL import localization as lang
-from DisplayCAL import (config, worker)
 from DisplayCAL.cgats import CGATS
 from DisplayCAL.config import getcfg
 from DisplayCAL.icc_profile import ICCProfile
 from DisplayCAL.util_io import Files
-from DisplayCAL.wx_untethered_frame import UntetheredFrame
 from DisplayCAL.wx_addons import wx
+from DisplayCAL.wx_untethered_frame import UntetheredFrame
 from DisplayCAL.wx_windows import BaseApp
 
 

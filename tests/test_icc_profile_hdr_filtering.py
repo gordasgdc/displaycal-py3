@@ -5,8 +5,6 @@ registry value.  When the display is in SDR mode that value must be ignored so
 the correct SDR profile (ICMProfile) is used instead.
 """
 
-import os
-import sys
 import types
 from unittest import mock
 
@@ -14,10 +12,10 @@ import pytest
 
 from DisplayCAL import icc_profile as _icc
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_fake_winreg(registry_values):
     """Return a minimal fake winreg module seeded with the given values.
@@ -77,6 +75,7 @@ _MONKEY = ["{4d36e96e-e325-11ce-bfc1-08002be10318}", "0002"]
 # _winreg_get_display_profiles
 # ---------------------------------------------------------------------------
 
+
 class TestWinregGetDisplayProfiles:
     def test_returns_both_profiles_by_default(self, registry_with_both_profiles):
         """Both ICMProfile and ICMProfileAC are returned when filtering is off."""
@@ -85,7 +84,9 @@ class TestWinregGetDisplayProfiles:
         assert sdr in profiles
         assert hdr in profiles
 
-    def test_exclude_advanced_color_removes_hdr_entry(self, registry_with_both_profiles):
+    def test_exclude_advanced_color_removes_hdr_entry(
+        self, registry_with_both_profiles
+    ):
         """With exclude_advanced_color=True, ICMProfileAC entries are dropped."""
         icc, sdr, hdr = registry_with_both_profiles
         profiles = icc._winreg_get_display_profiles(
@@ -106,6 +107,7 @@ class TestWinregGetDisplayProfiles:
 # ---------------------------------------------------------------------------
 # _winreg_get_display_profile
 # ---------------------------------------------------------------------------
+
 
 class TestWinregGetDisplayProfile:
     def test_sdr_mode_returns_sdr_profile(self, registry_with_both_profiles):

@@ -380,9 +380,9 @@ def lut3d_format_side_effects(
     return updates
 
 
-def lut3d_encoding_codes(file_format: str, argyll_version: str) -> tuple[
-    list[str], list[str]
-]:
+def lut3d_encoding_codes(
+    file_format: str, argyll_version: str
+) -> tuple[list[str], list[str]]:
     """Return the ``(input codes, output codes)`` valid for ``file_format``.
 
     Mirrors ``LUT3DMixin.lut3d_setup_encoding_ctrl``.
@@ -582,9 +582,7 @@ def install_via_copy(
                     f"{os.linesep * 2}// Automatically added by "
                     f"{APPNAME} {VERSION_STRING}{os.linesep}"
                 ).encode()
-                reshade_fx += (
-                    f'#include "ColorLookupTable.fx"{os.linesep}'
-                ).encode()
+                reshade_fx += (f'#include "ColorLookupTable.fx"{os.linesep}').encode()
                 with open(reshade_fx_path, "wb") as reshade_fx_file:
                     reshade_fx_file.write(reshade_fx)
         clut_fx_dst = os.path.join(dst_dir, "ColorLookupTable.fx")

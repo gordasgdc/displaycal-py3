@@ -770,8 +770,10 @@ def detect_import_kind(
                     kind = "spyder4"
     if kind:
         if kind == "icd":
-            if not config.getcfg("dry_run") and result and not isinstance(
-                result, Exception
+            if (
+                not config.getcfg("dry_run")
+                and result
+                and not isinstance(result, Exception)
             ):
                 # Assume iColorDisplay DeviceCorrections.txt
                 ccmx_dir = config.get_argyll_data_dir()
@@ -937,18 +939,14 @@ def get_ccxx_measurement_modes(instrument_name: str, swap: bool = False) -> dict
             "e": lang.getstr("measurement_mode.lcd.white_led"),
             "b": lang.getstr("measurement_mode.lcd.wide_gamut.led"),
             "i": lang.getstr("measurement_mode.lcd.wide_gamut.gb_led"),
-            "h": lang.getstr(
-                "measurement_mode.lcd.high_brightness", "High brightness"
-            ),
+            "h": lang.getstr("measurement_mode.lcd.high_brightness", "High brightness"),
         },
         "Spyder 2024": {
             "l": lang.getstr("measurement_mode.lcd"),
             "e": lang.getstr("measurement_mode.lcd.white_led"),
             "b": lang.getstr("measurement_mode.lcd.wide_gamut.led"),
             "i": lang.getstr("measurement_mode.lcd.wide_gamut.gb_led"),
-            "h": lang.getstr(
-                "measurement_mode.lcd.high_brightness", "High brightness"
-            ),
+            "h": lang.getstr("measurement_mode.lcd.high_brightness", "High brightness"),
             "o": lang.getstr("measurement_mode.lcd.oled", "OLED"),
             "m": lang.getstr("measurement_mode.lcd.mini_led", "Mini-LED"),
         },
@@ -1009,9 +1007,7 @@ def compute_measurement_modes(
         }
         measurement_modes_ab = {instrument_type: ["c", "l"]}
     else:
-        measurement_modes = {
-            instrument_type: [lang.getstr("measurement_mode.refresh")]
-        }
+        measurement_modes = {instrument_type: [lang.getstr("measurement_mode.refresh")]}
         measurement_modes_ab = {instrument_type: ["c"]}
     instrument_features = worker.get_instrument_features(instrument_name)
     if instrument_name in ("Spyder4", "Spyder5") and worker.spyder4_cal_exists():
@@ -1101,9 +1097,7 @@ def compute_measurement_modes(
         0,
     ]:
         # Argyll CMS 1.5.x introduces new measurement mode
-        measurement_modes[instrument_type].extend(
-            [lang.getstr("measurement_mode.raw")]
-        )
+        measurement_modes[instrument_type].extend([lang.getstr("measurement_mode.raw")])
         measurement_modes_ab[instrument_type].append("R")
     elif instrument_name == "K-10" or not instrument_features:
         # K-10 and 'unknown' instruments
@@ -1239,9 +1233,7 @@ class ColorimeterCorrectionCatalog:
             self.cached_paths.remove(path)
         self.cached_descriptors.pop(path, None)
         self.instruments.pop(path, None)
-        key = next(
-            (key for key, value in self.mapping.items() if value == path), None
-        )
+        key = next((key for key, value in self.mapping.items() if value == path), None)
         if key is not None:
             del self.mapping[key]
 
@@ -1517,9 +1509,9 @@ def resolve_colorimeter_correction_selection(
                 if not cgats:
                     cgats = CGATS(ccmx_cfg[1], strict=True)
             except (OSError, CGATSError) as exception:
-                if isinstance(
-                    exception, CGATSInvalidError
-                ) and ccmx_cfg[1] in get_argyll_data_files(
+                if isinstance(exception, CGATSInvalidError) and ccmx_cfg[
+                    1
+                ] in get_argyll_data_files(
                     worker, "lu", "*" + os.path.splitext(ccmx_cfg[1])[1]
                 ):
                     malformed_ccxx.append(ccmx_cfg[1])

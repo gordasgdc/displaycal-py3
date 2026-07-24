@@ -42,7 +42,7 @@ def eecolor_to_icc_devicelink(eecolor_3dlut_filename: str, unity: bool = False) 
 
     if not unity:
         # Read in eeColor 3D LUT data
-        safe_print("Reading in eeColor 3D LUT", '"%s"' % eecolor_3dlut_filename)
+        safe_print("Reading in eeColor 3D LUT", f'"{eecolor_3dlut_filename}"')
         eecolor_3dlut_data = []
         with open(eecolor_3dlut_filename, "rb") as eecolor_3dlut:
             for line in eecolor_3dlut:
@@ -52,7 +52,7 @@ def eecolor_to_icc_devicelink(eecolor_3dlut_filename: str, unity: bool = False) 
                 values = [float(v) for v in line.split()]
                 eecolor_3dlut_data.append(values)
 
-        clutres = int(round(len(eecolor_3dlut_data) ** (1.0 / 3.0)))
+        clutres = round(len(eecolor_3dlut_data) ** (1.0 / 3.0))
         clutmax = clutres - 1.0
 
         # Fix input values (eeColor BRG) so sorting produces correct result
@@ -175,8 +175,8 @@ def main() -> None:
         )
         safe_print("Author: Florian Hoech, licensed under the GPL version 3")
         safe_print(
-            "Usage: %s [--unity] [--batch] <name>.<target color space>.txt"
-            % os.path.basename(sys.argv[0])
+            f"Usage: {os.path.basename(sys.argv[0])} [--unity] [--batch] "
+            "<name>.<target color space>.txt"
         )
         safe_print(
             "Possible target color spaces: BT709, SMPTE_C, EBU_PAL, BT2020, DCI_P3"
@@ -189,13 +189,13 @@ def main() -> None:
         safe_print("")
         safe_print("Examples:")
         safe_print("  Convert SDR BT709 eeColor 3D LUT")
-        safe_print("  %s eeColor.BT709.txt" % os.path.basename(sys.argv[0]))
+        safe_print(f"  {os.path.basename(sys.argv[0])} eeColor.BT709.txt")
         safe_print("")
         safe_print("  Convert HDR BT2020 eeColor 3D LUT")
-        safe_print("  %s eeColor.BT2020.HDR.txt" % os.path.basename(sys.argv[0]))
+        safe_print(f"  {os.path.basename(sys.argv[0])} eeColor.BT2020.HDR.txt")
         safe_print("")
         safe_print("  Convert HDR to SDR BT2020 eeColor 3D LUT")
-        safe_print("  %s eeColor.BT2020.HDR2SDR.txt" % os.path.basename(sys.argv[0]))
+        safe_print(f"  {os.path.basename(sys.argv[0])} eeColor.BT2020.HDR2SDR.txt")
     if sys.stdout.isatty() and "--batch" not in sys.argv[1:]:
         input("Press RETURN to exit")
     sys.exit(int(not result))

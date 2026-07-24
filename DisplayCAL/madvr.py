@@ -301,8 +301,8 @@ def fill_madvr_3dlut_with_icc_device_link(
             for j in range(clutres):
                 for k in range(clutres):
                     # Optimize for speed
-                    b, g, r = chr(k), chr(j), chr(i)
-                    raw.write(b + b + g + g + r + r).encode()
+                    b, g, r = bytes([k]), bytes([j]), bytes([i])
+                    raw.write(b + b + g + g + r + r)
             perc = round(i / clutmax * 100)
             if perc > prevperc:
                 logfile.write(f"\r{perc}%")
@@ -388,7 +388,7 @@ def print_lut_generation_summary(
         )
 
 
-def inet_pton(ip_string: str) -> str:
+def inet_pton(ip_string: str) -> bytes:
     """Convert ip_string to packed IP representation.
 
     Convert an IP address in string format to the packed binary format used in
@@ -398,15 +398,15 @@ def inet_pton(ip_string: str) -> str:
         ip_string (str): The IP address in string format, either IPv4 or IPv6.
 
     Returns:
-        str: The packed binary representation of the IP address.
+        bytes: The packed binary representation of the IP address.
     """
     if ":" in ip_string:
         # IPv6
-        return "".join(
+        return b"".join(
             [unhexlify(block.rjust(4, "0")) for block in ip_string.split(":")]
         )
     # IPv4
-    return "".join([chr(int(block)) for block in ip_string.split(".")])
+    return bytes(int(block) for block in ip_string.split("."))
 
 
 def trunc(value: str, length: int) -> str:
@@ -1791,9 +1791,9 @@ class MadTPGNet(MadTPGBase):
         client["component"] = component
         client["instance"] = record["instance"]
         if command == "reply":
-            if params == "+":
+            if params == b"+":
                 params = True
-            elif params == "-":
+            elif params == b"-":
                 params = False
         elif command == "confirm":
             if addr not in self.clients:
@@ -2554,7 +2554,7 @@ class MadTPGNetSender:
             if self.command == "LoadHdr3dlut":
                 params += struct.pack("<i", args[3])  # HDR to SDR?
         elif self.command == "SetDeviceGammaRamp":
-            self._process_set_device_gamma_ramp_param(args)
+            params = self._process_set_device_gamma_ramp_param(args)
         elif self.command in (
             "SetDisableOsdButton",
             "SetStayOnTopButton",
@@ -2573,15 +2573,18 @@ class MadTPGNetSender:
         return self.madtpg._send(
             self._conn,
             self.command,
-            params if isinstance(params, bytes) else params.encode(),
+            params if isinstance(params, bytes) else params.encode("UTF-16-LE"),
         )
 
-    def _process_set_device_gamma_ramp_param(self, args: list | tuple) -> None:
+    def _process_set_device_gamma_ramp_param(self, args: list | tuple) -> bytes:
         """Process SetDeviceGammaRamp parameters.
 
         Args:
             args (list | tuple): Positional arguments for the
                 SetDeviceGammaRamp command.
+
+        Returns:
+            bytes: The packed device gamma ramp parameters.
         """
         params = b""
         for j in range(3):
@@ -2590,6 +2593,7 @@ class MadTPGNetSender:
                 # else convert ushort_Array_256_Array_3 to string
                 v = i * 257 if args[0] is None else args[0][j][i]
                 params += struct.pack("<H", v)
+        return params
 
     def _process_show_rgb_param(self, args: list | tuple, kwargs: dict) -> str:
         """Process ShowRGB parameters and return formatted string.

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-from io import BytesIO
 import os
 import re
 import sys
+from io import BytesIO
 
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, root)
@@ -10,7 +10,6 @@ sys.path.insert(0, root)
 from DisplayCAL import lazydict
 from DisplayCAL.util_list import natsort
 from DisplayCAL.util_os import listdir_re
-
 
 USE_INLINE = False
 
@@ -20,8 +19,7 @@ def quote(obj):
         return '"%s"' % obj.replace("\\", "\\\\").replace('"', '\\"').replace(
             "\n", "\\n"
         ).replace("\t", "\\t")
-    else:
-        return repr(obj)
+    return repr(obj)
 
 
 def langmerge(infilename1, infilename2, outfilename):
@@ -119,9 +117,9 @@ def langmerge(infilename1, infilename2, outfilename):
     for key in natsort(dictin1.keys(), False):
         if key not in dictin2 and not key.startswith("*") and dictin1[key]:
             if "ORPHANED KEY-VALUE PAIRS" not in merged:
-                merged[
-                    "ORPHANED KEY-VALUE PAIRS"
-                ] = "Note to translators: Key-value pairs below this point are no longer used. You may consider removing them."
+                merged["ORPHANED KEY-VALUE PAIRS"] = (
+                    "Note to translators: Key-value pairs below this point are no longer used. You may consider removing them."
+                )
             merged[key] = dictin1[key]
             print("Orphan: '%s' '%s'" % (key, dictin1[key]))
 

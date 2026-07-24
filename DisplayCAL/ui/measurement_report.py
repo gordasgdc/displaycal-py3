@@ -37,6 +37,7 @@ browse-button stand-in the Qt 3D LUT window uses (:class:`_FileBrowse`).
 
 from __future__ import annotations
 
+import contextlib
 import math
 import os
 import sys
@@ -54,7 +55,6 @@ from qtpy.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QMessageBox,
     QPushButton,
     QRadioButton,
     QSlider,
@@ -86,11 +86,11 @@ from DisplayCAL.icc_profile import (
     XYZType,
 )
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import get_theme_pixmap
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
-from DisplayCAL.ui import message_box
 from DisplayCAL.ui.tooltip_window import info_text_html
 from DisplayCAL.util_list import natsort_key_factory
 from DisplayCAL.worker import Worker, get_current_profile_path
@@ -127,10 +127,8 @@ def friendly_file_name(path: str) -> str:
     """
     name = None
     if os.path.splitext(path)[1].lower() in (".icc", ".icm"):
-        try:
+        with contextlib.suppress(OSError, ICCProfileInvalidError):
             name = ICCProfile(path).getDescription()
-        except (OSError, ICCProfileInvalidError):
-            pass
     if not name:
         name = os.path.basename(path)
     return lang.getstr(name)
@@ -1055,9 +1053,7 @@ class ReportPanel(QWidget):
         Args:
             event (object): Truthy when triggered by the user.
         """
-        setcfg(
-            "measurement_report.chart.fields", self.fields_ctrl.currentText()
-        )
+        setcfg("measurement_report.chart.fields", self.fields_ctrl.currentText())
         if event:
             self.mr_update_main_controls(event)
 
@@ -1680,9 +1676,7 @@ class ReportPanel(QWidget):
             patches (int | None): Patch count; taken from the patch-count label
                 when omitted.
         """
-        integration_time = self.worker.get_instrument_features().get(
-            "integration_time"
-        )
+        integration_time = self.worker.get_instrument_features().get("integration_time")
         if integration_time:
             if which == "chart" and not patches:
                 patches = int(self.chart_patches_amount.text())

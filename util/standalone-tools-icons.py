@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-from glob import glob
-from subprocess import call
-from tempfile import mkdtemp
 import os
 import re
 import sys
-
+from glob import glob
+from subprocess import call
+from tempfile import mkdtemp
 
 appname = "DisplayCAL"
 feeduri = "http://displaycal.net/0install/%s.xml" % appname
@@ -17,7 +16,7 @@ def script2pywname(script):
         appname + "-3dlut-maker": appname + "-3DLUT-maker",
         appname + "-vrml-to-x3d-converter": appname + "-VRML-to-X3D-converter",
     }
-    pyw = appname + script[len(appname):]
+    pyw = appname + script[len(appname) :]
     return a2b.get(pyw, pyw)
 
 
@@ -55,7 +54,7 @@ def installer(action="install"):
                                 ),
                             ]
                         )
-                except EnvironmentError as exception:
+                except OSError as exception:
                     exception.filename = "xdg-icon-resource"
                     raise exception
                 with open(desktopfilename) as desktopfile:
@@ -80,7 +79,7 @@ def installer(action="install"):
                             tmpfilename,
                         ]
                     )
-                except EnvironmentError as exception:
+                except OSError as exception:
                     exception.filename = "xdg-desktop-menu"
                     raise exception
             else:
@@ -96,12 +95,12 @@ def installer(action="install"):
                                 scriptname,
                             ]
                         )
-                except EnvironmentError as exception:
+                except OSError as exception:
                     exception.filename = "xdg-icon-resource"
                     raise exception
                 try:
                     call(["xdg-desktop-menu", action, "--noupdate", desktopfilename])
-                except EnvironmentError as exception:
+                except OSError as exception:
                     exception.filename = "xdg-desktop-menu"
                     raise exception
     finally:

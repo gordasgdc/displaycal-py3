@@ -24,11 +24,31 @@ if TYPE_CHECKING:
 
 #: Device channel counts by ICC colour-space signature.
 _CHANNELS = {
-    b"XYZ": 3, b"Lab": 3, b"Luv": 3, b"YCbr": 3, b"Yxy": 3, b"RGB": 3,
-    b"GRAY": 1, b"HSV": 3, b"HLS": 3, b"CMYK": 4, b"CMY": 3, b"2CLR": 2,
-    b"3CLR": 3, b"4CLR": 4, b"5CLR": 5, b"6CLR": 6, b"7CLR": 7, b"8CLR": 8,
-    b"9CLR": 9, b"ACLR": 10, b"BCLR": 11, b"CCLR": 12, b"DCLR": 13,
-    b"ECLR": 14, b"FCLR": 15,
+    b"XYZ": 3,
+    b"Lab": 3,
+    b"Luv": 3,
+    b"YCbr": 3,
+    b"Yxy": 3,
+    b"RGB": 3,
+    b"GRAY": 1,
+    b"HSV": 3,
+    b"HLS": 3,
+    b"CMYK": 4,
+    b"CMY": 3,
+    b"2CLR": 2,
+    b"3CLR": 3,
+    b"4CLR": 4,
+    b"5CLR": 5,
+    b"6CLR": 6,
+    b"7CLR": 7,
+    b"8CLR": 8,
+    b"9CLR": 9,
+    b"ACLR": 10,
+    b"BCLR": 11,
+    b"CCLR": 12,
+    b"DCLR": 13,
+    b"ECLR": 14,
+    b"FCLR": 15,
 }
 
 
@@ -169,6 +189,4 @@ def compute_profile_gamut(
         odata = worker.xicclu(profile, odata, fwd_intent, "f", order)
 
     to_xyz = profile.connectionColorSpace == b"Lab"
-    return [
-        list(colormath.Lab2XYZ(*pcs)) if to_xyz else list(pcs) for pcs in odata
-    ]
+    return [list(colormath.Lab2XYZ(*pcs)) if to_xyz else list(pcs) for pcs in odata]

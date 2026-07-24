@@ -51,7 +51,6 @@ from qtpy.QtWidgets import (
     QDialogButtonBox,
     QHBoxLayout,
     QLabel,
-    QMessageBox,
     QProgressDialog,
     QVBoxLayout,
     QWidget,
@@ -107,7 +106,9 @@ def prisma_upload_filename(lut3d_path: str) -> str:
         "EBU3213_PAL": "PAL",
         "SMPTE431_P3": "P3",
     }.get(name, name)
-    return strftime(f"{gamut}-%Y%m%dT%H%M%S.3dl", localtime(os.stat(lut3d_path).st_ctime))
+    return strftime(
+        f"{gamut}-%Y%m%dT%H%M%S.3dl", localtime(os.stat(lut3d_path).st_ctime)
+    )
 
 
 class PrismaHostDialog(QDialog):
@@ -174,9 +175,7 @@ class PrismaHostDialog(QDialog):
                 QLabel(f"{lang.getstr('filename.upload')}: {self.filename}")
             )
 
-        self.buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-        )
+        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         self.buttons.accepted.connect(self._check_and_accept)
         self.buttons.rejected.connect(self.reject)
         layout.addWidget(self.buttons)
@@ -252,9 +251,7 @@ class PrismaHostDialog(QDialog):
         if result == QDialog.Accepted:
             setcfg("patterngenerator.prisma.host", self.host_ctrl.currentText())
             if self._upload and self.preset_ctrl is not None:
-                setcfg(
-                    "patterngenerator.prisma.preset", self.preset_ctrl.currentText()
-                )
+                setcfg("patterngenerator.prisma.preset", self.preset_ctrl.currentText())
         super().done(result)
 
 

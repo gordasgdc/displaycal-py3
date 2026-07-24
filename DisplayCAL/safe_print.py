@@ -124,7 +124,9 @@ class SafePrinter:
         strargs = []
         for arg in args:
             if not isinstance(arg, bytes):
-                arg = bytes(arg, encoding, "asciize")
+                if not isinstance(arg, str):
+                    arg = str(arg)
+                arg = arg.encode(encoding, "asciize")
             strargs.append(arg)
         line = sep.join(strargs).rstrip(end)
         if pad is not False:
@@ -134,7 +136,7 @@ class SafePrinter:
             fn(line)
         else:
             try:
-                if "b" not in file_.mode:
+                if "b" not in getattr(file_, "mode", ""):
                     line = line.decode(self.encoding)
                     if end:
                         end = end.decode(self.encoding)

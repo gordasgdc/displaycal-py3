@@ -22,8 +22,8 @@ to re-run ``check_instrument_setup`` once enabling finishes).
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from DisplayCAL.config import getcfg, setcfg
 from DisplayCAL.meta import VERSION_STRING, VERSION_TUPLE
@@ -64,14 +64,8 @@ def resolve_instrument_setup_needs(
                 "i1 Display 2" in worker.instruments
                 and "i1 Display 2" not in ccmx_instruments
             )
-            or (
-                "Spyder2" in worker.instruments
-                and "Spyder2" not in ccmx_instruments
-            )
-            or (
-                "Spyder3" in worker.instruments
-                and "Spyder3" not in ccmx_instruments
-            )
+            or ("Spyder2" in worker.instruments and "Spyder2" not in ccmx_instruments)
+            or ("Spyder3" in worker.instruments and "Spyder3" not in ccmx_instruments)
         )
     else:
         i1d3 = False

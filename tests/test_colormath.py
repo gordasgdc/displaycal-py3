@@ -3,29 +3,24 @@ import math
 import pytest
 
 from DisplayCAL.colormath import (
-    CAT_MATRICES,
+    LSTAR_K,
+    REC709_P,
+    RGB2XYZ,
+    SMPTE240M_P,
+    SRGB_P,
+    Matrix3x3,
     get_cat_matrix,
     get_standard_illuminant,
-    Matrix3x3,
-    smooth_avg_old,
-    smooth_avg,
-    RGB2XYZ,
-    special_pow,
     linmin,
-    REC709_P,
-    REC709_K0,
-    SMPTE240M_P,
-    SMPTE240M_K0,
-    SRGB_P,
-    SRGB_K0,
-    LSTAR_K,
-    LSTAR_E,
+    smooth_avg,
+    smooth_avg_old,
+    special_pow,
 )
 from tests.data.display_data import DisplayData
 
 
 def test_smooth_avg_1():
-    """testing if the smooth_avg function is working properly"""
+    """Testing if the smooth_avg function is working properly"""
     test_values = DisplayData.values_to_smooth
     expected_result = DisplayData.expected_smooth_values
     passes = 1
@@ -36,7 +31,7 @@ def test_smooth_avg_1():
 
 
 def test_smooth_avg_is_matching_old_implementation_1():
-    """testing if the ``smooth_avg`` function is matching ``smooth_avg_old``"""
+    """Testing if the ``smooth_avg`` function is matching ``smooth_avg_old``"""
     test_values = DisplayData.values_to_smooth
     expected_result = DisplayData.expected_smooth_values
     passes = 1
@@ -53,7 +48,7 @@ def test_smooth_avg_is_matching_old_implementation_1():
 
 
 def test_smooth_avg_is_matching_old_implementation_2():
-    """testing if the ``smooth_avg`` function is matching ``smooth_avg_old``"""
+    """Testing if the ``smooth_avg`` function is matching ``smooth_avg_old``"""
     test_values = DisplayData.values_to_smooth
     passes = 1
     window = tuple([1] * 5)
@@ -73,7 +68,7 @@ def test_smooth_avg_is_matching_old_implementation_2():
 
 
 def test_smooth_avg_is_matching_old_implementation_3():
-    """testing if the ``smooth_avg`` function is matching ``smooth_avg_old``"""
+    """Testing if the ``smooth_avg`` function is matching ``smooth_avg_old``"""
     test_values = DisplayData.values_to_smooth
     passes = 1
     window = tuple([1] * 7)
@@ -395,16 +390,19 @@ def quadratic_func(fdata, xt):
     x = xt[0] if isinstance(xt, (list, tuple)) else xt.get(0, 0)
     return (x - 3.0) ** 2
 
+
 def linear_func(fdata, xt):
     # Linear function: f(x) = 2x + 1, minimum at -infinity
     x = xt[0] if isinstance(xt, (list, tuple)) else xt.get(0, 0)
     return 2 * x + 1
+
 
 def multi_dim_quadratic(fdata, xt):
     # 2D quadratic: f(x, y) = (x-2)^2 + (y+1)^2, minimum at (2, -1)
     x = xt[0] if isinstance(xt, (list, tuple)) else xt.get(0, 0)
     y = xt[1] if isinstance(xt, (list, tuple)) else xt.get(1, 0)
     return (x - 2.0) ** 2 + (y + 1.0) ** 2
+
 
 def test_linmin_quadratic_minimization():
     cp = [0.0]
@@ -417,6 +415,7 @@ def test_linmin_quadratic_minimization():
     assert cp[0] == pytest.approx(3.0, abs=1e-3)
     assert result == pytest.approx(0.0, abs=1e-6)
 
+
 def test_linmin_linear_function():
     cp = [0.0]
     xi = [1.0]
@@ -428,6 +427,7 @@ def test_linmin_linear_function():
     # as much as possible, but since the bracket is limited, it should not diverge
     # Just check that the result is less than the starting value
     assert result < linear_func(None, {0: 0.0})
+
 
 def test_linmin_multidimensional_quadratic():
     cp = [0.0, 0.0]
@@ -445,6 +445,7 @@ def test_linmin_multidimensional_quadratic():
     expected = multi_dim_quadratic(None, [0.5, 0.5])
     assert result == pytest.approx(expected, abs=1e-6)
 
+
 def test_linmin_with_zero_direction():
     cp = [1.0]
     xi = [0.0]
@@ -456,6 +457,7 @@ def test_linmin_with_zero_direction():
     assert cp[0] == pytest.approx(1.0)
     # The result should be the function value at cp
     assert result == pytest.approx(quadratic_func(None, {0: 1.0}))
+
 
 def test_linmin_handles_dict_xt():
     # linmin uses dict for xt if di <= 10, so test that path

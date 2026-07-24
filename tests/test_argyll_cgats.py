@@ -3,9 +3,9 @@ from __future__ import annotations
 import pytest
 
 from DisplayCAL import argyll_cgats
-from DisplayCAL.icc_profile import ICCProfile
 from DisplayCAL.cgats import CGATS
 from DisplayCAL.debughelpers import Error
+from DisplayCAL.icc_profile import ICCProfile
 
 
 def test_quote_nonoption_args_1():

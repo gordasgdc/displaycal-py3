@@ -21,7 +21,7 @@ os.environ.setdefault("QT_API", "pyside6")
 
 pytest.importorskip("qtpy")
 
-from qtpy.QtCore import Qt, QItemSelectionModel  # noqa: E402
+from qtpy.QtCore import QItemSelectionModel, Qt  # noqa: E402
 from qtpy.QtGui import QKeyEvent  # noqa: E402
 
 from DisplayCAL.cgats import CGATS  # noqa: E402

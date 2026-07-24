@@ -5,7 +5,8 @@ import sys
 root = os.path.dirname(os.path.dirname(__file__))
 sys.path.append(root)
 
-from DisplayCAL import config, localization as lang, meta
+from DisplayCAL import config, meta
+from DisplayCAL import localization as lang
 from DisplayCAL.icc_profile import ICCProfile
 from DisplayCAL.worker import Worker, check_argyll_bin, get_argyll_util
 

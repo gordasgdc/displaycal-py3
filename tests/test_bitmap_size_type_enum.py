@@ -1,9 +1,10 @@
-from enum import IntEnum
 import sys
+from enum import IntEnum
 
 import pytest
 
 from DisplayCAL.config import BitmapSizeType
+
 
 @pytest.mark.parametrize(
     "type_",
@@ -58,8 +59,9 @@ def test_to_type_type_is_skipped():
     py_error_message = {
         8: "to_type() missing 1 required positional argument: 'type_'",
         9: "to_type() missing 1 required positional argument: 'type_'",
-    }.get(sys.version_info.minor,
-        "BitmapSizeType.to_type() missing 1 required positional argument: 'type_'"
+    }.get(
+        sys.version_info.minor,
+        "BitmapSizeType.to_type() missing 1 required positional argument: 'type_'",
     )
     assert str(cm.value) == py_error_message
 
@@ -154,7 +156,7 @@ def test_to_type_is_working_properly(type__name, type_):
         [BitmapSizeType.HighDPI_4x + 1, BitmapSizeType.HighDPI_2x],
         [BitmapSizeType.HighDPI_2x + 1, BitmapSizeType.HighDPI_2x_Original],
         [BitmapSizeType.HighDPI_2x_Original + 1, BitmapSizeType.Original],
-        [BitmapSizeType.Original + 1, 5], # Beyond the enum range
+        [BitmapSizeType.Original + 1, 5],  # Beyond the enum range
     ],
 )
 def test_addition_with_integer_values(value1, value2):

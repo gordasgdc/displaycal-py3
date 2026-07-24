@@ -39,17 +39,19 @@
 #
 
 import sys
+
 if sys.frozen == "windows_exe":
+
     class Stderr:
         encoding = None
         softspace = 0
         _file = None
         _error = None
 
-        def write(self, text, alert=sys._MessageBox, fname=sys.executable + '.log'):
+        def write(self, text, alert=sys._MessageBox, fname=sys.executable + ".log"):
             if self._file is None and self._error is None:
                 try:
-                    self._file = open(fname, 'w')
+                    self._file = open(fname, "w")
                 except Exception as details:
                     self._error = details
             if self._file is not None:
@@ -92,8 +94,12 @@ del sys
 # someone elses removable or network drive so the getline() call
 # causes it to ask them to insert a disk in that drive.
 import linecache
+
+
 def fake_getline(filename, lineno, module_globals=None):
-    return ''
+    return ""
+
+
 linecache.orig_getline = linecache.getline
 linecache.getline = fake_getline
 

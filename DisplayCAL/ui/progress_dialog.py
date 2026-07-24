@@ -114,9 +114,7 @@ def format_elapsed(seconds: float) -> str:
     return strftime("%H:%M:%S", gmtime(seconds))
 
 
-def estimate_remaining(
-    elapsed: float, progress: float, maximum: float
-) -> float | None:
+def estimate_remaining(elapsed: float, progress: float, maximum: float) -> float | None:
     """Estimate the remaining seconds from elapsed time and progress.
 
     Linear extrapolation from the work done so far, matching the wx dialog's
@@ -224,9 +222,7 @@ class ProgressDialog(QDialog):
         if show_remaining_time:
             time_grid.addWidget(QLabel(lang.getstr("remaining_time")), 1, 0)
             self._remaining_label = QLabel(TIME_UNKNOWN)
-            time_grid.addWidget(
-                self._remaining_label, 1, 1, Qt.AlignmentFlag.AlignLeft
-            )
+            time_grid.addWidget(self._remaining_label, 1, 1, Qt.AlignmentFlag.AlignLeft)
         else:
             self._remaining_label = None
         layout.addLayout(time_grid)

@@ -11,7 +11,7 @@ def generate(pydir: Path, bdist_cmd: str, arch: str, dry_run: bool) -> None:
     """Generate the Inno Setup `.iss` script for the current build."""
     for tmpl_type in [bdist_cmd]:
         inno_template_path = Path(pydir, "misc", f"{meta.NAME}-Setup-{tmpl_type}.iss")
-        with open(inno_template_path, "r") as inno_template:
+        with open(inno_template_path) as inno_template:
             print(f"inno_template_path: {inno_template_path}")
             template = inno_template.read()
             # print(template)

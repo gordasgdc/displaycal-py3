@@ -230,7 +230,7 @@ class CCXXPlotWidget(pg.PlotWidget):
                 [x], [y], symbol="+", size=8, pen=pg.mkPen(color, width=1.75)
             )
             self.addItem(item)
-            legend.addItem(item, "{:.4f} x {:.4f} y".format(x, y))
+            legend.addItem(item, f"{x:.4f} x {y:.4f} y")
 
         self.setXRange(0, 1, padding=0)
         self.setYRange(0, 1, padding=0)

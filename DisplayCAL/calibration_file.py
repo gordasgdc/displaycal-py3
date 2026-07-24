@@ -23,6 +23,7 @@ Deliberately not reproduced here (documented, not silently dropped):
 
 from __future__ import annotations
 
+import contextlib
 import io
 import os
 import shutil
@@ -573,9 +574,9 @@ def match_display_and_instrument(
 
         if display_index is not None:
             match.display_index = display_index
-            match.display_changed = get_display_name(
-                None, False
-            ) != get_display_name(display_index, False)
+            match.display_changed = get_display_name(None, False) != get_display_name(
+                display_index, False
+            )
             if is_virtual_display() or get_display_name() == "SII REPEATER":
                 match.reenable_3dlut_tab = True
 
@@ -841,8 +842,7 @@ def apply_lut3d_config_mapper(
                 if os.path.basename(os.path.dirname(cfgvalue)) == "ref":
                     # Fall back to ref file if not absolute path or not found
                     cfgvalue = (
-                        get_data_path("ref/" + os.path.basename(cfgvalue))
-                        or cfgvalue
+                        get_data_path("ref/" + os.path.basename(cfgvalue)) or cfgvalue
                     )
                 elif not os.path.dirname(cfgvalue):
                     # Use profile dir
@@ -876,10 +876,8 @@ def apply_lut3d_config_mapper(
             if cfgvalue is None:
                 continue
             cfgvalue = _decode_cfgvalue(cfgvalue)
-            try:
+            with contextlib.suppress(ValueError):
                 cfgvalue = round(float(cfgvalue), 4)
-            except ValueError:
-                pass
             setcfg(f"3dlut.content.colorspace.{color}.{coord}", cfgvalue)
 
     # Make sure 3D LUT TRC enumeration matches parameters for older profiles
@@ -1030,9 +1028,7 @@ def parse_legacy_cal(ti3_lines: list[bytes], worker: Worker) -> LegacyCalResult:
                     setcfg("trc", gamma)
                 except ValueError:
                     continue
-            worker.options_dispcal.append(
-                "-" + getcfg("trc.type") + str(getcfg("trc"))
-            )
+            worker.options_dispcal.append("-" + getcfg("trc.type") + str(getcfg("trc")))
             result.settings.append(lang.getstr("trc"))
         elif key == b"DEGREE_OF_BLACK_OUTPUT_OFFSET":
             setcfg("calibration.black_output_offset", stripzeros(value))
@@ -1056,9 +1052,7 @@ def parse_legacy_cal(ti3_lines: list[bytes], worker: Worker) -> LegacyCalResult:
             result.settings.append(lang.getstr("calibration.black_luminance"))
         elif key == b"QUALITY":
             setcfg("calibration.quality", value.lower()[0:1])
-            worker.options_dispcal.append(
-                "-q{}".format(getcfg("calibration.quality"))
-            )
+            worker.options_dispcal.append("-q{}".format(getcfg("calibration.quality")))
             result.settings.append(lang.getstr("calibration.quality"))
 
     if not black_point_correction:

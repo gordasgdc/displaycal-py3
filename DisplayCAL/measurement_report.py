@@ -623,7 +623,9 @@ def perform_self_check_lookup(
     else:
         luminance = 100
     white_xyz_cdm2 = [v * luminance for v in wtpt]
-    ti3.add_keyword("LUMINANCE_XYZ_CDM2", "{:.6f} {:.6f} {:.6f}".format(*white_xyz_cdm2))
+    ti3.add_keyword(
+        "LUMINANCE_XYZ_CDM2", "{:.6f} {:.6f} {:.6f}".format(*white_xyz_cdm2)
+    )
 
     with open(ti3_path, "wb") as ti3_file:
         ti3_file.write(bytes(ti3))
@@ -725,9 +727,7 @@ class SanityCheckContext:
     rows: list[SanityCheckRow]
 
 
-def resolve_sanity_check(
-    ti3: CGATS, force: bool = False
-) -> SanityCheckContext | None:
+def resolve_sanity_check(ti3: CGATS, force: bool = False) -> SanityCheckContext | None:
     """Detect suspiciously-off patches in a measured TI3.
 
     Pure port of the detection half of ``measurement_file_check_confirm``
@@ -788,7 +788,9 @@ def resolve_sanity_check(
                     delta_to_sRGB=cur_delta_to_sRGB,
                 )
             )
-    return SanityCheckContext(ti3=ti3_1, items=items, black=black, white=white, rows=rows)
+    return SanityCheckContext(
+        ti3=ti3_1, items=items, black=black, white=white, rows=rows
+    )
 
 
 def recompute_sanity_row(

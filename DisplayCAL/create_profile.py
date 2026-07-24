@@ -106,7 +106,9 @@ def load_measurement_lines(path: str) -> CollectedMeasurement:
             raise CreateProfileError(
                 lang.getstr("error.file.open", path)
             ) from exception
-    return CollectedMeasurement(path=path, ti3_lines=ti3_lines, profile=profile, tags=tags)
+    return CollectedMeasurement(
+        path=path, ti3_lines=ti3_lines, profile=profile, tags=tags
+    )
 
 
 def has_calibration_curves(ti3_lines: list[bytes]) -> bool:
@@ -189,7 +191,9 @@ def merge_measurement_files(
     for collected_path in collected_paths:
         os.remove(collected_path)
     if isinstance(result, Exception) or not result:
-        message = str(result) if isinstance(result, Exception) else "\n".join(worker.errors)
+        message = (
+            str(result) if isinstance(result, Exception) else "\n".join(worker.errors)
+        )
         raise CreateProfileError(message)
 
 

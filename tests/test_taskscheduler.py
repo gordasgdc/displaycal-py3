@@ -1,5 +1,6 @@
-import pytest
 import sys
+
+import pytest
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="requires Windows")

@@ -49,9 +49,10 @@ def resolve_overwrite_path(ext: str = "", filename: str | None = None) -> str:
 
 def macos_bugs_warning_applicable() -> bool:
     """Whether the macOS-bugs warnings apply to the running platform/version."""
-    return sys.platform == "darwin" and intlist(
-        platform.mac_ver()[0].split(".")
-    ) >= [10, 8]
+    return sys.platform == "darwin" and intlist(platform.mac_ver()[0].split(".")) >= [
+        10,
+        8,
+    ]
 
 
 def should_warn_calibration_bugs() -> bool:

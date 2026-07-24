@@ -254,7 +254,7 @@ def setup_profile_loader_task(exe: str, exedir: str, pydir: str) -> None:
                 triggers=[daily],
                 actions=actions,
             )
-        except Exception as exception:
+        except Exception:
             if DEBUG:
                 exception = traceback.format_exc()
             print(
@@ -2404,9 +2404,7 @@ class ProfileLoader:
                         # screen), see issue #694.
                         if not verify_load:
                             break
-                        if not worker.calibration_is_clobbered(
-                            dispwin, i, profile_arg
-                        ):
+                        if not worker.calibration_is_clobbered(dispwin, i, profile_arg):
                             # Loaded OK (or could not be determined)
                             break
                         if attempt + 1 < max_attempts:
@@ -2586,9 +2584,7 @@ class ProfileLoader:
         )
         unstable_threshold = max(
             1,
-            int(
-                config.getcfg("profile_loader.macos_reapply_watch_unstable_threshold")
-            ),
+            int(config.getcfg("profile_loader.macos_reapply_watch_unstable_threshold")),
         )
         backoff_seconds = max(
             0,
@@ -4332,9 +4328,7 @@ class ProfileLoader:
                     f"0x{device0.StateFlags:x}"
                 )
                 debug_print(f"Monitor {i:d} 1st display device ID:", device0.DeviceID)
-                debug_print(
-                    f"Monitor {i:d} 1st display device key:", device0.DeviceKey
-                )
+                debug_print(f"Monitor {i:d} 1st display device key:", device0.DeviceKey)
                 display0, edid0 = get_display_name_edid(device0)
                 debug_print(f"Monitor {i:d} 1st display description:", display0)
             if (

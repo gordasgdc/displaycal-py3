@@ -210,9 +210,7 @@ class ProfileLoaderExceptionsDialog(QDialog):
         self.table.setItem(
             row, _COL_EXECUTABLE, QTableWidgetItem(os.path.basename(path))
         )
-        self.table.setItem(
-            row, _COL_DIRECTORY, QTableWidgetItem(os.path.dirname(path))
-        )
+        self.table.setItem(row, _COL_DIRECTORY, QTableWidgetItem(os.path.dirname(path)))
         return row
 
     def _row_path(self, row: int) -> str:

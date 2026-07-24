@@ -10,8 +10,9 @@ sys.path.insert(
 )
 
 
-from DisplayCAL.meta import DESCRIPTION, NAME, VERSION_TUPLE
 from winmanifest import ManifestFromXMLFile
+
+from DisplayCAL.meta import DESCRIPTION, NAME, VERSION_TUPLE
 
 
 def getmanifest(manifest_template_path):

@@ -1,9 +1,10 @@
-from enum import Enum
 import sys
+from enum import Enum
 
 import pytest
 
 from DisplayCAL.colorspace_to_vrml import CAT
+
 
 @pytest.mark.parametrize(
     "cat",
@@ -31,7 +32,6 @@ def test_it_is_an_enum(cat):
 @pytest.mark.parametrize(
     "cat,expected_value",
     [
-
         [CAT.Bradford, "Bradford"],
         [CAT.BS, "BS"],
         [CAT.BS_PC, "BS-PC"],
@@ -105,8 +105,9 @@ def test_to_cat_cat_is_skipped():
 
     py_error_message = {
         9: "to_cat() missing 1 required positional argument: 'cat'",
-    }.get(sys.version_info.minor,
-        "CAT.to_cat() missing 1 required positional argument: 'cat'"
+    }.get(
+        sys.version_info.minor,
+        "CAT.to_cat() missing 1 required positional argument: 'cat'",
     )
     assert str(cm.value) == py_error_message
 

@@ -78,8 +78,7 @@
 #
 # 2009-03-21  First version
 
-"""
-winmanifest.py
+"""winmanifest.py
 
 Create, parse and write MS Windows Manifest files.
 Find files which are part of an assembly, by searching shared and
@@ -99,9 +98,9 @@ except ImportError:
     import md5
     import sha
 import os
-from glob import glob
 import sys
 import xml
+from glob import glob
 from xml.dom import Node, minidom
 from xml.dom.minidom import Document, Element
 
@@ -177,7 +176,6 @@ else:
 
 
 class File(_File):
-
     """A file referenced by an assembly inside a manifest."""
 
     def __init__(
@@ -236,10 +234,9 @@ class File(_File):
             if not silent:
                 print("I: Found file", fn)
             return fn
-        else:
-            if not silent:
-                print("W: No such file", fn)
-            return None
+        if not silent:
+            print("W: No such file", fn)
+        return None
 
 
 class InvalidManifestError(Exception):
@@ -251,12 +248,9 @@ class ManifestXMLParseError(InvalidManifestError):
 
 
 class Manifest:
-
     # Manifests:
     # http://msdn.microsoft.com/en-us/library/aa375365%28VS.85%29.aspx
-
-    """
-    Manifest constructor.
+    """Manifest constructor.
 
     To build a basic manifest for your application:
       mf = Manifest(type='win32', name='YourAppName', language='*',
@@ -394,7 +388,6 @@ class Manifest:
         runtime.
 
         """
-
         # Shared Assemblies:
         # http://msdn.microsoft.com/en-us/library/aa375996%28VS.85%29.aspx
         #
@@ -491,8 +484,7 @@ class Manifest:
                         else:
                             if not silent:
                                 print(
-                                    "I: Checking publisher policy for "
-                                    "binding redirects"
+                                    "I: Checking publisher policy for binding redirects"
                                 )
                             for assembly in policy.dependentAssemblies:
                                 if (
@@ -990,9 +982,11 @@ class Manifest:
             xmlstr = domtree.toprettyxml(indent, newl, encoding)
         else:
             xmlstr = domtree.toprettyxml(indent, newl)
-        xmlstr = xmlstr.strip(os.linesep.encode('utf-8')).replace(
-            ('<?xml version="1.0" encoding="%s"?>' % encoding).encode('utf-8'),
-            ('<?xml version="1.0" encoding="%s" standalone="yes"?>' % encoding).encode('utf-8'),
+        xmlstr = xmlstr.strip(os.linesep.encode("utf-8")).replace(
+            ('<?xml version="1.0" encoding="%s"?>' % encoding).encode("utf-8"),
+            ('<?xml version="1.0" encoding="%s" standalone="yes"?>' % encoding).encode(
+                "utf-8"
+            ),
         )
         domtree.unlink()
         return xmlstr
