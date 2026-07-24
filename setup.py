@@ -3,7 +3,7 @@
 
 setuptools' `build_meta` backend execs whatever file is literally named
 `setup.py` on every build hook call, so this file has to exist and has to
-route to the real, distutils-based `DisplayCAL._setup.setup()`: that is
+route to the real, distutils-based `DisplayCAL._setup.main()`: that is
 where `data_files` (desktop entries, icons, man pages, the appdata.xml
 and copyright templates, ...) is actually assembled, pyproject.toml has
 no declarative equivalent for it.
@@ -55,9 +55,9 @@ def setup() -> None:
         int(time.time()),
     )
 
-    from DisplayCAL._setup import setup as real_setup
+    from DisplayCAL._setup import main
 
-    real_setup()
+    main()
 
 
 if __name__ == "__main__":

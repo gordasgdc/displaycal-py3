@@ -1377,8 +1377,8 @@ def _write_manifest_in(
     return False
 
 
-def setup() -> None:
-    """Setup function for DisplayCAL."""
+def main() -> None:
+    """Entry point that assembles `attrs` and runs the real distutils/setuptools setup()."""
     print("***", os.path.abspath(sys.argv[0]), " ".join(sys.argv[1:]))
 
     bdist_dumb = "bdist_dumb" in sys.argv[1:]
@@ -1662,4 +1662,4 @@ def setup() -> None:
 
 
 if __name__ == "__main__":
-    setup()
+    main()
