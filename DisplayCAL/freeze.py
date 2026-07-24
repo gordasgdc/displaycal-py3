@@ -280,16 +280,21 @@ def copy_qt_plugins(dist_dir: str) -> None:
     print(f"Wrote {qt_conf_path}")
 
 
-def build_py2exe() -> None:
-    """py2exe builder that uses the new freeze API."""
-    use_sdl = False
-    sys.path.insert(1, os.path.join(pydir, "..", "util"))
+def _collect_data_files(
+    use_sdl: bool, doc: str, data: str
+) -> tuple[list[tuple[str, str]], list[tuple[str, list[str]]]]:
+    """Collect the script list and data files for the frozen build.
 
-    debug = False
-    # do_full_install = False
+    Args:
+        use_sdl (bool): Whether to bundle SDL2 audio DLLs.
+        doc (str): Target directory for doc/appdata files.
+        data (str): Target directory for package/data files.
 
-    doc = "."
-    data = "."
+    Returns:
+        tuple[list[tuple[str, str]], list[tuple[str, list[str]]]]: The
+            scripts list (as returned by get_scripts()), and the data_files
+            list understood by py2exe.freeze().
+    """
     # Use CA file from certifi project
     import certifi
 
@@ -424,15 +429,22 @@ def build_py2exe() -> None:
                     desktopicons,
                 )
             )
-    # `attrs` only carries the fields py2exe_kwargs (further below) actually
-    # reads: name/version/classifiers/description/license/entry_points/
-    # package_data/etc. all live in pyproject.toml's `[project]` table (see
-    # DisplayCAL/setup.py's own `attrs`), and were never passed to a real
-    # setup() call from here to begin with.
-    attrs = {
-        "data_files": data_files,
-    }
+    return scripts, data_files
 
+
+def _build_targets(
+    scripts: list[tuple[str, str]],
+) -> tuple[list[Target], list[Target]]:
+    """Build the py2exe ``windows``/``console`` Target lists.
+
+    Args:
+        scripts (list[tuple[str, str]]): Script names and descriptions, as
+            returned by get_scripts().
+
+    Returns:
+        tuple[list[Target], list[Target]]: The windows and console Target
+            lists understood by py2exe.freeze().
+    """
     from winmanifest_util import getmanifestxml
 
     arch = "amd64" if platform.architecture()[0] == "64bit" else "x86"
@@ -461,7 +473,7 @@ def build_py2exe() -> None:
             os.path.join(source_dir, "scripts", script),
             os.path.join(tmp_scripts_dir, script2pywname(script)),
         )
-    attrs["windows"] = [
+    windows = [
         Target(
             script=os.path.join(tmp_scripts_dir, script2pywname(script)),
             icon_resources=[
@@ -488,7 +500,7 @@ def build_py2exe() -> None:
     ]
 
     # Add profile loader launcher
-    attrs["windows"].append(
+    windows.append(
         Target(
             script=os.path.join(
                 tmp_scripts_dir, script2pywname(apply_profiles_launcher[0])
@@ -521,7 +533,7 @@ def build_py2exe() -> None:
                 ),
                 console_script_path,
             )
-    attrs["console"] = [
+    console = [
         Target(
             script=os.path.join(tmp_scripts_dir, script2pywname(script) + "-console"),
             icon_resources=[
@@ -547,7 +559,7 @@ def build_py2exe() -> None:
     ]
 
     # Programs without GUI
-    attrs["console"].append(
+    console.append(
         Target(
             script=os.path.join(
                 tmp_scripts_dir, appname + "-eeColor-to-madVR-converter"
@@ -565,15 +577,20 @@ def build_py2exe() -> None:
         )
     )
 
-    dist_dir = os.path.join(
-        pydir,
-        "..",
-        "dist",
-        f"py2exe.{get_platform()}-py{sys.version_info[0]}.{sys.version_info[1]}",
-        f"{NAME}-{VERSION_STRING}",
-    )
-    os.makedirs(dist_dir, exist_ok=True)
-    attrs["options"] = {
+    return windows, console
+
+
+def _build_py2exe_options(dist_dir: str, debug: bool) -> dict:
+    """Build the ``options`` dict passed to py2exe.freeze().
+
+    Args:
+        dist_dir (str): The py2exe frozen output directory.
+        debug (bool): Whether to build with debug-friendly py2exe options.
+
+    Returns:
+        dict: The ``options`` dict understood by py2exe.freeze().
+    """
+    options = {
         "py2exe": {
             "dist_dir": dist_dir,
             "dll_excludes": [
@@ -603,9 +620,44 @@ def build_py2exe() -> None:
         }
     }
     if debug:
-        attrs["options"]["py2exe"].update(
+        options["py2exe"].update(
             {"bundle_files": 3, "compressed": 0, "optimize": 0, "skip_archive": 1}
         )
+    return options
+
+
+def build_py2exe() -> None:
+    """py2exe builder that uses the new freeze API."""
+    use_sdl = False
+    sys.path.insert(1, os.path.join(pydir, "..", "util"))
+
+    debug = False
+    # do_full_install = False
+
+    doc = "."
+    data = "."
+
+    scripts, data_files = _collect_data_files(use_sdl, doc, data)
+    # `attrs` only carries the fields py2exe_kwargs (further below) actually
+    # reads: name/version/classifiers/description/license/entry_points/
+    # package_data/etc. all live in pyproject.toml's `[project]` table (see
+    # DisplayCAL/setup.py's own `attrs`), and were never passed to a real
+    # setup() call from here to begin with.
+    attrs = {
+        "data_files": data_files,
+    }
+
+    attrs["windows"], attrs["console"] = _build_targets(scripts)
+
+    dist_dir = os.path.join(
+        pydir,
+        "..",
+        "dist",
+        f"py2exe.{get_platform()}-py{sys.version_info[0]}.{sys.version_info[1]}",
+        f"{NAME}-{VERSION_STRING}",
+    )
+    os.makedirs(dist_dir, exist_ok=True)
+    attrs["options"] = _build_py2exe_options(dist_dir, debug)
     attrs["zipfile"] = os.path.join("lib", "library.zip")
 
     py2exe_kwargs = {
