@@ -9,6 +9,7 @@ include DisplayCAL*.pyw
 include DisplayCAL-*.pyw
 include DisplayCAL-*.py
 include native_build.py
+recursive-include _native_build *.py
 include CHANGES.html
 include README.html
 include README-fr.html

@@ -1575,6 +1575,7 @@ def setup() -> None:
                 f"include {NAME}-*.pyw",
                 f"include {NAME}-*.py",
                 "include native_build.py",
+                "recursive-include _native_build *.py",
             ]
         )
         for _datadir, datafiles in attrs.get("data_files", []):

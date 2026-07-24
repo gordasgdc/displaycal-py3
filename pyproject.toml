@@ -81,7 +81,16 @@ include-package-data = false
 
 [tool.setuptools.packages.find]
 where = ["./"]
-exclude = ["misc", "misc.*", "tests", "tests.*", "util", "util.*"]
+exclude = [
+    "_native_build",
+    "_native_build.*",
+    "misc",
+    "misc.*",
+    "tests",
+    "tests.*",
+    "util",
+    "util.*",
+]
 
 [tool.setuptools.package-data]
 DisplayCAL = [
