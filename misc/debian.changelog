@@ -1,5 +1,0 @@
-${DEBPACKAGE} (${VERSION}-1) stable; urgency=low
-
-  * Version ${VERSION}
-
- -- ${MAINTAINER} <obs-packaging@${DOMAIN}>  ${DEBDATETIME}
