@@ -192,8 +192,7 @@ class VRML2X3DWindow(BaseWindow):
             return vrmlpath
         default_dir, default_file = config.get_verified_path("last_vrml_path")
         wildcard = (
-            lang.getstr("filetype.vrml")
-            + " (*.vrml *.vrml.gz *.wrl.gz *.wrl *.wrz)"
+            lang.getstr("filetype.vrml") + " (*.vrml *.vrml.gz *.wrl.gz *.wrl *.wrz)"
         )
         path, _ = QFileDialog.getOpenFileName(
             self,

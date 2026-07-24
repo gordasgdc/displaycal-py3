@@ -178,9 +178,9 @@ class _ScriptingHost(ScriptingHostMixin, QWidget):
                 and calibration_management_isenabled()
             ):
                 return lang.getstr("calibration.load.handled_by_os")
-            if (
-                len(data) == 1 and pl._is_displaycal_running()
-            ) or pl._is_other_running(False):
+            if (len(data) == 1 and pl._is_displaycal_running()) or pl._is_other_running(
+                False
+            ):
                 return "forbidden"
             if data[-1] == "display-changed":
                 with pl.lock:
@@ -328,7 +328,9 @@ class ApplyProfilesTrayIcon(QSystemTrayIcon):
 
         notifications_action = menu.addAction(lang.getstr("show_notifications"))
         notifications_action.setCheckable(True)
-        notifications_action.setChecked(bool(getcfg("profile_loader.show_notifications")))
+        notifications_action.setChecked(
+            bool(getcfg("profile_loader.show_notifications"))
+        )
         notifications_action.triggered.connect(
             lambda checked: setcfg("profile_loader.show_notifications", int(checked))
         )
@@ -904,9 +906,7 @@ def main() -> int:
     unknown_option = profile_loader.filter_unknown_args()
     if "--help" in sys.argv[1:] or unknown_option:
         if unknown_option:
-            print(
-                f"{sys.argv[0]}: unrecognized option `{unknown_option}'"
-            )
+            print(f"{sys.argv[0]}: unrecognized option `{unknown_option}'")
         profile_loader.display_help_message()
         return 0
     if "-V" in sys.argv[1:] or "--version" in sys.argv[1:]:

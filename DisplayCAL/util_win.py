@@ -740,24 +740,30 @@ def is_advanced_color_enabled(gdi_device_name: str) -> bool | None:
         num_paths = wintypes.UINT(0)
         num_modes = wintypes.UINT(0)
 
-        if user32.GetDisplayConfigBufferSizes(
-            QDC_ONLY_ACTIVE_PATHS,
-            ctypes.byref(num_paths),
-            ctypes.byref(num_modes),
-        ) != 0:
+        if (
+            user32.GetDisplayConfigBufferSizes(
+                QDC_ONLY_ACTIVE_PATHS,
+                ctypes.byref(num_paths),
+                ctypes.byref(num_modes),
+            )
+            != 0
+        ):
             return None
 
         paths = (_PATH_INFO * num_paths.value)()
         modes = (_MODE_INFO * num_modes.value)()
 
-        if user32.QueryDisplayConfig(
-            QDC_ONLY_ACTIVE_PATHS,
-            ctypes.byref(num_paths),
-            paths,
-            ctypes.byref(num_modes),
-            modes,
-            None,
-        ) != 0:
+        if (
+            user32.QueryDisplayConfig(
+                QDC_ONLY_ACTIVE_PATHS,
+                ctypes.byref(num_paths),
+                paths,
+                ctypes.byref(num_modes),
+                modes,
+                None,
+            )
+            != 0
+        ):
             return None
 
         gdi_name_lower = gdi_device_name.lower()
@@ -787,7 +793,9 @@ def is_advanced_color_enabled(gdi_device_name: str) -> bool | None:
             adv_color2.header.id = path.targetInfo.id
 
             if user32.DisplayConfigGetDeviceInfo(ctypes.byref(adv_color2)) == 0:
-                return adv_color2.activeColorMode == DISPLAYCONFIG_ADVANCED_COLOR_MODE_HDR
+                return (
+                    adv_color2.activeColorMode == DISPLAYCONFIG_ADVANCED_COLOR_MODE_HDR
+                )
 
             # Fall back to the older type-9 API (pre-Win11 22H2).
             adv_color = _ADVANCED_COLOR_INFO()

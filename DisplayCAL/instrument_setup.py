@@ -64,14 +64,8 @@ def resolve_instrument_setup_needs(
                 "i1 Display 2" in worker.instruments
                 and "i1 Display 2" not in ccmx_instruments
             )
-            or (
-                "Spyder2" in worker.instruments
-                and "Spyder2" not in ccmx_instruments
-            )
-            or (
-                "Spyder3" in worker.instruments
-                and "Spyder3" not in ccmx_instruments
-            )
+            or ("Spyder2" in worker.instruments and "Spyder2" not in ccmx_instruments)
+            or ("Spyder3" in worker.instruments and "Spyder3" not in ccmx_instruments)
         )
     else:
         i1d3 = False

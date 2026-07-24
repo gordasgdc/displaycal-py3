@@ -2757,7 +2757,10 @@ def initcfg(
         if not module:
             if getcfg("lang", fallback=False, cfg=cfg) is None:
                 setcfg("lang", DEFAULTS["lang"], cfg=cfg)
-            if getcfg("calibration.ambient_viewcond_adjust", fallback=False, cfg=cfg) is None:
+            if (
+                getcfg("calibration.ambient_viewcond_adjust", fallback=False, cfg=cfg)
+                is None
+            ):
                 setcfg(
                     "calibration.ambient_viewcond_adjust",
                     DEFAULTS["calibration.ambient_viewcond_adjust"],

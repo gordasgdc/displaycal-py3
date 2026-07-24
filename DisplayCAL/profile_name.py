@@ -154,7 +154,23 @@ class ProfileType(str, Enum):
 PROFILE_TYPES = tuple((member.value, member.label_key) for member in ProfileType)
 
 _DATE_DIRECTIVES = (
-    "a", "A", "b", "B", "d", "H", "I", "j", "m", "M", "p", "S", "U", "w", "W", "y", "Y",
+    "a",
+    "A",
+    "b",
+    "B",
+    "d",
+    "H",
+    "I",
+    "j",
+    "m",
+    "M",
+    "p",
+    "S",
+    "U",
+    "w",
+    "W",
+    "y",
+    "Y",
 )
 
 
@@ -242,9 +258,7 @@ def expand_profile_name(template: str, ctx: ProfileNameContext) -> str:
     black_output_offset = ctx.black_output_offset
 
     if "%cg" in profile_name and trc:
-        bt1886 = (
-            trc == "2.4" and ctx.trc_type == "G" and black_output_offset == "0"
-        )
+        bt1886 = trc == "2.4" and ctx.trc_type == "G" and black_output_offset == "0"
         if bt1886:
             trc = "Rec. 1886"
         elif trc not in ("l", "709", "s", "240"):
@@ -298,9 +312,7 @@ def expand_profile_name(template: str, ctx: ProfileNameContext) -> str:
             quality["c"] = msgs[aspects["c"]]
         if "%pq" in profile_name:
             quality["p"] = msgs[aspects["p"]]
-        if len(quality) == 2 and (
-            quality["c"] == quality["p"] or quality["c"] == "\0"
-        ):
+        if len(quality) == 2 and (quality["c"] == quality["p"] or quality["c"] == "\0"):
             profile_name = re.sub(r"%cq\W*%pq", quality["p"], profile_name)
         for q in quality:
             profile_name = profile_name.replace(f"%{q}q", quality[q])
@@ -577,8 +589,16 @@ def resolve_default_testchart(
 #: with fewer. The ``+quality`` keys (``"lh"``/``"xh"``/``"Xh"``) happen to
 #: carry the same value as their base type, kept only for fidelity with wx.
 _RECOMMENDED_TESTCHART_PATCHES = {
-    "G": 6, "g": 6, "l": 125, "lh": 125, "S": 12, "s": 12,
-    "X": 73, "Xh": 73, "x": 73, "xh": 73,
+    "G": 6,
+    "g": 6,
+    "l": 125,
+    "lh": 125,
+    "S": 12,
+    "s": 12,
+    "X": 73,
+    "Xh": 73,
+    "x": 73,
+    "xh": 73,
 }
 
 
@@ -638,7 +658,10 @@ def suggested_profile_type_for_auto(
             return ProfileType.XYZ_LUT if lut3d_create else ProfileType.XYZ_LUT_MATRIX
         return None
     if auto > 1:
-        if current_profile_type not in (ProfileType.XYZ_LUT, ProfileType.XYZ_LUT_MATRIX):
+        if current_profile_type not in (
+            ProfileType.XYZ_LUT,
+            ProfileType.XYZ_LUT_MATRIX,
+        ):
             return ProfileType.XYZ_LUT if lut3d_create else ProfileType.XYZ_LUT_MATRIX
         return None
     if current_profile_type not in (
@@ -647,7 +670,11 @@ def suggested_profile_type_for_auto(
         ProfileType.SHAPER_MATRIX,
         ProfileType.SINGLE_SHAPER_MATRIX,
     ):
-        return ProfileType.SINGLE_SHAPER_MATRIX if getcfg("trc") else ProfileType.SHAPER_MATRIX
+        return (
+            ProfileType.SINGLE_SHAPER_MATRIX
+            if getcfg("trc")
+            else ProfileType.SHAPER_MATRIX
+        )
     return None
 
 
@@ -662,8 +689,10 @@ class MeasurementTimeEstimate:
         """Return the localized ``"~Hh Mm"``-style label."""
         return lang.getstr(
             "estimated_measurement_time",
-            (self.hours if self.hours is not None else "--",
-             self.minutes if self.minutes is not None else "--"),
+            (
+                self.hours if self.hours is not None else "--",
+                self.minutes if self.minutes is not None else "--",
+            ),
         )
 
     def is_long(self) -> bool:
@@ -715,9 +744,8 @@ def estimate_measurement_time(
 
     tpp = list(integration_time)
     if (
-        ("plasma" in tech or "crt" in tech or "projector" in tech or "dlp" in tech)
-        and worker.get_instrument_features().get("refresh")
-    ):
+        "plasma" in tech or "crt" in tech or "projector" in tech or "dlp" in tech
+    ) and worker.get_instrument_features().get("refresh"):
         tpp = [v + 0.25 for v in tpp]
     if config.get_display_name() == "madVR":
         tpp = [v + 0.45 for v in tpp]
@@ -830,7 +858,9 @@ def icc_profile_has_embedded_ti3(profile: ICCProfile) -> bool:
     """
     ti3_lines = [
         line.strip()
-        for line in BytesIO(profile.tags.get("CIED", b"") or profile.tags.get("targ", b""))
+        for line in BytesIO(
+            profile.tags.get("CIED", b"") or profile.tags.get("targ", b"")
+        )
     ]
     return b"CTI3" in ti3_lines
 

@@ -2579,9 +2579,7 @@ def reload_black_videoluts(
     reloaded = []
     for _ in range(max(1, int(retries))):
         black = [
-            i
-            for i, m in enumerate(maxima_fn())
-            if m is not None and m < threshold
+            i for i, m in enumerate(maxima_fn()) if m is not None and m < threshold
         ]
         if not black:
             break
@@ -3698,9 +3696,7 @@ class Worker(WorkerBase):
         self.progress_wnd.Pulse(" " * 4)
         if self.is_ambient_measurement:
             self.is_ambient_measurement = False
-            confirmed = self._prompt_confirm(
-                lang.getstr("instrument.measure_ambient")
-            )
+            confirmed = self._prompt_confirm(lang.getstr("instrument.measure_ambient"))
             if self.finished:
                 return None
             if not confirmed:
@@ -3730,10 +3726,7 @@ class Worker(WorkerBase):
                 failed = "calibration failed" in txt.lower()
                 if failed:
                     self._last_calibration_msg = None
-                if (
-                    calmsg == self._last_calibration_msg
-                    and not failed
-                ):
+                if calmsg == self._last_calibration_msg and not failed:
                     # Same calibration prompt seen again after already sending a
                     # keypress (e.g. ArgyllCMS 3.4.1 race condition with ColorMunki
                     # where the prompt echoes before the device completes its single
@@ -4609,7 +4602,11 @@ END_DATA
                 self.logger = DummyLogger()
             else:
                 self.logger = get_file_logger("interact")
-        if getattr(self, "thread", None) and self.thread.is_alive() and self.interactive:
+        if (
+            getattr(self, "thread", None)
+            and self.thread.is_alive()
+            and self.interactive
+        ):
             self.logger.info("-" * 80)
         self.sessionlogfile = None
         self.madtpg_bw_lvl = None
@@ -4846,9 +4843,7 @@ END_DATA
         result = None
 
         path = os.path.split(path)
-        path = os.path.join(
-            path[0], make_argyll_compatible_path(path[1], is_name=True)
-        )
+        path = os.path.join(path[0], make_argyll_compatible_path(path[1], is_name=True))
         filename, ext = os.path.splitext(path)
         name = os.path.basename(filename)
 
@@ -16811,9 +16806,7 @@ BEGIN_DATA
                     and not self.subprocess_abort
                     and diffuser_retries < max_diffuser_retries
                     and "Instrument Access Failed" in str(result)
-                    and any(
-                        "Diffuser thread failed" in line for line in self.output
-                    )
+                    and any("Diffuser thread failed" in line for line in self.output)
                 ):
                     diffuser_retries += 1
                     self.log(
@@ -18168,7 +18161,7 @@ BEGIN_DATA
                 # Use the GitHub API digest field, available for every release
                 # asset without any separate upload step.
                 # URL: .../releases/download/{version}/{filename}
-                path_tail = orig_uri[len("https://github.com/"):]
+                path_tail = orig_uri[len("https://github.com/") :]
                 parts = path_tail.split("/")
                 # parts: ["eoyilmaz", "argyllcms-binaries", "releases", "download", version, filename]
                 if len(parts) >= 6:
@@ -18234,7 +18227,9 @@ BEGIN_DATA
                         total_size = None
             contentdispo = response.info().get("Content-Disposition")
             if contentdispo:
-                m = re.search(r'filename[*]?=(?:"([^"]+)"|([^\s;]+))', contentdispo, re.I)
+                m = re.search(
+                    r'filename[*]?=(?:"([^"]+)"|([^\s;]+))', contentdispo, re.I
+                )
                 if m:
                     filename = (m.group(1) or m.group(2)).strip()
             if not filename:

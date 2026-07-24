@@ -914,7 +914,9 @@ class LUT3DMixin:
                             # me_header was read as bytes -- a str
                             # pattern raises TypeError)
                             me_header = re.sub(
-                                rb"#define\s+USE_LUT\s+0", b"#define USE_LUT 1", me_header
+                                rb"#define\s+USE_LUT\s+0",
+                                b"#define USE_LUT 1",
+                                me_header,
                             )
                             # iLookupTableMode 2 = use mclut3d.png
                             me_header = re.sub(

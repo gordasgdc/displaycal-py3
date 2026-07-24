@@ -164,10 +164,7 @@ def get_toplevel_window(id_name_label: str) -> QWidget | None:
     if app is None:
         return None
     for win in reversed(app.topLevelWidgets()):
-        if (
-            win.isVisible()
-            and id_name_label in (win.objectName(), win.windowTitle())
-        ):
+        if win.isVisible() and id_name_label in (win.objectName(), win.windowTitle()):
             return win
     return None
 
@@ -251,9 +248,7 @@ class ScriptingHostMixin:
                     sleep(0.05)
                     continue
                 break
-            if addrport[0] != "127.0.0.1" and not getcfg(
-                "app.allow_network_clients"
-            ):
+            if addrport[0] != "127.0.0.1" and not getcfg("app.allow_network_clients"):
                 conn.close()
                 print(lang.getstr("app.client.network.disallowed", addrport))
                 sleep(0.2)
@@ -480,9 +475,7 @@ class ScriptingHostMixin:
                         if port:
                             ports.append(port)
             except OSError as exception:
-                print(
-                    f"Warning - could not read lockfile {lockfilename}:", exception
-                )
+                print(f"Warning - could not read lockfile {lockfilename}:", exception)
             else:
                 scripting_hosts.extend(
                     f"127.0.0.1:{port} {lock_file_basename}" for port in ports
@@ -490,9 +483,7 @@ class ScriptingHostMixin:
         scripting_hosts.sort()
         return scripting_hosts
 
-    def send_command(
-        self, scripting_host_name_suffix: str, command: str
-    ) -> object:
+    def send_command(self, scripting_host_name_suffix: str, command: str) -> object:
         """Send ``command`` to a running scripting host and return its response.
 
         Args:
@@ -527,8 +518,7 @@ class ScriptingHostMixin:
                     print(f"{scripting_host} {command} returned", response)
                 else:
                     print(
-                        f"Warning - {scripting_host} not running under expected "
-                        "port",
+                        f"Warning - {scripting_host} not running under expected port",
                         port,
                     )
                 del conn
@@ -657,9 +647,7 @@ class ScriptingHostMixin:
         self.raise_()
         self.activateWindow()
 
-    def open_files_command(
-        self, data: list, command: str, multi: bool = False
-    ) -> str:
+    def open_files_command(self, data: list, command: str, multi: bool = False) -> str:
         """Handle the standard ``<command> [file...]`` / ``load <file...>`` commands.
 
         Raises the window and routes any supplied paths through its drop target;
@@ -847,11 +835,7 @@ class ScriptingHostMixin:
             return "error " + demjson.encode(str(exception))
         if response != "invalid":
             return response
-        if (
-            data[0] == "refresh"
-            and len(data) == 1
-            and hasattr(self, "update_controls")
-        ):
+        if data[0] == "refresh" and len(data) == 1 and hasattr(self, "update_controls"):
             self.update_controls()
             return "ok"
         if data[0] == "restore-defaults":

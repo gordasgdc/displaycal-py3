@@ -1338,7 +1338,9 @@ def _write_manifest_in(
         "include {}".format(os.path.join(*pymod.split(".")))
         for pymod in attrs.get("py_modules", [])
     )
-    manifest_in.append("include {}".format(os.path.join(NAME, "theme", "theme-info.txt")))
+    manifest_in.append(
+        "include {}".format(os.path.join(NAME, "theme", "theme-info.txt"))
+    )
     manifest_in.append(
         "recursive-include {} {} {}".format(
             os.path.join(NAME, "theme", "icons"), "*.icns", "*.ico"
@@ -1605,7 +1607,9 @@ def main() -> None:
         if not os.path.isdir(pil_dylibs):
             import PIL
 
-            pil_installed_dylibs = os.path.join(os.path.dirname(PIL.__file__), ".dylibs")
+            pil_installed_dylibs = os.path.join(
+                os.path.dirname(PIL.__file__), ".dylibs"
+            )
             print("Copying", pil_installed_dylibs, "->", pil_dylibs)
             shutil.copytree(pil_installed_dylibs, pil_dylibs)
             # ADD THIS: Remove existing signatures so the later deep-sign works properly

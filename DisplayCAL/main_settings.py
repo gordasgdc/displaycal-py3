@@ -57,9 +57,9 @@ def update_ccmx_items_from_path(
         bool: True if CCMX items were updated, False otherwise.
     """
     if not ccmx:
-        ccxx = safe_glob(
-            os.path.join(os.path.dirname(path), "*.ccmx")
-        ) or safe_glob(os.path.join(os.path.dirname(path), "*.ccss"))
+        ccxx = safe_glob(os.path.join(os.path.dirname(path), "*.ccmx")) or safe_glob(
+            os.path.join(os.path.dirname(path), "*.ccss")
+        )
         if ccxx and len(ccxx) == 1:
             ccmx = ccxx[0]
             update_ccmx_items = True

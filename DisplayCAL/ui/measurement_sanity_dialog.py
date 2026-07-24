@@ -198,7 +198,10 @@ class MeasurementSanityDialog(QDialog):
             item.setForeground(_BAD_COLOR)
 
     def _paint_swatches(
-        self, row_index: int, rgb: tuple[float, float, float], xyz: tuple[float, float, float]
+        self,
+        row_index: int,
+        rgb: tuple[float, float, float],
+        xyz: tuple[float, float, float],
     ) -> None:
         rgb255 = [v / 100.0 * 255 for v in rgb]
         self.table.item(row_index, 4).setBackground(QColor(*_clamp255(rgb255)))

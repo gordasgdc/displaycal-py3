@@ -343,9 +343,7 @@ class UntetheredWindow(BaseWindow):
                         or colormath.delta(*white_planckianCCT_Lab + white_Lab)["E"] < 6
                     )
                 ):
-                    XYZ = colormath.adapt(
-                        XYZ[0], XYZ[1], XYZ[2], white_XYZ_Y100, "D65"
-                    )
+                    XYZ = colormath.adapt(XYZ[0], XYZ[1], XYZ[2], white_XYZ_Y100, "D65")
         X, Y, Z = (v / 100.0 for v in XYZ)
         color = [round(v) for v in colormath.XYZ2RGB(X, Y, Z, scale=255)]
         return Lab, color
@@ -488,7 +486,9 @@ class UntetheredWindow(BaseWindow):
         # A leftover pixmap paints over the label regardless of stylesheet, so
         # it must be cleared for the background-color to become visible.
         label.clear()
-        label.setStyleSheet(f"background-color: rgb({color[0]}, {color[1]}, {color[2]});")
+        label.setStyleSheet(
+            f"background-color: rgb({color[0]}, {color[1]}, {color[2]});"
+        )
 
     def _set_swatch_checkerboard(self, label: QLabel) -> None:
         """Reset a patch swatch to the "no patch yet" checkerboard."""

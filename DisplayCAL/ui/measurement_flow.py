@@ -138,9 +138,7 @@ def patterngenerator_kind(display_name: str) -> PatternGeneratorKind:
     return PatternGeneratorKind.NONE
 
 
-def build_measureframe_command(
-    exe: str = EXE, pydir: str = PYDIR
-) -> list[str]:
+def build_measureframe_command(exe: str = EXE, pydir: str = PYDIR) -> list[str]:
     """Build the command that runs the Qt measure frame as a subprocess.
 
     Mirrors ``MainFrame.start_measureframe_subprocess``'s script, but launches

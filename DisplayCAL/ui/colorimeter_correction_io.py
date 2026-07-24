@@ -120,9 +120,7 @@ class _CallThread(QThread):
         self.done.emit(result)
 
 
-def _indeterminate_progress(
-    title: str, parent: QWidget | None
-) -> QProgressDialog:
+def _indeterminate_progress(title: str, parent: QWidget | None) -> QProgressDialog:
     progress = QProgressDialog(title, "", 0, 0, parent)
     progress.setWindowTitle(title)
     progress.setCancelButton(None)
@@ -345,9 +343,7 @@ class _ImportOptionsDialog(QDialog):
             if not importer_availability[name]:
                 continue
             checkbox = QCheckBox(f"{desc} ({', '.join(instruments_)})")
-            check_exists = (
-                worker.spyder4_cal_exists() if name == "spyd4" else False
-            )
+            check_exists = worker.spyder4_cal_exists() if name == "spyd4" else False
             if any(
                 instrument in worker.instruments and not check_exists
                 for instrument in instruments_

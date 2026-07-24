@@ -176,8 +176,9 @@ class GamutPlot(pg.PlotWidget):
         ):
             self._apply_theme()
             if self.pcs_data:
-                self.draw_gamut(whitepoint=self._whitepoint,
-                                show_outline=self._show_outline)
+                self.draw_gamut(
+                    whitepoint=self._whitepoint, show_outline=self._show_outline
+                )
 
     def set_data(
         self,
@@ -349,9 +350,7 @@ class GamutPlot(pg.PlotWidget):
                         continue
                     self._add_curve([edge[j], edge[j + 1]], _COMPARISON, 2)
                 else:
-                    self._add_curve(
-                        [edge[j], edge[j + 1]], _rgb(edge_triplets[j]), 3
-                    )
+                    self._add_curve([edge[j], edge[j + 1]], _rgb(edge_triplets[j]), 3)
 
         # Whitepoint marker.
         wx_, wy = coords[-1]

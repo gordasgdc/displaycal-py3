@@ -537,9 +537,7 @@ class TestchartEditorWindow(BaseWindow):
                 self.tc_neutral_axis_emphasis_slider,
                 self.tc_neutral_axis_emphasis_intctrl,
             ) = self._slider_spin(0, 100, self._on_neutral_axis_emphasis)
-            params.addWidget(
-                QLabel(lang.getstr("tc.neutral_axis_emphasis")), row, 0
-            )
+            params.addWidget(QLabel(lang.getstr("tc.neutral_axis_emphasis")), row, 0)
             params.addLayout(
                 self._pair_layout(
                     self.tc_neutral_axis_emphasis_slider,
@@ -676,9 +674,7 @@ class TestchartEditorWindow(BaseWindow):
         slider.valueChanged.connect(
             lambda v: self._sync_pair(slider, spin, v, on_change)
         )
-        spin.valueChanged.connect(
-            lambda v: self._sync_pair(spin, slider, v, on_change)
-        )
+        spin.valueChanged.connect(lambda v: self._sync_pair(spin, slider, v, on_change))
         return slider, spin
 
     def _sync_pair(
@@ -957,9 +953,7 @@ class TestchartEditorWindow(BaseWindow):
             self.tc_white_patches.setValue(getcfg("tc_white_patches"))
             if self.tc_black_patches is not None:
                 self.tc_black_patches.setValue(getcfg("tc_black_patches"))
-            self.tc_single_channel_patches.setValue(
-                getcfg("tc_single_channel_patches")
-            )
+            self.tc_single_channel_patches.setValue(getcfg("tc_single_channel_patches"))
             self.tc_gray_patches.setValue(getcfg("tc_gray_patches"))
             if getcfg("tc_multi_bcc_steps"):
                 setcfg("tc_multi_bcc", 1)
@@ -1039,9 +1033,7 @@ class TestchartEditorWindow(BaseWindow):
                 self.tc_neutral_axis_emphasis_intctrl.value() / 100.0,
             )
         if self.tc_dark_emphasis_intctrl is not None:
-            setcfg(
-                "tc_dark_emphasis", self.tc_dark_emphasis_intctrl.value() / 100.0
-            )
+            setcfg("tc_dark_emphasis", self.tc_dark_emphasis_intctrl.value() / 100.0)
         setcfg("tc.saturation_sweeps", self.saturation_sweeps_intctrl.value())
         for component, spin in self.saturation_sweeps_custom_ctrls.items():
             setcfg(f"tc.saturation_sweeps.custom.{component}", spin.value())
@@ -1233,9 +1225,7 @@ class TestchartEditorWindow(BaseWindow):
             "tc_vrml_device_colorspace",
             self.tc_vrml_device_colorspace_ctrl.currentText(),
         )
-        setcfg(
-            "tc_vrml_cie_colorspace", self.tc_vrml_cie_colorspace_ctrl.currentText()
-        )
+        setcfg("tc_vrml_cie_colorspace", self.tc_vrml_cie_colorspace_ctrl.currentText())
         setcfg("tc_vrml_black_offset", self.tc_vrml_black_offset_intctrl.value())
         setcfg("tc_vrml_use_D50", int(self.tc_vrml_use_D50_cb.isChecked()))
         setcfg("vrml.compress", int(self.tc_vrml_compress_cb.isChecked()))
@@ -1349,15 +1339,19 @@ class TestchartEditorWindow(BaseWindow):
         Returns:
             int: The total number of patches.
         """
-        if self.ti1 is not None and [
-            white_patches,
-            black_patches,
-            single_channel_patches,
-            gray_patches,
-            multi_steps,
-            multi_bcc_steps,
-            fullspread_patches,
-        ] == [None] * 7:
+        if (
+            self.ti1 is not None
+            and [
+                white_patches,
+                black_patches,
+                single_channel_patches,
+                gray_patches,
+                multi_steps,
+                multi_bcc_steps,
+                fullspread_patches,
+            ]
+            == [None] * 7
+        ):
             return self.ti1.queryv1("NUMBER_OF_SETS")
         if white_patches is None:
             white_patches = self.tc_white_patches.value()
@@ -2059,9 +2053,7 @@ class TestchartEditorWindow(BaseWindow):
         row = self._selected_or_last_row()
         newdata = []
         for i in range(maxv):
-            rgb, xyy = colormath.RGBsaturation(
-                r, g, b, 1.0 / (maxv - 1) * i, rgb_space
-            )
+            rgb, xyy = colormath.RGBsaturation(r, g, b, 1.0 / (maxv - 1) * i, rgb_space)
             x, y, z = colormath.xyY2XYZ(*xyy)
             newdata.append(
                 {
@@ -2134,16 +2126,12 @@ class TestchartEditorWindow(BaseWindow):
             except Exception as exception:  # noqa: BLE001
                 message_box.critical(self, self.windowTitle(), str(exception))
                 return
-        self._progress = self._make_progress(
-            lang.getstr("testchart.add_ti3_patches")
-        )
+        self._progress = self._make_progress(lang.getstr("testchart.add_ti3_patches"))
         self.add_ti3_btn.setEnabled(False)
         self._add_thread = _AddPatchesThread(
             self, chart, image, False, profile, parent=self
         )
-        self._add_thread.done.connect(
-            lambda result: self._on_added(result, profile)
-        )
+        self._add_thread.done.connect(lambda result: self._on_added(result, profile))
         self._add_thread.start()
 
     def _named_color_chart(self, path: str) -> bytes:
@@ -2530,9 +2518,7 @@ class TestchartEditorWindow(BaseWindow):
             entry["SAMPLE_ID"] = row + 2 + offset
         self.tc_add_data(row, newdata)
 
-    def _reference_to_patches(
-        self, chart: CGATS, profile: ICCProfile
-    ) -> list[dict]:
+    def _reference_to_patches(self, chart: CGATS, profile: ICCProfile) -> list[dict]:
         """Look reference CIE values up through the profile into patch dicts.
 
         Ports ``wx_testchart_editor.tc_add_ti3_consumer``.
@@ -2555,9 +2541,7 @@ class TestchartEditorWindow(BaseWindow):
         if not is_rgb_gamut:
             as_ti3 = all(
                 label in data_format for label in (b"LAB_L", b"LAB_A", b"LAB_B")
-            ) or all(
-                label in data_format for label in (b"XYZ_X", b"XYZ_Y", b"XYZ_Z")
-            )
+            ) or all(label in data_format for label in (b"XYZ_X", b"XYZ_Y", b"XYZ_Z"))
             if intent == "r":
                 chart.adapt()
             ti1, ti3, _void = self.worker.chart_lookup(

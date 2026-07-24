@@ -133,9 +133,7 @@ class InstallProfileWindow(BaseWindow):
 
         self._build_ui()
 
-        droptarget = FileDropTarget(
-            {".icc": self._load_path, ".icm": self._load_path}
-        )
+        droptarget = FileDropTarget({".icc": self._load_path, ".icm": self._load_path})
         droptarget.install_on(self)
 
         self._update_load_on_login_controls()
@@ -257,9 +255,7 @@ class InstallProfileWindow(BaseWindow):
             )
             return
         except pi.ProfileUnsupportedError as exception:
-            message_box.critical(
-                self, self.windowTitle(), f"{exception}\n{path}"
-            )
+            message_box.critical(self, self.windowTitle(), f"{exception}\n{path}")
             return
         self._profile = profile
         self._profile_path = path
@@ -337,9 +333,7 @@ class InstallProfileWindow(BaseWindow):
             return
         writecfg()
         self.install_btn.setEnabled(False)
-        self._progress = QProgressDialog(
-            lang.getstr("profile.install"), "", 0, 0, self
-        )
+        self._progress = QProgressDialog(lang.getstr("profile.install"), "", 0, 0, self)
         self._progress.setWindowTitle(self.windowTitle())
         self._progress.setCancelButton(None)
         self._progress.show()
@@ -359,9 +353,7 @@ class InstallProfileWindow(BaseWindow):
         show_install_summary(self, self.windowTitle(), result)
 
 
-def show_install_summary(
-    parent: QWidget | None, title: str, result: tuple
-) -> None:
+def show_install_summary(parent: QWidget | None, title: str, result: tuple) -> None:
     """Show the outcome of a completed :meth:`Worker.install_profile` call.
 
     Ports the per-backend (ArgyllCMS/colord/Oyranos/profile-loader) success

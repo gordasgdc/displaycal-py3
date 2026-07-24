@@ -1055,9 +1055,7 @@ class ReportPanel(QWidget):
         Args:
             event (object): Truthy when triggered by the user.
         """
-        setcfg(
-            "measurement_report.chart.fields", self.fields_ctrl.currentText()
-        )
+        setcfg("measurement_report.chart.fields", self.fields_ctrl.currentText())
         if event:
             self.mr_update_main_controls(event)
 
@@ -1680,9 +1678,7 @@ class ReportPanel(QWidget):
             patches (int | None): Patch count; taken from the patch-count label
                 when omitted.
         """
-        integration_time = self.worker.get_instrument_features().get(
-            "integration_time"
-        )
+        integration_time = self.worker.get_instrument_features().get("integration_time")
         if integration_time:
             if which == "chart" and not patches:
                 patches = int(self.chart_patches_amount.text())

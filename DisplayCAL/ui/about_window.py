@@ -109,9 +109,7 @@ class AboutWindow(BaseWindow):
             label = QLabel(line)
             label.setTextFormat(Qt.RichText)
             label.setOpenExternalLinks(False)
-            label.linkActivated.connect(
-                lambda url: QDesktopServices.openUrl(QUrl(url))
-            )
+            label.linkActivated.connect(lambda url: QDesktopServices.openUrl(QUrl(url)))
             label.setWordWrap(True)
             body_layout.addWidget(label)
         body_layout.addStretch(1)
@@ -159,9 +157,7 @@ class AboutWindow(BaseWindow):
             f"{_link('Suru Icons', 'https://github.com/snwh/suru-icon-theme')}"
             " © Sam Hewitt"
         )
-        lines.append(
-            f"Some icons © {_link('GNOME Project', 'https://www.gnome.org/')}"
-        )
+        lines.append(f"Some icons © {_link('GNOME Project', 'https://www.gnome.org/')}")
         lines.append(None)
 
         match = re.match(r"([^(]+)\s*(\([^(]+\))?\s*(\[[^[]+\])?", sys.version)

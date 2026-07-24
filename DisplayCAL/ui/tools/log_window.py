@@ -46,9 +46,7 @@ class LogWindow(BaseWindow):
         self.setCentralWidget(self._text)
         self.restore_position()
         if not self.restore_size():
-            self.resize(
-                config.getcfg("size.info.w"), config.getcfg("size.info.h")
-            )
+            self.resize(config.getcfg("size.info.w"), config.getcfg("size.info.h"))
 
     def Log(self, txt: str) -> None:  # noqa: N802 (wx-parity method name)
         """Append ``txt`` to the log view, scrolling to show it.

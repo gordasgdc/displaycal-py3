@@ -301,9 +301,7 @@ class ProfileInfoWindow(BaseWindow):
         self.comparison_combo = _bounded_combo(contents_length=22)
         self._comparison_profiles: dict[str, ICCProfile | None] = {}
         self._populate_comparison_profiles()
-        self.comparison_combo.currentIndexChanged.connect(
-            self._on_comparison_selected
-        )
+        self.comparison_combo.currentIndexChanged.connect(self._on_comparison_selected)
 
         # Single plot-mode combo, matching wx ``plot_mode_select``: one entry
         # per available tone-curve mode (vcgt / [rgb]TRC / measured) followed
@@ -787,8 +785,11 @@ class ProfileInfoWindow(BaseWindow):
         if not meta:
             return ""
         parts = []
-        for key, name in (("srgb", "sRGB"), ("adobe-rgb", "Adobe RGB"),
-                          ("dci-p3", "DCI P3")):
+        for key, name in (
+            ("srgb", "sRGB"),
+            ("adobe-rgb", "Adobe RGB"),
+            ("dci-p3", "DCI P3"),
+        ):
             try:
                 coverage = meta.getvalue(f"GAMUT_coverage({key})")
                 coverage = float(coverage) if coverage is not None else None

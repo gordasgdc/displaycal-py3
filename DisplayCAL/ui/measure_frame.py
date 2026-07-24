@@ -289,13 +289,9 @@ def _dither_rgb_image(
             pixels[:, channel] = floor[channel]
         else:
             select = np.floor((index + 1) * frac) > np.floor(index * frac)
-            pixels[:, channel] = np.where(
-                select, ceil[channel], floor[channel]
-            )
+            pixels[:, channel] = np.where(select, ceil[channel], floor[channel])
     pixels = np.ascontiguousarray(pixels.reshape(height, width, 3))
-    image = QImage(
-        pixels.data, width, height, 3 * width, QImage.Format_RGB888
-    )
+    image = QImage(pixels.data, width, height, 3 * width, QImage.Format_RGB888)
     return image.copy()  # detach from the numpy buffer
 
 
@@ -500,9 +496,7 @@ class MeasureFrame(BaseWindow):
         self.darken_cb: QCheckBox | None = None
         if not wayland or config.is_virtual_display():
             self.darken_cb = QCheckBox(lang.getstr("measure.darken_background"))
-            self.darken_cb.setChecked(
-                bool(int(getcfg("measure.darken_background")))
-            )
+            self.darken_cb.setChecked(bool(int(getcfg("measure.darken_background"))))
             self.darken_cb.toggled.connect(self._darken_handler)
             darken_row = QHBoxLayout()
             darken_row.addStretch(1)
@@ -510,13 +504,9 @@ class MeasureFrame(BaseWindow):
             darken_row.addStretch(1)
             bottom.addLayout(darken_row)
 
-        self.measure_button = QPushButton(
-            lang.getstr("measureframe.measurebutton")
-        )
+        self.measure_button = QPushButton(lang.getstr("measureframe.measurebutton"))
         self.measure_button.setDefault(True)
-        self.measure_button.setSizePolicy(
-            QSizePolicy.Maximum, QSizePolicy.Fixed
-        )
+        self.measure_button.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
         self.measure_button.clicked.connect(self.measure_requested.emit)
         measure_row = QHBoxLayout()
         measure_row.addStretch(1)
@@ -596,9 +586,7 @@ class MeasureFrame(BaseWindow):
                 self.display_size_mm[geometry] = size_mm
         if size_mm:
             return float(
-                default_measureframe_size(
-                    (geo.width(), geo.height()), size_mm
-                )
+                default_measureframe_size((geo.width(), geo.height()), size_mm)
             )
         return float(DEFAULTS.get("size.measureframe", 300))
 
@@ -727,10 +715,7 @@ class MeasureFrame(BaseWindow):
 
     def center_handler(self) -> None:
         """Centre the measurement area on the display."""
-        x, y = (
-            float(v)
-            for v in DEFAULTS["dimensions.measureframe"].split(",")[:2]
-        )
+        x, y = (float(v) for v in DEFAULTS["dimensions.measureframe"].split(",")[:2])
         self.place_n_zoom(x, y)
 
     # -- darken background -------------------------------------------------
@@ -789,9 +774,7 @@ class MeasureFrame(BaseWindow):
         ceil = tuple(math.ceil(v) for v in values)
         size = self._panel.size()
         if floor != ceil and size.width() and size.height():
-            image = _dither_rgb_image(
-                size.width(), size.height(), values, floor, ceil
-            )
+            image = _dither_rgb_image(size.width(), size.height(), values, floor, ceil)
             self._panel.set_image(image)
         else:
             self._panel.set_color(QColor(*floor))
@@ -816,9 +799,7 @@ class MeasureFrame(BaseWindow):
         super().showEvent(event)
         self.show_controls(True)
         if self.darken_cb is not None:
-            self.darken_cb.setChecked(
-                bool(int(getcfg("measure.darken_background")))
-            )
+            self.darken_cb.setChecked(bool(int(getcfg("measure.darken_background"))))
         self.place_n_zoom(
             *(float(v) for v in getcfg("dimensions.measureframe").split(","))
         )
@@ -905,9 +886,7 @@ def main() -> int:
 
     app = Application(sys.argv)
     worker = Worker()
-    worker.enumerate_displays_and_ports(
-        check_lut_access=False, enumerate_ports=False
-    )
+    worker.enumerate_displays_and_ports(check_lut_access=False, enumerate_ports=False)
     window = MeasureFrame()
 
     def _request_measure() -> None:

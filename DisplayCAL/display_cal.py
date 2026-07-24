@@ -3198,7 +3198,9 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         )
         self.Bind(wx.EVT_MENU, self.measure_handler, self.menuitem_measure_testchart)
         self.menuitem_specplot_run = None
-        if (specplot_run_menu_id := tools_advanced.FindItem("specplot.run")) is not None:
+        if (
+            specplot_run_menu_id := tools_advanced.FindItem("specplot.run")
+        ) is not None:
             self.menuitem_specplot_run = tools_advanced.FindItemById(
                 specplot_run_menu_id
             )
@@ -15627,7 +15629,16 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         debug_print("   path(s):", path)
         debug_print("   asroot:", asroot)
         result, i1d3, spyd4, icd = colorimeter_correction.detect_import_kind(
-            self.worker, result, i1d3, i1d3ccss, spyd4, spyd4en, icd, oeminst, path, asroot
+            self.worker,
+            result,
+            i1d3,
+            i1d3ccss,
+            spyd4,
+            spyd4en,
+            icd,
+            oeminst,
+            path,
+            asroot,
         )
         debug_print("import_colorimeter_correction ->")
         debug_print("   result:", result)
@@ -15925,9 +15936,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         # the storage folder (the extracted+moved file is really
         # "<basename>.cal"/etc.), so ``load_cal_handler`` silently treated the
         # import as if the calibration had gone missing.
-        return os.path.join(
-            getcfg("profile.save_path"), basename, basename + found_ext
-        )
+        return os.path.join(getcfg("profile.save_path"), basename, basename + found_ext)
 
     def import_session_archive_consumer(
         self, result: str | Exception, basename: str

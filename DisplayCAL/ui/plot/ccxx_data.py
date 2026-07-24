@@ -370,9 +370,7 @@ def compute_ccxx_plot_data(cgats: CGATS, worker: Worker | None = None) -> CCXXPl
         for observer in config.VALID_VALUES["observer"]:
             observers_ab[observer] = lang.getstr("observer." + observer)
         x_label = [lang.getstr("matrix")]
-        x_label.extend(
-            ["{:9.6f} {:9.6f} {:9.6f}".format(*tuple(row)) for row in mtx]
-        )
+        x_label.extend(["{:9.6f} {:9.6f} {:9.6f}".format(*tuple(row)) for row in mtx])
         if ref:
             ref_observer = cgats.queryv1("REFERENCE_OBSERVER")
             if ref_observer:

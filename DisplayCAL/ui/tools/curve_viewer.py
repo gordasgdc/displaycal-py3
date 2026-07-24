@@ -130,9 +130,7 @@ class _MeasuredThread(QThread):
         profile, worker, intent, use_clut, direction = self._args
         try:
             self.done.emit(
-                measured_tone_response(
-                    profile, worker, intent, use_clut, direction
-                )
+                measured_tone_response(profile, worker, intent, use_clut, direction)
             )
         except Exception as exception:  # noqa: BLE001  (report on GUI thread)
             self.done.emit(exception)
@@ -520,9 +518,7 @@ class CurvePanel(QWidget):
         self.mode_combo.blockSignals(True)
         self.mode_combo.clear()
         for mode in modes:
-            label = lang.getstr(
-                CURVE_MODES[mode], default="Measured tone response"
-            )
+            label = lang.getstr(CURVE_MODES[mode], default="Measured tone response")
             self.mode_combo.addItem(label, mode)
         for mode in shaper_modes:
             self.mode_combo.addItem(lang.getstr(shaper_mode_lang_key(mode)), mode)
@@ -533,9 +529,7 @@ class CurvePanel(QWidget):
         self.direction_combo.clear()
         if profile.colorSpace == b"RGB":
             for code in available_directions(profile):
-                self.direction_combo.addItem(
-                    lang.getstr(_DIRECTION_LABELS[code]), code
-                )
+                self.direction_combo.addItem(lang.getstr(_DIRECTION_LABELS[code]), code)
         self.direction_combo.blockSignals(False)
 
         if not modes:

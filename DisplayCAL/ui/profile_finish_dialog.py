@@ -199,9 +199,7 @@ class ProfileFinishDialog(QDialog):
             and sys.getwindowsversion() >= (6, 1)
             and util_win.calibration_management_isenabled()
         )
-        self.load_on_login_check = QCheckBox(
-            pi.get_profile_load_on_login_label(os_cal)
-        )
+        self.load_on_login_check = QCheckBox(pi.get_profile_load_on_login_label(os_cal))
         self.load_on_login_check.setChecked(
             bool(getcfg("profile.load_on_login")) or os_cal
         )

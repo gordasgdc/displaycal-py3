@@ -120,9 +120,10 @@ def _is_grayscale(pixmap: QPixmap) -> bool:
             color = image.pixelColor(x, y)
             if color.alpha() < 10:
                 continue
-            if abs(color.red() - color.green()) > 6 or abs(
-                color.green() - color.blue()
-            ) > 6:
+            if (
+                abs(color.red() - color.green()) > 6
+                or abs(color.green() - color.blue()) > 6
+            ):
                 return False
     return True
 

@@ -258,9 +258,7 @@ class Image:
             (time.mktime(time.localtime()) - time.mktime(time.gmtime())) / 60.0 / 60.0
         )
         tzoffset = b"%.2i" % tzoffset if tzoffset < 0 else b"+%.2i" % tzoffset
-        stream.write(
-            time.strftime("%Y:%m:%d:%H:%M:%S").encode() + tzoffset + b"\0\0"
-        )
+        stream.write(time.strftime("%Y:%m:%d:%H:%M:%S").encode() + tzoffset + b"\0\0")
         stream.write(
             f"{APPNAME} {VERSION_STRING}".encode().ljust(100, b"\0")
         )  # Creator
@@ -354,7 +352,9 @@ class Image:
         # SMPTE time code
         stream.write(
             b"".join(
-                chr(int(v.decode("ascii") if isinstance(v, bytes) else str(v), 16)).encode()
+                chr(
+                    int(v.decode("ascii") if isinstance(v, bytes) else str(v), 16)
+                ).encode()
                 for v in self.extrainfo.get("timecode", ["ff"] * 4)
             )
         )
