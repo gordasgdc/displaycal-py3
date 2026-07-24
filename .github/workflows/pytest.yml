@@ -130,7 +130,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --durations=50
+        python -m pytest --verbose -W ignore --color=yes -m "not network" --durations=50
 
     - name: Dump thread stacks (diagnostic, see conftest.py)
       if: always()
@@ -215,7 +215,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --durations=50
+        python -m pytest --verbose -W ignore --color=yes -m "not network" --durations=50
 
   macos:
     name: macOS + Python ${{ matrix.python-version }}
@@ -287,7 +287,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        python -m pytest --verbose -n auto -W ignore --color=yes -m "not network" --durations=50
+        python -m pytest --verbose -W ignore --color=yes -m "not network" --durations=50
 
     - name: Dump thread stacks (diagnostic, see conftest.py)
       if: always()
