@@ -3,7 +3,7 @@
 
 setuptools' `build_meta` backend execs whatever file is literally named
 `setup.py` on every build hook call, so this file has to exist and has to
-route to the real, distutils-based `DisplayCAL.setup.setup()`: that is
+route to the real, distutils-based `DisplayCAL._setup.setup()`: that is
 where `data_files` (desktop entries, icons, man pages, the appdata.xml
 and copyright templates, ...) is actually assembled, pyproject.toml has
 no declarative equivalent for it.
@@ -12,7 +12,7 @@ Unlike the old `setup.py` (now `native_build.py`), this file does not
 sniff `sys.argv` for native-packaging/freeze commands (`py2app`,
 `py2exe`, `bdist_deb`, `inno`, `0install`, ...), those are only reachable
 by invoking `native_build.py` directly. Its only other job is making
-sure the couple of `dist/` files that `DisplayCAL/setup.py`'s
+sure the couple of `dist/` files that `DisplayCAL/_setup.py`'s
 `data_files` unconditionally references (`dist/copyright` and the
 appdata.xml) exist before the real build runs.
 
@@ -55,7 +55,7 @@ def setup() -> None:
         int(time.time()),
     )
 
-    from DisplayCAL.setup import setup as real_setup
+    from DisplayCAL._setup import setup as real_setup
 
     real_setup()
 
