@@ -8324,24 +8324,28 @@ class ICCProfile:
         load: bool = True,
         use_cache: bool = False,
     ) -> Self:
-        """Create a new ICCProfile instance.
+        """Look up a cached ICCProfile instance, or allocate a new one.
+
+        This is only responsible for the cache identity check, returning an
+        already-loaded instance from `_ICCPROFILE_CACHE` if one matches
+        `profile`. All actual profile loading/parsing happens in `__init__`.
 
         Args:
             profile (None, bytes, str, pathlib.Path, file-like object, optional):
                 The ICC profile data to load. This can be a string or
                 pathlib.Path representing a file path, a bytes object
                 containing the profile data, or a file-like object.
-            load (bool, optional): If True, the profile will be loaded
-                immediately. If False, only the header will be read.
-            use_cache (bool, optional): If True, the profile will be cached
-                to avoid reloading it if it has already been loaded.
+            load (bool, optional): Unused here, kept for signature parity
+                with `__init__` since Python calls both with the same args.
+            use_cache (bool, optional): If True, resolve a cache key for
+                `profile` and return a matching cached instance if found.
 
         Raises:
-            ICCProfileInvalidError: If the profile data is invalid or
-                if the profile cannot be loaded.
+            ICCProfileInvalidError: If a path profile is empty.
 
         Returns:
-            ICCProfile: A new instance of the ICCProfile class.
+            ICCProfile: Either a cached instance, or a freshly allocated
+            (not yet initialized) instance.
         """
         key = None
         # the content of the profile should be passed as bytes in Python 3.
@@ -8394,6 +8398,43 @@ class ICCProfile:
             ICCProfile._recent.append(self)
 
         self._key = key
+        self._resolved_profile = profile
+        return self
+
+    def __init__(
+        self,
+        profile: None | bytes | str | pathlib.Path | BinaryIO | TextIO = None,
+        load: bool = True,
+        use_cache: bool = False,
+    ) -> None:
+        """Initialize the ICCProfile instance.
+
+        Optionally initialized with a string containing binary profile data or
+        a filename, or a file-like object. Also, if the 'load' keyword argument
+        is False (default True), only the header will be read initially and
+        loading of the tags will be deferred to when they are accessed the
+        first time.
+
+        Args:
+            profile (None, bytes, str, pathlib.Path, file-like object, optional):
+                The ICC profile data to load. This can be a string or
+                pathlib.Path representing a file path, a bytes object
+                containing the profile data, or a file-like object.
+            load (bool, optional): If True, the profile will be loaded
+                immediately. If False, only the header will be read.
+            use_cache (bool, optional): Unused here (already applied by
+                `__new__`), kept for signature parity.
+
+        Raises:
+            ICCProfileInvalidError: If the profile data is invalid or
+                if the profile cannot be loaded.
+        """
+        if getattr(self, "_initialized", False):
+            # Cache hit: __new__ returned an already-initialized instance.
+            return
+
+        profile = self.__dict__.pop("_resolved_profile")
+
         self.ID = b"\0" * 16
         self._data = b""
         self._file = None
@@ -8402,14 +8443,15 @@ class ICCProfile:
         self.filename = None
         self.is_loaded = False
         self.size = 0
+        self._initialized = True
 
-        if isinstance(key, tuple):
+        if isinstance(self._key, tuple):
             # Filename
             profile = open(profile, "rb")  # noqa: SIM115
 
         if profile is None:
             self.set_defaults()
-            return self
+            return
 
         if isinstance(profile, bytes):
             # Binary string
@@ -8539,7 +8581,7 @@ class ICCProfile:
                 if vcgt:
                     self.tags["vcgt"] = vcgt
             self.size = len(self.data)
-            return self
+            return
 
         if data[36:40] != b"acsp":
             raise ICCProfileInvalidError(
@@ -8593,8 +8635,6 @@ class ICCProfile:
 
         if load:
             _ = self.tags
-
-        return self
 
     def set_defaults(self) -> None:
         """Set default values for the ICC profile."""
