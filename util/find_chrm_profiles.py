@@ -7,7 +7,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from DisplayCAL import ICCProfile as iccp
 from DisplayCAL.defaultpaths import ICCPROFILES, ICCPROFILES_HOME
 
-
 for p in set(ICCPROFILES_HOME + ICCPROFILES):
     if os.path.isdir(p):
         for f in os.listdir(p):

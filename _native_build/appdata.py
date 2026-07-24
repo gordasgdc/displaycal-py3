@@ -6,12 +6,12 @@ from _native_build.templates import format_changelog, replace_placeholders
 
 def generate(pydir: Path, lastmod_time) -> None:
     """Generate dist/<APPSTREAM_ID>.appdata.xml from misc/<APPSTREAM_ID>.appdata.xml."""
-    with open(str(Path(pydir, "CHANGES.html")), "r", encoding="UTF-8") as f:
+    with open(str(Path(pydir, "CHANGES.html")), encoding="UTF-8") as f:
         readme = f.read()
         changelog = meta.get_latest_changelog_entry(readme)
 
-    from DisplayCAL._setup import get_scripts
     from DisplayCAL import localization as lang
+    from DisplayCAL._setup import get_scripts
 
     scripts = get_scripts()
     provides = [f"<python3>{meta.NAME}</python3>"]

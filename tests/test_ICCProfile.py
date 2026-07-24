@@ -14,17 +14,17 @@ import pytest
 from DisplayCAL import colormath
 from DisplayCAL.icc_profile import (
     CMMS,
-    dateTimeNumber,
-    DictType,
-    GAMUT_VOLUME_SRGB,
     GAMUT_VOLUME_ADOBERGB,
     GAMUT_VOLUME_SMPTE431_P3,
-    hexrepr,
+    GAMUT_VOLUME_SRGB,
+    DictType,
     ICCProfile,
     ICCProfileTag,
     MultiLocalizedUnicodeType,
-    s15Fixed16Number_tohex,
     Text,
+    dateTimeNumber,
+    hexrepr,
+    s15Fixed16Number_tohex,
     uInt8Number_tohex,
     uInt16Number_tohex,
     uInt32Number_tohex,
@@ -48,7 +48,7 @@ def test_iccprofile_from_rgb_space():
         ["Profile class", "Display device profile"],
         ["Color model", "RGB"],
         ["Profile connection space (PCS)", "XYZ"],
-        ["Created", "2022-03-09 00:19:53"]
+        ["Created", "2022-03-09 00:19:53"],
     ]
 
     if sys.platform == "darwin":
@@ -118,7 +118,7 @@ def test_iccprofile_from_rgb_space():
     ]
     expected_result[17] = [
         "Checksum",
-        "0x{}".format(binascii.hexlify(icc.ID).upper().decode()),
+        f"0x{binascii.hexlify(icc.ID).upper().decode()}",
     ]
 
     assert result == expected_result
@@ -266,7 +266,7 @@ def test_iccprofile_get_info():
     ]
     expected_result[17] = [
         "Checksum",
-        "0x{}".format(binascii.hexlify(icc.ID).upper().decode()),
+        f"0x{binascii.hexlify(icc.ID).upper().decode()}",
     ]
     assert result == expected_result
 
@@ -790,7 +790,7 @@ def test_for_issue_31_3(data_files):
     ]
     expected_result[17] = [
         "Checksum",
-        "0x{}".format(binascii.hexlify(icc.ID).upper().decode()),
+        f"0x{binascii.hexlify(icc.ID).upper().decode()}",
     ]
     assert result == expected_result
 
@@ -905,7 +905,7 @@ def test_dict_type_to_json_roundtrip_ascii_and_unicode():
 
 
 def test_hexrepr_unknown_mapping_does_not_append_vendor_name():
-    """hexrepr should only append mapped names when available."""
+    """Hexrepr should only append mapped names when available."""
     result = hexrepr(b"ZZZZ", mapping=CMMS)
     assert result == "0x5A5A5A5A 'ZZZZ'"
 

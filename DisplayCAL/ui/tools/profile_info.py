@@ -25,7 +25,6 @@ from qtpy.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QMessageBox,
     QPushButton,
     QSplitter,
     QStackedWidget,
@@ -41,10 +40,10 @@ from DisplayCAL.argyll import make_argyll_compatible_path
 from DisplayCAL.config import get_data_path, getcfg, setcfg
 from DisplayCAL.icc_profile import ICCProfile
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
-from DisplayCAL.ui import message_box
 from DisplayCAL.ui.plot.colorspaces import COLORSPACES
 from DisplayCAL.ui.plot.curve_data import CURVE_MODES, available_curve_modes
 from DisplayCAL.ui.plot.gamut import GamutPlot

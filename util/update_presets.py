@@ -7,7 +7,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from DisplayCAL import colormath, config, worker
 from DisplayCAL.icc_profile import ICCProfile, TextType
 
-
 config.initcfg()
 srgb = config.get_data_path("ref/sRGB.icm")
 if not srgb:

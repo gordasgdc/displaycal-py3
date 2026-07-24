@@ -59,11 +59,11 @@ from DisplayCAL.config import (
     setcfg,
 )
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import get_themed_pixmap
-from DisplayCAL.ui.theme import is_dark
 from DisplayCAL.ui.base_window import BaseWindow
-from DisplayCAL.ui import message_box
+from DisplayCAL.ui.theme import is_dark
 from DisplayCAL.util_list import strlist
 from DisplayCAL.worker import Worker
 

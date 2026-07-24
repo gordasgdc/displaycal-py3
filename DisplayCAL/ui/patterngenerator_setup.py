@@ -51,7 +51,6 @@ from qtpy.QtWidgets import (
     QDialogButtonBox,
     QHBoxLayout,
     QLabel,
-    QMessageBox,
     QProgressDialog,
     QVBoxLayout,
     QWidget,

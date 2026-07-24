@@ -6,8 +6,7 @@ from pathlib import Path
 
 from _native_build import appdata as appdata_mod
 from _native_build import inno as inno_mod
-from _native_build import meta
-from _native_build import version
+from _native_build import meta, version
 from _native_build.templates import replace_placeholders
 
 pydir = Path(__file__).resolve().parent.parent

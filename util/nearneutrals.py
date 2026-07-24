@@ -5,8 +5,8 @@ import sys
 def nearneutrals(res=17, step=2):
     grid = []
     inc = 100.0 / res
-    for i in range(0, res):
-        for j in range(0, 3):
+    for i in range(res):
+        for j in range(3):
             v = [i * inc] * 3
             v[j] += step
             if v[j] > 100:

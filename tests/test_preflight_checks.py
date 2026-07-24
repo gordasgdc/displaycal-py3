@@ -18,7 +18,9 @@ class FakeWorker:
     """Minimal worker exposing what ``resolve_cal_choice_info`` touches."""
 
     def __init__(self, argyll_version=None, lut_access=True):
-        self.argyll_version = argyll_version if argyll_version is not None else [3, 0, 0]
+        self.argyll_version = (
+            argyll_version if argyll_version is not None else [3, 0, 0]
+        )
         self._lut_access = lut_access
 
     def has_lut_access(self):
@@ -178,12 +180,16 @@ class TestComputeCalChoiceResult:
         return pfc.CalChoiceInfo(**base)
 
     def test_embed_unchecked_no_reset_returns_false(self):
-        result = pfc.compute_cal_choice_result(self._info(), embed_cal=False, reset_cal=False)
+        result = pfc.compute_cal_choice_result(
+            self._info(), embed_cal=False, reset_cal=False
+        )
         assert result.apply_calibration is False
         assert result.reset_video_lut is False
 
     def test_embed_unchecked_with_reset_resets_video_lut(self):
-        result = pfc.compute_cal_choice_result(self._info(), embed_cal=False, reset_cal=True)
+        result = pfc.compute_cal_choice_result(
+            self._info(), embed_cal=False, reset_cal=True
+        )
         assert result.apply_calibration is False
         assert result.reset_video_lut is True
 

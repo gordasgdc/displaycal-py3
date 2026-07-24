@@ -17,9 +17,7 @@ from decimal import Decimal
 from enum import IntEnum
 from typing import TYPE_CHECKING, Any
 
-
 # Local Imports
-import DisplayCAL
 from DisplayCAL import colormath
 from DisplayCAL.argyll_names import INTENTS, OBSERVERS, VIDEO_ENCODINGS, VIEWCONDS
 
@@ -45,8 +43,8 @@ from DisplayCAL.defaultpaths import (  # noqa: F401
     ICCPROFILES,
     ICCPROFILES_HOME,
 )
-from DisplayCAL.meta import VERSION_STRING
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.meta import VERSION_STRING
 from DisplayCAL.options import DEBUG
 from DisplayCAL.safe_print import (  # noqa: F401
     ENC,  # don't remove this, imported by other modules
@@ -909,10 +907,6 @@ def adjust_bitmap_size(
             # In case bilinear is not supported,
             # and to prevent black borders after resizing for some images
             quality = wx.IMAGE_QUALITY_NORMAL
-        elif orig_name in ():
-            # Hmm. Everything else looks great with bicubic,
-            # but this one gets jaggy unless we use bilinear
-            quality = wx.IMAGE_QUALITY_BILINEAR
         elif scale < 1.5 or bitmap_size_type == BitmapSizeType.HighDPI_4x:
             quality = wx.IMAGE_QUALITY_BICUBIC
         else:
@@ -2573,9 +2567,9 @@ def restart_application() -> None:
     """
     args = [arg for arg in sys.argv[1:] if arg not in ("--qt", "--wx")]
     if getattr(sys, "frozen", False):
-        os.execv(sys.executable, [sys.executable] + args)
+        os.execv(sys.executable, [sys.executable, *args])
     else:
-        os.execv(sys.executable, [sys.executable, sys.argv[0]] + args)
+        os.execv(sys.executable, [sys.executable, sys.argv[0], *args])
 
 
 def is_ccxx_testchart(testchart: None | str = None) -> bool:
@@ -3323,14 +3317,16 @@ def writecfg(
             # processes writing the config at the same time (e.g. the
             # profile loader and the main app running concurrently) could
             # interleave their writes and corrupt the file.
-            with open(lockfilename, "a+b") as lockfile:
-                with FileLock(lockfile, exclusive=True, blocking=True):
-                    fd, tmpfilename = tempfile.mkstemp(
-                        dir=CONFIG_HOME, prefix=f"{cfgbasename}.", suffix=".tmp"
-                    )
-                    with os.fdopen(fd, "wb") as cfgfile:
-                        cfgfile.write(data)
-                    os.replace(tmpfilename, cfgfilename)
+            with (
+                open(lockfilename, "a+b") as lockfile,
+                FileLock(lockfile, exclusive=True, blocking=True),
+            ):
+                fd, tmpfilename = tempfile.mkstemp(
+                    dir=CONFIG_HOME, prefix=f"{cfgbasename}.", suffix=".tmp"
+                )
+                with os.fdopen(fd, "wb") as cfgfile:
+                    cfgfile.write(data)
+                os.replace(tmpfilename, cfgfilename)
         except Exception as exception:
             print(
                 "Warning - could not write user configuration file "

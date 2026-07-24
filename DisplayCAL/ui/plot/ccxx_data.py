@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import math
 import os
-import sys
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -284,7 +283,6 @@ def compute_ccxx_plot_data(cgats: CGATS, worker: Worker | None = None) -> CCXXPl
                     XYZ.append(v)
             samples.append((XYZ, values, {}))
     else:
-        cube_size = 2
         x_min = 0
         y_min = 0
 

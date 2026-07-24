@@ -106,7 +106,7 @@ def test_get_canonical_instrument_name(
 
 
 def test_remove_vendor_names(target_instrument: Union[bytes, str]) -> None:
-    """testing the argyll_instruments.remove_vendor_names() function"""
+    """Testing the argyll_instruments.remove_vendor_names() function"""
     if isinstance(target_instrument, str):
         pytest.skip()
     result = remove_vendor_names(target_instrument)

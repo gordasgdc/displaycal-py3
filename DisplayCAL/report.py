@@ -5,7 +5,6 @@ compatibility with existing report formats. The module also includes utilities
 for backing up and updating reports with the latest template files.
 """
 
-import codecs
 import os
 import re
 import shutil
@@ -38,9 +37,7 @@ def create(
     if not report_html_template_path:
         raise OSError(lang.getstr("file.missing", template_filename))
     try:
-        with open(
-            report_html_template_path, "r", encoding="utf-8"
-        ) as report_html_template:
+        with open(report_html_template_path, encoding="utf-8") as report_html_template:
             report_html = report_html_template.read()
     except OSError as exception:
         raise exception.__class__(
@@ -68,7 +65,7 @@ def create(
         if not path:
             raise OSError(lang.getstr("file.missing", include))
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 if include.endswith(".js"):
                     js = f.read()
                     if pack:
@@ -107,7 +104,7 @@ def update(report_path: str, pack: bool = True) -> None:
     """
     # read original report
     try:
-        with open(report_path, "r", encoding="utf-8") as orig_report:
+        with open(report_path, encoding="utf-8") as orig_report:
             orig_report_html = orig_report.read()
     except OSError as exception:
         raise exception.__class__(

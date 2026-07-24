@@ -2701,7 +2701,7 @@ class VisualWhitepointEditor(wx.Frame):
             ]
             pos[0] += self.mainPanel.Position[0]
             pos[1] -= (self.Size[0] - self.ClientSize[0]) / 2
-            pos = [int(round(coord)) for coord in pos]
+            pos = [round(coord) for coord in pos]
             self._mgr.GetPane("mainPanel").FloatingPosition(pos).CloseButton(True)
             wx.CallAfter(self.area_handler)
         else:

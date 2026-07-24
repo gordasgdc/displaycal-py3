@@ -12,7 +12,6 @@ import pytest
 from DisplayCAL import lut3d_settings as l3d
 from DisplayCAL.config import PROFILE_EXT
 
-
 # -- TRC combo selection -----------------------------------------------------
 
 
@@ -604,9 +603,7 @@ def _base_kwargs(**overrides):
 
 def test_resolve_lut3d_path_info_devlink_changed(tmp_path):
     lut3d_path = str(tmp_path / "profile.cube")
-    info = l3d.resolve_lut3d_path_info(
-        _FakeWorker(), lut3d_path, **_base_kwargs()
-    )
+    info = l3d.resolve_lut3d_path_info(_FakeWorker(), lut3d_path, **_base_kwargs())
     assert info.lut3d_path == lut3d_path
     assert info.devlink_profile == os.path.splitext(lut3d_path)[0] + PROFILE_EXT
     assert info.devlink_changed is True

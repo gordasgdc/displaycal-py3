@@ -275,7 +275,9 @@ def test_follow_display_shows_live_lut_when_actual_lut_checked(qapp, monkeypatch
         window.panel.actual_lut_check.blockSignals(False)
         called = []
         monkeypatch.setattr(
-            window.panel, "_on_actual_lut_toggled", lambda checked: called.append(checked)
+            window.panel,
+            "_on_actual_lut_toggled",
+            lambda checked: called.append(checked),
         )
 
         window.panel.follow_display(0)

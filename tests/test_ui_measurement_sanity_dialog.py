@@ -38,9 +38,9 @@ def qapp():
 
 @pytest.fixture
 def ti3_path(data_path):
-    return str(data_path / "icc" / (
-        "UP2516D #1 2022-03-20 02-08 D6500 2.2 F-S XYZLUT+MTX.ti3"
-    ))
+    return str(
+        data_path / "icc" / ("UP2516D #1 2022-03-20 02-08 D6500 2.2 F-S XYZLUT+MTX.ti3")
+    )
 
 
 def _stub_suspicious_pair(item_a, item_b):

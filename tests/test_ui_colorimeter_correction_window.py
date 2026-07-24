@@ -128,6 +128,7 @@ def stub_worker(monkeypatch):
         "get_technology_strings",
         lambda self, *a, **k: {"l": "LCD", "c": "CRT", "u": "Unknown"},
     )
+
     # CreateCorrectionWindow.__init__() also unconditionally calls this on
     # every window construction. The real implementation shells out to
     # `ccxxmake -?` with a 30s timeout, which reliably eats the full 30s on

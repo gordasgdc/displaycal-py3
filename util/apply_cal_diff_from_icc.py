@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-import os, sys
+import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from DisplayCAL import argyll_cgats, config, colormath as cm
+from DisplayCAL import argyll_cgats, config
+from DisplayCAL import colormath as cm
 from DisplayCAL.cgats import CGATS
 from DisplayCAL.icc_profile import ICCProfile
-from DisplayCAL.worker import Worker, Xicclu, get_argyll_util, _applycal_bug_workaround
-
+from DisplayCAL.worker import Worker, Xicclu, _applycal_bug_workaround, get_argyll_util
 
 cgats_header = """CAL
 ORIGINATOR "Argyll dispcal"
@@ -51,7 +52,7 @@ def get_cal(
         XYZ = cm.adapt(
             *[cm.special_pow(i / maxval, gamma, slope_limit)] * 3,
             whitepoint_source=(1, 1, 1),
-            whitepoint_destination=XYZwp
+            whitepoint_destination=XYZwp,
         )
         XYZ = cm.blend_blackpoint(*XYZ, bp_in=(0, 0, 0), bp_out=XYZbp, wp=XYZwp)
         idata.append(XYZ)
@@ -167,7 +168,7 @@ def main(icc_profile_filename, target_whitepoint=None, gamma=2.2, skip_cal=False
         -240: "SMPTE240M",
         -601: "BT601",
     }.get(gamma, gamma)
-    owtpt = target_whitepoint and ".%s" % target_whitepoint or ""
+    owtpt = (target_whitepoint and ".%s" % target_whitepoint) or ""
 
     filename, ext = os.path.splitext(icc_profile_filename)
 
@@ -214,7 +215,7 @@ def main(icc_profile_filename, target_whitepoint=None, gamma=2.2, skip_cal=False
         )
         if not result and not os.path.isfile(out_color_profile_filename):
             raise Exception("applycal returned a non-zero exit code")
-        elif isinstance(result, Exception):
+        if isinstance(result, Exception):
             raise result
         calapplied = ICCProfile(out_color_profile_filename)
     else:
@@ -252,7 +253,7 @@ def main(icc_profile_filename, target_whitepoint=None, gamma=2.2, skip_cal=False
                 # Found
                 XYZwscaled = XYZscaled[i]
                 logfiles.write(
-                    "Solution found at index %i " "(step size %f)\n" % (i, 1 / 2000.0)
+                    "Solution found at index %i (step size %f)\n" % (i, 1 / 2000.0)
                 )
                 logfiles.write("RGB white %6.4f %6.4f %6.4f\n" % tuple(RGBclip[:3]))
                 logfiles.write(
@@ -267,9 +268,7 @@ def main(icc_profile_filename, target_whitepoint=None, gamma=2.2, skip_cal=False
                 # Found solution
                 break
         if not XYZwscaled:
-            raise Exception(
-                "No solution found in %i " "iterations with %i steps" % (n, i)
-            )
+            raise Exception("No solution found in %i iterations with %i steps" % (n, i))
         target_whitepoint = XYZwscaled
         del RGBscaled
 
@@ -286,152 +285,142 @@ def main(icc_profile_filename, target_whitepoint=None, gamma=2.2, skip_cal=False
 
     out_color_profile_filename = (
         filename
-        + " %s%s" % (target_whitepoint and "%s " % owtpt[1:] or "", ogamma)
+        + " %s%s" % ((target_whitepoint and "%s " % owtpt[1:]) or "", ogamma)
         + ext
     )
 
     if target_whitepoint is False:  # NEVER
         # Apply inverse CAL with PCS white
         main(icc_profile_filename, gamma=gamma, skip_cal=True)
-    else:
+    elif not applycal_inverse:
         # Generate inverse calibration
-
         # Apply inverse CAL and write output file
-        if not applycal_inverse:
-            # Use our own code
+        # Use our own code
 
-            TRC = []
+        TRC = []
 
-            seen = []
+        seen = []
 
-            for tagname in (
-                "A2B0",
-                "A2B1",
-                "A2B2",
-                "B2A0",
-                "B2A1",
-                "B2A2",
-                "rTRC",
-                "gTRC",
-                "bTRC",
-            ):
-                if tagname not in profile.tags:
+        for tagname in (
+            "A2B0",
+            "A2B1",
+            "A2B2",
+            "B2A0",
+            "B2A1",
+            "B2A2",
+            "rTRC",
+            "gTRC",
+            "bTRC",
+        ):
+            if tagname not in profile.tags:
+                continue
+            print(tagname)
+            if profile.tags[tagname] in seen:
+                print("Already seen")
+                continue
+            seen.append(profile.tags[tagname])
+            if tagname.startswith("A2B"):
+                # Apply calibration to input curves
+                cal = get_cal(num_cal_entries, None, gamma, profile, intent, "if")
+                interp_i = get_interp(cal, True)
+                entries = profile.tags[tagname].input
+            elif tagname.startswith("B2A"):
+                # Apply inverse calibration to output curves
+                if profile.tags[tagname].clut_grid_steps <= 9:
+                    # Low quality. Skip.
+                    print("Low quality, skipping")
                     continue
-                print(tagname)
-                if profile.tags[tagname] in seen:
-                    print("Already seen")
-                    continue
-                seen.append(profile.tags[tagname])
+                cal = get_cal(num_cal_entries, None, gamma, profile, intent, "b")
+                interp_i = get_interp(cal, True)
+                entries = profile.tags[tagname].output
+            else:
+                entries = profile.tags[tagname]
+                TRC.append(entries[:])
+                num_entries = len(entries)
+                j = "rgb".index(tagname[0])
+                cal = get_cal(num_cal_entries, None, gamma, profile, intent, "if", "r")
+                interp_i = get_interp(cal, True)
+                cinterp = cm.Interp(
+                    [interp_i[j](i / (num_entries - 1.0)) for i in range(num_entries)],
+                    entries,
+                    use_numpy=True,
+                )
+                entries[:] = [
+                    cinterp(i / (num_entries - 1.0)) for i in range(num_entries)
+                ]
+                continue
+            for j in range(3):
+                num_entries = len(entries[j])
                 if tagname.startswith("A2B"):
-                    # Apply calibration to input curves
-                    cal = get_cal(num_cal_entries, None, gamma, profile, intent, "if")
-                    interp_i = get_interp(cal, True)
-                    entries = profile.tags[tagname].input
-                elif tagname.startswith("B2A"):
-                    # Apply inverse calibration to output curves
-                    if profile.tags[tagname].clut_grid_steps <= 9:
-                        # Low quality. Skip.
-                        print("Low quality, skipping")
-                        continue
-                    cal = get_cal(num_cal_entries, None, gamma, profile, intent, "b")
-                    interp_i = get_interp(cal, True)
-                    entries = profile.tags[tagname].output
-                else:
-                    entries = profile.tags[tagname]
-                    TRC.append(entries[:])
-                    num_entries = len(entries)
-                    j = "rgb".index(tagname[0])
-                    cal = get_cal(
-                        num_cal_entries, None, gamma, profile, intent, "if", "r"
-                    )
-                    interp_i = get_interp(cal, True)
                     cinterp = cm.Interp(
                         [
                             interp_i[j](i / (num_entries - 1.0))
                             for i in range(num_entries)
                         ],
-                        entries,
+                        [v / 65535.0 for v in entries[j]],
                         use_numpy=True,
                     )
-                    entries[:] = [
-                        cinterp(i / (num_entries - 1.0)) for i in range(num_entries)
-                    ]
-                    continue
-                for j in range(3):
-                    num_entries = len(entries[j])
-                    if tagname.startswith("A2B"):
-                        cinterp = cm.Interp(
-                            [
-                                interp_i[j](i / (num_entries - 1.0))
-                                for i in range(num_entries)
-                            ],
-                            [v / 65535.0 for v in entries[j]],
-                            use_numpy=True,
-                        )
-                    elif tagname.startswith("B2A"):
-                        rinterp = cm.Interp(
-                            [v / 65535.0 for v in entries[j]],
-                            [i / (num_entries - 1.0) for i in range(num_entries)],
-                            use_numpy=True,
-                        )
-                        cinterp = cm.Interp(
-                            [
-                                rinterp(i / (num_entries - 1.0))
-                                for i in range(num_entries)
-                            ],
-                            [
-                                interp_i[j](i / (num_entries - 1.0))
-                                for i in range(num_entries)
-                            ],
-                            use_numpy=True,
-                        )
-                    entries[j] = []
-                    num_entries = max(num_entries, 256)
-                    for i in range(num_entries):
-                        entries[j].append(
-                            min(max(cinterp(i / (num_entries - 1.0)) * 65535, 0), 65535)
-                        )
+                elif tagname.startswith("B2A"):
+                    rinterp = cm.Interp(
+                        [v / 65535.0 for v in entries[j]],
+                        [i / (num_entries - 1.0) for i in range(num_entries)],
+                        use_numpy=True,
+                    )
+                    cinterp = cm.Interp(
+                        [rinterp(i / (num_entries - 1.0)) for i in range(num_entries)],
+                        [
+                            interp_i[j](i / (num_entries - 1.0))
+                            for i in range(num_entries)
+                        ],
+                        use_numpy=True,
+                    )
+                entries[j] = []
+                num_entries = max(num_entries, 256)
+                for i in range(num_entries):
+                    entries[j].append(
+                        min(max(cinterp(i / (num_entries - 1.0)) * 65535, 0), 65535)
+                    )
 
-            # Check for identical initial TRC tags, and force them identical again
-            if TRC and TRC.count(TRC[0]) == 3:
-                print("Forcing identical TRC tags")
-                for channel in "rb":
-                    profile.tags[channel + "TRC"] = profile.tags.gTRC
+        # Check for identical initial TRC tags, and force them identical again
+        if TRC and TRC.count(TRC[0]) == 3:
+            print("Forcing identical TRC tags")
+            for channel in "rb":
+                profile.tags[channel + "TRC"] = profile.tags.gTRC
 
-        elif existing_cgats:
-            # Use Argyll applycal
-            # XXX: Want to derive different cals for cLUT and TRC tags.
-            # Not possible with applycal unless applying cals separately and
-            # combining the profile parts later?
+    elif existing_cgats:
+        # Use Argyll applycal
+        # XXX: Want to derive different cals for cLUT and TRC tags.
+        # Not possible with applycal unless applying cals separately and
+        # combining the profile parts later?
 
-            # Get inverse calibration
-            interp_i = get_interp(ccal, True)
-            ical = []
-            # Argyll can only deal with 256 cal entries
-            for i in range(256):
-                ical.append([cinterp(i / 255.0) for cinterp in interp_i])
+        # Get inverse calibration
+        interp_i = get_interp(ccal, True)
+        ical = []
+        # Argyll can only deal with 256 cal entries
+        for i in range(256):
+            ical.append([cinterp(i / 255.0) for cinterp in interp_i])
 
-            # Write inverse CAL
-            icgats = cgats_header
-            for i, (R, G, B) in enumerate(ical):
-                icgats += "%.7f %.7f %.7f %.7f\n" % (i / 255.0, R, G, B)
-            icgats += "END_DATA\n"
-            ical_filename = icc_profile_filename + owtpt + ".%s.inverse.cal" % ogamma
-            with open(ical_filename, "wb") as f:
-                f.write(icgats.encode())
+        # Write inverse CAL
+        icgats = cgats_header
+        for i, (R, G, B) in enumerate(ical):
+            icgats += "%.7f %.7f %.7f %.7f\n" % (i / 255.0, R, G, B)
+        icgats += "END_DATA\n"
+        ical_filename = icc_profile_filename + owtpt + ".%s.inverse.cal" % ogamma
+        with open(ical_filename, "wb") as f:
+            f.write(icgats.encode())
 
-            result = worker.exec_cmd(
-                get_argyll_util("applycal"),
-                ["-v", ical_filename, filename + ".tmp" + ext, out_color_profile_filename],
-                capture_output=True,
-                log_output=True,
-            )
-            if not result and not os.path.isfile(out_color_profile_filename):
-                raise Exception("applycal returned a non-zero exit code")
-            elif isinstance(result, Exception):
-                raise result
+        result = worker.exec_cmd(
+            get_argyll_util("applycal"),
+            ["-v", ical_filename, filename + ".tmp" + ext, out_color_profile_filename],
+            capture_output=True,
+            log_output=True,
+        )
+        if not result and not os.path.isfile(out_color_profile_filename):
+            raise Exception("applycal returned a non-zero exit code")
+        if isinstance(result, Exception):
+            raise result
 
-            profile = ICCProfile(out_color_profile_filename)
+        profile = ICCProfile(out_color_profile_filename)
 
     out_profile = profile
 
@@ -505,7 +494,7 @@ def main(icc_profile_filename, target_whitepoint=None, gamma=2.2, skip_cal=False
     # Write updated profile
     out_profile.setDescription(
         out_profile.getDescription()
-        + " %s%s" % (target_whitepoint and "%s " % owtpt[1:] or "", ogamma)
+        + " %s%s" % ((target_whitepoint and "%s " % owtpt[1:]) or "", ogamma)
     )
     out_profile.calculate_id()
     out_profile.write(out_color_profile_filename)

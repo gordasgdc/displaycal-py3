@@ -43,7 +43,6 @@ from qtpy.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
-    QMessageBox,
     QPushButton,
     QRadioButton,
     QScrollArea,
@@ -80,10 +79,10 @@ from DisplayCAL.icc_profile import (
 )
 from DisplayCAL.log import LOG
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
-from DisplayCAL.ui import message_box
 from DisplayCAL.util_decimal import stripzeros
 from DisplayCAL.util_dict import dict_sort
 from DisplayCAL.util_io import Files

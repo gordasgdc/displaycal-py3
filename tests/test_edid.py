@@ -3,11 +3,10 @@
 import binascii
 import codecs
 import json
-import platform
 
 import pytest
 
-from DisplayCAL import real_display_size_mm, config
+from DisplayCAL import config, real_display_size_mm
 from DisplayCAL.config import getcfg
 from DisplayCAL.dev.mocks import check_call
 from DisplayCAL.edid import (
@@ -18,7 +17,6 @@ from DisplayCAL.edid import (
     parse_edid,
     parse_manufacturer_id,
 )
-
 from tests.data.display_data import DisplayData
 
 
@@ -36,19 +34,21 @@ def test_get_edid_1(clear_displays, monkeypatch, patch_subprocess, data_files):
         xrandr_data = xrandr_data_file.read()
     patch_subprocess.output["xrandr--verbose"] = xrandr_data
 
-    with check_call(
-        config,
-        "getcfg",
-        DisplayData.CFG_DATA,
-        call_count=-1,
-    ):
-        with check_call(
+    with (
+        check_call(
+            config,
+            "getcfg",
+            DisplayData.CFG_DATA,
+            call_count=-1,
+        ),
+        check_call(
             real_display_size_mm,
             "_enumerate_displays",
             DisplayData.enumerate_displays(),
             call_count=-1,
-        ):
-            result = get_edid(0)
+        ),
+    ):
+        result = get_edid(0)
 
     assert isinstance(result, dict)
     assert "blue_x" in result
@@ -361,8 +361,7 @@ def test_get_edid_4(
                 "Resolve",
                 "Untethered",
             ]
-        else:
-            return orig_getcfg(config_value)
+        return orig_getcfg(config_value)
 
     monkeypatch.setattr("DisplayCAL.config.getcfg", patched_getcfg)
 
@@ -826,6 +825,7 @@ def test_get_edid_darwin_multi_display_index_fallback(monkeypatch, patch_subproc
 # Linux (xrandr) fallback tests
 # ---------------------------------------------------------------------------
 
+
 def _make_xrandr_output(*entries):
     """Build a minimal fake xrandr --verbose output.
 
@@ -836,7 +836,9 @@ def _make_xrandr_output(*entries):
     for i, (output_name, edid_hex) in enumerate(entries):
         name = output_name.encode() if isinstance(output_name, str) else output_name
         primary = b" primary" if i == 0 else b""
-        lines.append(name + b" connected" + primary + b" 2560x1440+0+0 (normal) 597mm x 336mm")
+        lines.append(
+            name + b" connected" + primary + b" 2560x1440+0+0 (normal) 597mm x 336mm"
+        )
         lines.append(b"\tEDID:")
         # Split hex into 32-char rows (16 bytes each) as xrandr does
         for j in range(0, len(edid_hex), 32):
@@ -852,7 +854,9 @@ def test_get_edid_from_xrandr_index_fallback_no_display(monkeypatch, patch_subpr
     """
     monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
     monkeypatch.setattr("DisplayCAL.edid.which", lambda x: "xrandr")
-    monkeypatch.setattr("DisplayCAL.edid.real_display_size_mm.get_display", lambda n: None)
+    monkeypatch.setattr(
+        "DisplayCAL.edid.real_display_size_mm.get_display", lambda n: None
+    )
     patch_subprocess.output["xrandr--verbose"] = _make_xrandr_output(
         ("DP-4", _VP2768A_HEX)
     )
@@ -864,7 +868,9 @@ def test_get_edid_from_xrandr_index_fallback_no_display(monkeypatch, patch_subpr
     assert parsed.get("monitor_name") == "VP2768a"
 
 
-def test_get_edid_from_xrandr_index_fallback_name_mismatch(monkeypatch, patch_subprocess):
+def test_get_edid_from_xrandr_index_fallback_name_mismatch(
+    monkeypatch, patch_subprocess
+):
     """get_edid_from_xrandr() falls back to index when xrandr name does not match.
 
     This covers the case where ArgyllCMS provides a generic name (e.g. "Monitor 1")
@@ -887,11 +893,15 @@ def test_get_edid_from_xrandr_index_fallback_name_mismatch(monkeypatch, patch_su
     assert parsed.get("monitor_name") == "VP2768a"
 
 
-def test_get_edid_from_xrandr_index_fallback_multi_display(monkeypatch, patch_subprocess):
+def test_get_edid_from_xrandr_index_fallback_multi_display(
+    monkeypatch, patch_subprocess
+):
     """get_edid_from_xrandr() fallback selects the Nth EDID for multi-display setups."""
     monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
     monkeypatch.setattr("DisplayCAL.edid.which", lambda x: "xrandr")
-    monkeypatch.setattr("DisplayCAL.edid.real_display_size_mm.get_display", lambda n: None)
+    monkeypatch.setattr(
+        "DisplayCAL.edid.real_display_size_mm.get_display", lambda n: None
+    )
     patch_subprocess.output["xrandr--verbose"] = _make_xrandr_output(
         ("DP-4", _VP2768A_HEX),
         ("DP-2", _U28E590_HEX),
@@ -908,7 +918,9 @@ def test_get_edid_from_xrandr_index_out_of_range(monkeypatch, patch_subprocess):
     """get_edid_from_xrandr() returns None when display_no exceeds available EDIDs."""
     monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
     monkeypatch.setattr("DisplayCAL.edid.which", lambda x: "xrandr")
-    monkeypatch.setattr("DisplayCAL.edid.real_display_size_mm.get_display", lambda n: None)
+    monkeypatch.setattr(
+        "DisplayCAL.edid.real_display_size_mm.get_display", lambda n: None
+    )
     patch_subprocess.output["xrandr--verbose"] = _make_xrandr_output(
         ("DP-4", _VP2768A_HEX)
     )
@@ -967,9 +979,9 @@ _SYSTEM_PROFILER_JSON_TAHOE = json.dumps(
 def test_get_display_name_from_system_profiler_match(monkeypatch, patch_subprocess):
     """get_display_name_from_system_profiler() returns name matched by resolution."""
     monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
-    patch_subprocess.output[
-        "system_profilerSPDisplaysDataType-json"
-    ] = _SYSTEM_PROFILER_JSON
+    patch_subprocess.output["system_profilerSPDisplaysDataType-json"] = (
+        _SYSTEM_PROFILER_JSON
+    )
 
     result = get_display_name_from_system_profiler(3840, 2160)
 
@@ -979,9 +991,9 @@ def test_get_display_name_from_system_profiler_match(monkeypatch, patch_subproce
 def test_get_display_name_from_system_profiler_builtin(monkeypatch, patch_subprocess):
     """get_display_name_from_system_profiler() matches built-in display by resolution."""
     monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
-    patch_subprocess.output[
-        "system_profilerSPDisplaysDataType-json"
-    ] = _SYSTEM_PROFILER_JSON
+    patch_subprocess.output["system_profilerSPDisplaysDataType-json"] = (
+        _SYSTEM_PROFILER_JSON
+    )
 
     result = get_display_name_from_system_profiler(3024, 1964)
 
@@ -991,9 +1003,9 @@ def test_get_display_name_from_system_profiler_builtin(monkeypatch, patch_subpro
 def test_get_display_name_from_system_profiler_no_match(monkeypatch, patch_subprocess):
     """get_display_name_from_system_profiler() returns None when resolution not found."""
     monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
-    patch_subprocess.output[
-        "system_profilerSPDisplaysDataType-json"
-    ] = _SYSTEM_PROFILER_JSON
+    patch_subprocess.output["system_profilerSPDisplaysDataType-json"] = (
+        _SYSTEM_PROFILER_JSON
+    )
 
     result = get_display_name_from_system_profiler(1920, 1080)
 
@@ -1103,11 +1115,11 @@ def test_get_display_name_from_system_profiler_native_resolution_key(
 def test_get_display_name_from_system_profiler_tahoe_underscore_resolution(
     monkeypatch, patch_subprocess
 ):
-    """macOS Tahoe uses _spdisplays_resolution (underscore prefix) for the resolution key."""
+    """MacOS Tahoe uses _spdisplays_resolution (underscore prefix) for the resolution key."""
     monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
-    patch_subprocess.output[
-        "system_profilerSPDisplaysDataType-json"
-    ] = _SYSTEM_PROFILER_JSON_TAHOE
+    patch_subprocess.output["system_profilerSPDisplaysDataType-json"] = (
+        _SYSTEM_PROFILER_JSON_TAHOE
+    )
 
     # 1728x1117 is what Argyll (dispwin) reports; it matches _spdisplays_resolution
     result = get_display_name_from_system_profiler(1728, 1117)
@@ -1120,9 +1132,9 @@ def test_get_display_name_from_system_profiler_tahoe_no_match(
 ):
     """_spdisplays_pixels (physical 2x) does not match Argyll logical resolution."""
     monkeypatch.setattr("DisplayCAL.edid.subprocess", patch_subprocess)
-    patch_subprocess.output[
-        "system_profilerSPDisplaysDataType-json"
-    ] = _SYSTEM_PROFILER_JSON_TAHOE
+    patch_subprocess.output["system_profilerSPDisplaysDataType-json"] = (
+        _SYSTEM_PROFILER_JSON_TAHOE
+    )
 
     # Physical pixel count (3456x2234) — Argyll reports logical (1728x1117),
     # so asking for physical should NOT match via _spdisplays_resolution but WILL

@@ -50,7 +50,9 @@ class TestMatchDisplayAndInstrument:
         assert match.instrument_index is None
 
     def test_unique_model_description_match_selects_display(self):
-        setcfg("displays", ["Display 1 @ 0, 0, 1920x1080", "Display 2 @ 0, 0, 1024x768"])
+        setcfg(
+            "displays", ["Display 1 @ 0, 0, 1920x1080", "Display 2 @ 0, 0, 1024x768"]
+        )
         setcfg("display.number", 1)
         profile = FakeProfile(model_description="Display 2")
         worker = FakeWorker(
@@ -65,7 +67,9 @@ class TestMatchDisplayAndInstrument:
         assert match.display_changed is True
 
     def test_currently_selected_display_is_not_flagged_changed(self):
-        setcfg("displays", ["Display 1 @ 0, 0, 1920x1080", "Display 2 @ 0, 0, 1024x768"])
+        setcfg(
+            "displays", ["Display 1 @ 0, 0, 1920x1080", "Display 2 @ 0, 0, 1024x768"]
+        )
         setcfg("display.number", 1)
         profile = FakeProfile(model_description="Display 1")
         worker = FakeWorker(
@@ -80,7 +84,9 @@ class TestMatchDisplayAndInstrument:
         assert match.display_changed is False
 
     def test_ambiguous_model_description_match_is_not_applied(self):
-        setcfg("displays", ["Display 1 @ 0, 0, 1920x1080", "Display 1 @ 0, 0, 1024x768"])
+        setcfg(
+            "displays", ["Display 1 @ 0, 0, 1920x1080", "Display 1 @ 0, 0, 1024x768"]
+        )
         setcfg("display.number", 1)
         profile = FakeProfile(model_description="Display 1")
         worker = FakeWorker(
@@ -94,7 +100,9 @@ class TestMatchDisplayAndInstrument:
         assert match.display_index is None
 
     def test_edid_md5_match_used_when_no_model_description(self):
-        setcfg("displays", ["Display 1 @ 0, 0, 1920x1080", "Display 2 @ 0, 0, 1024x768"])
+        setcfg(
+            "displays", ["Display 1 @ 0, 0, 1920x1080", "Display 2 @ 0, 0, 1024x768"]
+        )
         setcfg("display.number", 1)
         profile = FakeProfile(meta={"EDID_md5": {"value": "abc123"}})
         worker = FakeWorker(
@@ -111,9 +119,7 @@ class TestMatchDisplayAndInstrument:
         setcfg("displays", ["madVR"])
         setcfg("display.number", 1)
         profile = FakeProfile(model_description="madVR")
-        worker = FakeWorker(
-            display_edid=[{}], display_names=["madVR"], instruments=[]
-        )
+        worker = FakeWorker(display_edid=[{}], display_names=["madVR"], instruments=[])
 
         match = cf.match_display_and_instrument(profile, worker)
 
@@ -313,7 +319,9 @@ class TestApplyProfileB2aFlagsFromTi3:
         setcfg("profile.black_point_compensation", 0)
         lines = _ti3_header(b'USE_BLACK_POINT_COMPENSATION "YES"')
 
-        cf.apply_profile_b2a_flags_from_ti3(lines, is_preset=False, is_3dlut_preset=False)
+        cf.apply_profile_b2a_flags_from_ti3(
+            lines, is_preset=False, is_3dlut_preset=False
+        )
 
         assert getcfg("profile.black_point_compensation") == 1
 
@@ -321,7 +329,9 @@ class TestApplyProfileB2aFlagsFromTi3:
         setcfg("profile.black_point_compensation", 1)
         lines = _ti3_header(b'USE_BLACK_POINT_COMPENSATION "NO"')
 
-        cf.apply_profile_b2a_flags_from_ti3(lines, is_preset=False, is_3dlut_preset=False)
+        cf.apply_profile_b2a_flags_from_ti3(
+            lines, is_preset=False, is_3dlut_preset=False
+        )
 
         assert getcfg("profile.black_point_compensation") == 0
 
@@ -329,7 +339,9 @@ class TestApplyProfileB2aFlagsFromTi3:
         setcfg("profile.b2a.hires", 0)
         lines = _ti3_header(b'HIRES_B2A "YES"')
 
-        cf.apply_profile_b2a_flags_from_ti3(lines, is_preset=False, is_3dlut_preset=False)
+        cf.apply_profile_b2a_flags_from_ti3(
+            lines, is_preset=False, is_3dlut_preset=False
+        )
 
         assert getcfg("profile.b2a.hires") == 1
 
@@ -338,7 +350,9 @@ class TestApplyProfileB2aFlagsFromTi3:
         setcfg("profile.b2a.hires.smooth", 0)
         lines = _ti3_header(b'SMOOTH_B2A "YES"')
 
-        cf.apply_profile_b2a_flags_from_ti3(lines, is_preset=False, is_3dlut_preset=False)
+        cf.apply_profile_b2a_flags_from_ti3(
+            lines, is_preset=False, is_3dlut_preset=False
+        )
 
         assert getcfg("profile.b2a.hires") == 1
         assert getcfg("profile.b2a.hires.smooth") == 1
@@ -348,7 +362,9 @@ class TestApplyProfileB2aFlagsFromTi3:
         setcfg("profile.b2a.hires.smooth", 0)
         lines = _ti3_header(b'HIRES_B2A "NO"', b'SMOOTH_B2A "YES"')
 
-        cf.apply_profile_b2a_flags_from_ti3(lines, is_preset=False, is_3dlut_preset=False)
+        cf.apply_profile_b2a_flags_from_ti3(
+            lines, is_preset=False, is_3dlut_preset=False
+        )
 
         assert getcfg("profile.b2a.hires") == 0
         assert getcfg("profile.b2a.hires.smooth") == 1

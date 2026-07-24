@@ -238,9 +238,7 @@ def test_reload_clobbered_displays_batches_simultaneous_clobbers_in_one_pass():
             "DisplayCAL.worker.get_macos_videolut_maxima",
             side_effect=lambda: _maxima_from_clobbered(2, clobbered),
         ),
-        mock.patch(
-            "DisplayCAL.worker.reload_macos_videoluts", side_effect=fake_reload
-        ),
+        mock.patch("DisplayCAL.worker.reload_macos_videoluts", side_effect=fake_reload),
         mock.patch("DisplayCAL.profile_loader.time.sleep"),
     ):
         converged = pl._reload_clobbered_displays(
@@ -287,9 +285,7 @@ def test_reload_clobbered_displays_converges_after_a_reload_not_sticking():
             "DisplayCAL.worker.get_macos_videolut_maxima",
             side_effect=lambda: _maxima_from_clobbered(2, clobbered),
         ),
-        mock.patch(
-            "DisplayCAL.worker.reload_macos_videoluts", side_effect=fake_reload
-        ),
+        mock.patch("DisplayCAL.worker.reload_macos_videoluts", side_effect=fake_reload),
         mock.patch("DisplayCAL.profile_loader.time.sleep", side_effect=fake_sleep),
     ):
         converged = pl._reload_clobbered_displays(
@@ -321,9 +317,7 @@ def test_reload_clobbered_displays_stops_after_max_passes_without_hanging():
             "DisplayCAL.worker.get_macos_videolut_maxima",
             side_effect=lambda: _maxima_from_clobbered(2, clobbered),
         ),
-        mock.patch(
-            "DisplayCAL.worker.reload_macos_videoluts", side_effect=fake_reload
-        ),
+        mock.patch("DisplayCAL.worker.reload_macos_videoluts", side_effect=fake_reload),
         mock.patch("DisplayCAL.profile_loader.time.sleep"),
     ):
         converged = pl._reload_clobbered_displays(
@@ -356,9 +350,7 @@ def test_reload_clobbered_displays_stops_on_shutdown():
             "DisplayCAL.worker.get_macos_videolut_maxima",
             side_effect=lambda: _maxima_from_clobbered(1, clobbered),
         ),
-        mock.patch(
-            "DisplayCAL.worker.reload_macos_videoluts", side_effect=fake_reload
-        ),
+        mock.patch("DisplayCAL.worker.reload_macos_videoluts", side_effect=fake_reload),
         mock.patch("DisplayCAL.profile_loader.time.sleep"),
     ):
         converged = pl._reload_clobbered_displays(

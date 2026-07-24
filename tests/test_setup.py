@@ -1,4 +1,5 @@
 import os
+
 import pytest
 
 from DisplayCAL._setup import get_data

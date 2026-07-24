@@ -39,7 +39,6 @@ from qtpy.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QLabel,
-    QMessageBox,
     QProgressDialog,
     QPushButton,
     QRadioButton,

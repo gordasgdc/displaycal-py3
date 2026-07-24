@@ -13,36 +13,35 @@ import requests
 import wx
 from wx import AppConsole, Button
 
-from DisplayCAL import display_cal, config
+from DisplayCAL import config, display_cal
 from DisplayCAL import localization as lang
 from DisplayCAL.cgats import CGATS
 from DisplayCAL.config import get_ccxx_testchart, get_icon, getcfg, setcfg
 from DisplayCAL.dev.mocks import check_call, check_call_str
 from DisplayCAL.display_cal import (
-    app_update_check,
+    ExtraArgsFrame,
+    GamapFrame,
+    IncrementingInt,
+    MainFrame,
+    MeasurementFileCheckSanityDialog,
+    StartupFrame,
     app_up_to_date,
+    app_update_check,
     check_donation,
     colorimeter_correction_check_overwrite,
     colorimeter_correction_web_check_choose,
     donation_message,
-    ExtraArgsFrame,
-    GamapFrame,
     get_cgats_measurement_mode,
     get_cgats_path,
     get_profile_load_on_login_label,
-    IncrementingInt,
     install_scope_handler,
-    MainFrame,
-    MeasurementFileCheckSanityDialog,
     show_ccxx_error_dialog,
-    StartupFrame,
     webbrowser_open,
 )
-from DisplayCAL.icc_profile import ICCProfile
-from DisplayCAL.util_str import universal_newlines
 from DisplayCAL.util_list import intlist
+from DisplayCAL.util_str import universal_newlines
 from DisplayCAL.worker import Worker, check_ti3
-from DisplayCAL.wx_windows import ConfirmDialog, BaseInteractiveDialog, InfoDialog
+from DisplayCAL.wx_windows import BaseInteractiveDialog, ConfirmDialog, InfoDialog
 
 
 @pytest.fixture(scope="session", name="app", autouse=True)
@@ -128,7 +127,7 @@ def test_donation_message(mainframe: MainFrame, response: int) -> None:
 @pytest.mark.skipif(
     os.getenv("GITHUB_ACTIONS") == "true",
     reason="Seems like the first call of ShowWindowModalBlocking always fails on remote."
-    "Locally however the problem cannot be reproduced, skipping test for now."
+    "Locally however the problem cannot be reproduced, skipping test for now.",
 )
 @pytest.mark.parametrize(
     "update",
@@ -136,7 +135,8 @@ def test_donation_message(mainframe: MainFrame, response: int) -> None:
     ids=("update comports", "don't update comports"),
 )
 @pytest.mark.parametrize(
-    "response, value", (
+    "response, value",
+    (
         (wx.ID_OK, True),
         (wx.ID_NO, False),
     ),
@@ -157,7 +157,10 @@ def test_colorimeter_correction_check_overwrite(
         f.write(b"placeholder")
     try:
         with check_call(BaseInteractiveDialog, "ShowWindowModalBlocking", response):
-            assert colorimeter_correction_check_overwrite(mainframe, cgats, update) == value
+            assert (
+                colorimeter_correction_check_overwrite(mainframe, cgats, update)
+                == value
+            )
     finally:
         if os.path.exists(target_path):
             os.remove(target_path)
@@ -175,7 +178,7 @@ def test_colorimeter_correction_web_check_choose_observer_column(
     every CCMX correction instead of resolving the real label.
     """
     cgats_text = (
-        'CCMX\n\n'
+        "CCMX\n\n"
         'DESCRIPTOR "test"\n'
         'DISPLAY "LCD Monitor"\n'
         'REFERENCE_OBSERVER "1931_2"\n'
@@ -283,7 +286,9 @@ def test_restore_testchart_clears_crash_state(mainframe: MainFrame) -> None:
     try:
         assert is_ccxx_testchart(), "Pre-condition: should look like a CCXX testchart"
         mainframe.restore_testchart()
-        assert not is_ccxx_testchart(), "After restore, should no longer be CCXX testchart"
+        assert not is_ccxx_testchart(), (
+            "After restore, should no longer be CCXX testchart"
+        )
         assert getcfg("testchart.file") == original_testchart
         assert getcfg("testchart.file.backup", False) is None
     finally:
@@ -428,11 +433,14 @@ def test_init_measurement_file_check_sanity_dialog_frame(
 # is_new_update() unit tests
 # ---------------------------------------------------------------------------
 
+
 def test_is_new_update_returns_version_when_newer(monkeypatch):
     """is_new_update() returns a version tuple when a newer release exists."""
     mock_resp = MagicMock()
     mock_resp.json.return_value = {"tag_name": "99.0.0", "assets": []}
-    monkeypatch.setattr("DisplayCAL.display_cal.requests.get", lambda *a, **kw: mock_resp)
+    monkeypatch.setattr(
+        "DisplayCAL.display_cal.requests.get", lambda *a, **kw: mock_resp
+    )
     result = display_cal.is_new_update()
     assert result == (99, 0, 0)
 
@@ -440,17 +448,22 @@ def test_is_new_update_returns_version_when_newer(monkeypatch):
 def test_is_new_update_returns_false_when_current(monkeypatch):
     """is_new_update() returns False when already on the latest version."""
     from DisplayCAL.meta import VERSION_TUPLE
+
     tag = ".".join(str(n) for n in VERSION_TUPLE[:3])
     mock_resp = MagicMock()
     mock_resp.json.return_value = {"tag_name": tag, "assets": []}
-    monkeypatch.setattr("DisplayCAL.display_cal.requests.get", lambda *a, **kw: mock_resp)
+    monkeypatch.setattr(
+        "DisplayCAL.display_cal.requests.get", lambda *a, **kw: mock_resp
+    )
     assert display_cal.is_new_update() is False
 
 
 def test_is_new_update_returns_false_on_network_error(monkeypatch):
     """is_new_update() returns False and does not raise on network failures."""
+
     def raise_error(*a, **kw):
         raise requests.RequestException("connection refused")
+
     monkeypatch.setattr("DisplayCAL.display_cal.requests.get", raise_error)
     assert display_cal.is_new_update() is False
 
@@ -459,7 +472,9 @@ def test_is_new_update_returns_false_on_bad_json(monkeypatch):
     """is_new_update() returns False when the response JSON is missing expected keys."""
     mock_resp = MagicMock()
     mock_resp.json.return_value = {"unexpected_key": "value"}
-    monkeypatch.setattr("DisplayCAL.display_cal.requests.get", lambda *a, **kw: mock_resp)
+    monkeypatch.setattr(
+        "DisplayCAL.display_cal.requests.get", lambda *a, **kw: mock_resp
+    )
     assert display_cal.is_new_update() is False
 
 
@@ -467,24 +482,33 @@ def test_is_new_update_returns_false_on_bad_json(monkeypatch):
 # get_download_url() unit tests
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("plat,machine,version,expected_filename", [
-    ("win32",  "AMD64",   "3.9.0", "DisplayCAL-3.9.0-Windows-x64.exe"),
-    ("win32",  "ARM64",   "3.9.0", "DisplayCAL-3.9.0-Windows-arm64.exe"),
-    ("darwin", "arm64",   "3.9.0", "DisplayCAL-3.9.0-macOS-arm64.dmg"),
-    ("darwin", "aarch64", "3.9.0", "DisplayCAL-3.9.0-macOS-arm64.dmg"),
-    ("darwin", "x86_64",  "3.9.0", "DisplayCAL-3.9.0-macOS-x86.dmg"),
-    ("linux",  "x86_64",  "3.9.0", "displaycal-3.9.0.tar.gz"),
-])
+
+@pytest.mark.parametrize(
+    "plat,machine,version,expected_filename",
+    [
+        ("win32", "AMD64", "3.9.0", "DisplayCAL-3.9.0-Windows-x64.exe"),
+        ("win32", "ARM64", "3.9.0", "DisplayCAL-3.9.0-Windows-arm64.exe"),
+        ("darwin", "arm64", "3.9.0", "DisplayCAL-3.9.0-macOS-arm64.dmg"),
+        ("darwin", "aarch64", "3.9.0", "DisplayCAL-3.9.0-macOS-arm64.dmg"),
+        ("darwin", "x86_64", "3.9.0", "DisplayCAL-3.9.0-macOS-x86.dmg"),
+        ("linux", "x86_64", "3.9.0", "displaycal-3.9.0.tar.gz"),
+    ],
+)
 def test_get_download_url(monkeypatch, plat, machine, version, expected_filename):
     """get_download_url() returns the correct asset URL for each platform."""
     fake_assets = [
-        {"name": expected_filename,
-         "browser_download_url": f"https://example.com/{expected_filename}"},
+        {
+            "name": expected_filename,
+            "browser_download_url": f"https://example.com/{expected_filename}",
+        },
     ]
     monkeypatch.setattr(display_cal, "RELEASE_DATA", {"assets": fake_assets})
     monkeypatch.setattr(display_cal.sys, "platform", plat)
     monkeypatch.setattr(display_cal.platform, "machine", lambda: machine)
-    assert display_cal.get_download_url(version) == f"https://example.com/{expected_filename}"
+    assert (
+        display_cal.get_download_url(version)
+        == f"https://example.com/{expected_filename}"
+    )
 
 
 def test_get_download_url_returns_none_when_no_matching_asset(monkeypatch):
@@ -531,7 +555,7 @@ def test_create_profile_name_crc32_without_edid(
     mainframe: MainFrame, monkeypatch
 ) -> None:
     """create_profile_name() strips %crc32 when no EDID data is available."""
-    monkeypatch.setattr(mainframe.worker, "get_display_edid", lambda: {})
+    monkeypatch.setattr(mainframe.worker, "get_display_edid", dict)
     mainframe.profile_name_textctrl.SetValue("name-%crc32-suffix")
     assert mainframe.create_profile_name() == "name-suffix"
 
@@ -604,9 +628,7 @@ def test_measurement_file_check_handler_regenerates_profile_without_typeerror(
 
     monkeypatch.setattr(wx.FileDialog, "__init__", _fake_filedialog_init)
     monkeypatch.setattr(wx.FileDialog, "ShowModal", lambda self: wx.ID_OK)
-    monkeypatch.setattr(
-        MainFrame, "measurement_file_check_confirm", _fake_confirm
-    )
+    monkeypatch.setattr(MainFrame, "measurement_file_check_confirm", _fake_confirm)
     monkeypatch.setattr(ConfirmDialog, "ShowModal", lambda self: wx.ID_OK)
     create_profile_calls = []
     monkeypatch.setattr(
@@ -617,9 +639,7 @@ def test_measurement_file_check_handler_regenerates_profile_without_typeerror(
     with check_call(InfoDialog, "ShowModal", wx.ID_OK, call_count=0):
         mainframe.measurement_file_check_handler(None)
     assert len(create_profile_calls) == 1
-    assert create_profile_calls[0].endswith(
-        os.path.basename(icc_path)
-    )
+    assert create_profile_calls[0].endswith(os.path.basename(icc_path))
 
 
 def test_import_session_archive_producer_returns_extracted_file_extension(
@@ -643,7 +663,9 @@ def test_import_session_archive_producer_returns_extracted_file_extension(
     )
 
     assert not isinstance(result, Exception)
-    assert result == os.path.join(getcfg("profile.save_path"), basename, f"{basename}.cal")
+    assert result == os.path.join(
+        getcfg("profile.save_path"), basename, f"{basename}.cal"
+    )
 
 
 def test_load_cal_handler_proceeds_for_cal_files_with_no_profile(

@@ -128,6 +128,7 @@ from typing import TYPE_CHECKING, Callable
 from qtpy.QtCore import QEvent, QSize, Qt, QThread, QTimer, Signal
 from qtpy.QtGui import QAction, QActionGroup, QColor, QIcon, QPainter, QPixmap
 from qtpy.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QCheckBox,
     QComboBox,
@@ -146,7 +147,6 @@ from qtpy.QtWidgets import (
     QProgressDialog,
     QPushButton,
     QRadioButton,
-    QApplication,
     QScrollArea,
     QSizePolicy,
     QSlider,
@@ -167,12 +167,11 @@ from DisplayCAL import (
     lut3d_settings,
     preflight_checks,
     profile_finish,
+    report,
 )
-from DisplayCAL.log import LOGBUFFER
-from DisplayCAL import measurement_report as measurement_report_pipeline
 from DisplayCAL import localization as lang
+from DisplayCAL import measurement_report as measurement_report_pipeline
 from DisplayCAL import profile_name as profile_name_mod
-from DisplayCAL import report
 from DisplayCAL.argyll import (
     argyll_version_at_least,
     check_argyll_bin,
@@ -208,10 +207,11 @@ from DisplayCAL.icc_profile import (
     TextType,
     VideoCardGammaType,
 )
-from DisplayCAL.meta import DEVELOPMENT_HOME_PAGE, DOMAIN
+from DisplayCAL.log import LOGBUFFER
+from DisplayCAL.meta import DEVELOPMENT_HOME_PAGE, DOMAIN, VERSION_STRING
 from DisplayCAL.meta import NAME as APPNAME
-from DisplayCAL.meta import VERSION_STRING
 from DisplayCAL.options import TEST
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.about_window import AboutWindow
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import (
@@ -220,7 +220,6 @@ from DisplayCAL.ui.assets import (
     get_theme_pixmap,
     get_themed_pixmap,
 )
-from DisplayCAL.ui.theme import is_dark
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.ccxx_plot_window import CCXXPlotWindow
 from DisplayCAL.ui.colorimeter_correction_io import (
@@ -242,7 +241,6 @@ from DisplayCAL.ui.measure_frame import (
     default_measureframe_size,
     resolve_screen_size_mm,
 )
-from DisplayCAL.ui import message_box
 from DisplayCAL.ui.measurement_flow import (
     MeasurementFlow,
     PresentationMode,
@@ -265,7 +263,7 @@ from DisplayCAL.ui.profile_install_window import (
 )
 from DisplayCAL.ui.progress_dialog import ProgressDialog
 from DisplayCAL.ui.spyder2_enable import Spyder2EnableController
-from DisplayCAL.ui.tooltip_window import TooltipWindow, info_text_html
+from DisplayCAL.ui.theme import is_dark
 from DisplayCAL.ui.tools.curve_viewer import CurveViewerWindow
 from DisplayCAL.ui.tools.log_window import LogWindow
 from DisplayCAL.ui.tools.lut3d import LUT3DWindow
@@ -273,8 +271,9 @@ from DisplayCAL.ui.tools.profile_info import ProfileInfoWindow
 from DisplayCAL.ui.tools.synth_profile import SynthICCWindow
 from DisplayCAL.ui.tools.testchart_editor import TestchartEditorWindow
 from DisplayCAL.ui.tools.visual_whitepoint_editor import VisualWhitepointEditorWindow
-from DisplayCAL.ui.update_check_window import UpdateCheckController
+from DisplayCAL.ui.tooltip_window import TooltipWindow, info_text_html
 from DisplayCAL.ui.untethered_window import UntetheredWindow
+from DisplayCAL.ui.update_check_window import UpdateCheckController
 from DisplayCAL.ui.worker_runner import (
     AdjustmentController,
     PasswordPromptAdapter,
@@ -5137,7 +5136,7 @@ class MainWindow(BaseWindow):
             self.lut3d_trc_gamma_type_ctrl.setCurrentIndex(
                 lut3d_settings.TRC_GAMMA_TYPE_BA.get(trc_gamma_type, 0)
             )
-            outoffset = int(round(float(trc_output_offset) * 100))
+            outoffset = round(float(trc_output_offset) * 100)
             self.lut3d_trc_black_output_offset_ctrl.setValue(outoffset)
             self.lut3d_trc_black_output_offset_intctrl.setValue(outoffset)
 
@@ -8599,9 +8598,10 @@ class MainWindow(BaseWindow):
             return
         if not self._check_overwrite(".cal"):
             return
-        if getcfg("profile.update") or self.worker.dispcal_create_fast_matrix_shaper:
-            if not self._check_overwrite(PROFILE_EXT):
-                return
+        if (
+            getcfg("profile.update") or self.worker.dispcal_create_fast_matrix_shaper
+        ) and not self._check_overwrite(PROFILE_EXT):
+            return
         self.begin_measurement(MeasurementAction.CALIBRATE)
 
     def _fast_matrix_shaper_choice(

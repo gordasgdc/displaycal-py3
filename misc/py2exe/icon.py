@@ -1,11 +1,11 @@
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Copyright (c) 2013, PyInstaller Development Team.
 #
 # Distributed under the terms of the GNU General Public License with exception
 # for distributing bootloader.
 #
 # The full license is in the file COPYING.txt, distributed with this software.
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 
 RT_ICON = 3
@@ -14,19 +14,21 @@ LOAD_LIBRARY_AS_DATAFILE = 2
 
 import struct
 import types
+
 try:
     StringTypes = types.StringTypes
 except AttributeError:
-    StringTypes = (str)
+    StringTypes = str
 
 import logging
+
 logger = logging.getLogger()
 
 
 class Structure:
     def __init__(self):
         size = self._sizeInBytes = struct.calcsize(self._format_)
-        self._fields_ = list(struct.unpack(self._format_, '\000' * size))
+        self._fields_ = list(struct.unpack(self._format_, "\000" * size))
         indexes = self._indexes_ = {}
         for i, nm in enumerate(self._names_):
             indexes[nm] = i
@@ -34,7 +36,7 @@ class Structure:
     def dump(self):
         logger.info("DUMP of %s", self)
         for name in self._names_:
-            if not name.startswith('_'):
+            if not name.startswith("_"):
                 logger.info("%20s = %s", name, getattr(self, name))
         logger.info("")
 
@@ -55,7 +57,7 @@ class Structure:
             self.__dict__[name] = value
 
     def tostring(self):
-        args = [self._format_,] + self._fields_
+        args = [self._format_] + self._fields_
         return struct.pack(*args)
 
     def fromfile(self, file):
@@ -67,19 +69,39 @@ class ICONDIRHEADER(Structure):
     _names_ = "idReserved", "idType", "idCount"
     _format_ = "hhh"
 
+
 class ICONDIRENTRY(Structure):
-    _names_ = ("bWidth", "bHeight", "bColorCount", "bReserved", "wPlanes",
-               "wBitCount", "dwBytesInRes", "dwImageOffset")
+    _names_ = (
+        "bWidth",
+        "bHeight",
+        "bColorCount",
+        "bReserved",
+        "wPlanes",
+        "wBitCount",
+        "dwBytesInRes",
+        "dwImageOffset",
+    )
     _format_ = "bbbbhhii"
+
 
 class GRPICONDIR(Structure):
     _names_ = "idReserved", "idType", "idCount"
     _format_ = "hhh"
 
+
 class GRPICONDIRENTRY(Structure):
-    _names_ = ("bWidth", "bHeight", "bColorCount", "bReserved", "wPlanes",
-               "wBitCount", "dwBytesInRes", "nID")
+    _names_ = (
+        "bWidth",
+        "bHeight",
+        "bColorCount",
+        "bReserved",
+        "wPlanes",
+        "wBitCount",
+        "dwBytesInRes",
+        "nID",
+    )
     _format_ = "bbbbhhih"
+
 
 class IconFile:
     def __init__(self, path):
@@ -113,7 +135,8 @@ class IconFile:
 
 
 def CopyIcons_FromIco(dstpath, srcpath, id=1):
-    import win32api #, win32con
+    import win32api  # , win32con
+
     icons = map(IconFile, srcpath)
     logger.info("Updating icons from %s to %s", srcpath, dstpath)
 
@@ -132,15 +155,16 @@ def CopyIcons_FromIco(dstpath, srcpath, id=1):
 
     win32api.EndUpdateResource(hdst, 0)
 
+
 def CopyIcons(dstpath, srcpath):
     import os.path
 
     if isinstance(srcpath, StringTypes):
-        srcpath = [ srcpath ]
+        srcpath = [srcpath]
 
     def splitter(s):
         try:
-            srcpath, index = s.split(',')
+            srcpath, index = s.split(",")
             return srcpath.strip(), int(index)
         except ValueError:
             return s, None
@@ -153,22 +177,23 @@ def CopyIcons(dstpath, srcpath):
         srcs = []
         for s in srcpath:
             e = os.path.splitext(s[0])[1]
-            if e.lower() != '.ico':
+            if e.lower() != ".ico":
                 raise ValueError("multiple icons supported only from .ico files")
             if s[1] is not None:
                 raise ValueError("index not allowed for .ico files")
             srcs.append(s[0])
         return CopyIcons_FromIco(dstpath, srcs)
 
-    srcpath,index = srcpath[0]
+    srcpath, index = srcpath[0]
     srcext = os.path.splitext(srcpath)[1]
-    if srcext.lower() == '.ico':
+    if srcext.lower() == ".ico":
         return CopyIcons_FromIco(dstpath, [srcpath])
     if index is not None:
         logger.info("Updating icons from %s, %d to %s", srcpath, index, dstpath)
     else:
         logger.info("Updating icons from %s to %s", srcpath, dstpath)
-    import win32api #, win32con
+    import win32api  # , win32con
+
     hdst = win32api.BeginUpdateResource(dstpath, 0)
     hsrc = win32api.LoadLibraryEx(srcpath, 0, LOAD_LIBRARY_AS_DATAFILE)
     if index is None:
@@ -188,6 +213,7 @@ def CopyIcons(dstpath, srcpath):
 
 def add_icon(exe_path, ico_filename, ico_id):
     CopyIcons(exe_path, "%s,%i" % (ico_filename, ico_id))
+
 
 if __name__ == "__main__":
     import sys

@@ -1595,7 +1595,7 @@ class DisplayAdjustmentFrame(windowcls):
             else:
                 target_br = None
             if self.lb.GetCurrentPage().ctrltype == "rgb_gain" and initial_br:
-                initial_br = ["Initial"] + initial_br[1:]
+                initial_br = ["Initial", *initial_br[1:]]
             compare_br = (
                 target_br or initial_br or ("Initial", float(current_br.groups()[0]))
             )

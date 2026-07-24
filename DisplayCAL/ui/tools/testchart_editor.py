@@ -100,10 +100,10 @@ from DisplayCAL.icc_profile import (
     NamedColor2Type,
 )
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
-from DisplayCAL.ui import message_box
 from DisplayCAL.util_dict import swap_dict_keys_values
 from DisplayCAL.util_os import launch_file, waccess
 from DisplayCAL.worker import (

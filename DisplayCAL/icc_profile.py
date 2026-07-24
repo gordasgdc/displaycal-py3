@@ -39,14 +39,11 @@ from weakref import WeakValueDictionary
 
 from DisplayCAL.util_dict import dict_sort
 
-
 if sys.platform == "win32":
     import winreg
 
-    import pywintypes
-
     try:
-        import win32api
+        import win32api  # noqa: F401  # availability checked via sys.modules below
         import win32gui
     except ImportError:
         pass
@@ -105,11 +102,8 @@ elif sys.platform == "win32":
     from DisplayCAL import util_win
     from DisplayCAL.mscms import WCSManagerProxy
 
-    if sys.getwindowsversion() < (6,):
-        # WCS only available under Vista and later
-        mscms = None
-    else:
-        mscms = WCSManagerProxy()
+    # WCS only available under Vista and later
+    mscms = None if sys.getwindowsversion() < (6,) else WCSManagerProxy()
 
 
 if TYPE_CHECKING:
@@ -3452,7 +3446,7 @@ def uInt16Number_tohex(num: int) -> bytes:  # noqa: N802
     Returns:
         bytes: The 2-byte hex representation of the number.
     """
-    return struct.pack(">H", round(num))
+    return struct.pack(">H", round(num))  # num can be float despite the type hint
 
 
 def uInt32Number(binaryString: bytes) -> int:  # noqa: N802, N803
@@ -3476,7 +3470,7 @@ def uInt32Number_tohex(num: int) -> bytes:  # noqa: N802
     Returns:
         bytes: The 4-byte hex representation of the number.
     """
-    return struct.pack(">I", round(num))
+    return struct.pack(">I", round(num))  # num can be float despite the type hint
 
 
 def uInt64Number(binaryString: bytes) -> int:  # noqa: N802, N803
@@ -3500,7 +3494,7 @@ def uInt64Number_tohex(num: int) -> bytes:  # noqa: N802
     Returns:
         bytes: The 8-byte hex representation of the number.
     """
-    return struct.pack(">Q", round(num))
+    return struct.pack(">Q", round(num))  # num can be float despite the type hint
 
 
 def uInt8Number(binaryString: bytes) -> int:  # noqa: N802, N803
@@ -3524,7 +3518,7 @@ def uInt8Number_tohex(num: int) -> bytes:  # noqa: N802
     Returns:
         bytes: The 1-byte hex representation of the number.
     """
-    return struct.pack(">H", round(num))[1:2]
+    return struct.pack(">H", round(num))[1:2]  # num can be float despite the type hint
 
 
 def videoCardGamma(  # noqa: N802
@@ -10234,10 +10228,7 @@ class ICCProfile:
                     countries = tag[language]
                     for country in countries:
                         value = countries[country]
-                        if country.strip("\0 "):
-                            country = "/" + country
-                        else:
-                            country = ""
+                        country = "/" + country if country.strip("\0 ") else ""
                         info[f"    {language}{country}"] = value
             elif isinstance(tag, NamedColor2Type):
                 info[name] = ""

@@ -24,6 +24,7 @@ tool-window shaped, not pure data, and the testchart editor itself
 
 from __future__ import annotations
 
+import contextlib
 import math
 import os
 import re
@@ -327,12 +328,10 @@ def expand_profile_name(template: str, ctx: ProfileNameContext) -> str:
 
     for directive in _DATE_DIRECTIVES:
         if f"%{directive}" in profile_name:
-            try:
+            with contextlib.suppress(UnicodeDecodeError):
                 profile_name = profile_name.replace(
                     f"%{directive}", strftime(f"%{directive}")
                 )
-            except UnicodeDecodeError:
-                pass
 
     profile_name = re.sub(r"\s", " ", profile_name)
 

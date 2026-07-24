@@ -1,15 +1,15 @@
-
 # PyYAML
 from io import StringIO
-import yaml
 
 import pytest
+import yaml
 
 from DisplayCAL.lazydict import LazyDictYAMLLite, LazyDictYAMLUltraLite
 
 
 @pytest.mark.parametrize(
-    "doc, do_assert", [
+    "doc, do_assert",
+    [
         ['TEST: \n  "ABC\n\n  DEF\n"  \n    \n\n\n\n', True],
         ['TEST: \n  "ABC\n\n  DEF"', True],
         ['TEST: \n  "ABC\n  DEF\n"', True],
@@ -38,7 +38,7 @@ from DisplayCAL.lazydict import LazyDictYAMLLite, LazyDictYAMLUltraLite
         ["TEST: |- # Comment\n  Value", True],
         ["TEST: |- # Comment\n  Value # Not A Comment\n  # Not A Comment", True],
         ["TEST: # Comment", False],
-    ]
+    ],
 )
 def test_yaml_lite_to_yaml_conformance(doc, do_assert):
     """Testing YAML Lite to YAML conformance."""

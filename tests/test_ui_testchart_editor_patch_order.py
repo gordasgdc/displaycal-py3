@@ -186,7 +186,9 @@ def test_sort_handler_dispatches_single_method(loaded, monkeypatch, index, metho
     ],
     ids=["red", "green", "blue", "cyan", "magenta", "yellow"],
 )
-def test_sort_handler_primary_to_top_dispatch(loaded, monkeypatch, index, expected_kwargs):
+def test_sort_handler_primary_to_top_dispatch(
+    loaded, monkeypatch, index, expected_kwargs
+):
     window = loaded
     calls = []
     monkeypatch.setattr(
@@ -251,9 +253,7 @@ def test_sort_handler_repopulates_grid_and_enables_save(loaded, monkeypatch):
     window = loaded
     window.ti1.filename = None  # save button gating needs an existing file path
     populate_calls = []
-    monkeypatch.setattr(
-        window, "_populate_grid", lambda: populate_calls.append(True)
-    )
+    monkeypatch.setattr(window, "_populate_grid", lambda: populate_calls.append(True))
     window.change_patch_order_ctrl.setCurrentIndex(0)
     window.tc_sort_handler()
     assert populate_calls == [True]

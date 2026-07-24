@@ -8,11 +8,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from DisplayCAL.meta import DOMAIN
 
 tplpth = os.path.join(os.path.dirname(__file__), "..", "misc", "README.template.html")
-with open(tplpth, "r") as tpl:
+with open(tplpth) as tpl:
     readme = tpl.read()
 
 chglog = re.search(
-    r'<div id="(?:changelog|history)">' ".+?<h2>.+?</h2>" ".+?<dl>.+?</dd>",
+    r'<div id="(?:changelog|history)">' ".+?<h2>.+?</h2>.+?<dl>.+?</dd>",
     readme,
     re.S,
 )

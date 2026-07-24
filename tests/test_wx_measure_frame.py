@@ -41,11 +41,13 @@ def test_get_default_size_1(real_display: bool, size_in_mm: tuple[int, int]) -> 
                     ):
                         result = get_default_size()
                 else:
-                    with check_call(
-                        wx, "DisplaySize", DisplayData.DISPLAY_DATA_1["size"]
+                    with (
+                        check_call(
+                            wx, "DisplaySize", DisplayData.DISPLAY_DATA_1["size"]
+                        ),
+                        check_call(wx, "DisplaySizeMM", size_in_mm),
                     ):
-                        with check_call(wx, "DisplaySizeMM", size_in_mm):
-                            result = get_default_size()
+                        result = get_default_size()
     assert isinstance(result, int)
     assert result > 1
 
@@ -75,4 +77,3 @@ def test_from_module():
     t = threading.Thread(target=test)
     app.TopWindow.show_controls(False)
     t.start()
-

@@ -21,9 +21,8 @@ pytest.importorskip("qtpy")
 
 from DisplayCAL import config  # noqa: E402
 from DisplayCAL import localization as lang  # noqa: E402
-from DisplayCAL.worker import Worker  # noqa: E402
-
 from DisplayCAL.ui import colorimeter_correction_io as ccio  # noqa: E402
+from DisplayCAL.worker import Worker  # noqa: E402
 
 
 @pytest.fixture(scope="session")
@@ -104,9 +103,7 @@ class TestWebCheckChooserDialog:
 
 class TestWebCheckController:
     def test_fetch_failure_shows_message_and_finishes(self, qapp, worker, monkeypatch):
-        monkeypatch.setattr(
-            ccio, "http_request", lambda *a, **k: False
-        )
+        monkeypatch.setattr(ccio, "http_request", lambda *a, **k: False)
         infos = []
         monkeypatch.setattr(
             ccio.QMessageBox, "information", lambda *a, **k: infos.append(a)
@@ -222,7 +219,9 @@ class TestImportController:
         )
         seen_asroot = []
 
-        def fake_detect(worker_, result, i1d3, i1d3ccss, spyd4, spyd4en, icd, oeminst, path, asroot):
+        def fake_detect(
+            worker_, result, i1d3, i1d3ccss, spyd4, spyd4en, icd, oeminst, path, asroot
+        ):
             seen_asroot.append(asroot)
             return True, i1d3, spyd4, True
 
@@ -264,7 +263,9 @@ class TestImportController:
         )
         seen_asroot = []
 
-        def fake_detect(worker_, result, i1d3, i1d3ccss, spyd4, spyd4en, icd, oeminst, path, asroot):
+        def fake_detect(
+            worker_, result, i1d3, i1d3ccss, spyd4, spyd4en, icd, oeminst, path, asroot
+        ):
             seen_asroot.append(asroot)
             return True, True, spyd4, icd
 
@@ -333,9 +334,7 @@ class TestUploadController:
             status = 201
 
         responses = [_DupResp(), _PostResp()]
-        monkeypatch.setattr(
-            ccio, "http_request", lambda *a, **k: responses.pop(0)
-        )
+        monkeypatch.setattr(ccio, "http_request", lambda *a, **k: responses.pop(0))
         controller = ccio.UploadController(worker, None)
         finished = []
         controller.finished.connect(lambda: finished.append(True))

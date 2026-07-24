@@ -3,7 +3,6 @@ import codecs
 import os
 import sys
 
-
 pnpidcache = {}
 
 
@@ -14,7 +13,7 @@ def convert_hwdb_to_pnp_ids(hwdb_filename):
             if line.strip().startswith("acpi:"):
                 pnpid = line.split(":")[1][:3]
                 continue
-            elif line.strip().startswith("ID_VENDOR_FROM_DATABASE"):
+            if line.strip().startswith("ID_VENDOR_FROM_DATABASE"):
                 name = line.split("=", 1)[1].strip()
             else:
                 continue

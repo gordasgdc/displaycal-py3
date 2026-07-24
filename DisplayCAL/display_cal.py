@@ -32,7 +32,6 @@ import socket
 import subprocess as sp
 import sys
 import threading
-import requests
 import traceback
 import urllib.error
 import urllib.parse
@@ -46,6 +45,7 @@ from time import localtime, sleep, strftime
 from typing import TYPE_CHECKING, Callable
 from zlib import crc32
 
+import requests
 from send2trash import send2trash
 
 # wxPython
@@ -62,9 +62,8 @@ from DisplayCAL import (
     colormath,
     config,
     floatspin,
-    main_settings,
     madvr,
-    measurement_report as measurement_report_utils,
+    main_settings,
     preflight_checks,
     profile_install,
     report,
@@ -76,6 +75,9 @@ from DisplayCAL import (
     xh_hstretchstatbmp,
 )
 from DisplayCAL import localization as lang
+from DisplayCAL import (
+    measurement_report as measurement_report_utils,
+)
 from DisplayCAL.argyll import (
     check_set_argyll_bin,
     get_argyll_instrument_config,
@@ -118,7 +120,6 @@ from DisplayCAL.config import (
     ENC,
     EXE,
     EXE_EXT,
-    FS_ENC,
     ISEXE,
     PROFILE_EXT,
     PYDIR,
@@ -170,9 +171,9 @@ from DisplayCAL.meta import (
     AUTHOR,
     DEVELOPMENT_HOME_PAGE,
     DOMAIN,
+    GITHUB_API_URL,
     VERSION_STRING,
     VERSION_TUPLE,
-    GITHUB_API_URL,
     get_latest_changelog_entry,
 )
 from DisplayCAL.meta import (
@@ -227,7 +228,6 @@ from DisplayCAL.worker import (
     check_ti3_criteria1,
     check_ti3_criteria2,
     get_arg,
-    get_argyll_util,
     get_cfg_option_from_args,
     get_current_profile_path,
     get_options_from_cal,
@@ -420,7 +420,7 @@ def is_new_update() -> bool | tuple:
         )
         response.raise_for_status()
     except requests.RequestException as e:
-        print(f"Error checking for updates: Network error - {str(e)}")
+        print(f"Error checking for updates: Network error - {e!s}")
         return False
 
     try:
@@ -428,7 +428,7 @@ def is_new_update() -> bool | tuple:
         RELEASE_DATA = data
         latest_version_tuple = tuple(int(n) for n in data["tag_name"].split("."))
     except (KeyError, ValueError, IndexError) as e:
-        print(f"Error checking for updates: Parsing error - {str(e)}")
+        print(f"Error checking for updates: Parsing error - {e!s}")
         return False
 
     current_version = VERSION_TUPLE[:3]
@@ -767,14 +767,14 @@ def app_update_confirm(
         folder = "/snapshot" if snapshot else ""
         if zeroinstall:
             return
-        elif not argyll:
+        if not argyll:
             # Download the update from GitHub based on the user's platform
             download_url = get_download_url(newversion)
             if download_url is not None:
                 try:
                     webbrowser.open_new_tab(download_url)
                 except Exception as e:
-                    print(f"Error opening web browser for updates: {str(e)}")
+                    print(f"Error opening web browser for updates: {e!s}")
             else:
                 launch_file(f"{DEVELOPMENT_HOME_PAGE}/releases")
         else:
@@ -839,7 +839,7 @@ def app_update_confirm(
                 fancy=False,
             )
         return
-    elif result != wx.ID_CANCEL:
+    if result != wx.ID_CANCEL:
         launch_file(DEVELOPMENT_HOME_PAGE)
     elif not argyll:
         # Check for Argyll update
@@ -1825,14 +1825,18 @@ class GamapFrame(BaseFrame):
         lstr = self.gamap_out_viewcond_ctrl.GetStringSelection()
         cur = getcfg("gamap_out_viewcond")
         v = self.viewconds_ba[lstr]
-        if v != cur and event and v in self.viewconds_out_nondisplay:
-            if not show_result_dialog(
+        if (
+            v != cur
+            and event
+            and v in self.viewconds_out_nondisplay
+            and not show_result_dialog(
                 Warn(lang.getstr("warning.gamap.out_viewcond.nondisplay", lstr)),
                 self,
                 confirm=lang.getstr("ok"),
-            ):
-                self.gamap_out_viewcond_ctrl.SetStringSelection(self.viewconds_ab[cur])
-                return
+            )
+        ):
+            self.gamap_out_viewcond_ctrl.SetStringSelection(self.viewconds_ab[cur])
+            return
         if v != cur:
             setcfg("gamap_out_viewcond", v)
             if self.Parent and hasattr(self.Parent, "profile_settings_changed"):
@@ -13375,7 +13379,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self.check_keydown_timer.Stop()
         self.lut_watch_timer.Stop()
 
-    def check_lut_clobbered(self, event: "wx.TimerEvent | None" = None) -> None:
+    def check_lut_clobbered(self, event: wx.TimerEvent | None = None) -> None:
         """Re-load calibration if macOS has clobbered the VideoLUT (issue #694).
 
         Idle backstop to the in-session recovery in worker.exec_cmd: runs only on

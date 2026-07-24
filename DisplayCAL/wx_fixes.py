@@ -806,7 +806,7 @@ def _adjust_sizer_args_scaling_for_appdpi(*args, **kwargs):
                 if dimension > 0:
                     spacer[i] = round(dimension * scale)
             # print(spacer)
-            args = [tuple(spacer)] + args[1:]
+            args = [tuple(spacer), *args[1:]]
     return args, kwargs
 
 

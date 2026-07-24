@@ -22,8 +22,8 @@ to re-run ``check_instrument_setup`` once enabling finishes).
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from DisplayCAL.config import getcfg, setcfg
 from DisplayCAL.meta import VERSION_STRING, VERSION_TUPLE

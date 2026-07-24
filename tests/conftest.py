@@ -28,8 +28,8 @@ if sys.platform == "win32":
 
 import faulthandler
 import glob
-import platform
 import pathlib
+import platform
 import shutil
 import subprocess
 import tarfile
@@ -52,9 +52,7 @@ import zipfile
 if os.environ.get("GITHUB_ACTIONS") == "true":
     faulthandler.enable()
     _faulthandler_dump_file = open("faulthandler_dump.log", "a", buffering=1)
-    faulthandler.dump_traceback_later(
-        90, repeat=True, file=_faulthandler_dump_file
-    )
+    faulthandler.dump_traceback_later(90, repeat=True, file=_faulthandler_dump_file)
 
 
 _pytest_exitstatus = None
@@ -104,17 +102,11 @@ if (
 
 from urllib.error import URLError
 
+import pytest
 from requests import HTTPError
 
-from DisplayCAL.debughelpers import DownloadError
-import pytest
-
-from DisplayCAL import audio, config
-from DisplayCAL.util_os import which
-from DisplayCAL.worker import Worker
-
 import DisplayCAL
-from DisplayCAL import real_display_size_mm
+from DisplayCAL import audio, config, real_display_size_mm, util_os
 from DisplayCAL.argyll import (
     get_argyll_latest_version,
     get_argyll_version_string,
@@ -122,8 +114,10 @@ from DisplayCAL.argyll import (
 )
 from DisplayCAL.colormath import get_rgb_space
 from DisplayCAL.config import setcfg, writecfg
+from DisplayCAL.debughelpers import DownloadError
 from DisplayCAL.icc_profile import ICCProfile
-from DisplayCAL import util_os
+from DisplayCAL.util_os import which
+from DisplayCAL.worker import Worker
 
 # Never let a test pop a real browser tab or hand a URL/file to the OS's
 # default-app opener. Help-menu / update-check / donate handlers across both
@@ -227,7 +221,9 @@ def _setup_argyll_session():
         # ArgyllCMS is already installed
         argyll_path = pathlib.Path(xicclu_path).parent
         setcfg("argyll.dir", str(argyll_path.absolute()))
-        argyll_version_string = get_argyll_version_string("xicclu", True, [str(argyll_path)])
+        argyll_version_string = get_argyll_version_string(
+            "xicclu", True, [str(argyll_path)]
+        )
         argyll_version = parse_argyll_version_string(argyll_version_string)
         print(f"argyll_version_string: {argyll_version_string}")
         print(f"argyll_version: {argyll_version}")
@@ -313,7 +309,9 @@ def _setup_argyll_session():
         base_delay = 10
         for download_attempt in range(max_download_retries):
             result = worker.download(url, download_dir=argyll_temp_path)
-            if isinstance(result, (DownloadError, HTTPError, PermissionError, URLError)):
+            if isinstance(
+                result, (DownloadError, HTTPError, PermissionError, URLError)
+            ):
                 delay = base_delay * (2**download_attempt)
                 if download_attempt < max_download_retries - 1:
                     print(
@@ -352,7 +350,9 @@ def _setup_argyll_session():
     if argyll_path.is_dir():
         print("argyll_path is valid!")
         setcfg("argyll.dir", str(argyll_path.absolute()))
-        argyll_version_string = get_argyll_version_string("xicclu", True, [str(argyll_path)])
+        argyll_version_string = get_argyll_version_string(
+            "xicclu", True, [str(argyll_path)]
+        )
         argyll_version = parse_argyll_version_string(argyll_version_string)
         print(f"argyll_version_string: {argyll_version_string}")
         print(f"argyll_version: {argyll_version}")
@@ -399,9 +399,7 @@ def setup_argyll(_setup_argyll_session):
 def random_icc_profile():
     """Create a random ICCProfile suitable for modification."""
     rec709_gamma18 = list(get_rgb_space("Rec. 709"))
-    icc_profile = ICCProfile.from_rgb_space(
-        rec709_gamma18, b"Rec. 709 gamma 1.8"
-    )
+    icc_profile = ICCProfile.from_rgb_space(rec709_gamma18, b"Rec. 709 gamma 1.8")
     icc_profile_path = tempfile.mktemp(suffix=".icc")
     icc_profile.write(icc_profile_path)
 

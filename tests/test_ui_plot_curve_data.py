@@ -47,9 +47,7 @@ def vcgt_profile():
     # A profile with a clean ASCII description (unlike _CLUT_PROFILE, whose
     # "mluc" desc tag getDescription() mis-decodes) so the temp-file naming
     # in install_vcgt() doesn't trip over an unrelated parsing quirk.
-    return ICCProfile(
-        os.path.join(_ICC_DIR, "vcgt_cm_test_cyanish_reddish.icc")
-    )
+    return ICCProfile(os.path.join(_ICC_DIR, "vcgt_cm_test_cyanish_reddish.icc"))
 
 
 # -- apply_bpc ----------------------------------------------------------------
@@ -86,7 +84,9 @@ def test_available_shaper_modes_respects_show_advanced_options(clut_profile):
 
 def test_shaper_mode_lang_key():
     assert shaper_mode_lang_key("A2B0.input") == "profile.tags.A2B0.shaper_curves.input"
-    assert shaper_mode_lang_key("B2A2.output") == "profile.tags.B2A2.shaper_curves.output"
+    assert (
+        shaper_mode_lang_key("B2A2.output") == "profile.tags.B2A2.shaper_curves.output"
+    )
 
 
 def test_extract_shaper_curve_device_rgb_input(clut_profile):

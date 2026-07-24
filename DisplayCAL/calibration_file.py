@@ -23,6 +23,7 @@ Deliberately not reproduced here (documented, not silently dropped):
 
 from __future__ import annotations
 
+import contextlib
 import io
 import os
 import shutil
@@ -875,10 +876,8 @@ def apply_lut3d_config_mapper(
             if cfgvalue is None:
                 continue
             cfgvalue = _decode_cfgvalue(cfgvalue)
-            try:
+            with contextlib.suppress(ValueError):
                 cfgvalue = round(float(cfgvalue), 4)
-            except ValueError:
-                pass
             setcfg(f"3dlut.content.colorspace.{color}.{coord}", cfgvalue)
 
     # Make sure 3D LUT TRC enumeration matches parameters for older profiles

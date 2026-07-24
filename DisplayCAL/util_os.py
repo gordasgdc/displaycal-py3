@@ -18,7 +18,6 @@ import tempfile
 import time
 from typing import TYPE_CHECKING, Any, Callable
 
-
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -647,7 +646,6 @@ def mksfile(filename: str) -> str:
         str: A tuple containing the file descriptor and the absolute
             path of the created file.
     """
-    flags = tempfile._bin_openflags
     fname, ext = os.path.splitext(filename)
     for seq in range(tempfile.TMP_MAX):
         pth = filename if not seq else f"{fname}({seq:d}){ext}"

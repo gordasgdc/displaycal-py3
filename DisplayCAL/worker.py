@@ -2330,8 +2330,7 @@ def get_macos_videolut_maxima(max_displays=16):
         channel_max = 0.0
         for channel in (red, green, blue):
             for j in range(nent.value):
-                if channel[j] > channel_max:
-                    channel_max = channel[j]
+                channel_max = max(channel_max, channel[j])
         maxima.append(channel_max)
     return maxima
 
@@ -4033,8 +4032,7 @@ class Worker(WorkerBase):
             # Video level detection would require a separate dispread session,
             # which tears down/restarts that server before interactive adjust.
             # Skip auto-detection here to keep a single continuous web session.
-            or display_name == "Web @ localhost"
-            or display_name == "Untethered"
+            or display_name in ("Web @ localhost", "Untethered")
             or is_ccxx_testchart()
         )
 
@@ -8792,7 +8790,7 @@ BEGIN_DATA
                 sum(
                     x0 * y1 - x1 * y0
                     for ((x0, y0, Y0), (x1, y1, Y1)) in zip(
-                        xyYrgb, xyYrgb[1:] + [xyYrgb[0]]
+                        xyYrgb, [*xyYrgb[1:], xyYrgb[0]]
                     )
                 )
             )
@@ -9103,7 +9101,7 @@ BEGIN_DATA
                     sum(
                         x0 * y1 - x1 * y0
                         for ((x0, y0, Y0), (x1, y1, Y1)) in zip(
-                            xyYrgb, xyYrgb[1:] + [xyYrgb[0]]
+                            xyYrgb, [*xyYrgb[1:], xyYrgb[0]]
                         )
                     )
                 )
@@ -18786,7 +18784,7 @@ BEGIN_DATA
                     # the current directory on drive C: (c:foo), not c:\foo.
 
                     # Save incomplete runs to different directory
-                    parts = [config.DATA_HOME, "incomplete"] + parts[-2:]
+                    parts = [config.DATA_HOME, "incomplete", *parts[-2:]]
                     dst_path = os.sep.join(parts)
                 result = check_create_dir(os.path.dirname(dst_path))
                 if isinstance(result, Exception):

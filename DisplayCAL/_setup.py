@@ -337,7 +337,6 @@ def create_app_symlinks(dist_dir: str, scripts: list[tuple[str, str]]) -> None:
             elif entry == "Info.plist":
                 with open(
                     os.path.join(dist_dir, main_contents_rel, entry),
-                    "r",
                     encoding="utf-8",
                 ) as info_in:
                     info_xml = info_in.read()
@@ -937,8 +936,8 @@ def _configure_py2app(
         f"{NAME}-{VERSION_STRING}",
     )
     import py2app.build_app as py2app_build_app
-    from py2app.build_app import py2app as py2app_cls
     from py2app import util as py2app_util
+    from py2app.build_app import py2app as py2app_cls
 
     def _skip_codesign_adhoc(bundle: str) -> None:
         print(f"Skipping ad-hoc codesign for bundle: {bundle}")
@@ -1613,7 +1612,7 @@ def main() -> None:
             print("Copying", pil_installed_dylibs, "->", pil_dylibs)
             shutil.copytree(pil_installed_dylibs, pil_dylibs)
             # ADD THIS: Remove existing signatures so the later deep-sign works properly
-            for root, dirs, files in os.walk(pil_dylibs):
+            for root, _dirs, files in os.walk(pil_dylibs):
                 for file in files:
                     if file.endswith(".dylib"):
                         os.system(

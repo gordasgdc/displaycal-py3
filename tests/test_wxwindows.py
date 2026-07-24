@@ -31,6 +31,7 @@ def test_progress_dialog_get_bitmaps_frame_counts(progress_type, expected_count)
     breaking get_bitmaps' hardcoded "needs exactly 17 images" sanity check.
     """
     import wx
+
     from DisplayCAL.wx_windows import ProgressDialog
 
     app = wx.GetApp() or wx.App()  # noqa: F841 -- must stay referenced, see wx docs.
@@ -41,9 +42,12 @@ def test_progress_dialog_get_bitmaps_frame_counts(progress_type, expected_count)
     assert len(bitmaps) == expected_count
 
 
-@pytest.mark.skip(reason="TODO: This test is moved from the module, properly implement it.")
+@pytest.mark.skip(
+    reason="TODO: This test is moved from the module, properly implement it."
+)
 def test_wxwindows():
     import wx
+
     from DisplayCAL import config
     from DisplayCAL import localization as lang
     from DisplayCAL.wx_windows import BaseApp, ProgressDialog, SimpleTerminal

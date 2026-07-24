@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-from time import strftime
 import binascii
 import os
 import sys
+from time import strftime
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 from DisplayCAL import colormath
-from DisplayCAL.icc_profile import ICCProfile, get_display_profile, XYZType
+from DisplayCAL.icc_profile import ICCProfile, XYZType, get_display_profile
 
 
 def prettyprint(iterable, level=1):

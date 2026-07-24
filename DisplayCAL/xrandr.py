@@ -20,8 +20,7 @@ from ctypes import (
     pointer,
     util,
 )
-from typing import ClassVar, TYPE_CHECKING
-
+from typing import TYPE_CHECKING, ClassVar
 
 if TYPE_CHECKING:
     if sys.version_info >= (3, 11):

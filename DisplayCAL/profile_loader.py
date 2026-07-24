@@ -254,7 +254,7 @@ def setup_profile_loader_task(exe: str, exedir: str, pydir: str) -> None:
                 triggers=[daily],
                 actions=actions,
             )
-        except Exception as exception:
+        except Exception:
             if DEBUG:
                 exception = traceback.format_exc()
             print(

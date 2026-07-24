@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-from time import strftime
 import math
 import os
 import sys
+from time import strftime
 
 
 def buf2ord64(buf):
@@ -54,7 +54,7 @@ def readcals(filename):
             4: "LCD RGB LED TFT",
             5: "LCD CCFL TFT",
         }.get(i, "UNKNOWN")
-        cal = Spyd4Cal(buf[41 * 8 * i: 41 * 8 * (i + 1)], display, tech)
+        cal = Spyd4Cal(buf[41 * 8 * i : 41 * 8 * (i + 1)], display, tech)
         if sum(cal.spec) != len(cal.spec):
             cals.append(cal)
         else:
@@ -71,7 +71,7 @@ class Spyd4Cal:
         self.norm = 1.0
         self.spec = []
         for i in range(int(len(buf) / 8)):
-            val = buf2ord64(buf[8 * i: 8 * (i + 1)])
+            val = buf2ord64(buf[8 * i : 8 * (i + 1)])
             self.spec.append(IEEE754_64todouble(val))
 
     def write_ccss(self, filename):

@@ -77,7 +77,8 @@ def test_table_populated_sorted_by_key(qapp):
         from qtpy.QtCore import Qt
 
         assert (
-            dialog.table.item(0, ple._COL_ENABLED).checkState() == Qt.CheckState.Unchecked
+            dialog.table.item(0, ple._COL_ENABLED).checkState()
+            == Qt.CheckState.Unchecked
         )
         assert (
             dialog.table.item(0, ple._COL_RESET).checkState() == Qt.CheckState.Checked
@@ -147,7 +148,6 @@ def test_known_app_rejected_on_browse(qapp, monkeypatch):
 
         def _fake_critical(*args, **kwargs):
             shown["called"] = True
-            return None
 
         monkeypatch.setattr(ple.QMessageBox, "critical", _fake_critical)
         dialog._on_add()

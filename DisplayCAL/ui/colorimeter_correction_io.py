@@ -72,8 +72,8 @@ from DisplayCAL.argyll import get_argyll_util
 from DisplayCAL.config import get_argyll_data_dir, get_verified_path, getcfg, setcfg
 from DisplayCAL.meta import DOMAIN
 from DisplayCAL.meta import NAME as APPNAME
-from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui import message_box
+from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.measurement_flow import observer_items
 from DisplayCAL.ui.worker_runner import PasswordPromptAdapter
 from DisplayCAL.worker import Worker, check_create_dir, http_request

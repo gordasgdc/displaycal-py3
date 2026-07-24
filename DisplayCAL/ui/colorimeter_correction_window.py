@@ -89,10 +89,10 @@ from DisplayCAL.cgats import CGATS, CGATSError
 from DisplayCAL.config import DEFAULTS, get_argyll_data_dir, getcfg, setcfg
 from DisplayCAL.edid import PNP_ID_CACHE, get_manufacturer_name
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.assets import get_theme_pixmap
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
-from DisplayCAL.ui import message_box
 from DisplayCAL.ui.measurement_flow import observer_items
 from DisplayCAL.ui.tooltip_window import TooltipWindow, info_text_html
 from DisplayCAL.util_str import safe_str

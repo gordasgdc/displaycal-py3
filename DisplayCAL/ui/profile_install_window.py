@@ -68,10 +68,10 @@ from DisplayCAL.argyll import check_set_argyll_bin
 from DisplayCAL.config import get_verified_path, getcfg, setcfg, writecfg
 from DisplayCAL.icc_profile import ICCProfile, ICCProfileInvalidError
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
-from DisplayCAL.ui import message_box
 from DisplayCAL.ui.tools.profile_info import ProfileInfoWindow
 from DisplayCAL.ui.worker_runner import PasswordPromptAdapter
 from DisplayCAL.util_os import is_superuser, which

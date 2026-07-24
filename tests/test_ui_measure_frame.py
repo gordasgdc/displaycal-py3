@@ -81,7 +81,9 @@ def test_compute_dimensions_roundtrips_center():
     assert dims == "0.5,0.5,1.0"
 
 
-@pytest.mark.parametrize("x,y,scale", [(0.5, 0.5, 1.0), (0.25, 0.75, 2.0), (0.0, 0.0, 1.5)])
+@pytest.mark.parametrize(
+    "x,y,scale", [(0.5, 0.5, 1.0), (0.25, 0.75, 2.0), (0.0, 0.0, 1.5)]
+)
 def test_place_then_dimensions_roundtrip(x, y, scale):
     """Placing then reading back reproduces the original coordinates."""
     side, pos, saved_scale = compute_frame_geometry(
@@ -96,9 +98,7 @@ def test_place_then_dimensions_roundtrip(x, y, scale):
 
 def test_compute_dimensions_detects_fullscreen():
     """A near-display-sized patch is reported as fullscreen (scale 50, centred)."""
-    dims = compute_dimensions(
-        (1920, 1040), (0, 0), DISPLAY, CLIENT, DEFAULT_SIZE, 25
-    )
+    dims = compute_dimensions((1920, 1040), (0, 0), DISPLAY, CLIENT, DEFAULT_SIZE, 25)
     assert dims == "0.5,0.5,50.0"
 
 

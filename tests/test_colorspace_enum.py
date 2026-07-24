@@ -1,9 +1,10 @@
-from enum import Enum
 import sys
+from enum import Enum
 
 import pytest
 
 from DisplayCAL.colorspace_to_vrml import ColorSpace
+
 
 @pytest.mark.parametrize(
     "colorspace",
@@ -150,8 +151,9 @@ def test_to_colorspace_colorspace_is_skipped():
 
     py_error_message = {
         9: "to_colorspace() missing 1 required positional argument: 'colorspace'",
-    }.get(sys.version_info.minor,
-        "ColorSpace.to_colorspace() missing 1 required positional argument: 'colorspace'"
+    }.get(
+        sys.version_info.minor,
+        "ColorSpace.to_colorspace() missing 1 required positional argument: 'colorspace'",
     )
     assert str(cm.value) == py_error_message
 
@@ -300,6 +302,8 @@ def test_to_colorspace_colorspace_is_not_a_valid_str():
         ["xYy", ColorSpace.xyY],
     ],
 )
-def test_schedule_colorspace_to_colorspace_is_working_properly(colorspace_name, colorspace):
+def test_schedule_colorspace_to_colorspace_is_working_properly(
+    colorspace_name, colorspace
+):
     """ColorSpace can parse schedule colorspace names."""
     assert ColorSpace.to_colorspace(colorspace_name) == colorspace

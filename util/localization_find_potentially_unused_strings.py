@@ -16,8 +16,7 @@ def quote(obj):
         return '"%s"' % obj.replace("\\", "\\\\").replace('"', '\\"').replace(
             "\n", "\\n"
         )
-    else:
-        return repr(obj)
+    return repr(obj)
 
 
 def find_potentially_unused_strings(filepath, keys):
@@ -42,7 +41,7 @@ def find_potentially_unused_strings(filepath, keys):
 
 def main():
     keys = {}
-    for (dirpath, _dirnames, filenames) in os.walk(os.path.join(root, "DisplayCAL")):
+    for dirpath, _dirnames, filenames in os.walk(os.path.join(root, "DisplayCAL")):
         for filename in filenames:
             ext = os.path.splitext(filename)[1][1:]
             if ext not in ("py", "pyw", "xrc"):

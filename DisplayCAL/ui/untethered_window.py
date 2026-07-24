@@ -25,6 +25,7 @@ worker's ``terminal``/``progress_wnd``) is
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 from typing import TYPE_CHECKING
@@ -634,10 +635,9 @@ class UntetheredWindow(BaseWindow):
         """
         if not getcfg("measurement.play_sound"):
             return
-        try:
+        # A missing/failed sound must never break measurement.
+        with contextlib.suppress(Exception):
             audio.Sound(get_data_path(filename)).safe_play()
-        except Exception:  # noqa: BLE001 - a missing/failed sound must never break measurement
-            pass
 
     def _send(self, key: str) -> None:
         """Request that ``key`` be sent to the interactive ``spotread``."""

@@ -85,7 +85,7 @@ class TestInjectCcxxMetadata:
 # database's "cgats" JSON field contains (as text, since the web-check JSON is
 # UTF-8, not raw bytes).
 CCMX_TEXT = (
-    'CCMX\n\n'
+    "CCMX\n\n"
     'DESCRIPTOR "test"\n'
     'ORIGINATOR "Argyll dispcal"\n'
     'CREATED "Thu Apr 19 13:24:37 2012"\n'
@@ -97,14 +97,14 @@ CCMX_TEXT = (
     'FIT_AVG_DE00 "0.123"\n'
     'FIT_MAX_DE00 "0.456"\n'
     'COLOR_REP "XYZ"\n\n'
-    'NUMBER_OF_FIELDS 4\n'
-    'BEGIN_DATA_FORMAT\n'
-    'SAMPLE_ID XYZ_X XYZ_Y XYZ_Z\n'
-    'END_DATA_FORMAT\n\n'
-    'NUMBER_OF_SETS 1\n'
-    'BEGIN_DATA\n'
-    '1 1.0 1.0 1.0\n'
-    'END_DATA\n'
+    "NUMBER_OF_FIELDS 4\n"
+    "BEGIN_DATA_FORMAT\n"
+    "SAMPLE_ID XYZ_X XYZ_Y XYZ_Z\n"
+    "END_DATA_FORMAT\n\n"
+    "NUMBER_OF_SETS 1\n"
+    "BEGIN_DATA\n"
+    "1 1.0 1.0 1.0\n"
+    "END_DATA\n"
 )
 
 
@@ -229,10 +229,11 @@ class TestValidateUploadOriginator:
 class TestComputeUploadDedupHash:
     def test_strips_created_before_hashing(self):
         with_created = b'CCMX\n\nCREATED "Thu Apr 19 13:24:37 2012"\nDISPLAY "x"\n'
-        without_created = b"CCMX\n\n\nDISPLAY \"x\"\n"
-        assert cc.compute_upload_dedup_hash(
-            with_created
-        ) == md5(without_created.strip()).hexdigest()
+        without_created = b'CCMX\n\n\nDISPLAY "x"\n'
+        assert (
+            cc.compute_upload_dedup_hash(with_created)
+            == md5(without_created.strip()).hexdigest()
+        )
 
     def test_different_content_hashes_differently(self):
         a = b'CCMX\n\nDISPLAY "a"\n'
@@ -274,7 +275,7 @@ class TestBuildUploadParams:
             f'CCMX\n\nREFERENCE_FILENAME "{ref_path}"\n'
             f'REFERENCE_HASH "md5:{digest}"\n'
             'DISPLAY "LCD Monitor"\n'
-        ).encode("utf-8")
+        ).encode()
         params = cc.build_upload_params(cgats)
         assert params["reference_cgats"] == reserialized
 
@@ -286,7 +287,7 @@ class TestBuildUploadParams:
             f'CCMX\n\nREFERENCE_FILENAME "{ref_path}"\n'
             'REFERENCE_HASH "md5:deadbeef"\n'
             'DISPLAY "LCD Monitor"\n'
-        ).encode("utf-8")
+        ).encode()
         params = cc.build_upload_params(cgats)
         assert "reference_cgats" not in params
 
@@ -352,7 +353,16 @@ class TestDetectImportKind:
         # no-op and hands the caller's ``result`` back untouched.
         worker = MagicMock()
         result, i1d3, spyd4, icd = cc.detect_import_kind(
-            worker, None, False, False, False, False, False, None, "/no/such/file", False
+            worker,
+            None,
+            False,
+            False,
+            False,
+            False,
+            False,
+            None,
+            "/no/such/file",
+            False,
         )
         assert result is None
         assert (i1d3, spyd4, icd) == (False, False, False)

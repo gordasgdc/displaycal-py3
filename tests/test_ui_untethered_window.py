@@ -182,13 +182,9 @@ def test_auto_advance_requires_two_settled_readings(window, cgats):
         "D50 Lab: 0.000000 0.000000 0.000000\n"
     )
     window.parse_txt("key to take a reading\n")  # auto-triggers the 2nd patch
-    window.parse_txt(
-        "Result is XYZ: 95.0 100.0 105.0, D50 Lab: 100.0 0.0 0.0\n"
-    )
+    window.parse_txt("Result is XYZ: 95.0 100.0 105.0, D50 Lab: 100.0 0.0 0.0\n")
     assert window.measured == [0]  # not yet committed: only one reading so far
-    window.parse_txt(
-        "Result is XYZ: 95.05 100.0 105.05, D50 Lab: 100.0 0.0 0.0\n"
-    )
+    window.parse_txt("Result is XYZ: 95.05 100.0 105.05, D50 Lab: 100.0 0.0 0.0\n")
     assert window.measured == [0, 1]
     assert window.finished is True
     assert window.finish_btn.isEnabled() is True

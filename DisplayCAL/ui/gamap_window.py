@@ -59,15 +59,14 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from DisplayCAL import config
-from DisplayCAL import gamap_settings
+from DisplayCAL import config, gamap_settings
 from DisplayCAL import localization as lang
 from DisplayCAL.config import DEFAULTS, get_data_path, getcfg, setcfg
 from DisplayCAL.icc_profile import ICCProfile, ICCProfileInvalidError
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
-from DisplayCAL.ui import message_box
 from DisplayCAL.ui.measurement_report import _FileBrowse
 from DisplayCAL.util_list import natsort_key_factory
 

@@ -19,6 +19,5 @@ sys.path.insert(1, str(pydir))
 from _native_build.cli import setup  # noqa: E402
 from _native_build.templates import replace_placeholders  # noqa: E402, F401
 
-
 if __name__ == "__main__":
     setup()

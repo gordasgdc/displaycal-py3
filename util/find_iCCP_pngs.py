@@ -5,7 +5,7 @@ from PIL import Image
 
 
 def find_iCCP_pngs():
-    for (dirpath, _dirnames, filenames) in os.walk(
+    for dirpath, _dirnames, filenames in os.walk(
         os.path.join(os.path.dirname(__file__), "..", "DisplayCAL")
     ):
         for filename in filenames:

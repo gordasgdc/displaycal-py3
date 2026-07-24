@@ -10,7 +10,14 @@ sys.path.insert(
 )
 
 
-from DisplayCAL.meta import AUTHOR, DESCRIPTION, DOMAIN, NAME, VERSION_STRING, VERSION_TUPLE
+from DisplayCAL.meta import (
+    AUTHOR,
+    DESCRIPTION,
+    DOMAIN,
+    NAME,
+    VERSION_STRING,
+    VERSION_TUPLE,
+)
 
 
 def mktempver(

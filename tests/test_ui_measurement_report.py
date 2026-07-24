@@ -111,12 +111,16 @@ class TestConstruction:
 
     def test_fields_chooser_defaults(self, window):
         # Default is populated from the loaded chart (RGB-based reference).
-        items = [window.fields_ctrl.itemText(i) for i in range(window.fields_ctrl.count())]
+        items = [
+            window.fields_ctrl.itemText(i) for i in range(window.fields_ctrl.count())
+        ]
         assert items  # non-empty
         assert all(v in ("CMYK", "LAB", "RGB", "XYZ") for v in items)
 
     def test_trc_chooser_populated(self, window):
-        items = [window.mr_trc_ctrl.itemText(i) for i in range(window.mr_trc_ctrl.count())]
+        items = [
+            window.mr_trc_ctrl.itemText(i) for i in range(window.mr_trc_ctrl.count())
+        ]
         assert len(items) == 3
 
 
@@ -192,7 +196,9 @@ class TestSignals:
         window.chart_btn.click()
         assert received == [True]
 
-    def test_measure_button_reports_alt_modifier_as_self_check(self, window, monkeypatch):
+    def test_measure_button_reports_alt_modifier_as_self_check(
+        self, window, monkeypatch
+    ):
         from qtpy.QtCore import Qt
         from qtpy.QtWidgets import QApplication
 

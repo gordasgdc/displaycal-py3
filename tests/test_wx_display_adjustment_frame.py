@@ -1,11 +1,9 @@
 import pytest
 
 
-
 def setup_test():
     """Setup test environment."""
     from _thread import start_new_thread
-    from time import sleep
 
     class Subprocess:
         """Mock subprocess class to simulate sending commands."""
@@ -43,7 +41,9 @@ def setup_test():
     app.MainLoop()
 
 
-@pytest.mark.skip(reason="TODO: This test is moved from the module, properly implement it.")
+@pytest.mark.skip(
+    reason="TODO: This test is moved from the module, properly implement it."
+)
 def test_from_modules(bytes_=None):
     global i
     # 0 = dispcal -v -yl
@@ -277,7 +277,7 @@ White = XYZ 125.32 127.78 113.82
   Target black = x 0.3415, y 0.3483, Current = x 0.3386, y 0.3465, error =  1.55 DE
 
 Press 1 .. 7""",
-                r"""Doing check measurements
+            r"""Doing check measurements
 Black = XYZ   0.19   0.20   0.29
 Grey  = XYZ  26.98  27.68  24.97
 White = XYZ 125.00 127.56 113.99
@@ -290,7 +290,7 @@ White = XYZ 125.00 127.56 113.99
   Target black = x 0.3401, y 0.3540, Current = x 0.3372, y 0.3464, error =  4.48 DE
 
 Press 1 .. 7""",
-                r"""Doing check measurements
+            r"""Doing check measurements
 Black = XYZ   0.19   0.21   0.29
 Grey  = XYZ  23.56  24.14  21.83
 White = XYZ 124.87 130.00 112.27

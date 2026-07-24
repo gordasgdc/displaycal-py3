@@ -124,9 +124,7 @@ def test_reload_macos_videoluts_applies_profile_vcgt():
         return True
 
     with (
-        mock.patch(
-            "DisplayCAL.worker.get_macos_videolut_capacity", return_value=64
-        ),
+        mock.patch("DisplayCAL.worker.get_macos_videolut_capacity", return_value=64),
         mock.patch(
             "DisplayCAL.worker.get_macos_display_profile_data", return_value=None
         ),
@@ -150,9 +148,7 @@ def test_reload_macos_videoluts_falls_back_to_linear_without_vcgt():
         return True
 
     with (
-        mock.patch(
-            "DisplayCAL.worker.get_macos_videolut_capacity", return_value=4
-        ),
+        mock.patch("DisplayCAL.worker.get_macos_videolut_capacity", return_value=4),
         mock.patch(
             "DisplayCAL.worker.get_macos_display_profile_data", return_value=None
         ),
@@ -182,9 +178,7 @@ def test_reload_macos_videoluts_reports_set_failure():
     profile.tags = {}
     logged = []
     with (
-        mock.patch(
-            "DisplayCAL.worker.get_macos_videolut_capacity", return_value=4
-        ),
+        mock.patch("DisplayCAL.worker.get_macos_videolut_capacity", return_value=4),
         mock.patch(
             "DisplayCAL.worker.get_macos_display_profile_data", return_value=None
         ),
@@ -207,9 +201,7 @@ def test_reload_macos_videoluts_applies_all_displays_in_one_call():
         return True
 
     with (
-        mock.patch(
-            "DisplayCAL.worker.get_macos_videolut_capacity", return_value=4
-        ),
+        mock.patch("DisplayCAL.worker.get_macos_videolut_capacity", return_value=4),
         mock.patch(
             "DisplayCAL.worker.get_macos_display_profile_data", return_value=None
         ),

@@ -1,5 +1,3 @@
-import pytest
-
 from DisplayCAL import network
 
 
@@ -16,6 +14,7 @@ def test_get_network_addr():
 
 def test_dns_server_addr():
     assert network.DNS_SERVER_IP_ADDR == "8.8.8.8"
+
 
 def test_dns_server_port():
     assert network.DNS_SERVER_PORT == 53

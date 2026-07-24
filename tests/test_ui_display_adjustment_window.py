@@ -253,7 +253,9 @@ def test_space_key_starts_adjustment(window):
 
     keys = _sent(window)
     window.set_selection(1)
-    event = QKeyEvent(QKeyEvent.Type.KeyPress, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier, " ")
+    event = QKeyEvent(
+        QKeyEvent.Type.KeyPress, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier, " "
+    )
     window.keyPressEvent(event)
     assert keys == ["2"]
 
@@ -264,7 +266,9 @@ def test_digit_key_selects_page_and_starts(window):
 
     keys = _sent(window)
     # "3" -> page index 2 (luminance), not disabled in LCD mode.
-    event = QKeyEvent(QKeyEvent.Type.KeyPress, Qt.Key.Key_3, Qt.KeyboardModifier.NoModifier, "3")
+    event = QKeyEvent(
+        QKeyEvent.Type.KeyPress, Qt.Key.Key_3, Qt.KeyboardModifier.NoModifier, "3"
+    )
     window.keyPressEvent(event)
     assert window.current_page().ctrltype == "luminance"
     assert keys == ["3"]

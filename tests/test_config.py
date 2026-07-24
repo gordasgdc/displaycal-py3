@@ -1,15 +1,11 @@
-from enum import IntEnum
 import configparser
 import os
 import sys
-from unittest.mock import patch, MagicMock
-
+from unittest.mock import MagicMock, patch
 
 import pytest
-import sys
-import builtins
 
-import DisplayCAL.config as config
+from DisplayCAL import config
 
 
 def test_default_values_1():
@@ -19,15 +15,15 @@ def test_default_values_1():
     config.initcfg()
 
     assert config.configparser.DEFAULTSECT == "Default"
-    assert config.EXE == sys.executable  # venv/bin/python
-    assert config.EXEDIR == os.path.dirname(sys.executable)  # venv/bin
-    assert config.EXENAME == os.path.basename(sys.executable)  # python
+    assert sys.executable == config.EXE  # venv/bin/python
+    assert os.path.dirname(sys.executable) == config.EXEDIR  # venv/bin
+    assert os.path.basename(sys.executable) == config.EXENAME  # python
     assert config.ISEXE is False
     # $HOME/.local/bin/pycharm-{PYCHARMVERSION}/plugins/python/helpers/pycharm/_jb_pytest_runner.py
     assert config.PYFILE != ""
     # $HOME/.local/bin/pycharm-{PYCHARMVERSION}/plugins/python/helpers/pycharm/_jb_pytest_runner.py
     assert config.PYPATH != ""
-    assert config.ISAPP is False  #
+    assert config.ISAPP is False
     assert config.PYNAME != ""  # _jb_pytest_runner
     # assert config.pyext != ""  # .py  This is not valid when pytest runß directly
     # $HOME/Documents/development/displaycal/DisplayCAL
@@ -35,21 +31,21 @@ def test_default_values_1():
 
     if sys.platform == "linux":
         assert config.XDG_CONFIG_DIR_DEFAULT == "/etc/xdg"
-        assert config.XDG_CONFIG_HOME == os.path.expanduser("~/.config")
-        assert config.XDG_DATA_HOME == os.path.expanduser("~/.local/share")
-        assert config.XDG_DATA_HOME_DEFAULT == os.path.expanduser("~/.local/share")
+        assert os.path.expanduser("~/.config") == config.XDG_CONFIG_HOME
+        assert os.path.expanduser("~/.local/share") == config.XDG_DATA_HOME
+        assert os.path.expanduser("~/.local/share") == config.XDG_DATA_HOME_DEFAULT
 
     # skip the rest of the test for now
     return
 
-    assert config.XDG_DATA_DIRS == [
+    assert [
         "/usr/share/pop",
         os.path.expanduser("~/.local/share/flatpak/exports/share"),
         "/var/lib/flatpak/exports/share",
         "/usr/local/share",
         "/usr/share",
         "/var/lib",
-    ]
+    ] == config.XDG_DATA_DIRS
 
     from DisplayCAL.meta import VERSION_STRING
 
@@ -110,10 +106,11 @@ def test_default_values_1():
 
 # get_hidpi_scaling_factor
 @pytest.mark.parametrize(
-    "platform,expected", [
+    "platform,expected",
+    [
         ("darwin", 1.0),
         ("win32", 1.0),
-    ]
+    ],
 )
 def test_get_hidpi_scaling_factor_mac_win(monkeypatch, platform, expected):
     monkeypatch.setattr(sys, "platform", platform)
@@ -127,11 +124,15 @@ def test_get_hidpi_scaling_factor_xrdb(monkeypatch):
     monkeypatch.setattr("DisplayCAL.util_os.which", lambda name: name == "xrdb")
     # Patch get_default_dpi to return 96
     monkeypatch.setattr(config, "get_default_dpi", lambda: 96)
+
     # Patch subprocess.Popen to simulate xrdb output
     class DummyPopen:
-        def __init__(self, *a, **k): pass
+        def __init__(self, *a, **k):
+            pass
+
         def communicate(self):
             return (b"Xft.dpi:        192\n", b"")
+
     monkeypatch.setattr("subprocess.Popen", DummyPopen)
     assert config.get_hidpi_scaling_factor() == 2.0
 
@@ -141,10 +142,14 @@ def test_get_hidpi_scaling_factor_xrdb_invalid(monkeypatch):
     monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setattr("DisplayCAL.util_os.which", lambda name: name == "xrdb")
     monkeypatch.setattr(config, "get_default_dpi", lambda: 96)
+
     class DummyPopen:
-        def __init__(self, *a, **k): pass
+        def __init__(self, *a, **k):
+            pass
+
         def communicate(self):
             return (b"Xft.dpi:        notanumber\n", b"")
+
     monkeypatch.setattr("subprocess.Popen", DummyPopen)
     # Should fall through and return None
     assert config.get_hidpi_scaling_factor() is None
@@ -156,12 +161,16 @@ def test_get_hidpi_scaling_factor_kde(monkeypatch):
     monkeypatch.setattr("DisplayCAL.util_os.which", lambda name: False)
     monkeypatch.setenv("XDG_CURRENT_DESKTOP", "KDE")
     monkeypatch.setenv("QT_SCREEN_SCALE_FACTORS", "1.5;2.0")
+
     # Patch wx and real_display_size_mm to avoid wx dependency
     class DummyWx:
         @staticmethod
         def GetApp():
             return None
-    monkeypatch.setitem(sys.modules, "DisplayCAL.wx_addons", type("mod", (), {"wx": DummyWx}))
+
+    monkeypatch.setitem(
+        sys.modules, "DisplayCAL.wx_addons", type("mod", (), {"wx": DummyWx})
+    )
     # Should use first factor
     assert config.get_hidpi_scaling_factor() == 1.5
 
@@ -171,11 +180,15 @@ def test_get_hidpi_scaling_factor_gnome(monkeypatch):
     monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setattr("DisplayCAL.util_os.which", lambda name: name == "gsettings")
     monkeypatch.setenv("XDG_CURRENT_DESKTOP", "GNOME")
+
     # Patch subprocess.Popen to simulate gsettings output
     class DummyPopen:
-        def __init__(self, *a, **k): pass
+        def __init__(self, *a, **k):
+            pass
+
         def communicate(self):
             return (b"uint32 2", b"")
+
     monkeypatch.setattr("subprocess.Popen", DummyPopen)
     assert config.get_hidpi_scaling_factor() == 2.0
 
@@ -189,6 +202,7 @@ def test_get_hidpi_scaling_factor_none(monkeypatch):
 
 
 # getcfg debug_print fix (#698)
+
 
 def test_getcfg_no_debug_print_for_none_default(monkeypatch):
     """debug_print must not fire when the fallback default value is None."""
@@ -264,6 +278,7 @@ def test_getcfg_still_corrects_calibration_file():
 
 # initcfg combined "if not module" block (#698)
 
+
 def _make_ini(tmp_path: os.PathLike) -> None:
     """Write a minimal DisplayCAL.ini so fetch_config_files finds it."""
     ini = tmp_path / "DisplayCAL.ini"
@@ -329,6 +344,7 @@ def test_initcfg_module_skips_defaults(monkeypatch, tmp_path):
 
 
 # writecfg atomicity/locking and oversized-config quarantine (#828)
+
 
 def test_writecfg_writes_atomically_and_locks(monkeypatch, tmp_path):
     """writecfg() must write via a locked temp file + atomic replace."""
@@ -414,8 +430,7 @@ def test_initcfg_reads_ini_as_utf8(monkeypatch, tmp_path):
         assert mock_read.call_args.kwargs.get("encoding") == "utf-8"
 
     assert (
-        fresh_cfg.get(configparser.DEFAULTSECT, "last_cal_path", fallback=None)
-        == value
+        fresh_cfg.get(configparser.DEFAULTSECT, "last_cal_path", fallback=None) == value
     )
 
 
@@ -525,7 +540,4 @@ def test_restart_application_frozen_omits_script_arg(monkeypatch):
 
     config.restart_application()
 
-    assert calls == [
-        ("/Applications/DisplayCAL.app", ["/Applications/DisplayCAL.app"])
-    ]
-
+    assert calls == [("/Applications/DisplayCAL.app", ["/Applications/DisplayCAL.app"])]

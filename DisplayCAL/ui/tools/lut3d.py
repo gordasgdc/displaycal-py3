@@ -71,11 +71,11 @@ from DisplayCAL.icc_profile import (
     VideoCardGammaType,
 )
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import get_theme_pixmap
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
-from DisplayCAL.ui import message_box
 from DisplayCAL.util_decimal import stripzeros
 from DisplayCAL.util_os import waccess
 from DisplayCAL.worker import Worker, get_current_profile_path

@@ -26,7 +26,6 @@ from qtpy.QtCore import QObject, Qt, QThread, Signal
 from qtpy.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
-    QMessageBox,
     QPushButton,
     QWidget,
 )
@@ -34,11 +33,11 @@ from qtpy.QtWidgets import (
 from DisplayCAL import config, x3dom
 from DisplayCAL import localization as lang
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import message_box
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import get_theme_pixmap
 from DisplayCAL.ui.base_window import BaseWindow
 from DisplayCAL.ui.file_drop import FileDropTarget
-from DisplayCAL.ui import message_box
 from DisplayCAL.util_os import launch_file, make_win32_compatible_long_path, waccess
 
 #: Suffixes the converter accepts (lowercased), longest first matters for the
