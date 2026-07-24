@@ -1,4 +1,4 @@
-"""DisplayCAL setup.py script.
+"""DisplayCAL _setup.py script.
 
 Can be used with setuptools or pure distutils (the latter can be forced
 with the --use-distutils option, otherwise it will try to use setuptools
@@ -13,7 +13,7 @@ instead.
 
 IMPORTANT NOTE:
 If called from within the installed package, should only be used to
-uninstall (setup.py uninstall --record=INSTALLED_FILES). Otherwise, a
+uninstall (_setup.py uninstall --record=INSTALLED_FILES). Otherwise, a
 plain `pip install .`/`python -m build` in the root directory of the
 source tar.gz/zip already routes here through the thin root `setup.py`;
 for native-packaging/freeze commands (py2app, inno, ...) use
@@ -1377,8 +1377,8 @@ def _write_manifest_in(
     return False
 
 
-def setup() -> None:
-    """Setup function for DisplayCAL."""
+def main() -> None:
+    """Entry point that assembles `attrs` and runs the real distutils/setuptools setup()."""
     print("***", os.path.abspath(sys.argv[0]), " ".join(sys.argv[1:]))
 
     bdist_dumb = "bdist_dumb" in sys.argv[1:]
@@ -1662,4 +1662,4 @@ def setup() -> None:
 
 
 if __name__ == "__main__":
-    setup()
+    main()

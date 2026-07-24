@@ -1,7 +1,7 @@
 import os
 import pytest
 
-from DisplayCAL.setup import get_data
+from DisplayCAL._setup import get_data
 
 
 @pytest.mark.parametrize(
@@ -9,7 +9,7 @@ from DisplayCAL.setup import get_data
     [["DisplayCAL", "doc", None, None, ["LICENSE.txt"]]],
 )
 def test_get_data_returns_relative_paths(tgt_dir, key, pkgname, subkey, excludes):
-    """DisplayCAL.setup.get_data() returns relative paths."""
+    """DisplayCAL._setup.get_data() returns relative paths."""
     result = get_data(tgt_dir, key, pkgname, subkey, excludes)
     all_paths = []
     for r in result:

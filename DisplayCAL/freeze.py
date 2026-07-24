@@ -641,7 +641,7 @@ def build_py2exe() -> None:
     # `attrs` only carries the fields py2exe_kwargs (further below) actually
     # reads: name/version/classifiers/description/license/entry_points/
     # package_data/etc. all live in pyproject.toml's `[project]` table (see
-    # DisplayCAL/setup.py's own `attrs`), and were never passed to a real
+    # DisplayCAL/_setup.py's own `attrs`), and were never passed to a real
     # setup() call from here to begin with.
     attrs = {
         "data_files": data_files,

@@ -10,7 +10,7 @@ def generate(pydir: Path, lastmod_time) -> None:
         readme = f.read()
         changelog = meta.get_latest_changelog_entry(readme)
 
-    from DisplayCAL.setup import get_scripts
+    from DisplayCAL._setup import get_scripts
     from DisplayCAL import localization as lang
 
     scripts = get_scripts()
