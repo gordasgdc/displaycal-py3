@@ -168,10 +168,7 @@ class LUT16Type(ICCProfileTag):
         if [round(v * 32768) for v in bp] != [round(v * 32768) for v in bp_out]:
             D50 = colormath.get_whitepoint("D50")  # noqa: N806
 
-            # Deferred import: _mp_apply_black still lives in
-            # DisplayCAL.icc_profile pending its extraction into tonemap.py
-            # (item 9), which itself imports this module.
-            from DisplayCAL.icc_profile import _mp_apply_black
+            from DisplayCAL.icc_profile.tonemap import _mp_apply_black
             from DisplayCAL.multiprocess import pool_slice
 
             num_workers = 1 if len(self.clut[0]) < 33 else None
