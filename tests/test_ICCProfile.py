@@ -313,12 +313,12 @@ def test_iccprofile_missing_relative_path_searches_by_basename(monkeypatch, tmp_
     letter) it's not, so the search branch was entered there and passed
     the full path straight through as a glob pattern.
     """
-    from DisplayCAL import icc_profile
+    from DisplayCAL.icc_profile import profile as icc_profile_module
 
     search_dir = tmp_path / "profiles"
     search_dir.mkdir()
-    monkeypatch.setattr(icc_profile, "ICCPROFILES_HOME", [str(search_dir)])
-    monkeypatch.setattr(icc_profile, "ICCPROFILES", [])
+    monkeypatch.setattr(icc_profile_module, "ICCPROFILES_HOME", [str(search_dir)])
+    monkeypatch.setattr(icc_profile_module, "ICCPROFILES", [])
 
     calls = []
     real_glob = Path.glob
