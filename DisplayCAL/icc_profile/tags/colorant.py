@@ -20,6 +20,10 @@ from DisplayCAL.icc_profile.codecs import (
 from DisplayCAL.icc_profile.constants import COLORANTS, GEOMETRY, ILLUMINANTS, OBSERVERS
 from DisplayCAL.icc_profile.structures import ADict, AODict
 from DisplayCAL.icc_profile.tags.base import ICCProfileTag, XYZNumber
+from DisplayCAL.icc_profile.tags.text import (
+    MultiLocalizedUnicodeType,
+    TextDescriptionType,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -429,14 +433,6 @@ class ProfileSequenceDescType(ICCProfileTag, list):
         self.profile = profile
         if not tagData:
             return
-        # Deferred import: TextDescriptionType/MultiLocalizedUnicodeType still
-        # live in DisplayCAL.icc_profile pending their extraction into
-        # tags/text.py (item 5), which itself imports this module.
-        from DisplayCAL.icc_profile import (
-            MultiLocalizedUnicodeType,
-            TextDescriptionType,
-        )
-
         count = uInt32Number(tagData[8:12])
         desc_data = tagData[12:]
         while count:
@@ -480,12 +476,6 @@ class ProfileSequenceDescType(ICCProfileTag, list):
         Args:
             profile (ICCProfile): The ICC profile to add.
         """
-        # Deferred import, see the same import in __init__ above.
-        from DisplayCAL.icc_profile import (
-            MultiLocalizedUnicodeType,
-            TextDescriptionType,
-        )
-
         desc = {}
         desc.update(profile.device)
         desc["tech"] = profile.tags.get("tech", b"").ljust(4, b"\0")[:4]
