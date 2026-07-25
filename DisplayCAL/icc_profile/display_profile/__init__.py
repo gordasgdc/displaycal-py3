@@ -23,6 +23,16 @@ from DisplayCAL.icc_profile.display_profile.windows import (
 if TYPE_CHECKING:
     from DisplayCAL.icc_profile import ICCProfile
 
+__all__ = [
+    "_winreg_get_display_profiles",
+    "get_display_profile",
+    "get_display_profile_linux",
+    "get_display_profile_macos",
+    "get_display_profile_windows",
+    "set_display_profile",
+    "unset_display_profile",
+]
+
 
 def get_display_profile(
     display_no: int = 0,
