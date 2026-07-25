@@ -126,7 +126,6 @@ from DisplayCAL.icc_profile.codecs import (
     uInt16Number_tohex,
     uInt32Number,
     uInt32Number_tohex,
-    videoCardGamma,
 )
 from DisplayCAL.icc_profile.constants import (
     CIIS,
@@ -156,49 +155,45 @@ from DisplayCAL.icc_profile.structures import (
     DictList,
     DictListItem,
 )
-from DisplayCAL.icc_profile.tags.base import (
+from DisplayCAL.icc_profile.tags import (
+    TAG_SIGNATURE_TO_TAG,
+    TYPE_SIGNATURE_TO_TYPE,
     ChromaticAdaptionTag,
-    DateTimeType,
-    ICCProfileTag,
-    LazyLoadTagAODict,
-    S15Fixed16ArrayType,
-    TagData,
-    Text,
-    XYZNumber,
-    XYZType,
-)
-from DisplayCAL.icc_profile.tags.colorant import (
     ChromaticityType,
     Colorant,
     ColorantTableType,
+    CurveType,
+    DateTimeType,
+    DictType,
+    DictTypeJSONEncoder,
     Geometry,
+    ICCProfileTag,
     Illuminant,
+    LazyLoadTagAODict,
+    LUT16Type,
+    MakeAndModelType,
     MeasurementType,
-    Observer,
-    ProfileSequenceDescType,
-    ViewingConditionsType,
-)
-from DisplayCAL.icc_profile.tags.curve import CurveType, ParametricCurveType
-from DisplayCAL.icc_profile.tags.dict_type import DictType, DictTypeJSONEncoder
-from DisplayCAL.icc_profile.tags.lut import LUT16Type
-from DisplayCAL.icc_profile.tags.named_color import (
+    MultiLocalizedUnicodeType,
     NamedColor2Type,
     NamedColor2Value,
     NamedColor2ValueTuple,
-)
-from DisplayCAL.icc_profile.tags.text import (
-    MakeAndModelType,
-    MultiLocalizedUnicodeType,
+    Observer,
+    ParametricCurveType,
+    ProfileSequenceDescType,
+    S15Fixed16ArrayType,
     SignatureType,
+    TagData,
+    Text,
     TextDescriptionType,
     TextType,
-)
-from DisplayCAL.icc_profile.tags.video_card_gamma import (
     VideoCardGammaFormulaType,
     VideoCardGammaTableType,
     VideoCardGammaType,
+    ViewingConditionsType,
+    WcsProfilesTagType,
+    XYZNumber,
+    XYZType,
 )
-from DisplayCAL.icc_profile.tags.wcs import WcsProfilesTagType
 
 
 def create_RGB_A2B_XYZ(  # noqa: N802
@@ -2965,32 +2960,6 @@ def _mp_hdr_tonemap(
     elif its_hi:
         print("Max iterations", its_hi)
     return HDR_XYZ
-
-
-TAG_SIGNATURE_TO_TAG = {"arts": ChromaticAdaptionTag, "chad": ChromaticAdaptionTag}
-
-TYPE_SIGNATURE_TO_TYPE = {
-    b"chrm": ChromaticityType,
-    b"clrt": ColorantTableType,
-    b"curv": CurveType,
-    b"desc": TextDescriptionType,  # ICC v2
-    b"dict": DictType,  # ICC v2 + v4
-    b"dtim": DateTimeType,
-    b"meas": MeasurementType,
-    b"mluc": MultiLocalizedUnicodeType,  # ICC v4
-    b"mft2": LUT16Type,
-    b"mmod": MakeAndModelType,  # Apple private tag
-    b"ncl2": NamedColor2Type,
-    b"para": ParametricCurveType,
-    b"pseq": ProfileSequenceDescType,
-    b"sf32": S15Fixed16ArrayType,
-    b"sig ": SignatureType,
-    b"text": TextType,
-    b"vcgt": videoCardGamma,
-    b"view": ViewingConditionsType,
-    b"MS10": WcsProfilesTagType,
-    b"XYZ ": XYZType,
-}
 
 
 class ICCProfileInvalidError(IOError):
