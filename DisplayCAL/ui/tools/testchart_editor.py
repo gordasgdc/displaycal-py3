@@ -1660,7 +1660,7 @@ class TestchartEditorWindow(BaseWindow):
         data = self.ti1.queryv1("DATA")
         for row in sorted(rows, reverse=True):
             data.moveby1(row + 1, -1)
-            dict.pop(data, len(data) - 1)
+            del data[len(data) - 1]
         self.ti1.setmodified(True)
         self._populate_grid()
         self._select_row(min(rows))
