@@ -80,7 +80,9 @@ class EncodedWriter:
         """
         if self.data_encoding and not isinstance(data, str):
             data = data.decode(self.data_encoding, self.errors)
-        if self.file_encoding and isinstance(data, str):
+        if isinstance(data, (bytes, bytearray)):
+            data = data.decode(self.file_encoding or "utf-8", self.errors)
+        elif self.file_encoding:
             data = data.encode(self.file_encoding, self.errors).decode(
                 self.file_encoding, self.errors
             )
