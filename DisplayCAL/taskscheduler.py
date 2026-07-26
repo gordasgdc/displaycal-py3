@@ -755,15 +755,6 @@ class TaskScheduler:
         """
         return list(zip(self, self.tasks()))
 
-    def iteritems(self) -> Iterator[tuple[str, Task]]:
-        """Iterate over existing tasks and their names.
-
-        Returns:
-            Iterator[tuple[str, Task]]: An iterator over tuples containing task
-                names and their corresponding Task objects.
-        """
-        return zip(self, self.itertasks())
-
     def itertasks(self) -> Iterator[Task]:
         """Iterate over existing tasks.
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import TYPE_CHECKING, Any, TextIO
 
 from DisplayCAL.config import get_data_path
@@ -38,17 +39,38 @@ def unquote(string: str, raise_exception: bool = True) -> str:
     return string
 
 
-def escape(string: str) -> bytes:
+# Backslash-escape pairs used by YAML-style quoted scalars.
+# NOTE: "\\" must stay first so it's escaped/unescaped in a single pass
+# without colliding with the other two-char sequences below.
+_ESCAPES = {
+    "\\": "\\\\",
+    "'": "\\'",
+    '"': '\\"',
+    "\n": "\\n",
+    "\t": "\\t",
+    "\r": "\\r",
+    "\0": "\\0",
+    "\a": "\\a",
+    "\b": "\\b",
+    "\f": "\\f",
+    "\v": "\\v",
+}
+_UNESCAPES = {escaped: raw for raw, escaped in _ESCAPES.items()}
+_ESCAPE_RE = re.compile("|".join(re.escape(raw) for raw in _ESCAPES))
+_UNESCAPE_RE = re.compile("|".join(re.escape(escaped) for escaped in _UNESCAPES))
+
+
+def escape(string: str) -> str:
     """Backslash-escape special chars in string."""
     if isinstance(string, str):
-        string = string.encode("string_escape")
+        string = _ESCAPE_RE.sub(lambda m: _ESCAPES[m.group(0)], string)
     return string
 
 
-def unescape(string: bytes) -> str:
+def unescape(string: str) -> str:
     """Unescape escaped chars in string."""
-    if isinstance(string, bytes):
-        string = string.decode("string_escape")
+    if isinstance(string, str):
+        string = _UNESCAPE_RE.sub(lambda m: _UNESCAPES[m.group(0)], string)
     return string
 
 
@@ -79,19 +101,6 @@ class LazyDict(dict):
         self.path = path
         self.encoding = encoding
         self.errors = errors
-
-    def __cmp__(self, other: Any) -> bool:  # noqa: ANN401
-        """Compare the dictionary with another object.
-
-        Args:
-            other (Any): The object to compare with.
-
-        Returns:
-            bool: True if the dictionary is equal to the other object,
-                False otherwise.
-        """
-        self.load()
-        return super().__cmp__(other)
 
     def __contains__(self, key: Any) -> bool:  # noqa: ANN401
         """Check if the dictionary contains a key.
@@ -289,34 +298,6 @@ class LazyDict(dict):
         """
         self.load()
         return super().items()
-
-    def iteritems(self) -> Iterator:
-        """Return an iterator over the dictionary's items.
-
-        Returns:
-            Iterator: An iterator over the dictionary's items, where each item
-                is a tuple of (key, value).
-        """
-        self.load()
-        return super().items()
-
-    def iterkeys(self) -> Iterator:
-        """Return an iterator over the dictionary's keys.
-
-        Returns:
-            Iterator: An iterator over the dictionary's keys.
-        """
-        self.load()
-        return super().keys()
-
-    def itervalues(self) -> Iterator:
-        """Return an iterator over the dictionary's values.
-
-        Returns:
-            Iterator: An iterator over the dictionary's values.
-        """
-        self.load()
-        return super().values()
 
     def keys(self) -> Any:  # noqa: ANN401
         """Return a view of the dictionary's keys.

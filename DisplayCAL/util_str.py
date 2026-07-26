@@ -399,10 +399,7 @@ def make_filename_safe(unistr, encoding=fs_enc, substitute="_", concat=True):
     # substitution character '?'
     # NOTE that under Windows, encoding with the filesystem encoding may
     # substitute some characters even in "strict" replacement mode depending
-    # on the Windows language setting for non-Unicode programs! (Python 2.x
-    # under Windows supports Unicode by wrapping the win32 ASCII API, so it is
-    # a non-Unicode program from that point of view. This problem presumably
-    # doesn't exist with Python 3.x which uses the win32 Unicode API)
+    # on the Windows language setting for non-Unicode programs.
     if isinstance(unistr, str):
         # str
         unidec = unistr.encode(encoding, "replace").decode(encoding, "replace")
@@ -568,10 +565,10 @@ def replace_control_chars(txt, replacement=" ", collapse=False):
 
 
 def safe_basestring(obj, enc="utf-8", errors="replace"):
-    """Return a string or bytes representation of obj.
+    """Return a string representation of obj.
 
-    Return obj if isinstance(obj, basestring). Otherwise, return unicode(obj),
-    string(obj), or repr(obj), whichever succeeds first.
+    Return obj if isinstance(obj, str). Otherwise, return str(obj, enc, errors)
+    (for bytes) or repr(obj), whichever succeeds first.
     """
     if isinstance(obj, env_errors):
         # Possible variations of environment-type errors:
@@ -582,7 +579,7 @@ def safe_basestring(obj, enc="utf-8", errors="replace"):
         #   (created by EnvironmentError with two arguments)
         # - instance with just 'args' attribute
         #   (created by EnvironmentError with one or more than three arguments)
-        # - urllib2.URLError with empty 'args' attribute but 'reason' and
+        # - urllib.error.URLError with empty 'args' attribute but 'reason' and
         #   'filename' attributes
         # - pywintypes.error with 'funcname', 'message', 'strerror', 'winerror'
         #   and 'args' attributes

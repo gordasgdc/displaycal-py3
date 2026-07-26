@@ -179,6 +179,7 @@ from __future__ import annotations
 
 import locale
 import re
+from functools import total_ordering
 from math import ceil, floor
 
 import wx
@@ -1533,6 +1534,7 @@ DEFAULT_PRECISION = 2
 # This only has effect at compile-time.
 
 
+@total_ordering
 class FixedPoint:
     """Decimal arithmetic with a fixed number of digits after the decimal point.
 
@@ -1806,20 +1808,38 @@ class FixedPoint:
 
     __copy__ = __deepcopy__ = copy
 
-    def __cmp__(self, other: str | float | FixedPoint) -> int:
-        """Compare this :class:`FixedPoint` with `other`.
+    def __eq__(self, other: object) -> bool:
+        """Return whether this :class:`FixedPoint` equals `other`.
+
+        Args:
+            other (object): The other value to compare with.
+
+        Returns:
+            bool: True if this :class:`FixedPoint` equals `other`, False
+                otherwise.
+        """
+        if other is None:
+            return False
+        try:
+            xn, yn, _ = _norm(self, other)
+        except TypeError:
+            return NotImplemented
+        return xn == yn
+
+    def __lt__(self, other: str | float | FixedPoint) -> bool:
+        """Return whether this :class:`FixedPoint` is less than `other`.
 
         Args:
             other (str | float | FixedPoint): The other number to compare with.
 
         Returns:
-            int: -1 if this :class:`FixedPoint` is less than `other`, 0 if they are
-                equal, 1 if this :class:`FixedPoint` is greater than `other`.
+            bool: True if this :class:`FixedPoint` is less than `other`, False
+                otherwise.
         """
         if other is None:
-            return 1
-        xn, yn, p = _norm(self, other)
-        return cmp(xn, yn)
+            return False
+        xn, yn, _ = _norm(self, other)
+        return xn < yn
 
     def __hash__(self) -> int:
         """Return the hash of this :class:`FixedPoint`.
@@ -2015,28 +2035,20 @@ class FixedPoint:
         n, p = self.__reduce()
         return float(n) / float(10**p)
 
-    def __long__(self) -> int:
-        """Return the long portion of this :class:`FixedPoint`.
-
-        Returns:
-            int: The long portion of this :class:`FixedPoint.
-        """
-        # XXX should this round instead?
-        # XXX note e.g. long(-1.9) == -1L and long(1.9) == 1L in Python
-        # XXX note that __int__ inherits whatever __long__ does,
-        # XXX and .frac() is affected too
-        answer = abs(self.n) / (10**self.p)
-        if self.n < 0:
-            answer = -answer
-        return answer
-
     def __int__(self) -> int:
         """Return the integer portion of this :class:`FixedPoint`.
+
+        Note:
+            Truncates toward zero, and `.frac()` is affected too.
 
         Returns:
             int: The integer portion of this :class:`FixedPoint`.
         """
-        return int(self.__long__())
+        # XXX should this round instead?
+        answer = abs(self.n) // (10**self.p)
+        if self.n < 0:
+            answer = -answer
+        return answer
 
     def frac(self) -> FixedPoint:
         """Return fractional portion as a :class:`FixedPoint`.

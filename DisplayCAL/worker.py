@@ -9502,14 +9502,12 @@ BEGIN_DATA
                     # For CIELab cLUT, white- and black point will only
                     # fall on a cLUT point if uneven cLUT res
                     if i == clutres * (clutres // 2) + clutres // 2:
-                        # if raw_input("{:d} {!r}".format(i, RGB)):
                         RGB = 0, 0, 0
                     elif i == (
                         clutres**2 * (clutres - 1)
                         + clutres * (clutres // 2)
                         + clutres // 2
                     ):
-                        # if raw_input("{:d} {!r}".format(i, RGB)):
                         RGB = 1, 1, 1
                 itable.clut[-1].append([v * 65535 for v in RGB])
         if logfile:

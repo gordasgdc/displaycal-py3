@@ -2739,14 +2739,6 @@ def initcfg(
                 "\n".join(cfgfiles)
             )
         )
-        # Fix Python 2.7 ConfigParser option values being lists instead of
-        # strings in case of a ParsingError. http://bugs.python.org/issue24142
-        all_sections = [configparser.DEFAULTSECT]
-        all_sections.extend(cfg.sections())
-        for section in all_sections:
-            for name, val in cfg.items(section):
-                if isinstance(val, list):
-                    cfg.set(section, name, "\n".join(val))
     finally:
         if not module:
             if getcfg("lang", fallback=False, cfg=cfg) is None:
