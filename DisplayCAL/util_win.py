@@ -29,10 +29,6 @@ if TYPE_CHECKING:
     from _win32typing import PyDISPLAY_DEVICE
 
 
-if not hasattr(ctypes, "c_bool"):
-    # Python 2.5
-    ctypes.c_bool = ctypes.c_int
-
 if sys.getwindowsversion() >= (6,):
     LPDWORD = POINTER(DWORD)
     PROCESS_QUERY_LIMITED_INFORMATION = 0x1000

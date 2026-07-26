@@ -565,7 +565,6 @@ class SpawnUnix:
         self.delaybeforesend = 0.05  # Sets sleep time used just before sending data to child. Time in seconds.  # noqa: E501
         self.delayafterclose = 0.1  # Sets delay in close() method to allow kernel time to update process status. Time in seconds.  # noqa: E501
         self.delayafterterminate = 0.1  # Sets delay in terminate() method to allow kernel time to update process status. Time in seconds.  # noqa: E501
-        self.softspace = False  # File-like object.
         self.name = f"<{self!r}>"  # File-like object.
         self.encoding = None  # File-like object.
         self.closed = True  # File-like object.
@@ -1828,16 +1827,6 @@ class SpawnWindows(SpawnUnix):
         columns=None,
         rows=None,
     ):
-        # super(spawn_windows, self).__init__(
-        #     command=command,
-        #     args=args,
-        #     timeout=timeout,
-        #     maxread=maxread,
-        #     searchwindowsize=searchwindowsize,
-        #     logfile=logfile,
-        #     cwd=cwd,
-        #     env=env
-        # )
         self.stdin = sys.stdin
         self.stdout = sys.stdout
         self.stderr = sys.stderr
@@ -1865,7 +1854,6 @@ class SpawnWindows(SpawnUnix):
         self.delaybeforesend = 0.05  # Sets sleep time used just before sending data to child. Time in seconds.  # noqa: E501
         self.delayafterclose = 0.1  # Sets delay in close() method to allow kernel time to update process status. Time in seconds.  # noqa: E501
         self.delayafterterminate = 0.1  # Sets delay in terminate() method to allow kernel time to update process status. Time in seconds.  # noqa: E501
-        self.softspace = False  # File-like object.
         self.name = f"<{self!r}>"  # File-like object.
         self.encoding = None  # File-like object.
         self.closed = True  # File-like object.

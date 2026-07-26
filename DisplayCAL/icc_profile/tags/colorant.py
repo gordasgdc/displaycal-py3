@@ -149,25 +149,6 @@ class Colorant:
         """
         return list(zip(list(self.keys()), list(self.values())))
 
-    def iteritems(self) -> Iterator[tuple[str, Any]]:
-        """Return an iterator over the key-value pairs in the object.
-
-        Returns:
-            Iterator[tuple[str, Any]]: An iterator over the key-value pairs in
-                the object.
-        """
-        return zip(list(self.keys()), iter(self.values()))
-
-    iterkeys = __iter__
-
-    def itervalues(self) -> Iterator:
-        """Return an iterator over the values in the object.
-
-        Returns:
-            Iterator: An iterator over the values in the object.
-        """
-        return map(self.get, list(self.keys()))
-
     def keys(self) -> list[str]:
         """Return a list of keys in the object.
 
@@ -280,7 +261,7 @@ class Observer(ADict):
     """
 
     def __init__(self, bytes_data: bytes) -> None:
-        super(ADict, self).__init__()
+        super().__init__()
         self.type = uInt32Number(bytes_data)
         self.description = OBSERVERS[self.type]
 

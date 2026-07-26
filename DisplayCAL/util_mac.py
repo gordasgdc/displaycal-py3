@@ -1,5 +1,6 @@
 """macOS utility functions for AppleScript, system info, and Terminal settings."""
 
+import codecs
 import os
 import re
 import subprocess as sp
@@ -183,7 +184,7 @@ def get_machine_attributes(model_id=None):
         match = re.search(r'(\w+)\s*=\s*"?(.*?)"?\s*;', line.decode())
         if match:
             # Need to double unescape backslashes
-            attrs[match.group(1)] = (
-                match.group(2).decode("string_escape").decode("string_escape")
+            attrs[match.group(1)] = codecs.decode(
+                codecs.decode(match.group(2), "unicode_escape"), "unicode_escape"
             )
     return attrs

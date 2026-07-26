@@ -16,11 +16,6 @@ from DisplayCAL.encoding import get_encoding
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    if sys.version_info >= (3, 11):
-        from typing import Self
-    else:
-        from typing_extensions import Self
-
 
 _codecs = {}
 _stdio = {}
@@ -189,10 +184,7 @@ class EncodedStream:
             name (str): The name of the attribute to set.
             value (Any): The value to set the attribute to.
         """
-        if name == "softspace":
-            setattr(self.stream, name, value)
-        else:
-            object.__setattr__(self, name, value)
+        object.__setattr__(self, name, value)
 
     def __next__(self) -> str:
         """Read the next line from the stream.
@@ -242,14 +234,6 @@ class EncodedStream:
             conditional_decode(line, self.encoding, self.errors)
             for line in self.stream.readlines(size)
         ]
-
-    def xreadlines(self) -> Self:
-        """Return an iterator that reads lines from the stream.
-
-        Returns:
-            Iterator[str]: An iterator that yields lines from the stream.
-        """
-        return self
 
     def write(self, text: str) -> None:
         """Write text to the stream, encoding it if necessary.

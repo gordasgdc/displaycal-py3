@@ -5510,7 +5510,7 @@ class CustomCellEditor(wx.grid.PyGridCellEditor):
             f"CustomCellEditor.Show({show!r}, {attr!r}) was called. This should "
             "not happen, but is unlikely an issue."
         )
-        super(self.__class__, self).Show(show, attr)
+        super().Show(show, attr)
 
     def PaintBackground(self, dc, rect, attr=None):
         """Draw the part of the cell not occupied by the edit control.
@@ -5579,7 +5579,7 @@ class CustomCellEditor(wx.grid.PyGridCellEditor):
 
     def Destroy(self):
         """Do final cleanup."""
-        super(self.__class__, self).Destroy()
+        super().Destroy()
 
     def Clone(self):
         """Create a new object which is the copy of this one *Must Override*."""

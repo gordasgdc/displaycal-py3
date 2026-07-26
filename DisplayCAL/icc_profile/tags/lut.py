@@ -691,13 +691,6 @@ BEGIN_DATA
                         is_gray = x == y == clutres // 2
                     else:
                         is_gray = False
-                    # print(
-                    #     i, y, x,
-                    #     "{:d} {:d} {:d}".format(*(int(v / 655.35 * 2.55)
-                    #     for v in grid[y][x])),
-                    #     is_dark,
-                    #     raw_input(is_gray) if is_gray else "",
-                    # )
                     if is_dark or is_gray:
                         # Don't smooth dark colors and gray axis
                         continue

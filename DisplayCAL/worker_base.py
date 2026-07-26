@@ -234,13 +234,10 @@ def _mp_generate_B2A_clut(
                     # Apply TRC to XYZ values to distribute them optimally
                     # across cLUT grid points.
                     XYZ = [interp[i](v) for i, v in enumerate((d, e, f))]
-                    # print "%3.6f %3.6f %3.6f" % tuple(XYZ), '->',
                     # Scale into PCS
                     v = m2i * XYZ
                     if bpc and XYZbp != [0, 0, 0]:
                         v = colormath.blend_blackpoint(v[0], v[1], v[2], None, XYZbp)
-                    # print "%3.6f %3.6f %3.6f" % tuple(v)
-                    # raw_input()
                     if intent == "a":
                         v = colormath.adapt(
                             *[*v, XYZwp, list(profile.tags.wtpt.ir.values())]
@@ -335,22 +332,6 @@ class ThreadAbort:
             bool: True if the event is set, False otherwise.
         """
         return self.event.is_set()
-
-    def __cmp__(self, other):
-        """Compare the event state with another value.
-
-        Args:
-            other: The value to compare with.
-
-        Returns:
-            int: -1 if the event is set and other is not, 1 if the event is not
-                 set and other is, 0 if both are in the same state.
-        """
-        if self.event.is_set() < other:
-            return -1
-        if self.event.is_set() > other:
-            return 1
-        return 0
 
 
 class WorkerBase:
