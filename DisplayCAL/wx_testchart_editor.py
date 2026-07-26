@@ -4822,7 +4822,7 @@ END_DATA"""
                 if consecutive[0] != len(data) - 1:
                     data.moveby1(consecutive[-1] + len(consecutive), -len(consecutive))
                 for _ in consecutive:
-                    dict.pop(data, len(data) - 1)
+                    del data[len(data) - 1]
                 consecutive = []
             consecutive.append(row)
         rows.pop()

@@ -10,6 +10,7 @@ import io
 import math
 import os
 import re
+from collections.abc import Mapping, MutableMapping
 from pathlib import Path
 from typing import Any, BinaryIO, Callable
 
@@ -402,12 +403,12 @@ class CGATSValueError(CGATSError, ValueError):
     """CGATS value error."""
 
 
-class CGATS(dict):
+class CGATS(MutableMapping):
     """CGATS structure.
 
     CGATS files are treated mostly as 'soup', so only basic checking is in place.
 
-    TODO: Don't derive this from dict, but use a dict as a member variable.
+    Backed by a private ``_data`` dict rather than subclassing dict directly.
 
     Args:
         cgats (None | str | bytes | list | Path | io.IOBase | ICCProfileTag, optional):
@@ -443,6 +444,7 @@ class CGATS(dict):
         emit_keywords: bool = False,
         strict: bool = False,
     ) -> None:
+        object.__setattr__(self, "_data", {})
         super().__init__()
 
         self.normalize_fields = normalize_fields
@@ -723,8 +725,34 @@ class CGATS(dict):
         Args:
             name (str): The name of the item to delete.
         """
-        dict.__delitem__(self, name)
+        del self._data[name]
         self.setmodified()
+
+    def __iter__(self):
+        """Iterate over CGATS dictionary keys."""
+        return iter(self._data)
+
+    def __len__(self) -> int:
+        """Return the number of items in the CGATS dictionary."""
+        return len(self._data)
+
+    def __contains__(self, name: object) -> bool:
+        """Check whether ``name`` is a stored key in the CGATS dictionary."""
+        return name in self._data
+
+    def __eq__(self, other: object) -> bool:
+        """Compare raw stored data, matching the previous dict-subclass behavior.
+
+        Deliberately compares ``_data`` directly rather than using the default
+        ``Mapping.__eq__`` mixin, which would go through ``__getitem__`` (and
+        thus its ``SAMPLE_ID``/``INDEX`` recomputation) instead of comparing
+        literally-stored values.
+        """
+        if isinstance(other, CGATS):
+            return self._data == other._data
+        if isinstance(other, Mapping):
+            return self._data == dict(other)
+        return NotImplemented
 
     def __getattr__(self, name: str) -> Any:  # noqa: ANN401
         """Get attributes from CGATS dictionary.
@@ -782,10 +810,10 @@ class CGATS(dict):
             Any: The value of the item or the default value if not found.
         """
         if name == -1:
-            return dict.get(self, len(self) - 1, default)
+            return self._data.get(len(self) - 1, default)
         if name in ("NUMBER_OF_FIELDS", "NUMBER_OF_SETS"):
             return getattr(self, name, default)
-        return dict.get(self, name, default)
+        return self._data.get(name, default)
 
     def get_colorants(self) -> None | list:
         """Return colorants from CGATS file.
@@ -870,7 +898,7 @@ class CGATS(dict):
             name (str): The name of the attribute to set.
             value (Any): The value to set the attribute to.
         """
-        if name in ("_keys", "_lvl"):
+        if name in ("_keys", "_lvl", "_data"):
             object.__setattr__(self, name, value)
         elif name == "modified":
             self.setmodified(value)
@@ -900,7 +928,7 @@ class CGATS(dict):
             name (str): The name of the item to set.
             value (Any): The value to set for the item.
         """
-        dict.__setitem__(self, name, value)
+        self._data[name] = value
         self.setmodified()
 
     def setmodified(self, modified: bool = True) -> None:
@@ -1570,7 +1598,7 @@ class CGATS(dict):
         Raises:
             CGATSTypeError: If the data type is invalid.
         """
-        if not isinstance(data, (dict, list, tuple)):
+        if not isinstance(data, (Mapping, list, tuple)):
             raise CGATSTypeError(
                 f"Invalid data type for {self.type} (expected "
                 f"CGATS, dict, list or tuple, got {type(data)})"
@@ -1583,7 +1611,7 @@ class CGATS(dict):
                 self[var] = None
                 continue
 
-            if isinstance(data, dict):
+            if isinstance(data, Mapping):
                 if self.type in (b"DATA_FORMAT", b"KEYWORDS"):
                     key, value = len(self), data[var]
                 else:
@@ -1743,7 +1771,7 @@ class CGATS(dict):
         Returns:
             int: The key at which the data was added.
         """
-        if not isinstance(data, (dict, list, tuple)):
+        if not isinstance(data, (Mapping, list, tuple)):
             raise CGATSTypeError(
                 f"Invalid data type for {self.type} (expected CGATS, dict, list or "
                 f"tuple, got {type(data)})"
@@ -1786,7 +1814,7 @@ class CGATS(dict):
             CGATS: The updated CGATS instance with the added data.
         """
         for i, item in enumerate(list(self.parent["DATA_FORMAT"].values())):
-            if isinstance(data, dict):
+            if isinstance(data, Mapping):
                 try:
                     value = data[item.decode()]
                 except KeyError as e:
@@ -1962,12 +1990,12 @@ class CGATS(dict):
         # TODO: Simplify this method.
         modified = self.modified
         result = CGATS() if not get_first else None
-        if not isinstance(query, (dict, list, tuple)):
+        if not isinstance(query, (Mapping, list, tuple)):
             query = (query,)
 
         items = [self] + [self[key] for key in self]
         for item in items:
-            if not isinstance(item, (dict, list, tuple)):
+            if not isinstance(item, (Mapping, list, tuple)):
                 continue
             if not get_first:
                 n = len(result)
@@ -1983,7 +2011,7 @@ class CGATS(dict):
                 ):
                     current_query_value = (
                         query[query_key]
-                        if query_value is None and isinstance(query, dict)
+                        if query_value is None and isinstance(query, Mapping)
                         else query_value
                     )
                     if (
@@ -2006,7 +2034,7 @@ class CGATS(dict):
                             result_n[0]
                             if (
                                 get_value
-                                and isinstance(result_n, dict)
+                                and isinstance(result_n, Mapping)
                                 and len(result_n) == 1
                             )
                             else result_n
@@ -2017,7 +2045,7 @@ class CGATS(dict):
                             result_n[0]
                             if (
                                 get_value
-                                and isinstance(result_n, dict)
+                                and isinstance(result_n, Mapping)
                                 and len(result_n) == 1
                             )
                             else result_n
@@ -2111,7 +2139,7 @@ class CGATS(dict):
         if isinstance(key, int) and key != maxindex:
             self.moveby1(key + 1, -1)
         name = len(self) - 1
-        dict.pop(self, name)
+        self._data.pop(name, None)
         self.setmodified()
         return result
 
