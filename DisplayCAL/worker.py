@@ -4502,11 +4502,13 @@ END_DATA
         self.log(f"{APPNAME}: Instrument on screen")
         if not (
             isinstance(self.progress_wnd, (UntetheredFrame, DisplayUniformityFrame))
-            # Toolkit-neutral seam: the Qt untethered terminal proxy
-            # (DisplayCAL.ui.worker_runner._UntetheredTerminal) is not a real
-            # UntetheredFrame instance (no wx App to build one), so it marks
-            # itself with this duck-typed attribute instead.
+            # Toolkit-neutral seam: the Qt untethered/uniformity terminal
+            # proxies (DisplayCAL.ui.worker_runner._UntetheredTerminal /
+            # _UniformityTerminal) are not real UntetheredFrame /
+            # DisplayUniformityFrame instances (no wx App to build one), so
+            # they mark themselves with these duck-typed attributes instead.
             or getattr(self.progress_wnd, "is_untethered_terminal", False)
+            or getattr(self.progress_wnd, "is_uniformity_terminal", False)
         ):
             self.safe_send(" ")
             self.pauseable_now = True
@@ -14299,6 +14301,8 @@ BEGIN_DATA
                 if getcfg("measurement.play_sound") and (
                     hasattr(self.progress_wnd, "sound_on_off_btn")
                     or isinstance(self.progress_wnd, DisplayUniformityFrame)
+                    # See instrument_place_on_screen for this duck-typed seam.
+                    or getattr(self.progress_wnd, "is_uniformity_terminal", False)
                     or getattr(self.progress_wnd, "Name", None)
                     == "VisualWhitepointEditor"
                 ):
@@ -16140,7 +16144,8 @@ BEGIN_DATA
         Args:
             interactive_frame (str or wx.TopLevelWindow): Type of
                 interactive window, or a wx.TopLevelWindow instance for wx
-                callers. Qt callers pass "", "adjust" or "untethered".
+                callers. Qt callers pass "", "adjust", "untethered" or
+                "uniformity".
             pauseable (bool): Is the operation pauseable?
             cancelable (bool): Is the operation cancelable?
             show_remaining_time (bool): Show remaining time in the progress

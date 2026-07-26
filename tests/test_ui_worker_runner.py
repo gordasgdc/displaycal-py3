@@ -1186,3 +1186,225 @@ def test_untethered_controller_ignores_second_run_while_running(qapp):
     finally:
         block.set()
         assert _spin_until(qapp, lambda: ctrl.is_running is False)
+
+
+# --- _UniformityTerminal / UniformityController (issue #947) ----------------
+
+
+class _FakeUniformityWindow(QObject):
+    """Stand-in for the Qt ``UniformityWindow`` the driver marshals to."""
+
+    send_requested = Signal(str)
+    abort_requested = Signal()
+    closing = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.parsed = []
+        self.reset_calls = 0
+        self.shown = False
+        self.is_measuring = False
+
+    def parse_txt(self, txt):
+        self.parsed.append(txt)
+
+    def reset(self):
+        self.reset_calls += 1
+
+    def place(self):
+        pass
+
+    def show(self):
+        self.shown = True
+
+    def raise_(self):
+        pass
+
+    def hide(self):
+        self.shown = False
+
+    def isVisible(self):  # noqa: N802 - Qt name the terminal probes
+        return self.shown
+
+    def isActiveWindow(self):  # noqa: N802 - Qt name the terminal probes
+        return False
+
+
+class FakeUniformityWorker:
+    """Minimal worker exposing what ``UniformityController`` touches."""
+
+    def __init__(self, result=True, block=None):
+        self.sent = []
+        self.terminal = None
+        self.progress_wnd = None
+        self.thread = None
+        self._result = result
+        self._block = block
+        self.abort_calls = []
+        self.subprocess = object()
+        self.subprocess_abort = False
+        self.instrument_on_screen = True
+
+    def measure_uniformity_producer(self):
+        self.terminal.write("Setting up the instrument\n")
+        if self._block is not None:
+            self._block.wait()
+        return self._result
+
+    def safe_send(self, data):
+        self.sent.append(data)
+        return True
+
+    def abort_subprocess(self, confirm=False):
+        self.abort_calls.append(confirm)
+        if self._block is not None:
+            self._block.set()
+
+    def _init_run_state(self, **kwargs):
+        self.interactive_frame = kwargs.get("interactive_frame", "")
+        self.pauseable = kwargs.get("pauseable", False)
+        self.cancelable = kwargs.get("cancelable", True)
+        self.paused = False
+        self.subprocess_abort = False
+        self.thread_abort = False
+        self.abort_requested = False
+        self.finished = False
+        self.starttime = time.time()
+
+
+def test_uniformity_terminal_write_marshals_to_window(qapp):
+    window = _FakeUniformityWindow()
+    terminal = wr._UniformityTerminal(window)
+    terminal.write("hello")
+    assert window.parsed == ["hello"]
+    terminal.write("")
+    assert window.parsed == ["hello"]
+
+
+def test_uniformity_terminal_is_uniformity_terminal_marker(qapp):
+    window = _FakeUniformityWindow()
+    terminal = wr._UniformityTerminal(window)
+    assert terminal.is_uniformity_terminal is True
+
+
+def test_uniformity_terminal_pulse_returns_flags_without_touching_window(qapp):
+    # The wx DisplayUniformityFrame.Pulse() never shows the message either.
+    window = _FakeUniformityWindow()
+    terminal = wr._UniformityTerminal(window)
+    keep_going, skip = terminal.Pulse("please wait")
+    assert (keep_going, skip) == (True, False)
+    terminal.keepGoing = False
+    assert terminal.Pulse()[0] is False
+
+
+def test_uniformity_terminal_confirm_same_thread_shows_directly(qapp):
+    window = _FakeUniformityWindow()
+    terminal = wr._UniformityTerminal(window)
+    terminal._ask = lambda request: True
+    assert terminal.confirm("place instrument", "OK", "Cancel") is True
+
+
+def test_uniformity_controller_forwards_send_once_instrument_on_screen(qapp):
+    window = _FakeUniformityWindow()
+    worker = FakeUniformityWorker()
+    ctrl = wr.UniformityController(worker, window)
+    assert ctrl is not None
+    window.send_requested.emit(" ")
+    assert worker.sent == [" "]
+
+
+def test_uniformity_controller_waits_for_instrument_on_screen(qapp):
+    # Port of DisplayUniformityFrame.safe_send's retry guard: a send must not
+    # reach the worker until the instrument-placement prompt is confirmed.
+    window = _FakeUniformityWindow()
+    worker = FakeUniformityWorker()
+    worker.instrument_on_screen = False
+    ctrl = wr.UniformityController(worker, window)
+    window.send_requested.emit(" ")
+    assert worker.sent == []
+    assert ctrl._waiting_for_instrument is True
+    worker.instrument_on_screen = True
+    assert _spin_until(qapp, lambda: worker.sent == [" "])
+
+
+def test_uniformity_controller_forwards_abort_requested_to_worker(qapp):
+    window = _FakeUniformityWindow()
+    worker = FakeUniformityWorker()
+    ctrl = wr.UniformityController(worker, window)
+    assert ctrl is not None
+    window.abort_requested.emit()
+    assert worker.abort_calls == [False]
+
+
+def test_uniformity_controller_sets_interactive_state(qapp):
+    window = _FakeUniformityWindow()
+    block = Event()
+    worker = FakeUniformityWorker(block=block)
+    ctrl = wr.UniformityController(worker, window)
+    try:
+        ctrl.run(worker.measure_uniformity_producer)
+        assert worker.interactive is True
+        assert worker.interactive_frame == "uniformity"
+        assert worker.progress_wnd is not None
+        assert worker.thread is ctrl._thread
+        assert window.reset_calls == 1
+        assert window.shown is True
+    finally:
+        block.set()
+        assert _spin_until(qapp, lambda: ctrl.is_running is False)
+
+
+def test_uniformity_controller_run_calls_consumer_and_cleans_up(qapp):
+    window = _FakeUniformityWindow()
+    worker = FakeUniformityWorker(result=True)
+    ctrl = wr.UniformityController(worker, window)
+    got = []
+    ctrl.run(worker.measure_uniformity_producer, got.append)
+    assert _spin_until(qapp, lambda: got)
+    assert got == [True]
+    assert window.parsed == ["Setting up the instrument\n"]
+    assert worker.progress_wnd is None
+    assert worker.terminal is None
+    assert worker.thread is None
+    assert window.shown is False
+    assert ctrl.is_running is False
+
+
+def test_uniformity_controller_aborts_worker_when_window_closes(qapp):
+    window = _FakeUniformityWindow()
+    block = Event()
+    worker = FakeUniformityWorker(block=block)
+    ctrl = wr.UniformityController(worker, window)
+    ctrl.run(worker.measure_uniformity_producer)
+    assert ctrl.is_running is True
+
+    window.closing.emit()
+
+    assert worker.abort_calls == [False]
+    assert ctrl._terminal.keepGoing is False
+    assert _spin_until(qapp, lambda: ctrl.is_running is False)
+
+
+def test_uniformity_controller_closing_is_noop_when_not_running(qapp):
+    window = _FakeUniformityWindow()
+    worker = FakeUniformityWorker()
+    ctrl = wr.UniformityController(worker, window)
+
+    window.closing.emit()  # Nothing running yet; must not touch the worker.
+
+    assert worker.abort_calls == []
+
+
+def test_uniformity_controller_ignores_second_run_while_running(qapp):
+    window = _FakeUniformityWindow()
+    block = Event()
+    worker = FakeUniformityWorker(block=block)
+    ctrl = wr.UniformityController(worker, window)
+    try:
+        ctrl.run(worker.measure_uniformity_producer)
+        first_thread = ctrl._thread
+        ctrl.run(worker.measure_uniformity_producer)  # ignored while running
+        assert ctrl._thread is first_thread
+    finally:
+        block.set()
+        assert _spin_until(qapp, lambda: ctrl.is_running is False)

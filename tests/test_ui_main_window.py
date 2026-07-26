@@ -8272,7 +8272,9 @@ def test_report_uniformity_action_handler_cancelled_dialog_is_noop(window, monke
     monkeypatch.setattr(mw.QDialog, "exec_", lambda self: mw.QDialog.Rejected)
     controller_calls = []
     monkeypatch.setattr(
-        window, "_ensure_run_controller", lambda: controller_calls.append(True)
+        window,
+        "_ensure_uniformity_controller",
+        lambda rows, cols: controller_calls.append(True),
     )
     window._report_uniformity_action_handler()
     assert controller_calls == []
@@ -8288,13 +8290,15 @@ def test_report_uniformity_action_handler_confirmed_runs_measurement(
         def run(self, *a, **k):
             run_calls.append((a, k))
 
-    monkeypatch.setattr(window, "_ensure_run_controller", lambda: _FakeController())
+    monkeypatch.setattr(
+        window, "_ensure_uniformity_controller", lambda rows, cols: _FakeController()
+    )
     window._report_uniformity_action_handler()
     assert run_calls
     args, kwargs = run_calls[0]
     assert args[0] == window.worker.measure_uniformity_producer
     assert args[1] == window._on_uniformity_measurement_finished
-    assert kwargs["pauseable"] is True
+    assert kwargs == {}
     assert getcfg("uniformity.cols") in config.VALID_VALUES["uniformity.cols"]
     assert getcfg("uniformity.rows") in config.VALID_VALUES["uniformity.rows"]
 
