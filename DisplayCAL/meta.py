@@ -44,6 +44,11 @@ LONG_DESCRIPTION = (
 DOMAIN = "displaycal.net"
 DEVELOPMENT_HOME_PAGE = "https://github.com/eoyilmaz/displaycal-py3"
 GITHUB_API_URL = "https://api.github.com/repos/eoyilmaz/displaycal-py3"
+# ArgyllCMS publishes its own changelog; displaycal.net only ever mirrored an
+# old copy of it (last updated for V3.0.1), so fetch it straight from the
+# source instead of the stale local mirror.
+ARGYLL_CHANGELOG_DOMAIN = "www.argyllcms.com"
+ARGYLL_CHANGELOG_PATH = "doc/ChangesSummary.html"
 
 AUTHOR_EMAIL = ", ".join(
     [

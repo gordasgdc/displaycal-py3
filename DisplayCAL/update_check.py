@@ -42,6 +42,8 @@ import requests
 
 from DisplayCAL.argyll import get_argyll_latest_version
 from DisplayCAL.meta import (
+    ARGYLL_CHANGELOG_DOMAIN,
+    ARGYLL_CHANGELOG_PATH,
     DEVELOPMENT_HOME_PAGE,
     DOMAIN,
     GITHUB_API_URL,
@@ -223,7 +225,7 @@ def check_argyll_update(
         current_version=".".join(str(n) for n in current),
         new_version=latest_str,
         changelog_html=fetch_changelog_html(
-            DOMAIN, "Argyll/ChangesSummary.html", False
+            ARGYLL_CHANGELOG_DOMAIN, ARGYLL_CHANGELOG_PATH, False
         ),
         download_url=None,
         release_page_url=ARGYLL_HOME_PAGE,
