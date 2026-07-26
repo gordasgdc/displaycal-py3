@@ -272,11 +272,13 @@ from DisplayCAL.ui.tools.synth_profile import SynthICCWindow
 from DisplayCAL.ui.tools.testchart_editor import TestchartEditorWindow
 from DisplayCAL.ui.tools.visual_whitepoint_editor import VisualWhitepointEditorWindow
 from DisplayCAL.ui.tooltip_window import TooltipWindow, info_text_html
+from DisplayCAL.ui.uniformity_window import UniformityWindow
 from DisplayCAL.ui.untethered_window import UntetheredWindow
 from DisplayCAL.ui.update_check_window import UpdateCheckController
 from DisplayCAL.ui.worker_runner import (
     AdjustmentController,
     PasswordPromptAdapter,
+    UniformityController,
     UntetheredController,
     WorkerRunController,
 )
@@ -1262,6 +1264,12 @@ class MainWindow(BaseWindow):
         #: (see :meth:`_ensure_untethered_controller`).
         self._untethered_window: UntetheredWindow | None = None
         self._untethered_controller: UntetheredController | None = None
+        #: The uniformity-measurement grid window / driver. Unlike the other
+        #: controllers, these are rebuilt on every run (see
+        #: :meth:`_ensure_uniformity_controller`) since the grid's rows/cols
+        #: are chosen fresh each time via ``_UniformityLayoutDialog``.
+        self._uniformity_window: UniformityWindow | None = None
+        self._uniformity_controller: UniformityController | None = None
         #: The ``current_cal_choice()`` result for the pending ``PROFILE`` run,
         #: set by :meth:`profile_btn_handler` and consumed by
         #: :meth:`_run_profile_measurement`.
@@ -2678,32 +2686,39 @@ class MainWindow(BaseWindow):
         """Measure display device uniformity (Tools > Report menu).
 
         Port of ``measure_uniformity_handler``: confirms the patch layout via
-        :class:`_UniformityLayoutDialog`, then runs
-        ``Worker.measure_uniformity_producer`` through the shared
-        :class:`WorkerRunController`. The live per-patch grid visualization
-        wx shows during this measurement (``DisplayUniformityFrame``) is not
-        ported -- only the measurement itself and its post-run warnings.
+        :class:`_UniformityLayoutDialog`, then drives
+        ``Worker.measure_uniformity_producer`` through the interactive
+        :class:`~DisplayCAL.ui.worker_runner.UniformityController` and its
+        :class:`~DisplayCAL.ui.uniformity_window.UniformityWindow` grid (the
+        Qt port of wx's ``DisplayUniformityFrame``).
         """
         dialog = _UniformityLayoutDialog(self)
         if dialog.exec_() != QDialog.Accepted:
             return
-        setcfg("uniformity.cols", dialog.cols())
-        setcfg("uniformity.rows", dialog.rows())
-        controller = self._ensure_run_controller()
+        cols = dialog.cols()
+        rows = dialog.rows()
+        setcfg("uniformity.cols", cols)
+        setcfg("uniformity.rows", rows)
+        controller = self._ensure_uniformity_controller(rows, cols)
+        # Mirror wx's HideAll() before worker.start(): the grid fills the
+        # target display fullscreen, so the main window shouldn't stay on
+        # screen underneath it. Restored in
+        # _on_uniformity_measurement_finished via _restore_after_measurement.
+        self.hide()
         controller.run(
             self.worker.measure_uniformity_producer,
             self._on_uniformity_measurement_finished,
-            progress_msg=lang.getstr("report.uniformity"),
-            pauseable=True,
         )
 
     def _on_uniformity_measurement_finished(self, result: object) -> None:
         """Report the outcome of a uniformity measurement.
 
-        Mirrors wx's ``measure_uniformity_consumer``: shows an error on
-        failure, then (unless a dry run) surfaces any "spotread: Warning"
-        lines from ``self.worker.output``.
+        Mirrors wx's ``measure_uniformity_consumer``: restores the main
+        window (hidden behind the fullscreen grid while it ran), shows an
+        error on failure, then (unless a dry run) surfaces any "spotread:
+        Warning" lines from ``self.worker.output``.
         """
+        self._restore_after_measurement()
         if isinstance(result, Exception):
             message_box.critical(self, APPNAME, str(result))
             if getcfg("dry_run"):
@@ -9458,6 +9473,29 @@ class MainWindow(BaseWindow):
                 self.worker, self._untethered_window, self
             )
         return self._untethered_controller
+
+    def _ensure_uniformity_controller(self, rows: int, cols: int) -> UniformityController:
+        """(Re)build the uniformity grid window / driver for a fresh run.
+
+        Unlike the other controllers, this one is rebuilt on every call
+        rather than cached: the grid's row/column count is chosen fresh each
+        time via ``_UniformityLayoutDialog``, and wx's own
+        ``measure_uniformity_handler`` likewise destroys and reconstructs
+        ``DisplayUniformityFrame`` on every invocation rather than resizing an
+        existing one.
+
+        Args:
+            rows (int): Grid row count for this run.
+            cols (int): Grid column count for this run.
+        """
+        if self._uniformity_window is not None:
+            self._uniformity_window.close()
+            self._uniformity_window.deleteLater()
+        self._uniformity_window = UniformityWindow(self, rows=rows, cols=cols)
+        self._uniformity_controller = UniformityController(
+            self.worker, self._uniformity_window, self
+        )
+        return self._uniformity_controller
 
     def _run_measurement_via_worker(
         self,

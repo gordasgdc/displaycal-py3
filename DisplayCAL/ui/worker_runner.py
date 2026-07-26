@@ -1659,3 +1659,399 @@ class UntetheredController(QObject):
         if consumer is not None:
             consumer(result)
         self.finished.emit(result)
+
+
+class _UniformityTerminal(QObject):
+    """Thread-safe ``terminal`` + ``progress_wnd`` for the Qt uniformity grid.
+
+    Mirrors :class:`_UntetheredTerminal`, but for the display-uniformity
+    measurement grid (issue #947): ``Worker.measure_uniformity_producer`` runs
+    ``spotread`` interactively, streaming a per-swatch, per-brightness-level
+    prompt to ``worker.terminal`` and touching ``worker.progress_wnd`` (the
+    instrument-placement confirmation) from the producer thread. Both roles
+    are the one wx ``DisplayUniformityFrame``; under Qt the
+    :class:`~DisplayCAL.ui.uniformity_window.UniformityWindow` widget must
+    only be touched on the GUI thread, so this proxy stands in for both and
+    marshals every call onto the GUI thread through queued signals. It must
+    be created on the GUI thread so those deliveries queue.
+
+    Also carries :attr:`is_uniformity_terminal`, the duck-typed marker
+    ``Worker.instrument_place_on_screen`` and ``Worker.audio_visual_feedback``
+    check instead of ``isinstance(..., DisplayUniformityFrame)``, since this
+    proxy is not (and cannot be, with no running wx ``App``) a real instance
+    of the wx class.
+
+    Args:
+        window: The ``UniformityWindow`` to drive.
+        parent (QObject | None): Optional Qt parent.
+    """
+
+    _write = Signal(str)
+    _reset = Signal()
+    _show = Signal()
+    _confirm_requested = Signal(object)
+    _confirm3_requested = Signal(object)
+
+    #: Duck-typed marker; see the class docstring.
+    is_uniformity_terminal = True
+
+    def __init__(self, window: object, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._window = window
+        # Flags the worker thread reads/writes; plain attributes are fine.
+        self.keepGoing = True  # noqa: N815 - mirrors the wx attribute name
+        self.skip = False
+        self.dlg = None
+        self._write.connect(window.parse_txt)
+        self._reset.connect(window.reset)
+        self._show.connect(self._on_show)
+        self._confirm_requested.connect(self._on_confirm_requested)
+        self._confirm3_requested.connect(self._on_confirm3_requested)
+
+    # -- FilteredStream terminal (worker thread) ----------------------------
+
+    def write(self, txt: str) -> None:
+        """Render a ``spotread`` chunk on the GUI thread (worker thread call)."""
+        if txt:
+            self._write.emit(txt)
+
+    # -- wx progress_wnd interface (worker thread) --------------------------
+
+    @property
+    def is_measuring(self) -> bool:
+        """Whether the window is mid-measurement (read by the worker)."""
+        return bool(getattr(self._window, "is_measuring", False))
+
+    def Pulse(self, msg: str | None = None) -> tuple[bool, bool]:  # noqa: N802, ARG002
+        """Report the keep-going state (the wx frame's ``Pulse`` never shows
+        the message either -- see ``DisplayUniformityFrame.Pulse``).
+
+        Returns:
+            tuple[bool, bool]: ``(keepGoing, skip)``.
+        """
+        return self.keepGoing, self.skip
+
+    UpdatePulse = Pulse
+
+    def UpdateProgress(  # noqa: N802
+        self, value: float, msg: str | None = None  # noqa: ARG002
+    ) -> tuple[bool, bool]:
+        """Report the keep-going state (no visible progress in the grid).
+
+        Returns:
+            tuple[bool, bool]: ``(keepGoing, skip)``.
+        """
+        return self.keepGoing, self.skip
+
+    def Resume(self) -> None:  # noqa: N802
+        """Resume after a pause (clears the abort flag)."""
+        self.keepGoing = True
+
+    def reset(self) -> None:
+        """Reset the window to its pre-measurement state (GUI thread)."""
+        self.keepGoing = True
+        self._reset.emit()
+
+    def confirm(
+        self,
+        msg: str,
+        ok: str,
+        cancel: str,
+        icon: str = "dialog-information",
+    ) -> bool:
+        """Show a modal confirmation and block the worker thread for the answer.
+
+        Services ``Worker._prompt_confirm`` (e.g. the instrument on-screen
+        placement prompt), mirroring :meth:`ProgressAdapter.confirm`.
+
+        Args:
+            msg (str): The message to show.
+            ok (str): The confirm (accept) button label.
+            cancel (str): The cancel (reject) button label.
+            icon (str): The icon name (``"dialog-warning"`` for a warning).
+
+        Returns:
+            bool: True if the user confirmed, False if they cancelled.
+        """
+        request = _ConfirmRequest(msg, ok, cancel, icon)
+        if QThread.currentThread() is self.thread():
+            return self._ask(request)
+        self._confirm_requested.emit(request)
+        request.event.wait()
+        return request.result
+
+    def _on_confirm_requested(self, request: _ConfirmRequest) -> None:
+        """Show the confirm dialog on the GUI thread and release the worker."""
+        try:
+            request.result = self._ask(request)
+        finally:
+            request.event.set()
+
+    def _ask(self, request: _ConfirmRequest) -> bool:
+        """Show the actual Qt confirm dialog, parented to the window."""
+        from qtpy.QtWidgets import QMessageBox
+
+        box = QMessageBox(self._window)
+        box.setIcon(
+            QMessageBox.Icon.Warning
+            if request.icon == "dialog-warning"
+            else QMessageBox.Icon.Information
+        )
+        box.setText(request.msg)
+        ok_button = box.addButton(request.ok, QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(request.cancel, QMessageBox.ButtonRole.RejectRole)
+        message_box.exec_box(box)
+        return box.clickedButton() is ok_button
+
+    def confirm3(  # noqa: PLR0913
+        self,
+        msg: str,
+        retry: str,
+        alt: str,
+        cancel: str,
+        icon: str = "dialog-warning",
+    ) -> str:
+        """Show a modal three-button confirmation, blocking the worker thread.
+
+        Mirrors :meth:`ProgressAdapter.confirm3`.
+
+        Args:
+            msg (str): The message to show.
+            retry (str): The "retry" (primary) button label.
+            alt (str): The alternate-action button label.
+            cancel (str): The cancel button label.
+            icon (str): The icon name, ``"dialog-warning"`` for a warning else
+                an information icon.
+
+        Returns:
+            str: ``"retry"``, ``"alt"``, or ``"cancel"``.
+        """
+        request = _Confirm3Request(msg, retry, alt, cancel, icon)
+        if QThread.currentThread() is self.thread():
+            return self._ask3(request)
+        self._confirm3_requested.emit(request)
+        request.event.wait()
+        return request.result
+
+    def _on_confirm3_requested(self, request: _Confirm3Request) -> None:
+        """Show the three-button dialog on the GUI thread and release the worker."""
+        try:
+            request.result = self._ask3(request)
+        finally:
+            request.event.set()
+
+    def _ask3(self, request: _Confirm3Request) -> str:
+        """Show the actual Qt three-button dialog, parented to the window."""
+        from qtpy.QtWidgets import QMessageBox
+
+        box = QMessageBox(self._window)
+        box.setIcon(
+            QMessageBox.Icon.Warning
+            if request.icon == "dialog-warning"
+            else QMessageBox.Icon.Information
+        )
+        box.setText(request.msg)
+        retry_button = box.addButton(request.retry, QMessageBox.ButtonRole.AcceptRole)
+        alt_button = box.addButton(request.alt, QMessageBox.ButtonRole.ActionRole)
+        box.addButton(request.cancel, QMessageBox.ButtonRole.RejectRole)
+        message_box.exec_box(box)
+        clicked = box.clickedButton()
+        if clicked is retry_button:
+            return "retry"
+        if clicked is alt_button:
+            return "alt"
+        return "cancel"
+
+    def _on_show(self) -> None:
+        """Show / raise the window on the GUI thread.
+
+        Deliberately a plain ``show()``, not ``showFullScreen()``: see
+        ``UniformityWindow.place()`` for why.
+        """
+        self._window.place()
+        self._window.show()
+        self._window.raise_()
+
+    # The worker probes these for visibility / layout; safe no-ops / answers.
+    def Show(self, show: bool = True) -> None:  # noqa: N802, FBT001, FBT002
+        """Show the window (marshalled to the GUI thread)."""
+        if show:
+            self._show.emit()
+
+    def Hide(self) -> None:  # noqa: N802
+        """No-op: the controller hides the window on completion."""
+
+    def Layout(self) -> None:  # noqa: N802
+        """No-op: Qt lays out automatically."""
+
+    def start_timer(self, ms: int = 50) -> None:
+        """No-op: the window is fed by the worker's output stream directly."""
+
+    def stop_timer(self, immediate: bool = True) -> None:  # noqa: FBT001, FBT002
+        """No-op: there is no poll timer for the interactive path."""
+
+    def IsShownOnScreen(self) -> bool:  # noqa: N802
+        """Report whether the window is visible."""
+        return bool(self._window.isVisible())
+
+    def IsShown(self) -> bool:  # noqa: N802
+        """Report whether the window is visible."""
+        return bool(self._window.isVisible())
+
+    def IsActive(self) -> bool:  # noqa: N802
+        """Report whether the window is the active window."""
+        return bool(self._window.isActiveWindow())
+
+    def Raise(self) -> None:  # noqa: N802
+        """No-op: raising is handled on show."""
+
+
+class UniformityController(QObject):
+    """Drive an interactive display-uniformity measurement under Qt.
+
+    The uniformity counterpart to :class:`UntetheredController`: it runs
+    ``worker.measure_uniformity_producer`` (``spotread``) on a
+    :class:`_ProducerThread` with the Qt
+    :class:`~DisplayCAL.ui.uniformity_window.UniformityWindow` as the worker's
+    ``terminal`` / ``progress_wnd`` (through the thread-safe
+    :class:`_UniformityTerminal`), and wires the window's ``send_requested``
+    keys back to ``worker.safe_send`` and its ``abort_requested`` to
+    ``worker.abort_subprocess``. This is the Qt replacement for the
+    ``interactive_frame="uniformity"`` branch of ``Worker.start()``.
+
+    Args:
+        worker (Worker): The worker whose measurement producer will run.
+        window: The ``UniformityWindow`` to drive.
+        parent (QObject | None): Optional Qt parent.
+    """
+
+    #: Emitted with the producer's result after the consumer has run.
+    finished = Signal(object)
+
+    def __init__(
+        self, worker: Worker, window: object, parent: QObject | None = None
+    ) -> None:
+        super().__init__(parent)
+        self._worker = worker
+        self._window = window
+        self._terminal: _UniformityTerminal | None = None
+        self._thread: _ProducerThread | None = None
+        self._consumer: Callable | None = None
+        self._waiting_for_instrument = False
+        window.send_requested.connect(self._on_send)
+        window.abort_requested.connect(self._on_abort_requested)
+        window.closing.connect(self._on_window_closing)
+
+    @property
+    def is_running(self) -> bool:
+        """Whether a measurement producer thread is currently running."""
+        return self._thread is not None and self._thread.isRunning()
+
+    def run(
+        self,
+        producer: Callable,
+        consumer: Callable | None = None,
+        *,
+        wargs: tuple = (),
+        wkwargs: dict | None = None,
+    ) -> None:
+        """Start the interactive uniformity measurement.
+
+        Args:
+            producer (Callable): The worker measurement method to run off the
+                GUI thread (``worker.measure_uniformity_producer``).
+            consumer (Callable | None): Called on the GUI thread with the
+                producer result when the measurement finishes.
+            wargs (tuple): Positional arguments for the producer.
+            wkwargs (dict | None): Keyword arguments for the producer.
+        """
+        if self.is_running:
+            return
+        self._prepare_worker()
+        self._terminal = _UniformityTerminal(self._window)
+        self._worker.terminal = self._terminal
+        self._worker.progress_wnd = self._terminal
+        self._consumer = consumer
+        self._waiting_for_instrument = False
+
+        self._window.reset()
+        self._window.place()
+        # Deliberately a plain show(), not showFullScreen(): see
+        # UniformityWindow.place() for why.
+        self._window.show()
+
+        self._thread = _ProducerThread(producer, wargs, wkwargs or {}, parent=self)
+        # exec_cmd() only wires the interactive terminal into the output
+        # stream (and thus into parse(), which answers spotread's per-swatch
+        # prompts) when hasattr(worker, "thread") and worker.thread.is_alive()
+        # - so this has to stand in for worker.thread here exactly like
+        # UntetheredController does for its interactive path.
+        self._worker.thread = self._thread
+        self._thread.finished_with_result.connect(self._on_finished)
+        self._thread.start()
+
+    def _prepare_worker(self) -> None:
+        """Set the interactive worker state ``Worker.start()`` would set."""
+        worker = self._worker
+        worker.interactive = True
+        worker._init_run_state(  # noqa: SLF001 - cooperating class
+            interactive_frame="uniformity", pauseable=False, cancelable=True
+        )
+
+    def _on_send(self, key: str) -> None:
+        """Forward a key requested by the window to the ``spotread`` subprocess.
+
+        Port of ``DisplayUniformityFrame.safe_send``: waits for
+        ``worker.instrument_on_screen`` (set once the instrument-placement
+        prompt is confirmed) before actually forwarding, retrying every
+        200 ms in the meantime, since the grid's very first swatch click can
+        race that confirmation.
+        """
+        worker = self._worker
+        if not (getattr(worker, "subprocess", None) and not worker.subprocess_abort):
+            return
+        if not worker.instrument_on_screen:
+            self._waiting_for_instrument = True
+            QTimer.singleShot(200, lambda: self._on_send(key))
+            return
+        self._waiting_for_instrument = False
+        with contextlib.suppress(Exception):
+            worker.safe_send(key)
+
+    def _on_abort_requested(self) -> None:
+        """Abort the running ``spotread`` (the window's Escape/"Q" key binding)."""
+        with contextlib.suppress(Exception):
+            self._worker.abort_subprocess()
+
+    def _on_window_closing(self) -> None:
+        """Abort a still-running ``spotread`` when the window closes.
+
+        Closing the window otherwise leaves the producer thread blocked on
+        the subprocess forever: nothing is left to answer its prompts, so the
+        process stays up and the main window never comes back. Mirrors
+        :meth:`UntetheredController._on_window_closing`.
+        """
+        if not self.is_running:
+            return
+        if self._terminal is not None:
+            self._terminal.keepGoing = False
+        with contextlib.suppress(Exception):
+            self._worker.abort_subprocess(False)
+
+    def _on_finished(self, result: object) -> None:
+        """Handle measurement completion on the GUI thread."""
+        self._window.hide()
+        self._worker.progress_wnd = None
+        self._worker.terminal = None
+        if self._thread is not None:
+            # run() has returned by the time this queued slot fires; wait()
+            # returns immediately and avoids a "destroyed while running" warning.
+            self._thread.wait()
+        self._worker.thread = None
+        consumer = self._consumer
+        self._consumer = None
+        self._terminal = None
+        self._thread = None
+        if consumer is not None:
+            consumer(result)
+        self.finished.emit(result)
