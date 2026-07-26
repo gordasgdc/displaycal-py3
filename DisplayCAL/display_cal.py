@@ -168,6 +168,8 @@ from DisplayCAL.icc_profile import (
 )
 from DisplayCAL.log import LOGBUFFER
 from DisplayCAL.meta import (
+    ARGYLL_CHANGELOG_DOMAIN,
+    ARGYLL_CHANGELOG_PATH,
     AUTHOR,
     DEVELOPMENT_HOME_PAGE,
     DOMAIN,
@@ -455,6 +457,7 @@ def app_update_check(
         argyll (bool, optional): If True, check for ArgyllCMS update.
     """
     global APP_IS_UP_TO_DATE
+    chglog_domain = DOMAIN
     if argyll:
         if TEST_UPDATE:
             argyll_version = [0, 0, 0]
@@ -463,7 +466,8 @@ def app_update_check(
         else:
             argyll_version = intlist(getcfg("argyll.version").split("."))
         curversion_tuple = tuple(argyll_version)
-        chglog_file = "Argyll/ChangesSummary.html"
+        chglog_domain = ARGYLL_CHANGELOG_DOMAIN
+        chglog_file = ARGYLL_CHANGELOG_PATH
         # Fetch the latest ArgyllCMS version from argyllcms.com
         latest_argyll_str = get_argyll_latest_version()
         try:
@@ -544,7 +548,9 @@ def app_update_check(
         APP_IS_UP_TO_DATE = new_version_tuple <= curversion_tuple
     if new_version_tuple > curversion_tuple:
         # Get changelog
-        resp = http_request(parent, DOMAIN, "GET", "/" + chglog_file, silent=True)
+        resp = http_request(
+            parent, chglog_domain, "GET", "/" + chglog_file, silent=True
+        )
         chglog = None
         if resp:
             readme = str(resp.read())
@@ -569,7 +575,7 @@ def app_update_check(
                 )
                 chglog = re.sub(
                     re.compile(r'href="(#[^"]+)"', flags=re.I),
-                    rf'href="https://{DOMAIN}/\1"',
+                    rf'href="https://{chglog_domain}/\1"',
                     chglog,
                 )
 
