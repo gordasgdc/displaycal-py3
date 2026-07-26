@@ -10,7 +10,7 @@ from unittest import mock
 
 import pytest
 
-from DisplayCAL import icc_profile as _icc
+from DisplayCAL.icc_profile.display_profile import windows as _icc
 
 # ---------------------------------------------------------------------------
 # Helpers
