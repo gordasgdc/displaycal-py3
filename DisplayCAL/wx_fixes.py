@@ -20,16 +20,6 @@ if os.getenv("GTK_CSD", "0") != "0":
     # https://hub.displaycal.net/issue/17331/
     os.environ["GTK_CSD"] = "0"
 
-# wx_version will be removed in Phoenix
-try:
-    from DisplayCAL import wx_version
-except ImportError:
-    pass
-else:
-    if not getattr(sys, "frozen", False) and "wx" not in sys.modules:
-        with contextlib.suppress(wx_version.VersionError):
-            wx_version.select(["4.0", "3.0", "{}.{}.{}".format(*WX_MINVERSION[:3])])
-
 import wx
 
 if wx.VERSION < WX_MINVERSION:  # noqa: SIM300
