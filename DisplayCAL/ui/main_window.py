@@ -3325,9 +3325,30 @@ class MainWindow(BaseWindow):
         for update in self._themed_icon_updaters:
             update()
 
+    def _repolish_styled_widgets(self) -> None:
+        """Force every widget with its own stylesheet to re-read the palette.
+
+        Qt's QSS engine resolves any style property a widget's stylesheet
+        doesn't set explicitly (e.g. text colour, left to the default
+        ``QToolButton``/``QGroupBox`` rendering) from the palette once, at
+        that widget's first polish, and caches it -- it does not re-read the
+        palette on a later ``QApplication.setPalette()`` call the way a plain
+        widget with no stylesheet does. Without this, tab-bar button labels
+        and group-box titles (``_TAB_BUTTON_STYLE``/``_FLAT_GROUPBOX_STYLE``/
+        ``_ACTION_BUTTON_STYLE``) stay rendered in whichever scheme's text
+        colour was active when they were built, becoming unreadable against
+        the new scheme's background after a live OS theme switch.
+        """
+        for widget in self.findChildren(QWidget):
+            if widget.styleSheet():
+                widget.style().unpolish(widget)
+                widget.style().polish(widget)
+                widget.update()
+
     def changeEvent(self, event: QEvent) -> None:  # noqa: D102 (Qt override)
         if event.type() in (QEvent.PaletteChange, QEvent.ApplicationPaletteChange):
             self._refresh_themed_icons()
+            self._repolish_styled_widgets()
         super().changeEvent(event)
 
     @classmethod
