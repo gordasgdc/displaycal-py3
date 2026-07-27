@@ -128,6 +128,14 @@ def _is_grayscale(pixmap: QPixmap) -> bool:
     return True
 
 
+#: Icons that are grayscale (so they'd otherwise pass :func:`_is_grayscale`)
+#: but whose color *is* their meaning rather than an incidental glyph shade,
+#: e.g. the white-level/black-level "Measure" buttons' swatch icons. Auto-
+#: inverting these for dark mode would flatten the black swatch to light
+#: gray, making it look like the white-level button instead.
+_NEVER_RECOLOR = {"palette-white", "palette-black"}
+
+
 def get_themed_pixmap(size: int, name: str, dark: bool) -> QPixmap:
     """Return ``name`` recolored for the current theme, mirroring wx.
 
@@ -135,7 +143,9 @@ def get_themed_pixmap(size: int, name: str, dark: bool) -> QPixmap:
     ``web``, ``stock_refresh``, ...) to a light color when the app background
     is dark, since the plain PNGs are gray glyphs designed for a light
     background and are nearly invisible on the dark scheme; multi-color icons
-    (like the tab glyphs) are left untouched either way, same as wx.
+    (like the tab glyphs) are left untouched either way, same as wx. Icons in
+    :data:`_NEVER_RECOLOR` are also left untouched despite being grayscale,
+    since their color is semantic rather than a legibility-only glyph shade.
 
     Args:
         size (int): Square icon size (see :func:`get_theme_pixmap`).
@@ -148,7 +158,12 @@ def get_themed_pixmap(size: int, name: str, dark: bool) -> QPixmap:
         asset is missing.
     """
     pixmap = get_theme_pixmap(size, name)
-    if pixmap.isNull() or not dark or not _is_grayscale(pixmap):
+    if (
+        pixmap.isNull()
+        or not dark
+        or name in _NEVER_RECOLOR
+        or not _is_grayscale(pixmap)
+    ):
         return pixmap
     tinted = QPixmap(pixmap.size())
     tinted.setDevicePixelRatio(pixmap.devicePixelRatio())
