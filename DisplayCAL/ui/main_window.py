@@ -3428,15 +3428,21 @@ class MainWindow(BaseWindow):
         "}"
     )
 
-    #: ``_build_info_panel``'s ``panel`` carries its own stylesheet (its
-    #: top-border separator), which forces every descendant -- including an
-    #: ``extra`` ``QToolButton`` like ``display_tech_info_show_btn`` -- through
-    #: Qt's CSS style engine. Without its own rule such a button falls back to
-    #: the CSS engine's default bevelled ``QToolButton`` chrome (a visible
-    #: box) instead of the flat, borderless look a plain ``autoRaise`` button
-    #: gets from the native style. Unlike ``_HEADER_TOOL_BUTTON_STYLE`` these
-    #: buttons sit on the ordinary themed background rather than a fixed dark
-    #: banner, so use a theme-neutral gray hover/press tint instead of white.
+    #: Plain ``autoRaise`` icon buttons that live inside a container carrying
+    #: its own stylesheet -- ``_build_info_panel``'s top-border separator,
+    #: ``_FLAT_GROUPBOX_STYLE`` on the Display/Instrument ``QGroupBox``es --
+    #: fall back to the CSS engine's default bevelled ``QToolButton`` chrome
+    #: (a visible box) instead of the flat, borderless look a plain
+    #: ``autoRaise`` button gets from the native style, because any
+    #: stylesheet on an ancestor forces every descendant through Qt's CSS
+    #: style engine, not just the ones a selector targets. Covers
+    #: ``display_tech_info_show_btn``, ``detect_displays_and_ports_btn`` and
+    #: the four ``colorimeter_correction_*_btn``s. Unlike
+    #: ``_HEADER_TOOL_BUTTON_STYLE`` these buttons sit on the ordinary themed
+    #: background rather than a fixed dark banner, so use a theme-neutral
+    #: gray hover/press tint instead of white -- and set it unconditionally
+    #: rather than relying on native hover feedback, since the forced CSS
+    #: engine rendering doesn't reliably repaint a hover state either.
     _FLAT_TOOL_BUTTON_STYLE = (
         "QToolButton {"
         " border: none;"
@@ -3617,6 +3623,7 @@ class MainWindow(BaseWindow):
 
         self.detect_displays_and_ports_btn = QToolButton()
         self.detect_displays_and_ports_btn.setAutoRaise(True)
+        self.detect_displays_and_ports_btn.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
         self.detect_displays_and_ports_btn.setToolTip(
             lang.getstr("detect_displays_and_ports")
         )
@@ -3797,6 +3804,7 @@ class MainWindow(BaseWindow):
         ccmx_row.addWidget(self.colorimeter_correction_matrix_ctrl, 1)
         self.colorimeter_correction_info_btn = QToolButton()
         self.colorimeter_correction_info_btn.setAutoRaise(True)
+        self.colorimeter_correction_info_btn.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
         self.colorimeter_correction_info_btn.setToolTip(
             lang.getstr("colorimeter_correction.info")
         )
@@ -3807,6 +3815,7 @@ class MainWindow(BaseWindow):
         ccmx_row.addWidget(self.colorimeter_correction_info_btn)
         self.colorimeter_correction_matrix_btn = QToolButton()
         self.colorimeter_correction_matrix_btn.setAutoRaise(True)
+        self.colorimeter_correction_matrix_btn.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
         self.colorimeter_correction_matrix_btn.setToolTip(
             lang.getstr("colorimeter_correction_matrix_file.choose")
         )
@@ -3817,6 +3826,7 @@ class MainWindow(BaseWindow):
         ccmx_row.addWidget(self.colorimeter_correction_matrix_btn)
         self.colorimeter_correction_web_btn = QToolButton()
         self.colorimeter_correction_web_btn.setAutoRaise(True)
+        self.colorimeter_correction_web_btn.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
         self.colorimeter_correction_web_btn.setToolTip(
             lang.getstr("colorimeter_correction.web_check")
         )
@@ -3827,6 +3837,7 @@ class MainWindow(BaseWindow):
         ccmx_row.addWidget(self.colorimeter_correction_web_btn)
         self.colorimeter_correction_create_btn = QToolButton()
         self.colorimeter_correction_create_btn.setAutoRaise(True)
+        self.colorimeter_correction_create_btn.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
         self.colorimeter_correction_create_btn.setToolTip(
             lang.getstr("colorimeter_correction.create")
         )
