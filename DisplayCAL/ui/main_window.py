@@ -3436,8 +3436,11 @@ class MainWindow(BaseWindow):
     #: ``autoRaise`` button gets from the native style, because any
     #: stylesheet on an ancestor forces every descendant through Qt's CSS
     #: style engine, not just the ones a selector targets. Covers
-    #: ``display_tech_info_show_btn``, ``detect_displays_and_ports_btn`` and
-    #: the four ``colorimeter_correction_*_btn``s. Unlike
+    #: ``display_tech_info_show_btn``, ``detect_displays_and_ports_btn``, the
+    #: four ``colorimeter_correction_*_btn``s, and every button built via
+    #: :meth:`_tool_button` (the Calibration tab's whitepoint/luminance/
+    #: ambient "Measure" buttons and the Profiling tab's "Advanced...",
+    #: testchart/save-path/placeholder buttons). Unlike
     #: ``_HEADER_TOOL_BUTTON_STYLE`` these buttons sit on the ordinary themed
     #: background rather than a fixed dark banner, so use a theme-neutral
     #: gray hover/press tint instead of white -- and set it unconditionally
@@ -4800,9 +4803,19 @@ class MainWindow(BaseWindow):
     def _tool_button(
         self, icon_name: str, tooltip_key: str, handler: Callable[[], None]
     ) -> QToolButton:
-        """Build a flat 16px icon button, mirroring wx's ``wxBitmapButton`` rows."""
+        """Build a flat 16px icon button, mirroring wx's ``wxBitmapButton`` rows.
+
+        Used for the Calibration tab's whitepoint/luminance/ambient "Measure"
+        buttons and the Profiling tab's "Advanced...", testchart chooser/
+        editor, name-placeholder and save-path buttons. Sets
+        ``_FLAT_TOOL_BUTTON_STYLE`` explicitly (see that constant) so these
+        stay borderless with a consistent hover/press tint in both themes,
+        the same treatment applied to the header, info-panel and detect/
+        colorimeter-correction buttons.
+        """
         button = QToolButton()
         button.setAutoRaise(True)
+        button.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
         button.setToolTip(lang.getstr(tooltip_key))
         self._themed_icon(button, 16, icon_name)
         button.clicked.connect(handler)
