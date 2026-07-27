@@ -3428,6 +3428,30 @@ class MainWindow(BaseWindow):
         "}"
     )
 
+    #: ``_build_info_panel``'s ``panel`` carries its own stylesheet (its
+    #: top-border separator), which forces every descendant -- including an
+    #: ``extra`` ``QToolButton`` like ``display_tech_info_show_btn`` -- through
+    #: Qt's CSS style engine. Without its own rule such a button falls back to
+    #: the CSS engine's default bevelled ``QToolButton`` chrome (a visible
+    #: box) instead of the flat, borderless look a plain ``autoRaise`` button
+    #: gets from the native style. Unlike ``_HEADER_TOOL_BUTTON_STYLE`` these
+    #: buttons sit on the ordinary themed background rather than a fixed dark
+    #: banner, so use a theme-neutral gray hover/press tint instead of white.
+    _FLAT_TOOL_BUTTON_STYLE = (
+        "QToolButton {"
+        " border: none;"
+        " background: transparent;"
+        " padding: 4px;"
+        " border-radius: 4px;"
+        "}"
+        "QToolButton:hover {"
+        " background: rgba(128, 128, 128, 30);"
+        "}"
+        "QToolButton:pressed {"
+        " background: rgba(128, 128, 128, 60);"
+        "}"
+    )
+
     def _build_tabbar(self) -> QWidget:
         """Build the exclusive toggle-button tab bar."""
         bar = QWidget()
@@ -3510,7 +3534,13 @@ class MainWindow(BaseWindow):
         # wx's info panels don't set an explicit background either (they
         # inherit the app's BGCOLOUR/FGCOLOUR like everything else); only the
         # separator above them (wx's ``shadow-bordertop.png``) is distinct.
-        panel.setStyleSheet("border-top: 1px solid palette(mid);")
+        # The rule must be scoped by object name: an unscoped declaration is
+        # an implicit universal ("*") selector, so it would paint its own
+        # top border on every descendant widget (each icon/text label, the
+        # extra button) instead of just the panel, producing one stray line
+        # per row rather than a single separator above the whole panel.
+        panel.setObjectName("infoPanel")
+        panel.setStyleSheet("QWidget#infoPanel { border-top: 1px solid palette(mid); }")
         outer = QVBoxLayout(panel)
         outer.setContentsMargins(16, 16, 16, 16)
         outer.setSpacing(12)
@@ -3810,6 +3840,7 @@ class MainWindow(BaseWindow):
         self.display_tech_info_show_btn = QToolButton()
         self.display_tech_info_show_btn.setAutoRaise(True)
         self.display_tech_info_show_btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.display_tech_info_show_btn.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
         self._themed_icon(self.display_tech_info_show_btn, 16, "info")
         self.display_tech_info_show_btn.setText(lang.getstr("info.display_tech.show"))
         self.display_tech_info_show_btn.clicked.connect(

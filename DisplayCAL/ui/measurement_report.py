@@ -692,7 +692,12 @@ class ReportPanel(QWidget):
         # matches DisplayCAL.ui.main_window.MainWindow._build_info_panel's
         # equivalent for the other four tabs, so this one follows the app's
         # light/dark theme instead of staying hardcoded white.
-        panel.setStyleSheet("border-top: 1px solid palette(mid);")
+        # The rule must be scoped by object name: an unscoped declaration is
+        # an implicit universal ("*") selector, so it would paint its own
+        # top border on every descendant widget (the icon and text labels)
+        # instead of just the panel.
+        panel.setObjectName("infoPanel")
+        panel.setStyleSheet("QWidget#infoPanel { border-top: 1px solid palette(mid); }")
         outer = QVBoxLayout(panel)
         outer.setContentsMargins(16, 8, 16, 16)
         info_row = QHBoxLayout()
