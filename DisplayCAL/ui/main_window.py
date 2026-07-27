@@ -3351,6 +3351,32 @@ class MainWindow(BaseWindow):
             self._repolish_styled_widgets()
         super().changeEvent(event)
 
+    #: ``_HeaderPanelBar`` carries its own stylesheet (see ``_build_header``),
+    #: and any stylesheet on a widget forces Qt's CSS style engine to render
+    #: *every* descendant, not just the ones a selector targets. Without their
+    #: own rule these plain ``autoRaise`` buttons fall back to the CSS
+    #: engine's default ``QToolButton`` chrome, which paints a bevelled panel
+    #: from the theme's ``Button`` palette role -- dark enough in the dark
+    #: theme to read fine against the always-white icons (see
+    #: ``_header_icon_pixmap``), but near-white (so barely visible) in the
+    #: light theme. These buttons sit on the permanently dark blue banner
+    #: regardless of theme, so force them flat/transparent instead, matching
+    #: wx's own flat "-inverted" toolbar buttons.
+    _HEADER_TOOL_BUTTON_STYLE = (
+        "QToolButton {"
+        " border: none;"
+        " background: transparent;"
+        " padding: 4px;"
+        " border-radius: 4px;"
+        "}"
+        "QToolButton:hover {"
+        " background: rgba(255, 255, 255, 40);"
+        "}"
+        "QToolButton:pressed {"
+        " background: rgba(255, 255, 255, 70);"
+        "}"
+    )
+
     @classmethod
     def _header_tool_button(
         cls, icon_name: str, tooltip_key: str, slot: Callable[[], None]
@@ -3362,6 +3388,7 @@ class MainWindow(BaseWindow):
             button.setIcon(pixmap)
         button.setToolTip(lang.getstr(tooltip_key))
         button.setAutoRaise(True)
+        button.setStyleSheet(cls._HEADER_TOOL_BUTTON_STYLE)
         button.clicked.connect(lambda _checked=False: slot())
         return button
 
