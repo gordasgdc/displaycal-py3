@@ -26,9 +26,16 @@ never invoke it this way from the Qt startup path either):
   already);
 * the in-app auto-download-and-run-the-installer flow
   (``app_update_confirm``'s ``worker.start(consumer, worker.download, ...)``
-  branch) — the Qt dialog offers a direct asset download URL (opened in the
-  browser) or a "go to website" fallback instead of driving Argyll/DisplayCAL
-  installers itself, which is a large, separate feature in its own right.
+  branch) for the *update-available* dialogs — the Qt
+  ``_UpdateAvailableDialog`` offers a direct asset download URL (opened in
+  the browser) or a "go to website" fallback instead of driving
+  Argyll/DisplayCAL installers itself. The *missing*-ArgyllCMS startup
+  prompt (``MainWindow._prompt_missing_argyll``) is a separate flow and
+  does drive a real in-app download + extract, via
+  :func:`resolve_argyll_download_url` below plus a small Qt-only
+  ``_ArgyllDownloadThread`` (``main_window.py``) — installing ArgyllCMS in
+  the first place is table-stakes for a working app, unlike an optional
+  version bump.
 """
 
 from __future__ import annotations
@@ -118,6 +125,41 @@ def resolve_app_download_url(release_data: dict, newversion: str) -> str | None:
         if asset.get("name") == filename:
             return asset.get("browser_download_url")
     return None
+
+
+def resolve_argyll_download_url(newversion: str, domain: str) -> str:
+    """Return the ArgyllCMS release archive URL for the current platform.
+
+    Toolkit-neutral port of the ArgyllCMS branch of wx's
+    ``app_update_confirm`` (``display_cal.py``): same
+    ``argyll.domain``-relative GitHub Releases layout and per-platform
+    suffix table, simplified to ``platform.machine()`` detection (no
+    Windows registry lookup) like :func:`resolve_app_download_url`.
+    Confirmed against the real ``eoyilmaz/argyllcms-binaries`` release
+    assets, which are named exactly ``Argyll_V{version}{suffix}``.
+
+    Args:
+        newversion: The ArgyllCMS version string (e.g. ``"3.5.0"``).
+        domain: The ``argyll.domain`` config value (a GitHub repo URL).
+    """
+    machine = platform.machine().lower()
+    if sys.platform == "win32":
+        if machine in ("arm64", "aarch64"):
+            suffix = "_win_arm64_exe.zip"
+        elif machine in ("amd64", "x86_64"):
+            suffix = "_win64_exe.zip"
+        else:
+            suffix = "_win32_exe.zip"
+    elif sys.platform == "darwin":
+        if machine in ("arm64", "aarch64"):
+            suffix = "_macOS11_arm64_bin.tgz"
+        else:
+            suffix = "_osx10.6_x86_64_bin.tgz"
+    elif machine in ("x86_64", "amd64") or platform.architecture()[0] == "64bit":
+        suffix = "_linux_x86_64_bin.tgz"
+    else:
+        suffix = "_linux_x86_bin.tgz"
+    return f"{domain}/releases/download/{newversion}/Argyll_V{newversion}{suffix}"
 
 
 def _format_changelog(html: str, domain: str) -> str:

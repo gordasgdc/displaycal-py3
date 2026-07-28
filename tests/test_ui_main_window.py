@@ -7360,6 +7360,309 @@ def test_instrument_setup_nothing_needed_goes_straight_to_donation_check(
     assert donation_calls == [True]
 
 
+# --- Missing ArgyllCMS startup prompt (#956) ---------------------------------
+
+
+class _FakeArgyllChoiceMessageBox:
+    """Stand-in for ``mw.QMessageBox`` used by ``_prompt_missing_argyll``.
+
+    Real ``QMessageBox.addButton()`` returns a ``QPushButton`` whose object
+    identity ``clickedButton()`` later returns unchanged, which is what the
+    production code's ``clicked is download_button`` checks rely on. A
+    formatted label (e.g. the Homebrew button's path-substituted text) is a
+    *new* string object every time it's built, so using the label text
+    itself as the identity (as an earlier version of this fake did) breaks
+    identity comparisons for that button; each button gets its own sentinel
+    object instead, looked up by matching text value.
+    """
+
+    Warning = 0
+    AcceptRole = 1
+    ActionRole = 2
+    RejectRole = 3
+
+    clicked_text = None  # set per-test to the button text that was "clicked"
+
+    def __init__(self, parent=None):
+        self.buttons = []  # label texts, in add order (for inspection)
+        self._sentinels = []  # parallel list of per-button identity objects
+
+    def setWindowTitle(self, title):
+        pass
+
+    def setIcon(self, icon):
+        pass
+
+    def setText(self, text):
+        self.text = text
+
+    def addButton(self, text, role):
+        sentinel = object()
+        self.buttons.append(text)
+        self._sentinels.append(sentinel)
+        return sentinel
+
+    def exec_(self):
+        return None
+
+    def clickedButton(self):
+        for text, sentinel in zip(self.buttons, self._sentinels):
+            if text == self.clicked_text:
+                return sentinel
+        return None
+
+
+def test_prompt_missing_argyll_download_triggers_in_app_download(window, monkeypatch):
+    monkeypatch.setattr(mw, "QMessageBox", _FakeArgyllChoiceMessageBox)
+    monkeypatch.setattr(mw, "get_homebrew_argyll_bin", lambda: None)
+    _FakeArgyllChoiceMessageBox.clicked_text = lang.getstr("download")
+    calls = []
+    monkeypatch.setattr(
+        window, "_download_and_install_argyll", lambda: calls.append(True)
+    )
+    window._prompt_missing_argyll()
+    assert calls == [True]
+
+
+def test_prompt_missing_argyll_browse_calls_set_argyll_bin_handler(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw, "QMessageBox", _FakeArgyllChoiceMessageBox)
+    monkeypatch.setattr(mw, "get_homebrew_argyll_bin", lambda: None)
+    _FakeArgyllChoiceMessageBox.clicked_text = lang.getstr("browse")
+    calls = []
+    monkeypatch.setattr(
+        window, "_set_argyll_bin_handler", lambda: calls.append(True)
+    )
+    window._prompt_missing_argyll()
+    assert calls == [True]
+
+
+def test_prompt_missing_argyll_homebrew_sets_argyll_dir(window, monkeypatch):
+    brew_path = "/opt/homebrew/bin"
+    monkeypatch.setattr(mw, "QMessageBox", _FakeArgyllChoiceMessageBox)
+    monkeypatch.setattr(mw, "get_homebrew_argyll_bin", lambda: brew_path)
+    _FakeArgyllChoiceMessageBox.clicked_text = lang.getstr(
+        "argyll.use_homebrew", brew_path
+    )
+    setcfg_calls = []
+    writecfg_calls = []
+    monkeypatch.setattr(
+        mw, "setcfg", lambda key, value: setcfg_calls.append((key, value))
+    )
+    monkeypatch.setattr(mw, "writecfg", lambda: writecfg_calls.append(True))
+    window._prompt_missing_argyll()
+    assert setcfg_calls == [("argyll.dir", brew_path)]
+    assert writecfg_calls == [True]
+
+
+def test_prompt_missing_argyll_no_homebrew_button_when_unavailable(
+    window, monkeypatch
+):
+    monkeypatch.setattr(mw, "QMessageBox", _FakeArgyllChoiceMessageBox)
+    monkeypatch.setattr(mw, "get_homebrew_argyll_bin", lambda: None)
+    _FakeArgyllChoiceMessageBox.clicked_text = lang.getstr("cancel")
+    boxes = []
+    real_init = _FakeArgyllChoiceMessageBox.__init__
+
+    def tracking_init(self, parent=None):
+        real_init(self, parent)
+        boxes.append(self)
+
+    monkeypatch.setattr(_FakeArgyllChoiceMessageBox, "__init__", tracking_init)
+    window._prompt_missing_argyll()
+    assert lang.getstr("browse") in boxes[0].buttons
+    assert len(boxes[0].buttons) == 3  # download, browse, cancel -- no homebrew
+
+
+def test_prompt_missing_argyll_cancel_does_nothing(window, monkeypatch):
+    monkeypatch.setattr(mw, "QMessageBox", _FakeArgyllChoiceMessageBox)
+    monkeypatch.setattr(mw, "get_homebrew_argyll_bin", lambda: None)
+    _FakeArgyllChoiceMessageBox.clicked_text = lang.getstr("cancel")
+    monkeypatch.setattr(
+        window,
+        "_set_argyll_bin_handler",
+        lambda: pytest.fail("should not be called"),
+    )
+    monkeypatch.setattr(
+        window,
+        "_download_and_install_argyll",
+        lambda: pytest.fail("should not be called"),
+    )
+    window._prompt_missing_argyll()  # should not raise
+
+
+def _fake_argyll_download_start(self):
+    """Finish ``mw._ArgyllDownloadThread`` synchronously via its real Signal.
+
+    Mirrors the ``fake_run``/``finished.emit`` convention used elsewhere in
+    this file (e.g. the Spyder2/import-controller tests) for simulating an
+    async Qt operation's completion without spinning up a real thread --
+    here applied to ``start()`` since ``_ArgyllDownloadThread`` has no
+    separate producer/consumer split to fake at.
+    """
+    self.done.emit(_fake_argyll_download_start.result)
+
+
+def test_download_and_install_argyll_success_sets_argyll_dir(window, monkeypatch):
+    monkeypatch.setattr(mw, "get_argyll_latest_version", lambda: "3.5.0")
+    monkeypatch.setattr(
+        mw, "resolve_argyll_download_url", lambda version, domain: "https://x/y.tgz"
+    )
+    _fake_argyll_download_start.result = ["/tmp/Argyll_V3.5.0"]
+    monkeypatch.setattr(
+        mw._ArgyllDownloadThread, "start", _fake_argyll_download_start
+    )
+    setcfg_calls = []
+    writecfg_calls = []
+    monkeypatch.setattr(
+        mw, "setcfg", lambda key, value: setcfg_calls.append((key, value))
+    )
+    monkeypatch.setattr(mw, "writecfg", lambda: writecfg_calls.append(True))
+    detect_calls = []
+    monkeypatch.setattr(
+        window,
+        "detect_displays_and_ports_btn_handler",
+        lambda: detect_calls.append(True),
+    )
+    window._download_and_install_argyll()
+    assert setcfg_calls == [("argyll.dir", os.path.join("/tmp/Argyll_V3.5.0", "bin"))]
+    assert writecfg_calls == [True]
+    assert window._argyll_download_thread is None
+    assert window._argyll_download_progress is None
+    assert detect_calls == [True]  # matches wx's check_update_controls chain
+
+
+def test_download_and_install_argyll_failure_shows_error(window, monkeypatch):
+    monkeypatch.setattr(mw, "get_argyll_latest_version", lambda: "3.5.0")
+    monkeypatch.setattr(
+        mw, "resolve_argyll_download_url", lambda version, domain: "https://x/y.tgz"
+    )
+    _fake_argyll_download_start.result = Exception("download failed")
+    monkeypatch.setattr(
+        mw._ArgyllDownloadThread, "start", _fake_argyll_download_start
+    )
+    critical_calls = []
+    monkeypatch.setattr(
+        mw.message_box, "critical", lambda *a, **k: critical_calls.append(a)
+    )
+    setcfg_calls = []
+    monkeypatch.setattr(
+        mw, "setcfg", lambda key, value: setcfg_calls.append((key, value))
+    )
+    monkeypatch.setattr(
+        window,
+        "detect_displays_and_ports_btn_handler",
+        lambda: pytest.fail("should not be called"),
+    )
+    window._download_and_install_argyll()
+    assert critical_calls
+    assert setcfg_calls == []
+
+
+class _FakeDownloadWorker:
+    """Stand-in ``Worker`` for exercising ``_ArgyllDownloadThread.run()`` directly."""
+
+    download_result: object = None
+    extract_result: object = None
+
+    def download(self, url):
+        return self.download_result
+
+    def extract_archive(self, path):
+        if isinstance(self.extract_result, Exception):
+            raise self.extract_result
+        return self.extract_result
+
+
+def test_argyll_download_thread_emits_extracted_paths(qapp, monkeypatch, tmp_path):
+    extracted_dir = tmp_path / "Argyll_V3.5.0"
+    extracted_dir.mkdir()
+    worker = _FakeDownloadWorker()
+    worker.download_result = str(tmp_path / "Argyll_V3.5.0_osx10.6_x86_64_bin.tgz")
+    worker.extract_result = [str(extracted_dir)]
+    thread = mw._ArgyllDownloadThread(worker, "https://x/y.tgz")
+    results = []
+    thread.done.connect(results.append)
+    thread.run()
+    assert results == [[str(extracted_dir)]]
+
+
+def test_argyll_download_thread_emits_error_on_download_failure(qapp):
+    worker = _FakeDownloadWorker()
+    worker.download_result = Exception("connection refused")
+    thread = mw._ArgyllDownloadThread(worker, "https://x/y.tgz")
+    results = []
+    thread.done.connect(results.append)
+    thread.run()
+    assert len(results) == 1
+    assert isinstance(results[0], Exception)
+
+
+def test_argyll_download_thread_emits_error_on_empty_extraction(qapp, tmp_path):
+    worker = _FakeDownloadWorker()
+    worker.download_result = str(tmp_path / "Argyll_V3.5.0_osx10.6_x86_64_bin.tgz")
+    worker.extract_result = []
+    thread = mw._ArgyllDownloadThread(worker, "https://x/y.tgz")
+    results = []
+    thread.done.connect(results.append)
+    thread.run()
+    assert len(results) == 1
+    assert isinstance(results[0], Exception)
+
+
+def test_run_instrument_setup_and_donation_check_prompts_when_argyll_missing(
+    window, monkeypatch
+):
+    from DisplayCAL import instrument_setup as isetup
+
+    monkeypatch.setattr(mw, "check_argyll_bin", lambda: False)
+    prompt_calls = []
+    monkeypatch.setattr(
+        window, "_prompt_missing_argyll", lambda: prompt_calls.append(True)
+    )
+    monkeypatch.setattr(
+        isetup,
+        "resolve_instrument_setup_needs",
+        lambda *a, **k: isetup.InstrumentSetupNeeds(
+            needs_spyder2_enable=False,
+            needs_correction_import=False,
+            recheck_after_spyder2=False,
+        ),
+    )
+    donation_calls = []
+    monkeypatch.setattr(
+        window, "_show_donation_message_if_needed", lambda: donation_calls.append(True)
+    )
+    window._run_instrument_setup_and_donation_check()
+    assert prompt_calls == [True]
+    assert donation_calls == [True]  # still falls through afterward
+
+
+def test_run_instrument_setup_and_donation_check_skips_prompt_when_argyll_present(
+    window, monkeypatch
+):
+    from DisplayCAL import instrument_setup as isetup
+
+    monkeypatch.setattr(mw, "check_argyll_bin", lambda: True)
+    prompt_calls = []
+    monkeypatch.setattr(
+        window, "_prompt_missing_argyll", lambda: prompt_calls.append(True)
+    )
+    monkeypatch.setattr(
+        isetup,
+        "resolve_instrument_setup_needs",
+        lambda *a, **k: isetup.InstrumentSetupNeeds(
+            needs_spyder2_enable=False,
+            needs_correction_import=False,
+            recheck_after_spyder2=False,
+        ),
+    )
+    monkeypatch.setattr(window, "_show_donation_message_if_needed", lambda: None)
+    window._run_instrument_setup_and_donation_check()
+    assert prompt_calls == []
+
+
 def test_enable_spyder2_wires_controller_and_clears_on_finish(window, monkeypatch):
     from DisplayCAL.ui import spyder2_enable as s2
 
