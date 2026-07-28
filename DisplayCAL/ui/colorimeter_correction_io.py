@@ -167,8 +167,28 @@ def save_correction(cgats_bytes: bytes, parent: QWidget | None = None) -> bool:
 # -- Web check ----------------------------------------------------------------
 
 
+class _NumericTableWidgetItem(QTableWidgetItem):
+    """Table item that sorts numerically instead of lexicographically.
+
+    Falls back to the base class's text comparison for values that aren't
+    parseable as ``float`` (e.g. "unknown"/"not_applicable" placeholders).
+    """
+
+    def __lt__(self, other: QTableWidgetItem) -> bool:
+        try:
+            return float(self.text()) < float(other.text())
+        except (TypeError, ValueError):
+            # Not super().__lt__(other): PySide's vtable slot for this
+            # virtual still points at this very override regardless of the
+            # MRO, so calling up re-enters here and recurses forever.
+            return self.text() < other.text()
+
+
 class _WebCheckChooserDialog(QDialog):
     """List the corrections the online DB returned and let the user pick one."""
+
+    #: Columns sorted numerically (ΔE*00 values) rather than as plain text.
+    _NUMERIC_COLUMN_KEYS = frozenset({"fit_avg_de00", "fit_max_de00"})
 
     _COLUMN_KEYS = (
         "type",
@@ -186,7 +206,6 @@ class _WebCheckChooserDialog(QDialog):
     def __init__(self, rows: list[dict], parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle(lang.getstr("colorimeter_correction.web_check"))
-        self._rows = rows
         self.selected_cgats: bytes | None = None
 
         layout = QVBoxLayout(self)
@@ -211,8 +230,20 @@ class _WebCheckChooserDialog(QDialog):
         table.setEditTriggers(QTableWidget.NoEditTriggers)
         for r, row in enumerate(rows):
             for c, key in enumerate(self._COLUMN_KEYS):
-                table.setItem(r, c, QTableWidgetItem(str(row[key])))
+                item_cls = (
+                    _NumericTableWidgetItem
+                    if key in self._NUMERIC_COLUMN_KEYS
+                    else QTableWidgetItem
+                )
+                item = item_cls(str(row[key]))
+                if c == 0:
+                    # Sorting reorders rows visually, so the row's source
+                    # dict travels with its item rather than being looked up
+                    # by position in `rows` later.
+                    item.setData(Qt.UserRole, row)
+                table.setItem(r, c, item)
         table.resizeColumnsToContents()
+        table.setSortingEnabled(True)
         table.itemSelectionChanged.connect(self._update_ok_state)
         self._table = table
         layout.addWidget(table)
@@ -242,7 +273,8 @@ class _WebCheckChooserDialog(QDialog):
     def accept(self) -> None:
         rows = self._table.selectionModel().selectedRows()
         if rows:
-            self.selected_cgats = self._rows[rows[0].row()]["cgats"]
+            row = self._table.item(rows[0].row(), 0).data(Qt.UserRole)
+            self.selected_cgats = row["cgats"]
         super().accept()
 
 
