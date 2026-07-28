@@ -1,12 +1,35 @@
 Installation Instructions (Windows)
 ===================================
 
+ArgyllCMS Requirement
+----------------------
+
+DisplayCAL relies on [ArgyllCMS](https://www.argyllcms.com/) to talk to your
+measurement instrument and take the actual readings, it is not bundled with the
+installer or any of the install methods described below and needs to be obtained
+separately.
+
+You don't have to grab it upfront though. The first time you launch DisplayCAL and it
+can't find a working ArgyllCMS installation, it will offer to either **download** a
+matching build for you automatically (from
+[eoyilmaz/argyllcms-binaries](https://github.com/eoyilmaz/argyllcms-binaries/releases)),
+or **browse** to an existing installation already on your system.
+
+If you'd rather install it yourself first, that works too, DisplayCAL will pick it up
+automatically if it's on your `PATH`. Otherwise, point DisplayCAL at its `bin` folder
+via *File -> Locate ArgyllCMS executables...* whenever you need to change it.
+
 Install with Installer
 ----------------------
 
 We now have a proper [installer](https://www.github.com/eoyilmaz/displaycal-py3/releases) for Windows
 and this is the preferred way of running DisplayCAL under Windows (unless you want to
-test the latest code).
+test the latest code). Each release publishes two installers, pick the one matching your
+system:
+
+* `DisplayCAL-<version>-Windows-x64.exe`, for regular 64-bit (x86_64) Windows systems
+* `DisplayCAL-<version>-Windows-arm64.exe`, for Windows on ARM (e.g. Snapdragon-based
+  laptops)
 
 > [!NOTE]
 > ArgyllCMS 3.5.0 adds native Windows ARM64 binaries (`Argyll_V3.5.0_win_arm64_exe.zip`)

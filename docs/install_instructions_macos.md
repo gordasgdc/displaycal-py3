@@ -1,12 +1,36 @@
 Installation Instructions (MacOS)
 =================================
 
+ArgyllCMS Requirement
+----------------------
+
+DisplayCAL relies on [ArgyllCMS](https://www.argyllcms.com/) to talk to your
+measurement instrument and take the actual readings, it is not bundled with the
+installer or any of the install methods described below and needs to be obtained
+separately.
+
+You don't have to grab it upfront though. The first time you launch DisplayCAL and it
+can't find a working ArgyllCMS installation, it will offer to either **download** a
+matching build for you automatically (from
+[eoyilmaz/argyllcms-binaries](https://github.com/eoyilmaz/argyllcms-binaries/releases)),
+**browse** to an existing installation already on your system, or use a
+Homebrew-installed copy if one is detected (`brew install argyll-cms`).
+
+If you'd rather install it yourself first, that works too, DisplayCAL will pick it up
+automatically if it's on your `PATH` (including via Homebrew). Otherwise, point
+DisplayCAL at its `bin` folder via *DisplayCAL -> Locate ArgyllCMS executables...*
+whenever you need to change it.
+
 Install with Installer
 ----------------------
 
 We now have a proper [installer](https://www.github.com/eoyilmaz/displaycal-py3/releases)
 for MacOS and this is the preferred way of running DisplayCAL under MacOS (unless you
-want to test the latest code).
+want to test the latest code). Each release publishes two disk images, pick the one
+matching your Mac:
+
+* `DisplayCAL-<version>-macOS-arm64.dmg`, for Apple Silicon Macs (M1 and newer)
+* `DisplayCAL-<version>-macOS-x86_64.dmg`, for Intel Macs
 
 > [!NOTE]
 > ArgyllCMS 3.5.0 adds native Apple Silicon binaries
