@@ -9324,7 +9324,7 @@ class MainWindow(BaseWindow):
                 APPNAME,
                 lang.getstr("macos.bugs.cal.warning"),
                 QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
-                QMessageBox.No,
+                QMessageBox.Yes,
             )
             if answer == QMessageBox.Cancel:
                 return False
@@ -9340,7 +9340,7 @@ class MainWindow(BaseWindow):
             APPNAME,
             lang.getstr("macos.bugs.profile.warning"),
             QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
-            QMessageBox.No,
+            QMessageBox.Yes,
         )
         if answer == QMessageBox.Cancel:
             return False
