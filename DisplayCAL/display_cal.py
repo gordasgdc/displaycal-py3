@@ -406,12 +406,13 @@ def get_download_url(newversion: str) -> str | None:
     return None
 
 
-def is_new_update() -> bool | tuple:
+def is_new_update() -> bool | tuple | None:
     """Check for new updates on GitHub.
 
     Returns:
-        bool | tuple: The latest version tuple if a new update is available,
-        False otherwise.
+        bool | tuple | None: The latest version tuple if a new update is
+        available, False if already up to date, None if the check failed
+        (network or parsing error).
     """
     global RELEASE_DATA
     print("Checking for updates...")
@@ -423,7 +424,7 @@ def is_new_update() -> bool | tuple:
         response.raise_for_status()
     except requests.RequestException as e:
         print(f"Error checking for updates: Network error - {e!s}")
-        return False
+        return None
 
     try:
         data = response.json()
@@ -431,7 +432,7 @@ def is_new_update() -> bool | tuple:
         latest_version_tuple = tuple(int(n) for n in data["tag_name"].split("."))
     except (KeyError, ValueError, IndexError) as e:
         print(f"Error checking for updates: Parsing error - {e!s}")
-        return False
+        return None
 
     current_version = VERSION_TUPLE[:3]
     if latest_version_tuple > current_version:
@@ -500,45 +501,41 @@ def app_update_check(
             silent=silent,
         )
         if resp is False:
-            if silent:
-                # Check if we need to run instrument setup
-                wx.CallAfter(
-                    parent.check_instrument_setup, check_donation, (parent, snapshot)
-                )
-            return
-        data = resp.read()
-        if not wx.GetApp():
-            return
-        try:
-            new_version_tuple = tuple(int(n) for n in data.decode().split("."))
-        except ValueError:
-            print(lang.getstr("update_check.fail.version", DOMAIN))
-            if not silent:
-                wx.CallAfter(
-                    InfoDialog,
-                    parent,
-                    msg=lang.getstr("update_check.fail.version", DOMAIN),
-                    ok=lang.getstr("ok"),
-                    bitmap=get_icon(32, "dialog-error"),
-                    log=False,
-                )
+            # Fetch failed: treat as "no update" and fall through to the
+            # "up to date" branches below (which also check ArgyllCMS and
+            # instrument setup), regardless of silent/non-silent.
+            new_version_tuple = curversion_tuple
+        else:
+            data = resp.read()
+            if not wx.GetApp():
                 return
-            new_version_tuple = (0, 0, 0, 0)
+            try:
+                new_version_tuple = tuple(int(n) for n in data.decode().split("."))
+            except ValueError:
+                print(lang.getstr("update_check.fail.version", DOMAIN))
+                if not silent:
+                    wx.CallAfter(
+                        InfoDialog,
+                        parent,
+                        msg=lang.getstr("update_check.fail.version", DOMAIN),
+                        ok=lang.getstr("ok"),
+                        bitmap=get_icon(32, "dialog-error"),
+                        log=False,
+                    )
+                    return
+                new_version_tuple = (0, 0, 0, 0)
     else:
         # Stable
         print(lang.getstr("update_check"))
         curversion_tuple = VERSION_TUPLE
         chglog_file = "CHANGES.html"
         resp = is_new_update()
-        if resp is False:
-            if silent:
-                # Check if we need to run instrument setup
-                wx.CallAfter(
-                    parent.check_instrument_setup, check_donation, (parent, snapshot)
-                )
-                return
-            # Non-silent with no update available: fall through to the
-            # "up to date" branches below using the current version.
+        if resp is False or resp is None:
+            # No update available, or the check itself failed (network/parse
+            # error): either way fall through to the "up to date" branches
+            # below using the current version. This also applies during a
+            # silent startup check, since those branches are what eventually
+            # reach the ArgyllCMS / instrument-setup checks further down.
             resp = curversion_tuple
         if not wx.GetApp():
             return

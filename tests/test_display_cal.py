@@ -458,24 +458,43 @@ def test_is_new_update_returns_false_when_current(monkeypatch):
     assert display_cal.is_new_update() is False
 
 
-def test_is_new_update_returns_false_on_network_error(monkeypatch):
-    """is_new_update() returns False and does not raise on network failures."""
+def test_is_new_update_returns_none_on_network_error(monkeypatch):
+    """is_new_update() returns None and does not raise on network failures."""
 
     def raise_error(*a, **kw):
         raise requests.RequestException("connection refused")
 
     monkeypatch.setattr("DisplayCAL.display_cal.requests.get", raise_error)
-    assert display_cal.is_new_update() is False
+    assert display_cal.is_new_update() is None
 
 
-def test_is_new_update_returns_false_on_bad_json(monkeypatch):
-    """is_new_update() returns False when the response JSON is missing expected keys."""
+def test_is_new_update_returns_none_on_bad_json(monkeypatch):
+    """is_new_update() returns None when the response JSON is missing expected keys."""
     mock_resp = MagicMock()
     mock_resp.json.return_value = {"unexpected_key": "value"}
     monkeypatch.setattr(
         "DisplayCAL.display_cal.requests.get", lambda *a, **kw: mock_resp
     )
-    assert display_cal.is_new_update() is False
+    assert display_cal.is_new_update() is None
+
+
+@pytest.mark.parametrize(
+    "is_new_update_result", (False, None), ids=("no update", "check failed")
+)
+def test_app_update_check_silent_reaches_argyll_prompt_when_missing(
+    monkeypatch, mainframe: MainFrame, is_new_update_result: bool | None
+) -> None:
+    """Silent startup falls through to the Argyll prompt when Argyll is missing.
+
+    Regression test for #956: previously a silent update check that came
+    back False/None returned early and never reached the ArgyllCMS check.
+    """
+    monkeypatch.setattr(display_cal, "is_new_update", lambda: is_new_update_result)
+    monkeypatch.setattr(display_cal, "http_request", lambda *a, **kw: False)
+    monkeypatch.setattr(display_cal, "check_argyll_bin", lambda: False)
+    with check_call(wx, "CallAfter", call_count=1) as calls:
+        app_update_check(mainframe, silent=True)
+    assert calls[0][0][0] == mainframe.set_argyll_bin_handler
 
 
 # ---------------------------------------------------------------------------

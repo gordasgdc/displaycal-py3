@@ -177,7 +177,9 @@ from DisplayCAL.argyll import (
     check_argyll_bin,
     check_set_argyll_bin,
     get_argyll_instrument_config,
+    get_argyll_latest_version,
     get_argyll_util,
+    get_homebrew_argyll_bin,
     make_argyll_compatible_path,
 )
 from DisplayCAL.argyll_instruments import get_canonical_instrument_name
@@ -282,6 +284,7 @@ from DisplayCAL.ui.worker_runner import (
     UntetheredController,
     WorkerRunController,
 )
+from DisplayCAL.update_check import resolve_argyll_download_url
 from DisplayCAL.util_decimal import stripzeros
 from DisplayCAL.util_dict import dict_sort
 from DisplayCAL.util_os import get_program_file, launch_file, waccess, which
@@ -500,6 +503,52 @@ class _SessionArchiveImportThread(QThread):
     def run(self) -> None:  # noqa: D102 (QThread override)
         result = calibration_file.import_session_archive(self._request, self._exec_cmd)
         self.done.emit(result)
+
+
+class _ArgyllDownloadThread(QThread):
+    """Download and extract an ArgyllCMS release archive off the GUI thread.
+
+    Qt port of wx's ``Worker.process_argyll_download`` /
+    ``Worker.extract_archive`` pair (``worker.py``), combined into one
+    thread run behind a single progress dialog instead of wx's two chained
+    ``worker.start()`` calls (download, then extract).
+    """
+
+    #: Emitted with the list of extracted paths, or an ``Exception``.
+    done = Signal(object)
+
+    def __init__(self, worker: Worker, url: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._worker = worker
+        self._url = url
+
+    def run(self) -> None:  # noqa: D102 (QThread override)
+        result = self._worker.download(self._url)
+        if isinstance(result, Exception):
+            self.done.emit(result)
+            return
+        if not result or not (
+            result.lower().endswith(".zip") or result.lower().endswith(".tgz")
+        ):
+            self.done.emit(
+                Exception(f"{lang.getstr('error.file_type_unsupported')}\n{result}")
+            )
+            return
+        try:
+            extracted = self._worker.extract_archive(result)
+        except Exception as exception:  # noqa: BLE001  (reported on GUI thread)
+            self.done.emit(exception)
+            return
+        if (
+            isinstance(extracted, Exception)
+            or not extracted
+            or not os.path.isdir(extracted[0])
+        ):
+            self.done.emit(
+                Exception(lang.getstr("error.no_files_extracted_from_archive", result))
+            )
+            return
+        self.done.emit(extracted)
 
 
 #: Sentinel returned by :meth:`MainWindow._current_cal_choice` when the user
@@ -1310,6 +1359,10 @@ class MainWindow(BaseWindow):
         #: as opposed to :attr:`_install_profile_window`'s standalone flow.
         self._profile_install_thread: _ProfileInstallThread | None = None
         self._profile_install_progress: QProgressDialog | None = None
+        #: Background ArgyllCMS download+extract driven by the missing-Argyll
+        #: startup prompt (:meth:`_prompt_missing_argyll`).
+        self._argyll_download_thread: _ArgyllDownloadThread | None = None
+        self._argyll_download_progress: QProgressDialog | None = None
         #: Services :meth:`Worker.authenticate`'s sudo password prompt for any
         #: elevated (local-system/network) install scope chosen in that dialog.
         self.worker.password_prompt = PasswordPromptAdapter(parent=self)
@@ -1878,6 +1931,93 @@ class MainWindow(BaseWindow):
         self._install_profile_window.show()
         self._install_profile_window.raise_()
         self._install_profile_window.activateWindow()
+
+    def _prompt_missing_argyll(self) -> None:
+        """Startup prompt for missing ArgyllCMS binaries.
+
+        Qt port of the ``wx.SingleChoiceDialog`` half of wx's
+        ``argyll.set_argyll_bin()``, shown from
+        ``_run_instrument_setup_and_donation_check`` when
+        ``check_argyll_bin()`` fails. "Download" drives a real in-app
+        download + extract (see :meth:`_download_and_install_argyll`),
+        matching wx; cancelling just dismisses the prompt (Argyll stays
+        unconfigured until the user acts again, matching wx's own cancel
+        behaviour).
+        """
+        box = QMessageBox(self)
+        box.setWindowTitle(APPNAME)
+        box.setIcon(QMessageBox.Warning)
+        box.setText(lang.getstr("dialog.argyll.notfound.choice"))
+        download_button = box.addButton(
+            lang.getstr("download"), QMessageBox.AcceptRole
+        )
+        browse_button = box.addButton(lang.getstr("browse"), QMessageBox.ActionRole)
+        brew_argyll_bin = get_homebrew_argyll_bin()
+        homebrew_button = None
+        if brew_argyll_bin:
+            homebrew_button = box.addButton(
+                lang.getstr("argyll.use_homebrew", brew_argyll_bin),
+                QMessageBox.ActionRole,
+            )
+        box.addButton(lang.getstr("cancel"), QMessageBox.RejectRole)
+        message_box.exec_box(box)
+        clicked = box.clickedButton()
+        if clicked is download_button:
+            self._download_and_install_argyll()
+        elif clicked is browse_button:
+            self._set_argyll_bin_handler()
+        elif homebrew_button is not None and clicked is homebrew_button:
+            setcfg("argyll.dir", brew_argyll_bin)
+            writecfg()
+
+    def _download_and_install_argyll(self) -> None:
+        """Download the latest ArgyllCMS release and configure ``argyll.dir``.
+
+        Qt port of wx's ``app_update_confirm`` ArgyllCMS-download branch
+        plus ``Worker.process_argyll_download``/``set_argyll_bin``: resolves
+        the platform-specific release archive URL, downloads and extracts it
+        on a background thread behind an indeterminate progress dialog (the
+        same pattern as :meth:`_install_profile_direct`), then points
+        ``argyll.dir`` at the extracted ``bin`` folder. Falls back to an
+        error dialog with a "go to website" style message on failure --
+        Argyll stays unconfigured, same as a cancelled/failed wx download.
+        """
+        newversion = get_argyll_latest_version()
+        url = resolve_argyll_download_url(newversion, getcfg("argyll.domain"))
+        self._argyll_download_progress = QProgressDialog(
+            lang.getstr("downloading"), "", 0, 0, self
+        )
+        self._argyll_download_progress.setWindowTitle(APPNAME)
+        self._argyll_download_progress.setCancelButton(None)
+        self._argyll_download_progress.show()
+        self._argyll_download_thread = _ArgyllDownloadThread(
+            self.worker, url, parent=self
+        )
+        self._argyll_download_thread.done.connect(self._on_argyll_download_done)
+        self._argyll_download_thread.start()
+
+    def _on_argyll_download_done(self, result: object) -> None:
+        """Handle the background ArgyllCMS download+extract result.
+
+        Args:
+            result (object): The list of extracted paths, or an
+                ``Exception`` on failure.
+        """
+        self._argyll_download_thread = None
+        if self._argyll_download_progress is not None:
+            self._argyll_download_progress.close()
+            self._argyll_download_progress = None
+        if isinstance(result, Exception):
+            message_box.critical(self, APPNAME, str(result))
+            return
+        setcfg("argyll.dir", os.path.join(result[0], "bin"))
+        writecfg()
+        # Qt port of wx's own post-download behaviour: ``set_argyll_bin_handler``
+        # (``display_cal.py``) calls ``check_update_controls`` once Argyll
+        # becomes available, which re-enumerates displays/instruments rather
+        # than leaving the user to notice and click "Detect display devices
+        # and instruments" themselves.
+        self.detect_displays_and_ports_btn_handler()
 
     def _set_argyll_bin_handler(self) -> None:
         """File menu "Locate ArgyllCMS executables..." handler.
@@ -3012,6 +3152,8 @@ class MainWindow(BaseWindow):
 
     def _run_instrument_setup_and_donation_check(self) -> None:
         """Qt port of ``MainFrame.check_instrument_setup``'s dispatch."""
+        if not check_argyll_bin():
+            self._prompt_missing_argyll()
         needs = instrument_setup.resolve_instrument_setup_needs(
             self.worker, self._ccmx_catalog.instruments.values()
         )
@@ -3597,6 +3739,13 @@ class MainWindow(BaseWindow):
         display_row = QHBoxLayout()
         display_form = QFormLayout()
         self.display_ctrl = QComboBox()
+        # Qt's default AdjustToContentsOnFirstShow policy measures the combo
+        # once, while it's still empty (displays are only populated later by
+        # detect_displays_and_ports_btn_handler()), and never re-measures --
+        # leaving it stuck too narrow for the real display names. Recompute
+        # on every content change instead, matching wx's Choice/ComboBox,
+        # which auto-sizes to its current items without extra plumbing.
+        self.display_ctrl.setSizeAdjustPolicy(QComboBox.AdjustToContents)
         self.display_ctrl.currentIndexChanged.connect(self.display_ctrl_handler)
         # No row label: the group box is already titled "Display" right
         # above this combo, so a per-row "Display" label would just repeat it.
@@ -3654,6 +3803,9 @@ class MainWindow(BaseWindow):
         instrument_outer = QVBoxLayout(instrument_box)
         instrument_form = QFormLayout()
         self.comport_ctrl = QComboBox()
+        # Same AdjustToContents fix as display_ctrl above -- instruments are
+        # also only populated after the initial (empty) first show.
+        self.comport_ctrl.setSizeAdjustPolicy(QComboBox.AdjustToContents)
         self.comport_ctrl.currentIndexChanged.connect(self.comport_ctrl_handler)
         self.measurement_mode_ctrl = QComboBox()
         self.measurement_mode_ctrl.currentIndexChanged.connect(

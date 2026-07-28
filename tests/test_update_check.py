@@ -76,6 +76,35 @@ class TestResolveAppDownloadUrl:
         assert uc.resolve_app_download_url({"assets": []}, "3.9.0") is None
 
 
+class TestResolveArgyllDownloadUrl:
+    @pytest.mark.parametrize(
+        "plat,machine,architecture,expected_suffix",
+        [
+            ("win32", "AMD64", "64bit", "_win64_exe.zip"),
+            ("win32", "ARM64", "64bit", "_win_arm64_exe.zip"),
+            ("win32", "x86", "32bit", "_win32_exe.zip"),
+            ("darwin", "arm64", "64bit", "_macOS11_arm64_bin.tgz"),
+            ("darwin", "aarch64", "64bit", "_macOS11_arm64_bin.tgz"),
+            ("darwin", "x86_64", "64bit", "_osx10.6_x86_64_bin.tgz"),
+            ("linux", "x86_64", "64bit", "_linux_x86_64_bin.tgz"),
+            ("linux", "unknown", "32bit", "_linux_x86_bin.tgz"),
+        ],
+    )
+    def test_matches_platform_asset_naming(
+        self, monkeypatch, plat, machine, architecture, expected_suffix
+    ):
+        monkeypatch.setattr(uc.sys, "platform", plat)
+        monkeypatch.setattr(uc.platform, "machine", lambda: machine)
+        monkeypatch.setattr(uc.platform, "architecture", lambda: (architecture, ""))
+        url = uc.resolve_argyll_download_url(
+            "3.5.0", "https://github.com/eoyilmaz/argyllcms-binaries"
+        )
+        assert url == (
+            "https://github.com/eoyilmaz/argyllcms-binaries/releases/download/"
+            f"3.5.0/Argyll_V3.5.0{expected_suffix}"
+        )
+
+
 class TestCheckAppUpdate:
     def test_returns_result_when_newer_available(self, monkeypatch):
         mock_resp = MagicMock()
