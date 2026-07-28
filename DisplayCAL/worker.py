@@ -2613,6 +2613,7 @@ class Worker(WorkerBase):
         self.display_edid = []
         self.display_manufacturers = []
         self.display_names = []
+        self.display_generic_names = []
         self.display_rects = []
         self.displays = []
         self.instruments = []
@@ -4569,6 +4570,7 @@ END_DATA
         self.display_edid = []
         self.display_manufacturers = []
         self.display_names = []
+        self.display_generic_names = []
         self.display_rects = []
         self.displays = []
         self.instruments = []
@@ -6456,6 +6458,7 @@ END_DATA
                 self.display_edid = []
                 self.display_manufacturers = []
                 self.display_names = []
+                self.display_generic_names = []
                 if sys.platform == "win32":
                     # The ordering will work as long
                     # as Argyll continues using
@@ -6475,10 +6478,19 @@ END_DATA
                             display_manufacturer = "Google"
                         self.display_manufacturers.append(display_manufacturer)
                         self.display_names.append(display.split(":", 1)[1].strip())
+                        self.display_generic_names.append(
+                            display.split(":", 1)[1].strip()
+                        )
                         continue
                     display_name = split_display_name(display)
                     # Make sure we have nice descriptions
                     desc = []
+                    # Generic (non-model-id-overridden) description, e.g. for
+                    # matching against the online colorimeter correction
+                    # database, which is keyed by generic monitor names
+                    # ("Color LCD") rather than the machine model id
+                    # ("MacBookPro18,1").
+                    generic_desc = []
                     if sys.platform == "win32" and i < len(monitors):
                         # Get monitor description using win32api
                         device = util_win.get_active_display_device(
@@ -6502,6 +6514,7 @@ END_DATA
                         )
                         if is_primary:
                             display += " [PRIMARY]"
+                    original_display = display
                     # Get monitor descriptions from EDID
                     try:
                         # Important: display_name must be given for get_edid
@@ -6524,6 +6537,7 @@ END_DATA
                             "monitor_name",
                             edid.get("ascii", str(edid["product_id"] or "")),
                         )
+                        generic_monitor = monitor
                         if (
                             monitor in ("Color LCD", "iMac")
                             and edid["manufacturer_id"] == "APP"
@@ -6538,6 +6552,10 @@ END_DATA
                                 edid["monitor_name"] = monitor
                         if monitor and monitor not in "".join(desc):
                             desc = [monitor]
+                        if generic_monitor and generic_monitor not in "".join(
+                            generic_desc
+                        ):
+                            generic_desc = [generic_monitor]
                     else:
                         manufacturer = []
                         if sys.platform == "darwin" and i < len(self.display_rects):
@@ -6546,6 +6564,7 @@ END_DATA
                                 rect.width, rect.height
                             )
                             if sp_name:
+                                generic_desc = [sp_name]
                                 if sp_name in ("Color LCD", "iMac"):
                                     model_id = get_model_id()
                                     if model_id:
@@ -6555,34 +6574,48 @@ END_DATA
                         # Only replace the description if it not already
                         # contains the monitor model
                         display = " @".join([" ".join(desc), display.split("@")[-1]])
+                    if generic_desc and generic_desc[-1] not in original_display:
+                        generic_display = " @".join(
+                            [" ".join(generic_desc), original_display.split("@")[-1]]
+                        )
+                    else:
+                        generic_display = original_display
                     displays[i] = display
                     self.display_manufacturers.append(" ".join(manufacturer))
                     self.display_names.append(split_display_name(display))
+                    self.display_generic_names.append(
+                        split_display_name(generic_display)
+                    )
                 if self.argyll_version >= [1, 4, 0]:
                     displays.append("Web @ localhost")
                     self.display_edid.append({})
                     self.display_manufacturers.append("")
                     self.display_names.append("Web")
+                    self.display_generic_names.append("Web")
                 if self.argyll_version >= [1, 6, 0]:
                     displays.append("madVR")
                     self.display_edid.append({})
                     self.display_manufacturers.append("")
                     self.display_names.append("madVR")
+                    self.display_generic_names.append("madVR")
                 # Prisma (via DisplayCAL)
                 displays.append("Prisma")
                 self.display_edid.append({})
                 self.display_manufacturers.append("Q, Inc")
                 self.display_names.append("Prisma")
+                self.display_generic_names.append("Prisma")
                 # Resolve
                 displays.append("Resolve")
                 self.display_edid.append({})
                 self.display_manufacturers.append("DaVinci")
                 self.display_names.append("Resolve")
+                self.display_generic_names.append("Resolve")
                 # Untethered
                 displays.append("Untethered")
                 self.display_edid.append({})
                 self.display_manufacturers.append("")
                 self.display_names.append("Untethered")
+                self.display_generic_names.append("Untethered")
                 # -
                 self.displays = displays
                 setcfg("displays", displays)
@@ -9793,6 +9826,25 @@ BEGIN_DATA
                         display_name = re.sub(r"^[^([{\w]+", "", display_name)
             display.append(display_name)
             return " ".join(display)
+        return ""
+
+    def get_display_generic_name(self):
+        """Return the generic (non-model-id-overridden) name of the current display.
+
+        Unlike :meth:`get_display_name`, this never substitutes an Apple
+        machine model id (e.g. "MacBookPro18,1") for a built-in display's
+        generic monitor name (e.g. "Color LCD"), which makes it suitable for
+        matching against the online colorimeter correction database (see
+        :func:`DisplayCAL.colorimeter_correction.build_web_check_params`) -
+        that database is keyed by generic monitor/model names, not by the
+        machine-specific model id.
+
+        Returns:
+            str: The display's generic name, or "" if unavailable.
+        """
+        n = getcfg("display.number") - 1
+        if 0 <= n < len(self.display_generic_names):
+            return self.display_generic_names[n]
         return ""
 
     def get_display_name_short(self, prepend_manufacturer=False, prefer_edid=False):

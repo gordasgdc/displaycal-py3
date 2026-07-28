@@ -191,6 +191,12 @@ def build_web_check_params(worker: Worker) -> dict:
     ``MainFrame.colorimeter_correction_web_handler`` (the ``http_request``
     call itself, and its progress reporting, stay with the caller).
 
+    Uses ``worker.get_display_generic_name()`` (falling back to
+    ``get_display_name()``) for the ``display`` param: the online database is
+    keyed by generic monitor names ("Color LCD"), and for Apple built-in
+    displays ``get_display_name()`` substitutes the machine model id
+    ("MacBookPro18,1"), which the database has no entries for.
+
     Args:
         worker: The running :class:`DisplayCAL.worker.Worker`, used to derive
             the current display/instrument.
@@ -204,7 +210,9 @@ def build_web_check_params(worker: Worker) -> dict:
         "get": True,
         "type": filetype,
         "manufacturer_id": worker.get_display_edid().get("manufacturer_id", ""),
-        "display": worker.get_display_name(False, True) or "Unknown",
+        "display": worker.get_display_generic_name()
+        or worker.get_display_name(False, True)
+        or "Unknown",
         "instrument": worker.get_instrument_name() or "Unknown",
         "json": 1,
     }
@@ -1570,7 +1578,14 @@ def resolve_colorimeter_correction_selection(
     if ccmx_cfg[0] == "AUTO":
         if len(ccmx_cfg) < 2:
             ccmx_cfg.append("")
-        display_name = worker.get_display_name(False, True, False)
+        # Local CCMX/CCSS files are keyed by their own generic DISPLAY field
+        # ("Color LCD"), never by an Apple machine model id, so matching
+        # must use the generic name too (see get_display_generic_name()'s
+        # docstring / build_web_check_params, which need the same fix for
+        # the same reason).
+        display_name = worker.get_display_generic_name() or worker.get_display_name(
+            False, True, False
+        )
         if worker.instrument_supports_ccss():
             # Prefer CCSS
             ccmx_cfg[1] = catalog.mapping.get(f"\0{display_name}", "")

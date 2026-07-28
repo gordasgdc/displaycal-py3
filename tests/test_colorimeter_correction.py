@@ -8,10 +8,22 @@ handler and ``MainFrame.import_colorimeter_correction`` /
 slice). No display or QApplication is needed.
 """
 
+import os
 from hashlib import md5
 from unittest.mock import MagicMock
 
 from DisplayCAL import colorimeter_correction as cc
+from DisplayCAL import config
+
+# A CCSS fixture whose DISPLAY field ("DELL UP2516D") matches a display's
+# *generic* name, never a machine-specific model id - used to prove Auto
+# resolution matches against the generic name, not the raw display name.
+_CCSS_FIXTURE = os.path.join(
+    os.path.dirname(__file__),
+    "data",
+    "icc",
+    "Dell, DELL UP2516D (i1 Pro 2) 08.2020.ccss",
+)
 
 # A minimal CCMX-shaped blob with the DISPLAY line the injector anchors on.
 BASE = b'CCMX\n\nDESCRIPTOR "test"\nDISPLAY "LCD Monitor"\nCOLOR_REP "XYZ"\n'
@@ -185,6 +197,7 @@ class TestBuildWebCheckParams:
         worker = MagicMock()
         worker.instrument_supports_ccss.return_value = True
         worker.get_display_edid.return_value = {"manufacturer_id": "DEL"}
+        worker.get_display_generic_name.return_value = "Dell U2413"
         worker.get_display_name.return_value = "Dell U2413"
         worker.get_instrument_name.return_value = "i1 Pro"
         params = cc.build_web_check_params(worker)
@@ -197,16 +210,77 @@ class TestBuildWebCheckParams:
             "json": 1,
         }
 
+    def test_falls_back_to_display_name_when_no_generic_name(self):
+        worker = MagicMock()
+        worker.instrument_supports_ccss.return_value = True
+        worker.get_display_edid.return_value = {"manufacturer_id": "APP"}
+        worker.get_display_generic_name.return_value = ""
+        worker.get_display_name.return_value = "MacBookPro18,1"
+        worker.get_instrument_name.return_value = "i1 DisplayPro"
+        params = cc.build_web_check_params(worker)
+        assert params["display"] == "MacBookPro18,1"
+
     def test_falls_back_to_ccmx_only_and_unknown(self):
         worker = MagicMock()
         worker.instrument_supports_ccss.return_value = False
         worker.get_display_edid.return_value = {}
+        worker.get_display_generic_name.return_value = ""
         worker.get_display_name.return_value = None
         worker.get_instrument_name.return_value = None
         params = cc.build_web_check_params(worker)
         assert params["type"] == "ccmx"
         assert params["display"] == "Unknown"
         assert params["instrument"] == "Unknown"
+
+
+class TestResolveColorimeterCorrectionSelectionAuto:
+    """"Auto" must match local CCMX/CCSS files by generic display name.
+
+    Regression test: local corrections are keyed by their own DISPLAY field
+    (a generic monitor name, e.g. "DELL UP2516D"), never by a machine model
+    id, so "Auto" resolution has to prefer ``get_display_generic_name()``
+    the same way ``build_web_check_params`` does - otherwise, on a display
+    where ``get_display_name()`` diverges from the generic name (e.g. an
+    Apple built-in display, see ``get_display_generic_name``'s docstring),
+    "Auto" can never find a matching correction even when one is present on
+    disk.
+    """
+
+    def _worker(self):
+        worker = MagicMock()
+        worker.instrument_supports_ccss.return_value = True
+        worker.instrument_can_use_ccxx.return_value = True
+        worker.get_instrument_name.return_value = "i1 Pro 2"
+        worker.get_instrument_measurement_modes.return_value = {"auto": None}
+        # Deliberately wrong/overridden, mirroring get_display_name()'s
+        # Apple model-id substitution - Auto must not use this value.
+        worker.get_display_name.return_value = "MacBookPro18,1"
+        worker.get_display_generic_name.return_value = "DELL UP2516D"
+        return worker
+
+    def _catalog(self):
+        catalog = cc.ColorimeterCorrectionCatalog()
+        catalog.cached_paths = [_CCSS_FIXTURE]
+        return catalog
+
+    def test_auto_resolves_using_generic_display_name(self):
+        config.setcfg("measurement_mode", "auto")
+        config.setcfg("colorimeter_correction_matrix_file", "AUTO:")
+        result = cc.resolve_colorimeter_correction_selection(
+            self._catalog(), self._worker()
+        )
+        assert result.use_ccmx
+        assert result.ccmx[1] == _CCSS_FIXTURE
+        assert result.items[1] != cc.lang.getstr("auto")
+
+    def test_auto_stays_none_when_generic_name_does_not_match(self):
+        config.setcfg("measurement_mode", "auto")
+        config.setcfg("colorimeter_correction_matrix_file", "AUTO:")
+        worker = self._worker()
+        worker.get_display_generic_name.return_value = "Some Other Display"
+        result = cc.resolve_colorimeter_correction_selection(self._catalog(), worker)
+        assert not result.use_ccmx
+        assert result.ccmx[1] == ""
 
 
 class TestValidateUploadOriginator:
