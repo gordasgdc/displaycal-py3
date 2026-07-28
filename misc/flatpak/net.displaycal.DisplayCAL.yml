@@ -98,11 +98,22 @@ modules:
       # pip resolve the newest compatible one) so this can't silently pick a
       # release extras.wxpython.org hasn't built a wheel for yet and fall
       # through to that broken from-source path; --only-binary makes that
-      # failure mode a fast, clear pip error instead. It's built against
-      # Ubuntu 22.04's GTK3/WebKit2GTK, not the SDK's own, so if the
-      # resulting wxPython fails to import at runtime, that ABI mismatch is
-      # the first thing to suspect and this module should fall back to
-      # building from source.
+      # failure mode a fast, clear pip error instead.
+      #
+      # The ubuntu-22.04 wheel is deliberate, not a stale leftover from an
+      # older CI image: this build runs sandboxed inside org.freedesktop.
+      # Platform//25.08 (see runtime-version above), not the raw Ubuntu CI
+      # host, so there's no "match the wheel to the runner's Ubuntu version"
+      # fix to make here even though the runner itself is 24.04. The 22.04
+      # wheel needs old-ABI libs the Freedesktop runtime doesn't ship
+      # (libjpeg.so.8/libtiff.so.5/libjbig.so.0/libdeflate.so.0, see the
+      # libjpeg8/libtiff5/libjbig0/libdeflate0 modules below), extracted by
+      # hand from Jammy .debs after several rounds of "cannot open shared
+      # object file" failures (issue #232). Switching to the ubuntu-24.04
+      # wheel would link against different SONAMEs (Noble dropped libtiff5
+      # for libtiff6 entirely, see build-appimage.sh) and would need those
+      # shim modules reworked and re-verified on real Linux hardware, not
+      # just re-pointing this URL.
       - pip3 install --prefix=/app --find-links https://extras.wxpython.org/wxPython4/extras/linux/gtk3/ubuntu-22.04/ --only-binary wxpython wxPython==4.2.5
 
   - name: python-dbus
