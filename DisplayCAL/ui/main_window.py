@@ -3325,10 +3325,57 @@ class MainWindow(BaseWindow):
         for update in self._themed_icon_updaters:
             update()
 
+    def _repolish_styled_widgets(self) -> None:
+        """Force every widget with its own stylesheet to re-read the palette.
+
+        Qt's QSS engine resolves any style property a widget's stylesheet
+        doesn't set explicitly (e.g. text colour, left to the default
+        ``QToolButton``/``QGroupBox`` rendering) from the palette once, at
+        that widget's first polish, and caches it -- it does not re-read the
+        palette on a later ``QApplication.setPalette()`` call the way a plain
+        widget with no stylesheet does. Without this, tab-bar button labels
+        and group-box titles (``_TAB_BUTTON_STYLE``/``_FLAT_GROUPBOX_STYLE``/
+        ``_ACTION_BUTTON_STYLE``) stay rendered in whichever scheme's text
+        colour was active when they were built, becoming unreadable against
+        the new scheme's background after a live OS theme switch.
+        """
+        for widget in self.findChildren(QWidget):
+            if widget.styleSheet():
+                widget.style().unpolish(widget)
+                widget.style().polish(widget)
+                widget.update()
+
     def changeEvent(self, event: QEvent) -> None:  # noqa: D102 (Qt override)
         if event.type() in (QEvent.PaletteChange, QEvent.ApplicationPaletteChange):
             self._refresh_themed_icons()
+            self._repolish_styled_widgets()
         super().changeEvent(event)
+
+    #: ``_HeaderPanelBar`` carries its own stylesheet (see ``_build_header``),
+    #: and any stylesheet on a widget forces Qt's CSS style engine to render
+    #: *every* descendant, not just the ones a selector targets. Without their
+    #: own rule these plain ``autoRaise`` buttons fall back to the CSS
+    #: engine's default ``QToolButton`` chrome, which paints a bevelled panel
+    #: from the theme's ``Button`` palette role -- dark enough in the dark
+    #: theme to read fine against the always-white icons (see
+    #: ``_header_icon_pixmap``), but near-white (so barely visible) in the
+    #: light theme. These buttons sit on the permanently dark blue banner
+    #: regardless of theme, so force them flat/transparent instead, matching
+    #: wx's own flat "-inverted" toolbar buttons.
+    _HEADER_TOOL_BUTTON_STYLE = (
+        "QToolButton {"
+        " border: none;"
+        " background: transparent;"
+        " padding: 4px;"
+        " border-radius: 4px;"
+        "}"
+        "QToolButton:hover {"
+        " background: rgba(255, 255, 255, 40);"
+        "}"
+        "QToolButton:pressed {"
+        " background: rgba(255, 255, 255, 70);"
+        "}"
+    )
 
     @classmethod
     def _header_tool_button(
@@ -3341,6 +3388,7 @@ class MainWindow(BaseWindow):
             button.setIcon(pixmap)
         button.setToolTip(lang.getstr(tooltip_key))
         button.setAutoRaise(True)
+        button.setStyleSheet(cls._HEADER_TOOL_BUTTON_STYLE)
         button.clicked.connect(lambda _checked=False: slot())
         return button
 
@@ -3377,6 +3425,39 @@ class MainWindow(BaseWindow):
         "QToolButton:hover:!checked {"
         " background: rgba(128, 128, 128, 30);"
         " border-radius: 4px;"
+        "}"
+    )
+
+    #: Plain ``autoRaise`` icon buttons that live inside a container carrying
+    #: its own stylesheet -- ``_build_info_panel``'s top-border separator,
+    #: ``_FLAT_GROUPBOX_STYLE`` on the Display/Instrument ``QGroupBox``es --
+    #: fall back to the CSS engine's default bevelled ``QToolButton`` chrome
+    #: (a visible box) instead of the flat, borderless look a plain
+    #: ``autoRaise`` button gets from the native style, because any
+    #: stylesheet on an ancestor forces every descendant through Qt's CSS
+    #: style engine, not just the ones a selector targets. Covers
+    #: ``display_tech_info_show_btn``, ``detect_displays_and_ports_btn``, the
+    #: four ``colorimeter_correction_*_btn``s, and every button built via
+    #: :meth:`_tool_button` (the Calibration tab's whitepoint/luminance/
+    #: ambient "Measure" buttons and the Profiling tab's "Advanced...",
+    #: testchart/save-path/placeholder buttons). Unlike
+    #: ``_HEADER_TOOL_BUTTON_STYLE`` these buttons sit on the ordinary themed
+    #: background rather than a fixed dark banner, so use a theme-neutral
+    #: gray hover/press tint instead of white -- and set it unconditionally
+    #: rather than relying on native hover feedback, since the forced CSS
+    #: engine rendering doesn't reliably repaint a hover state either.
+    _FLAT_TOOL_BUTTON_STYLE = (
+        "QToolButton {"
+        " border: none;"
+        " background: transparent;"
+        " padding: 4px;"
+        " border-radius: 4px;"
+        "}"
+        "QToolButton:hover {"
+        " background: rgba(128, 128, 128, 30);"
+        "}"
+        "QToolButton:pressed {"
+        " background: rgba(128, 128, 128, 60);"
         "}"
     )
 
@@ -3462,7 +3543,13 @@ class MainWindow(BaseWindow):
         # wx's info panels don't set an explicit background either (they
         # inherit the app's BGCOLOUR/FGCOLOUR like everything else); only the
         # separator above them (wx's ``shadow-bordertop.png``) is distinct.
-        panel.setStyleSheet("border-top: 1px solid palette(mid);")
+        # The rule must be scoped by object name: an unscoped declaration is
+        # an implicit universal ("*") selector, so it would paint its own
+        # top border on every descendant widget (each icon/text label, the
+        # extra button) instead of just the panel, producing one stray line
+        # per row rather than a single separator above the whole panel.
+        panel.setObjectName("infoPanel")
+        panel.setStyleSheet("QWidget#infoPanel { border-top: 1px solid palette(mid); }")
         outer = QVBoxLayout(panel)
         outer.setContentsMargins(16, 16, 16, 16)
         outer.setSpacing(12)
@@ -3539,6 +3626,7 @@ class MainWindow(BaseWindow):
 
         self.detect_displays_and_ports_btn = QToolButton()
         self.detect_displays_and_ports_btn.setAutoRaise(True)
+        self.detect_displays_and_ports_btn.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
         self.detect_displays_and_ports_btn.setToolTip(
             lang.getstr("detect_displays_and_ports")
         )
@@ -3719,6 +3807,7 @@ class MainWindow(BaseWindow):
         ccmx_row.addWidget(self.colorimeter_correction_matrix_ctrl, 1)
         self.colorimeter_correction_info_btn = QToolButton()
         self.colorimeter_correction_info_btn.setAutoRaise(True)
+        self.colorimeter_correction_info_btn.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
         self.colorimeter_correction_info_btn.setToolTip(
             lang.getstr("colorimeter_correction.info")
         )
@@ -3729,6 +3818,7 @@ class MainWindow(BaseWindow):
         ccmx_row.addWidget(self.colorimeter_correction_info_btn)
         self.colorimeter_correction_matrix_btn = QToolButton()
         self.colorimeter_correction_matrix_btn.setAutoRaise(True)
+        self.colorimeter_correction_matrix_btn.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
         self.colorimeter_correction_matrix_btn.setToolTip(
             lang.getstr("colorimeter_correction_matrix_file.choose")
         )
@@ -3739,6 +3829,7 @@ class MainWindow(BaseWindow):
         ccmx_row.addWidget(self.colorimeter_correction_matrix_btn)
         self.colorimeter_correction_web_btn = QToolButton()
         self.colorimeter_correction_web_btn.setAutoRaise(True)
+        self.colorimeter_correction_web_btn.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
         self.colorimeter_correction_web_btn.setToolTip(
             lang.getstr("colorimeter_correction.web_check")
         )
@@ -3749,6 +3840,7 @@ class MainWindow(BaseWindow):
         ccmx_row.addWidget(self.colorimeter_correction_web_btn)
         self.colorimeter_correction_create_btn = QToolButton()
         self.colorimeter_correction_create_btn.setAutoRaise(True)
+        self.colorimeter_correction_create_btn.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
         self.colorimeter_correction_create_btn.setToolTip(
             lang.getstr("colorimeter_correction.create")
         )
@@ -3762,6 +3854,7 @@ class MainWindow(BaseWindow):
         self.display_tech_info_show_btn = QToolButton()
         self.display_tech_info_show_btn.setAutoRaise(True)
         self.display_tech_info_show_btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.display_tech_info_show_btn.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
         self._themed_icon(self.display_tech_info_show_btn, 16, "info")
         self.display_tech_info_show_btn.setText(lang.getstr("info.display_tech.show"))
         self.display_tech_info_show_btn.clicked.connect(
@@ -4710,9 +4803,19 @@ class MainWindow(BaseWindow):
     def _tool_button(
         self, icon_name: str, tooltip_key: str, handler: Callable[[], None]
     ) -> QToolButton:
-        """Build a flat 16px icon button, mirroring wx's ``wxBitmapButton`` rows."""
+        """Build a flat 16px icon button, mirroring wx's ``wxBitmapButton`` rows.
+
+        Used for the Calibration tab's whitepoint/luminance/ambient "Measure"
+        buttons and the Profiling tab's "Advanced...", testchart chooser/
+        editor, name-placeholder and save-path buttons. Sets
+        ``_FLAT_TOOL_BUTTON_STYLE`` explicitly (see that constant) so these
+        stay borderless with a consistent hover/press tint in both themes,
+        the same treatment applied to the header, info-panel and detect/
+        colorimeter-correction buttons.
+        """
         button = QToolButton()
         button.setAutoRaise(True)
+        button.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
         button.setToolTip(lang.getstr(tooltip_key))
         self._themed_icon(button, 16, icon_name)
         button.clicked.connect(handler)

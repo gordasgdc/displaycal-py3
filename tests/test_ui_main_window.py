@@ -8548,6 +8548,64 @@ def test_palette_change_event_refreshes_themed_icons(window, monkeypatch):
     assert calls
 
 
+def test_palette_change_event_repolishes_styled_widgets(window, monkeypatch):
+    """A live light/dark switch must repolish every stylesheet-styled widget.
+
+    Qt's QSS engine resolves any style property a widget's stylesheet leaves
+    unset (e.g. text colour, for ``_TAB_BUTTON_STYLE``/``_FLAT_GROUPBOX_STYLE``
+    widgets) from the palette once, at that widget's first polish, and never
+    re-reads it on a later ``QApplication.setPalette()`` call -- unlike a
+    plain widget with no stylesheet, which tracks palette changes live. Tab
+    labels and group-box titles became unreadable after a real light-to-dark
+    switch confirmed this live; :meth:`MainWindow._repolish_styled_widgets`
+    fixes it by forcing an unpolish/polish cycle.
+    """
+    from qtpy.QtCore import QEvent
+
+    calls = []
+    original = mw.MainWindow._repolish_styled_widgets
+
+    def spy(self):
+        calls.append(True)
+        original(self)
+
+    monkeypatch.setattr(mw.MainWindow, "_repolish_styled_widgets", spy)
+    window.changeEvent(QEvent(QEvent.PaletteChange))
+    assert calls
+
+
+class _PolishSpyStyle:
+    """Wraps a real ``QStyle`` to record ``polish``/``unpolish`` calls."""
+
+    def __init__(self, real_style, calls):
+        self._real_style = real_style
+        self._calls = calls
+
+    def polish(self, widget):
+        self._calls.append(widget)
+        return self._real_style.polish(widget)
+
+    def unpolish(self, widget):
+        return self._real_style.unpolish(widget)
+
+    def __getattr__(self, name):
+        return getattr(self._real_style, name)
+
+
+def test_repolish_styled_widgets_only_touches_stylesheet_widgets(window, monkeypatch):
+    """Only widgets with a non-empty stylesheet should get repolished."""
+    styled = window.calibrate_btn  # has _ACTION_BUTTON_STYLE
+    assert styled.styleSheet()
+    plain = window.calibration_file_ctrl  # a combo box, no stylesheet
+    assert not plain.styleSheet()
+
+    calls = []
+    spy_style = _PolishSpyStyle(styled.style(), calls)
+    monkeypatch.setattr(styled, "style", lambda: spy_style)
+    window._repolish_styled_widgets()
+    assert styled in calls
+
+
 def test_themed_icon_updaters_reflect_current_theme(window, monkeypatch):
     """Replaying the updaters must pick up ``is_dark()`` at refresh time."""
     seen_dark_values = []
