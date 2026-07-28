@@ -191,6 +191,12 @@ def build_web_check_params(worker: Worker) -> dict:
     ``MainFrame.colorimeter_correction_web_handler`` (the ``http_request``
     call itself, and its progress reporting, stay with the caller).
 
+    Uses ``worker.get_display_generic_name()`` (falling back to
+    ``get_display_name()``) for the ``display`` param: the online database is
+    keyed by generic monitor names ("Color LCD"), and for Apple built-in
+    displays ``get_display_name()`` substitutes the machine model id
+    ("MacBookPro18,1"), which the database has no entries for.
+
     Args:
         worker: The running :class:`DisplayCAL.worker.Worker`, used to derive
             the current display/instrument.
@@ -204,7 +210,9 @@ def build_web_check_params(worker: Worker) -> dict:
         "get": True,
         "type": filetype,
         "manufacturer_id": worker.get_display_edid().get("manufacturer_id", ""),
-        "display": worker.get_display_name(False, True) or "Unknown",
+        "display": worker.get_display_generic_name()
+        or worker.get_display_name(False, True)
+        or "Unknown",
         "instrument": worker.get_instrument_name() or "Unknown",
         "json": 1,
     }

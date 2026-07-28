@@ -185,6 +185,7 @@ class TestBuildWebCheckParams:
         worker = MagicMock()
         worker.instrument_supports_ccss.return_value = True
         worker.get_display_edid.return_value = {"manufacturer_id": "DEL"}
+        worker.get_display_generic_name.return_value = "Dell U2413"
         worker.get_display_name.return_value = "Dell U2413"
         worker.get_instrument_name.return_value = "i1 Pro"
         params = cc.build_web_check_params(worker)
@@ -197,10 +198,21 @@ class TestBuildWebCheckParams:
             "json": 1,
         }
 
+    def test_falls_back_to_display_name_when_no_generic_name(self):
+        worker = MagicMock()
+        worker.instrument_supports_ccss.return_value = True
+        worker.get_display_edid.return_value = {"manufacturer_id": "APP"}
+        worker.get_display_generic_name.return_value = ""
+        worker.get_display_name.return_value = "MacBookPro18,1"
+        worker.get_instrument_name.return_value = "i1 DisplayPro"
+        params = cc.build_web_check_params(worker)
+        assert params["display"] == "MacBookPro18,1"
+
     def test_falls_back_to_ccmx_only_and_unknown(self):
         worker = MagicMock()
         worker.instrument_supports_ccss.return_value = False
         worker.get_display_edid.return_value = {}
+        worker.get_display_generic_name.return_value = ""
         worker.get_display_name.return_value = None
         worker.get_instrument_name.return_value = None
         params = cc.build_web_check_params(worker)
