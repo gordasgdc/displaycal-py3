@@ -19,7 +19,13 @@ qtpy >= 2.4
 Send2Trash
 typing_extensions; python_version < "3.11"
 WMI; sys_platform == "win32"
-# wxPython is being phased out in favour of Qt (qtpy/PySide6) for DisplayCAL 4.0.
-# It is still required by the not-yet-ported legacy wx_* modules.
-wxPython >= 4.2.2
+# wxPython is being phased out in favour of Qt (qtpy/PySide6) for DisplayCAL 4.0
+# and is only still required by the not-yet-ported legacy wx_* modules, so
+# pinned to the last version we've verified rather than left open-ended.
+# Capping matters most on Linux: wxPython has no PyPI wheels there at all
+# (built instead by extras.wxpython.org, which lags upstream releases by
+# distro), so an unpinned install can pick a version with no Linux wheel yet
+# and fall back to a from-source sdist build our CI images aren't set up for
+# (missing gtk+-3.0/libcurl dev headers).
+wxPython == 4.2.5
 zeroconf

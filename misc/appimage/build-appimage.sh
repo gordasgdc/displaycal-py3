@@ -59,9 +59,17 @@ LIBPYTHON="$(ldd "$(command -v "python${PYVER}")" | awk '/libpython/{print $3}')
 # 2. Install DisplayCAL and its dependencies straight into that prefix,
 #    including the Ubuntu-matched wxPython wheel.
 "$APPDIR/usr/bin/python3" -m ensurepip --upgrade
+# --only-binary wxpython: this script only installs runtime libraries (see
+# top-of-file note), not the gtk+-3.0/libcurl dev headers a from-source
+# wxPython build needs. Without this flag, a wxPython release that has no
+# prebuilt wheel here yet (upstream published, extras.wxpython.org hasn't
+# caught up) silently falls through to a slow from-source build that then
+# fails on missing headers; this instead fails fast with a clear
+# "no matching distribution" error.
 "$APPDIR/usr/bin/python3" -m pip install --upgrade \
   --prefix "$APPDIR/usr" \
   --find-links "https://extras.wxpython.org/wxPython4/extras/linux/gtk3/ubuntu-${UBUNTU_RELEASE}/" \
+  --only-binary wxpython \
   "$WHEEL_PATH"
 
 # 2b. Prune Qt subsystems DisplayCAL/pyqtgraph/qtpy never import (verified via
