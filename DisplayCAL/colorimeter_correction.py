@@ -1578,7 +1578,14 @@ def resolve_colorimeter_correction_selection(
     if ccmx_cfg[0] == "AUTO":
         if len(ccmx_cfg) < 2:
             ccmx_cfg.append("")
-        display_name = worker.get_display_name(False, True, False)
+        # Local CCMX/CCSS files are keyed by their own generic DISPLAY field
+        # ("Color LCD"), never by an Apple machine model id, so matching
+        # must use the generic name too (see get_display_generic_name()'s
+        # docstring / build_web_check_params, which need the same fix for
+        # the same reason).
+        display_name = worker.get_display_generic_name() or worker.get_display_name(
+            False, True, False
+        )
         if worker.instrument_supports_ccss():
             # Prefer CCSS
             ccmx_cfg[1] = catalog.mapping.get(f"\0{display_name}", "")
