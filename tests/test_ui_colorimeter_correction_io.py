@@ -100,6 +100,63 @@ class TestWebCheckChooserDialog:
         dialog._table.selectRow(1)
         assert dialog._buttons.button(ccio.QDialogButtonBox.Ok).isEnabled()
 
+    def test_table_is_sortable(self, qapp):
+        dialog = ccio._WebCheckChooserDialog([_ROW], None)
+        assert dialog._table.isSortingEnabled()
+
+    def test_de00_columns_sort_numerically_not_lexicographically(self, qapp):
+        from qtpy.QtCore import Qt as _Qt
+
+        rows = [
+            dict(_ROW, cgats=b"A", display="A Display", fit_avg_de00="10.0"),
+            dict(_ROW, cgats=b"B", display="B Display", fit_avg_de00="2.0"),
+            dict(_ROW, cgats=b"C", display="C Display", fit_avg_de00="1.5"),
+        ]
+        dialog = ccio._WebCheckChooserDialog(rows, None)
+        col = dialog._COLUMN_KEYS.index("fit_avg_de00")
+        dialog._table.sortByColumn(col, _Qt.AscendingOrder)
+        displays = [
+            dialog._table.item(r, 0).data(_Qt.UserRole)["display"]
+            for r in range(dialog._table.rowCount())
+        ]
+        # Numeric order (1.5 < 2.0 < 10.0), not lexicographic ("1.5" <
+        # "10.0" < "2.0").
+        assert displays == ["C Display", "B Display", "A Display"]
+
+    def test_de00_column_sort_with_non_numeric_values_does_not_recurse(self, qapp):
+        # Regression test: rows where fit_max_de00 is "Not applicable" (CCSS
+        # entries, not CCMX) mixed with numeric CCMX entries once triggered
+        # infinite recursion, because the non-numeric fallback called
+        # super().__lt__(), which PySide re-dispatches back to this very
+        # override rather than the base implementation.
+        from qtpy.QtCore import Qt as _Qt
+
+        rows = [
+            dict(_ROW, cgats=b"A", display="A Display", fit_max_de00="Not applicable"),
+            dict(_ROW, cgats=b"B", display="B Display", fit_max_de00="2.0"),
+            dict(_ROW, cgats=b"C", display="C Display", fit_max_de00="1.0"),
+        ]
+        dialog = ccio._WebCheckChooserDialog(rows, None)
+        col = dialog._COLUMN_KEYS.index("fit_max_de00")
+        dialog._table.sortByColumn(col, _Qt.AscendingOrder)
+        assert dialog._table.rowCount() == 3
+
+    def test_accept_returns_correct_row_after_sorting(self, qapp):
+        from qtpy.QtCore import Qt as _Qt
+
+        rows = [
+            dict(_ROW, cgats=b"A", display="A Display", fit_avg_de00="10.0"),
+            dict(_ROW, cgats=b"B", display="B Display", fit_avg_de00="2.0"),
+            dict(_ROW, cgats=b"C", display="C Display", fit_avg_de00="1.5"),
+        ]
+        dialog = ccio._WebCheckChooserDialog(rows, None)
+        col = dialog._COLUMN_KEYS.index("fit_avg_de00")
+        dialog._table.sortByColumn(col, _Qt.AscendingOrder)
+        # After sorting, visual row 0 is "C Display" (lowest ΔE*00 avg).
+        dialog._table.selectRow(0)
+        dialog.accept()
+        assert dialog.selected_cgats == b"C"
+
 
 class TestWebCheckController:
     def test_fetch_failure_shows_message_and_finishes(self, qapp, worker, monkeypatch):
