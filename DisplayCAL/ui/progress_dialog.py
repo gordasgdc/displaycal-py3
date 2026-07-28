@@ -73,7 +73,7 @@ QDialog#progressdialog QPushButton {
     color: #FFFFFF;
     background-color: #222222;
     border: none;
-    border-radius: 3px;
+    border-radius: 8px;
     padding: 5px 14px;
 }
 QDialog#progressdialog QPushButton:hover {
@@ -229,19 +229,22 @@ class ProgressDialog(QDialog):
 
         button_row = QHBoxLayout()
         button_row.addStretch(1)
+        button_height = 31
         self.sound_on_off_btn = QPushButton()
         self.sound_on_off_btn.setObjectName("soundButton")
         self.sound_on_off_btn.setIcon(self._sound_icon())
         self.sound_on_off_btn.setIconSize(QSize(16, 16))
-        self.sound_on_off_btn.setFixedSize(28, 28)
+        self.sound_on_off_btn.setFixedSize(button_height, button_height)
         self.sound_on_off_btn.clicked.connect(self._on_sound_toggle)
         button_row.addWidget(self.sound_on_off_btn)
         self.pause_button = QPushButton(lang.getstr("pause"))
+        self.pause_button.setFixedHeight(button_height)
         self.pause_button.setVisible(pauseable)
         self.pause_button.clicked.connect(self._on_pause_clicked)
         button_row.addWidget(self.pause_button)
         if cancelable:
             self.cancel_button: QPushButton | None = QPushButton(lang.getstr("cancel"))
+            self.cancel_button.setFixedHeight(button_height)
             self.cancel_button.clicked.connect(self._on_cancel_clicked)
             button_row.addWidget(self.cancel_button)
         else:

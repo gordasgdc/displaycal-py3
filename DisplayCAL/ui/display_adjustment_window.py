@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from qtpy.QtCore import Qt, Signal
+from qtpy.QtCore import QSize, Qt, Signal
 from qtpy.QtGui import QIcon, QPainter, QPixmap
 from qtpy.QtWidgets import (
     QButtonGroup,
@@ -67,6 +67,40 @@ BGCOLOUR = "#333333"
 BORDERCOLOUR = "#222222"
 FGCOLOUR = "#999999"
 GREEN = "#33cc00"
+
+# wx sizes gauges and their markers at a fixed 200 (* dpiscale) px wide
+# instead of letting them stretch with the window
+# (``wx_display_adjustment_frame.py:681``, ``:713``).
+_GAUGE_WIDTH = 200
+
+# Flat dark button chrome matching wx's hand-painted ``FlatShadedButton``
+# (``DisplayCAL/wx_windows.py``, ``OnPaint``): borderless, rounded, #222222
+# fill with #999999 text, lightened on hover/press. Scoped by object name so
+# it doesn't bleed onto ``_SelectorButton``'s own (differently styled)
+# ``QToolButton``s.
+_ACTION_BUTTON_STYLESHEET = """
+QPushButton#adjustmentBtn, QPushButton#calibrationBtn, QToolButton#soundButton {
+    color: #999999;
+    background-color: #222222;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+}
+QPushButton#adjustmentBtn:hover, QPushButton#calibrationBtn:hover, QToolButton#soundButton:hover {
+    background-color: #3d3d3d;
+    color: #b3b3b3;
+}
+QPushButton#adjustmentBtn:pressed, QPushButton#calibrationBtn:pressed, QToolButton#soundButton:pressed {
+    background-color: #1a1a1a;
+}
+QPushButton#adjustmentBtn:disabled, QPushButton#calibrationBtn:disabled {
+    color: #5c5c5c;
+    background-color: #1a1a1a;
+}
+QToolButton#soundButton {
+    padding: 8px;
+}
+"""
 
 # Gauge bar gradients (dark -> bright shade), per channel, from
 # ``DisplayAdjustmentPanel.add_gauge``'s ``gaugecolors``. The dim set is used
@@ -118,6 +152,61 @@ _LUM_ICONS = {
 def _pixmap_icon(size: int, name: str) -> QIcon:
     """Return a themed pixmap wrapped as a ``QIcon`` (possibly empty)."""
     return QIcon(get_theme_pixmap(size, name))
+
+
+#: Gap baked into each action-button icon's own pixmap, right after its
+#: opaque content, so the rendered icon-to-text gap matches wx's explicit
+#: 10px ``constant`` between bitmap and label
+#: (``FlatShadedButton.DoGetBestSize``, ``wx_windows.py:3989``). Qt's own
+#: built-in icon/text spacing on ``QPushButton`` is only a couple of pixels
+#: and isn't exposed as a stylesheet property, so the gap has to live in the
+#: icon itself.
+_BUTTON_ICON_TEXT_GAP = 8
+
+
+def _button_icon(name: str, height: int = 10) -> tuple[QIcon, QSize]:
+    """A ``play``/``pause``/``skip`` icon plus the ``QSize`` to display it at.
+
+    These only exist as ``10x10`` assets (``skip.png`` is actually a 22x10
+    ">>|" glyph -- not square), too small to read clearly next to the 16px
+    sound-button icon in the same row. Loads the ``@2x`` (double-resolution)
+    variant when available so downscaling to ``height`` stays crisp, the same
+    trick :func:`~DisplayCAL.ui.assets.get_header_icon_pixmap` uses for retina
+    assets elsewhere in the Qt port, and derives the width from the source's
+    own aspect ratio rather than forcing a square box (which would squash
+    ``skip``), mirroring wx's ``FlatShadedButton.DoGetBestSize`` pinning only
+    the bitmap's height and keeping its native width
+    (``wx_windows.py:3994-3998``).
+
+    The returned pixmap has :data:`_BUTTON_ICON_TEXT_GAP` of trailing
+    transparent padding baked in (and the returned size includes it), so the
+    button's built-in icon/text gap doesn't need to be relied on.
+    """
+    path = get_data_path(f"theme/icons/10x10/{name}@2x.png") or get_data_path(
+        f"theme/icons/10x10/{name}.png"
+    )
+    pixmap = QPixmap(path) if path else QPixmap()
+    if pixmap.isNull():
+        return QIcon(), QSize(height, height)
+    # Qt auto-detects the "@2x" filename suffix and sets devicePixelRatio=2,
+    # which makes drawPixmap() render it at HALF the size computed below
+    # (size() returns raw buffer pixels, but painting honours the ratio).
+    # Reset it since we're doing our own manual height-based scaling.
+    pixmap.setDevicePixelRatio(1.0)
+    width = round(pixmap.width() * height / pixmap.height())
+    scaled = pixmap.scaled(
+        width,
+        height,
+        Qt.AspectRatioMode.IgnoreAspectRatio,
+        Qt.TransformationMode.SmoothTransformation,
+    )
+    padded_width = width + _BUTTON_ICON_TEXT_GAP
+    padded = QPixmap(padded_width, height)
+    padded.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(padded)
+    painter.drawPixmap(0, 0, scaled)
+    painter.end()
+    return QIcon(padded), QSize(padded_width, height)
 
 
 def _tab_state_pixmap(name: str) -> QPixmap:
@@ -202,11 +291,15 @@ def _marker_label(direction: str) -> QLabel:
     The asset is a 200x10 PNG that is transparent except for a short tick at
     its horizontal centre; port of ``DisplayAdjustmentPanel.add_marker``,
     which places one above and one below every gauge to mark the target
-    (50%) position. Stretched to the gauge's actual (DPI/layout-dependent)
-    width via ``setScaledContents`` so the tick stays exactly centred.
+    (50%) position. wx sizes both the marker and the gauge it belongs to at a
+    fixed ``200 * scale`` px wide (``add_gauge``/``add_marker``,
+    ``wx_display_adjustment_frame.py:681``, ``:713``) rather than letting them
+    stretch with the window, so the tick renders at its authored width;
+    letting our grid column stretch to fill the page (as it did before)
+    doubled the asset's width along with everything else in that column.
     """
     label = QLabel()
-    label.setFixedHeight(10)
+    label.setFixedSize(_GAUGE_WIDTH, 10)
     label.setScaledContents(True)
     path = get_data_path(f"theme/marker_{direction}.png")
     if path:
@@ -260,7 +353,11 @@ class _AdjustmentPage(QWidget):
 
         outer = QVBoxLayout(self)
         title_label = QLabel(title)
-        title_label.setStyleSheet(f"color: {FGCOLOUR}; font-weight: bold;")
+        title_label.setStyleSheet(f"color: {FGCOLOUR};")
+        title_font = title_label.font()
+        title_font.setPointSize(title_font.pointSize() + 1)
+        title_font.setBold(True)
+        title_label.setFont(title_font)
         outer.addWidget(title_label)
         self.desc = QLabel(" ")
         self.desc.setWordWrap(True)
@@ -333,7 +430,7 @@ class _AdjustmentPage(QWidget):
         gauge.setRange(0, 100)
         gauge.setValue(0)
         gauge.setTextVisible(False)
-        gauge.setFixedHeight(10)
+        gauge.setFixedSize(_GAUGE_WIDTH, 10)
         gauge.setStyleSheet(_gauge_stylesheet(name, self.ctrltype))
         self.gauges[name] = gauge
         self._grid.addWidget(head, self._row, 0)
@@ -449,7 +546,10 @@ class DisplayAdjustmentWindow(BaseWindow):
             title=lang.getstr("calibration.interactive_display_adjustment"),
             icon_name=APPNAME.lower(),
         )
-        self.setStyleSheet(f"QWidget {{ background-color: {BGCOLOUR}; }}")
+        self.setStyleSheet(
+            f"QWidget {{ background-color: {BGCOLOUR}; }}\n"
+            + _ACTION_BUTTON_STYLESHEET
+        )
 
         # Parse / phase state, mirroring the wx frame.
         self.keep_going = True
@@ -462,7 +562,9 @@ class DisplayAdjustmentWindow(BaseWindow):
 
         central = QWidget()
         self.setCentralWidget(central)
-        root = QHBoxLayout(central)
+        root = QVBoxLayout(central)
+        top = QHBoxLayout()
+        root.addLayout(top, 1)
 
         # Left: an icon-only page selector (the wx ``FlatImageBook`` tab column).
         self._selector = QButtonGroup(self)
@@ -488,11 +590,13 @@ class DisplayAdjustmentWindow(BaseWindow):
             self._selector_buttons.append(button)
             selector_col.addWidget(button)
         selector_col.addStretch(1)
-        root.addLayout(selector_col)
+        top.addLayout(selector_col)
 
-        # Right: the stacked adjustment pages over an indicator + button bar.
-        right = QVBoxLayout()
-        right.addWidget(self._stack, 1)
+        # Right: the stacked adjustment pages.
+        top.addWidget(self._stack, 1)
+
+        # Button bar spans the full width of the dialog, below the selector
+        # column and the stacked pages, matching the wx frame's layout.
         button_row = QHBoxLayout()
         self._indicator = QLabel()
         self._indicator.setFixedSize(10, 10)
@@ -501,19 +605,31 @@ class DisplayAdjustmentWindow(BaseWindow):
         self.adjustment_btn = QPushButton(
             lang.getstr("calibration.interactive_display_adjustment.start")
         )
+        button_height = 31
+        self.adjustment_btn.setObjectName("adjustmentBtn")
+        self.adjustment_btn.setFixedHeight(button_height)
+        icon, icon_size = _button_icon("play")
+        self.adjustment_btn.setIcon(icon)
+        self.adjustment_btn.setIconSize(icon_size)
         self.adjustment_btn.setEnabled(False)
         self.adjustment_btn.clicked.connect(self.start_interactive_adjustment)
         button_row.addWidget(self.adjustment_btn)
         self.sound_on_off_btn = QToolButton()
+        self.sound_on_off_btn.setFixedHeight(button_height)
+        self.sound_on_off_btn.setObjectName("soundButton")
         self.sound_on_off_btn.setToolTip(lang.getstr("measurement.play_sound"))
         self.sound_on_off_btn.clicked.connect(self._toggle_sound)
         button_row.addWidget(self.sound_on_off_btn)
         self.calibration_btn = QPushButton(lang.getstr("calibration.start"))
+        self.calibration_btn.setObjectName("calibrationBtn")
+        self.calibration_btn.setFixedHeight(button_height)
+        icon, icon_size = _button_icon("skip")
+        self.calibration_btn.setIcon(icon)
+        self.calibration_btn.setIconSize(icon_size)
         self.calibration_btn.setEnabled(False)
         self.calibration_btn.clicked.connect(self.continue_to_calibration)
         button_row.addWidget(self.calibration_btn)
-        right.addLayout(button_row)
-        root.addLayout(right, 1)
+        root.addLayout(button_row)
 
         self._set_sound_icon()
         self.setup()
@@ -723,6 +839,7 @@ class DisplayAdjustmentWindow(BaseWindow):
         """Set the sound button icon from the current setting."""
         name = "sound_volume_full" if getcfg("measurement.play_sound") else "sound_off"
         self.sound_on_off_btn.setIcon(_pixmap_icon(16, name))
+        self.sound_on_off_btn.setIconSize(QSize(13, 13))
 
     def _play_sound(self) -> None:
         """Best-effort single beep on a fresh reading (overridable seam)."""
@@ -767,10 +884,13 @@ class DisplayAdjustmentWindow(BaseWindow):
         self.abort_and_send("7" if getcfg("trc") else "8")
 
     def _set_adjustment_button(self, startstop: str, *, enabled: bool) -> None:
-        """Set the start/stop button's label and enabled state."""
+        """Set the start/stop button's label, icon and enabled state."""
         self.adjustment_btn.setText(
             lang.getstr(f"calibration.interactive_display_adjustment.{startstop}")
         )
+        icon, icon_size = _button_icon("pause" if startstop == "stop" else "play")
+        self.adjustment_btn.setIcon(icon)
+        self.adjustment_btn.setIconSize(icon_size)
         self.adjustment_btn.setEnabled(enabled)
 
     # -- keyboard -----------------------------------------------------------
