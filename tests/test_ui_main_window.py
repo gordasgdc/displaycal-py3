@@ -2886,7 +2886,13 @@ def test_macos_bugs_cal_warning_yes_resets_controls(window, monkeypatch):
         mw.preflight_checks, "should_warn_calibration_bugs", lambda: True
     )
     monkeypatch.setattr(mw.preflight_checks, "should_warn_profile_bugs", lambda: False)
-    monkeypatch.setattr(mw.QMessageBox, "warning", lambda *a, **k: mw.QMessageBox.Yes)
+    calls = []
+
+    def _warning(*args, **kwargs):
+        calls.append(args)
+        return mw.QMessageBox.Yes
+
+    monkeypatch.setattr(mw.QMessageBox, "warning", _warning)
     window.black_luminance_ctrl.setCurrentIndex(1)
     window.black_point_correction_ctrl.setValue(50)
     setcfg("calibration.black_point_correction.auto", 1)
@@ -2896,6 +2902,7 @@ def test_macos_bugs_cal_warning_yes_resets_controls(window, monkeypatch):
     assert window.black_luminance_ctrl.currentIndex() == 0
     assert window.black_point_correction_ctrl.value() == 0
     assert getcfg("calibration.black_point_correction.auto") == 0
+    assert calls[0][-1] == mw.QMessageBox.Yes
 
 
 def test_macos_bugs_cal_warning_cancel_aborts(window, monkeypatch):
@@ -2917,7 +2924,13 @@ def test_macos_bugs_profile_warning_yes_updates_profile_controls(window, monkeyp
         mw.preflight_checks, "macos_bugs_warning_applicable", lambda: True
     )
     monkeypatch.setattr(mw.preflight_checks, "should_warn_profile_bugs", lambda: True)
-    monkeypatch.setattr(mw.QMessageBox, "warning", lambda *a, **k: mw.QMessageBox.Yes)
+    calls = []
+
+    def _warning(*args, **kwargs):
+        calls.append(args)
+        return mw.QMessageBox.Yes
+
+    monkeypatch.setattr(mw.QMessageBox, "warning", _warning)
     setcfg("profile.type", "g")
     setcfg("profile.black_point_compensation", 0)
 
@@ -2926,6 +2939,7 @@ def test_macos_bugs_profile_warning_yes_updates_profile_controls(window, monkeyp
     assert getcfg("profile.type") == "S"
     assert getcfg("profile.black_point_compensation") == 1
     assert window.black_point_compensation_cb.isChecked() is True
+    assert calls[0][-1] == mw.QMessageBox.Yes
 
 
 class _FakeCalChoiceDialog:
