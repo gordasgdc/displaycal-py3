@@ -3,6 +3,27 @@
 Installation Instructions (Linux)
 =================================
 
+ArgyllCMS Requirement
+----------------------
+
+DisplayCAL relies on [ArgyllCMS](https://www.argyllcms.com/) to talk to your
+measurement instrument and take the actual readings, it is not bundled with any of
+the packages/installers or install methods described below and needs to be obtained
+separately.
+
+You don't have to grab it upfront though. The first time you launch DisplayCAL and it
+can't find a working ArgyllCMS installation, it will offer to either **download** a
+matching build for you automatically (from
+[eoyilmaz/argyllcms-binaries](https://github.com/eoyilmaz/argyllcms-binaries/releases)),
+or **browse** to an existing installation already on your system.
+
+If you'd rather install it yourself first (e.g. through your distro's package
+manager, or manually from the
+[ArgyllCMS releases page](https://github.com/eoyilmaz/argyllcms-binaries/releases)),
+that works too, DisplayCAL will pick it up automatically if it's on your `PATH`.
+Otherwise, point DisplayCAL at its `bin` folder via *File -> Locate ArgyllCMS
+executables...* whenever you need to change it.
+
 Install with Package
 ---------------------
 
