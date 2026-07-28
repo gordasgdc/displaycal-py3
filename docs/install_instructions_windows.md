@@ -6,7 +6,12 @@ Install with Installer
 
 We now have a proper [installer](https://www.github.com/eoyilmaz/displaycal-py3/releases) for Windows
 and this is the preferred way of running DisplayCAL under Windows (unless you want to
-test the latest code).
+test the latest code). Each release publishes two installers, pick the one matching your
+system:
+
+* `DisplayCAL-<version>-Windows-x64.exe`, for regular 64-bit (x86_64) Windows systems
+* `DisplayCAL-<version>-Windows-arm64.exe`, for Windows on ARM (e.g. Snapdragon-based
+  laptops)
 
 > [!NOTE]
 > ArgyllCMS 3.5.0 adds native Windows ARM64 binaries (`Argyll_V3.5.0_win_arm64_exe.zip`)

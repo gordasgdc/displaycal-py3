@@ -3,11 +3,47 @@
 Installation Instructions (Linux)
 =================================
 
-Although, there are currently no RPM, DEB or other common packages to install DisplayCAL
-directly under Linux, some distros supply recent DisplayCAL versions in their package
-management systems. Please search for them first.
+Install with Package
+---------------------
 
-Otherwise you can install DisplayCAL under Linux pretty easily.
+We publish DEB, RPM, Flatpak and AppImage packages for each
+[release](https://www.github.com/eoyilmaz/displaycal-py3/releases), and this is the
+preferred way of running DisplayCAL under Linux (unless you want to test the latest
+code). Pick whichever matches your distro/preference:
+
+* `DisplayCAL-<version>-Linux-amd64.deb`, for Debian/Ubuntu and other DEB-based distros:
+
+  ```shell
+  sudo apt install ./DisplayCAL-<version>-Linux-amd64.deb
+  ```
+
+* `DisplayCAL-<version>-Linux-x86_64.rpm`, for Fedora/openSUSE and other RPM-based
+  distros:
+
+  ```shell
+  sudo dnf install ./DisplayCAL-<version>-Linux-x86_64.rpm
+  ```
+
+* `DisplayCAL-<version>-Linux-x86_64.flatpak`, distro-independent:
+
+  ```shell
+  flatpak install ./DisplayCAL-<version>-Linux-x86_64.flatpak
+  ```
+
+* `DisplayCAL-<version>-Linux-x86_64.AppImage`, distro-independent, no installation
+  needed:
+
+  ```shell
+  chmod +x DisplayCAL-<version>-Linux-x86_64.AppImage
+  ./DisplayCAL-<version>-Linux-x86_64.AppImage
+  ```
+
+Also, some distros supply recent DisplayCAL versions in their own package management
+systems, please search for them first if you'd rather use your distro's native
+packaging.
+
+If none of these suit your needs, you can install DisplayCAL under Linux pretty easily
+through PyPI or by building it from source, as described below.
 
 Prerequisites
 -------------

@@ -6,7 +6,11 @@ Install with Installer
 
 We now have a proper [installer](https://www.github.com/eoyilmaz/displaycal-py3/releases)
 for MacOS and this is the preferred way of running DisplayCAL under MacOS (unless you
-want to test the latest code).
+want to test the latest code). Each release publishes two disk images, pick the one
+matching your Mac:
+
+* `DisplayCAL-<version>-macOS-arm64.dmg`, for Apple Silicon Macs (M1 and newer)
+* `DisplayCAL-<version>-macOS-x86_64.dmg`, for Intel Macs
 
 > [!NOTE]
 > ArgyllCMS 3.5.0 adds native Apple Silicon binaries
