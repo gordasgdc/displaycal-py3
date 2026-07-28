@@ -1150,6 +1150,16 @@ class AdjustmentController(QObject):
         running wx event loop pumping ``wx.CallAfter``, so without this poll
         the adjustment window would neither hide nor hand off to a progress
         dialog once "Continue calibration" moves past the interactive step.
+
+        Also mirrors wx's ``not self._detecting_video_levels`` guard:
+        ``Worker.calibrate()`` runs ``detect_video_levels()`` (a ``dispread``
+        patch measurement) *before* ``dispcal`` whenever Output Levels is set
+        to Auto, and that pre-check emits the same ``Patch N of M`` progress
+        text this poll looks for. Without the guard, a slow Auto detection
+        gets mistaken for real calibration progress, swaps the still-blank
+        adjustment window out for a plain progress dialog, and then never
+        recovers once ``dispcal``'s interactive menu re-shows the adjustment
+        window on top of it (issue #967).
         """
         from DisplayCAL.worker import FilteredStream
 
@@ -1168,6 +1178,7 @@ class AdjustmentController(QObject):
             if (
                 percentage is not None
                 and time() > self._start_time + 3
+                and not getattr(self._worker, "_detecting_video_levels", False)
                 and not getattr(self._window, "is_measuring", False)
             ):
                 self._swap_to_progress_dialog()

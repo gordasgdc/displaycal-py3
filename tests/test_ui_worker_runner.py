@@ -908,6 +908,32 @@ def test_adjustment_controller_does_not_swap_while_measuring(qapp):
         assert _spin_until(qapp, lambda: ctrl.is_running is False)
 
 
+def test_adjustment_controller_does_not_swap_while_detecting_video_levels(qapp):
+    # Worker.calibrate() runs detect_video_levels() (a dispread patch
+    # measurement) before dispcal whenever Output Levels is Auto, emitting the
+    # same "Patch N of M" progress text the swap logic looks for. Swapping to
+    # the progress dialog during that pre-check would strand a plain
+    # ProgressDialog on screen once dispcal's interactive menu re-shows the
+    # adjustment window afterwards (issue #967).
+    window = _FakeAdjustmentWindow()
+    block = Event()
+    worker = FakeCalibrateWorker(block=block)
+    worker.recent = _FakeBuffer()
+    worker.lastmsg = _FakeBuffer()
+    worker._detecting_video_levels = True
+    ctrl = wr.AdjustmentController(worker, window)
+    try:
+        ctrl.run(remove=True)
+        ctrl._start_time -= 10
+        worker.lastmsg.set("Patch 26 of 100")
+        ctrl._on_poll()
+        assert ctrl._swapped is False
+        assert window.shown is True
+    finally:
+        block.set()
+        assert _spin_until(qapp, lambda: ctrl.is_running is False)
+
+
 def test_adjustment_controller_cancel_after_swap_aborts_worker(qapp):
     window = _FakeAdjustmentWindow()
     block = Event()
