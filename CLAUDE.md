@@ -508,7 +508,19 @@ rezolvare de conflict necesară). Push-uit pe `origin/develop`.
   Banner-ul grafic din About (`theme/header.png`, cu textul "DisplayCAL³"
   desenat direct în imagine) rămâne branding vizual upstream — decizie
   de design amânată pentru etapa de identitate vizuală/website.
-- [ ] **Branding Inno Setup Windows** (fără semnare încă). NEÎNCEPUT.
+- [x] **Branding Inno Setup Windows** — imaginile wizard-ului
+  (`misc/media/install.bmp`, `icon-install.bmp`, aveau logo-ul vechi
+  upstream) regenerate cu identitatea GDC; `.iss`-ul (`misc/DisplayCAL-
+  Setup-py2exe.iss`) folosește deja `%(AppName)s`/`%(AppPublisher)s`/etc.
+  substituite din `meta.py` (deja corect — `NAME`/`AUTHOR`/`DOMAIN` erau
+  fixate din sesiunea de rebranding), nimic de editat acolo.
+  **BLOCAT, real, nu amânat**: build-ul EFECTIV (`.exe`) NU poate fi produs
+  din acest mediu — `py2exe`/`native_build.py inno` rulează STRICT pe
+  Windows (`sys.platform == "win32"`, verificat de două ori independent
+  în `_native_build/cli.py`), py2exe nici nu se instalează pe macOS. Vezi
+  `build_installer_windows.md` (nou, la rădăcina repo-ului) — pași compleți,
+  gata de rulat de Cristi (sau altcineva) pe o mașină Windows reală.
+  Fără semnare de cod încă (fără certificat, decizie deja confirmată).
 - [ ] **`docs/` GitHub Pages** pe acest repo + oglindă
   `gdc-plugin-manager-catalog-vendor/docs/DisplayCAL-CG/`. NEÎNCEPUT.
 - [ ] **`catalog.json`** → intrare nouă în `apps[]`. NEÎNCEPUT.
