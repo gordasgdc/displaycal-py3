@@ -187,7 +187,7 @@ from DisplayCAL.icc_profile import (
     set_display_profile,
 )
 from DisplayCAL.log import LOG, DummyLogger, LogFile, get_file_logger
-from DisplayCAL.meta import DOMAIN, VERSION_STRING
+from DisplayCAL.meta import UPSTREAM_RESOURCES_DOMAIN, VERSION_STRING
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.multiprocess import cpu_count, pool_slice
 from DisplayCAL.network import LoggingHTTPRedirectHandler, NoHTTPRedirectHandler
@@ -10814,7 +10814,7 @@ BEGIN_DATA
                 # Download version info
                 resp = http_request(
                     None,
-                    DOMAIN,
+                    UPSTREAM_RESOURCES_DOMAIN,
                     "GET",
                     "/Argyll/VERSION",
                     failure_msg=lang.getstr("update_check.fail"),
@@ -10837,7 +10837,7 @@ BEGIN_DATA
                     f"Argyll_V{argyll_version_string}_USB_driver_installer.exe"
                 )
                 installer_zip = self.download(
-                    f"https://{DOMAIN}/Argyll/{installer_basename}.zip"
+                    f"https://{UPSTREAM_RESOURCES_DOMAIN}/Argyll/{installer_basename}.zip"
                 )
                 if isinstance(installer_zip, Exception):
                     return installer_zip
@@ -11477,7 +11477,7 @@ BEGIN_DATA
                             "--no-wait",
                             "--offline",
                             "--command=run-apply-profiles",
-                            f"http://{DOMAIN}/0install/{APPNAME}.xml",
+                            f"http://{UPSTREAM_RESOURCES_DOMAIN}/0install/{APPNAME}.xml",
                         ]
                     )
                 else:
@@ -11705,7 +11705,7 @@ BEGIN_DATA
                     executable = (
                         "0launch --console --offline "
                         "--command=run-apply-profiles "
-                        f"http://{DOMAIN}/0install/{APPNAME}.xml"
+                        f"http://{UPSTREAM_RESOURCES_DOMAIN}/0install/{APPNAME}.xml"
                     )
                 else:
                     icon = os.path.join(
@@ -18121,7 +18121,7 @@ BEGIN_DATA
             error.retryable = retryable
             return error
 
-        is_main_dl = uri.startswith(f"https://{DOMAIN}/download/")
+        is_main_dl = uri.startswith(f"https://{UPSTREAM_RESOURCES_DOMAIN}/download/")
         if is_main_dl:
             # Always force connection to server even if local file exists for
             # displaycal.net/downloads/* and displaycal.net/Argyll/*
@@ -18166,7 +18166,7 @@ BEGIN_DATA
                     raise urllib.error.URLError("")
                 newurl = getattr(LoggingHTTPRedirectHandler, "newurl", uri)
                 if not orig_uri.startswith(argyllcms_binaries_base) and (
-                    is_main_dl or not newurl.startswith(f"https://{DOMAIN}/")
+                    is_main_dl or not newurl.startswith(f"https://{UPSTREAM_RESOURCES_DOMAIN}/")
                 ):
                     # Get SHA-256 hashes so we can verify the downloaded file.
                     # Only do this for 3rd party hosts/mirrors (no sense
@@ -18177,7 +18177,7 @@ BEGIN_DATA
                     # API digest field instead (handled below).
                     noredir = urllib.request.build_opener(NoHTTPRedirectHandler)
                     noredir.addheaders = list(get_default_headers().items())
-                    hashes = noredir.open(f"https://{DOMAIN}/sha256sums.txt")
+                    hashes = noredir.open(f"https://{UPSTREAM_RESOURCES_DOMAIN}/sha256sums.txt")
             except (
                 OSError,
                 urllib.error.URLError,

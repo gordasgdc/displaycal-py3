@@ -983,11 +983,38 @@ def _configure_py2app(
         "py2app": {
             "argv_emulation": False,
             "dist_dir": dist_dir,
-            "excludes": config["excludes"]["all"] + config["excludes"]["darwin"],
+            "excludes": config["excludes"]["all"]
+            + config["excludes"]["darwin"]
+            # py2app e o unealtă de BUILD, nu trebuie să ajungă niciodată
+            # împachetată în app-ul final — găsit doar la notarizare
+            # reală: binarele lui interne (apptemplate/bundletemplate
+            # prebuilt) erau bundle-ate accidental (probabil văzute de
+            # scanner-ul de dependințe fiindcă e importabil în venv-ul
+            # de build) și respinse ca nesemnate.
+            + ["py2app"],
             "iconfile": os.path.join(pydir, "theme", "icons", f"{NAME}.icns"),
             "no_strip": True,
             "optimize": 0,
             "plist": plist_dict,
+            # DisplayCAL-CG (GDC): pachete cu cod nativ (dylib-uri
+            # bundle-ate/extensii .so) trebuie extrase ca fișiere
+            # NORMALE, NU zipate în python313.zip — Apple notarytool
+            # inspectează și conținutul din interiorul unui .zip
+            # bundle-at și respinge orice binar Mach-O nesemnat de
+            # acolo, dar un fișier ÎNTR-UN zip nu poate fi semnat
+            # individual cu `codesign` (nu e un fișier separat pe
+            # disc) — găsit direct la prima notarizare reală încercată
+            # (upstream nu notarizează niciodată, deci nu a lovit asta).
+            # "google" e un pachet namespace (PEP 420, fără __init__.py) —
+            # `imp_find_module` (py2app/modulegraph) desparte "google.
+            # protobuf" pe puncte și caută ÎNTÂI "google" singur, cu
+            # `imp.find_module` clasic (pre-PEP420) — care nu găsește
+            # NICIUN namespace package, indiferent de subpachet. Fix real:
+            # `build_pkg.sh` creează un `google/__init__.py` gol în venv,
+            # ÎNAINTE de py2app — transformă local "google" într-un
+            # pachet obișnuit, găsibil, fără să afecteze conținutul lui.
+            "packages": ["PIL", "google"],
+
             # py2app's pyside6 recipe only copies Qt's plugin binaries
             # (e.g. platforms/libqcocoa.dylib, needed for QApplication to
             # start at all) when this is set; it defaults to empty and

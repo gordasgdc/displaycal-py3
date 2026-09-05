@@ -171,9 +171,11 @@ from DisplayCAL.meta import (
     ARGYLL_CHANGELOG_DOMAIN,
     ARGYLL_CHANGELOG_PATH,
     AUTHOR,
+    COLORIMETER_CORRECTIONS_DOMAIN,
     DEVELOPMENT_HOME_PAGE,
     DOMAIN,
     GITHUB_API_URL,
+    UPSTREAM_RESOURCES_DOMAIN,
     VERSION_STRING,
     VERSION_TUPLE,
     get_latest_changelog_entry,
@@ -1270,7 +1272,7 @@ def upload_colorimeter_correction(
     # Check for duplicate
     resp = http_request(
         parent,
-        f"colorimetercorrections.{DOMAIN}",
+        COLORIMETER_CORRECTIONS_DOMAIN,
         "GET",
         path,
         {
@@ -1294,7 +1296,7 @@ def upload_colorimeter_correction(
     params["put"] = True
     resp = http_request(
         parent,
-        f"colorimetercorrections.{DOMAIN}",
+        COLORIMETER_CORRECTIONS_DOMAIN,
         "POST",
         path,
         params,
@@ -3410,9 +3412,15 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             or os.path.isfile("/usr/share/common-licenses/GPL-3")
         )
         self.Bind(wx.EVT_MENU, self.license_handler, self.menuitem_license)
+        # DisplayCAL-CG (GDC): pagina dedicata acestei distributii, nu
+        # radacina gordas.dev (care e site-ul intregii suite GDC, nu al
+        # DisplayCAL). Pagina inca nu exista (planificata in CLAUDE.md,
+        # sectiunea Progres) - link-ul e pregatit deja spre calea finala.
         menuitem = help_action.FindItemById(help_action.FindItem("go_to_website"))
         self.Bind(
-            wx.EVT_MENU, lambda event: launch_file(f"https://{DOMAIN}/"), menuitem
+            wx.EVT_MENU,
+            lambda event: launch_file(f"https://{DOMAIN}/DisplayCAL-CG/"),
+            menuitem,
         )
         menuitem = help_action.FindItemById(help_action.FindItem("help_support"))
         self.Bind(wx.EVT_MENU, self.help_support_handler, menuitem)
@@ -6103,7 +6111,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             if result and not isinstance(result, Exception):
                 return result
         # Download from web
-        path = self.worker.download(f"https://{DOMAIN}/spyd2")
+        path = self.worker.download(f"https://{UPSTREAM_RESOURCES_DOMAIN}/spyd2")
         if isinstance(path, Exception):
             return path
         if not path:
@@ -13577,7 +13585,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             ckwargs={"parent": self},
             wargs=(
                 self,
-                f"colorimetercorrections.{DOMAIN}",
+                COLORIMETER_CORRECTIONS_DOMAIN,
                 "GET",
                 "/index.php",
                 params,
@@ -15727,7 +15735,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
             # We always (re-)download the i1D3 package because it may contain
             # additional corrections not present in i1Profiler
             result = self.worker.download(
-                f"https://{DOMAIN}/{name}", force=name == "i1d3"
+                f"https://{UPSTREAM_RESOURCES_DOMAIN}/{name}", force=name == "i1d3"
             )
             if isinstance(result, Exception):
                 break
@@ -20508,7 +20516,7 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
                     self.aboutdialog.panel,
                     -1,
                     label=APPNAME,
-                    URL=f"https://{DOMAIN}/",
+                    URL=f"https://{DOMAIN}/DisplayCAL-CG/",
                 ),
                 wx.StaticText(
                     self.aboutdialog.panel,

@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title id="page-title">DisplayCAL-CG</title>
+<meta id="meta-desc" name="description" content="DisplayCAL-CG — calibrare și profilare de display de nivel profesional, pentru Mac și Windows. Gratuit, open-source (GPLv3).">
+<link rel="icon" type="image/png" href="assets/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* Identitatea "Shift" — aceeasi paleta ca restul ecosistemului GDC. */
+  :root{
+    --bg:#14161A; --bg-2:#0F1114; --panel:#1A1D22; --panel-2:#20232A;
+    --border:#2B2F36; --text:#EDEFF2; --muted:#93989F; --faint:#5C6169;
+    --accent:#E8963C; --accent-ink:#1A1108; --accent-dim:#7A5426;
+    --accent-2:#F2A94F;
+    --success:#4CAF7D; --error:#E2584A;
+    --mono:'IBM Plex Mono', ui-monospace, monospace;
+    --sans:'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html{ scroll-behavior:smooth; }
+  body{
+    background:
+      radial-gradient(ellipse 900px 500px at 85% -10%, rgba(232,150,60,.16), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 0% 15%, rgba(242,169,79,.10), transparent 55%),
+      var(--bg);
+    color:var(--text); font-family:var(--sans); line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{ color:inherit; }
+  img{ display:block; max-width:100%; }
+  .wrap{ max-width:1080px; margin:0 auto; padding:0 24px; }
+  ::selection{ background:var(--accent); color:var(--accent-ink); }
+  code{ font-family:var(--mono); background:var(--panel-2); padding:1px 6px; border-radius:4px; font-size:.9em; }
+
+  header{ position:sticky; top:0; z-index:50; background:rgba(20,22,26,.82); backdrop-filter:blur(12px); border-bottom:1px solid var(--border); }
+  .header-inner{ display:flex; align-items:center; justify-content:space-between; padding:14px 24px; max-width:1080px; margin:0 auto; }
+  .brand{ display:flex; align-items:center; gap:10px; font-family:var(--mono); font-weight:700; font-size:15px; }
+  .brand .mark{ width:28px; height:28px; border-radius:8px; overflow:hidden; }
+  .brand .mark img{ width:100%; height:100%; }
+  #lang-switch{ display:flex; gap:4px; }
+  #lang-switch button{ font-family:var(--mono); font-size:11.5px; font-weight:600; color:var(--muted); background:transparent; border:1px solid var(--border); border-radius:6px; padding:5px 9px; cursor:pointer; }
+  #lang-switch button:hover{ color:var(--text); border-color:var(--accent); }
+  #lang-switch button.active{ color:var(--accent-ink); background:var(--accent); border-color:var(--accent); }
+
+  .hero{ padding:76px 0 52px; text-align:center; }
+  .eyebrow{ display:inline-block; font-family:var(--mono); font-size:12px; color:var(--accent); background:rgba(232,150,60,.10); border:1px solid rgba(232,150,60,.3); padding:5px 12px; border-radius:999px; margin-bottom:22px; }
+  .hero h1{ font-size:44px; font-weight:800; letter-spacing:-.02em; margin-bottom:16px; text-wrap:balance; }
+  .hero h1 .accent{ color:var(--accent); }
+  .hero p.tagline{ font-size:17px; color:var(--muted); max-width:620px; margin:0 auto 34px; }
+
+  .btn{ display:inline-flex; align-items:center; gap:8px; font-family:var(--mono); font-size:13.5px; font-weight:600; padding:12px 22px; border-radius:9px; text-decoration:none; white-space:nowrap; }
+  .btn-primary{ background:var(--accent); color:var(--accent-ink); }
+  .btn-primary:hover{ background:var(--accent-2); }
+  .btn-ghost{ border:1px solid var(--border); color:var(--text); }
+  .btn-ghost:hover{ border-color:var(--accent); }
+  .btn-disabled{ border:1px solid var(--border); color:var(--faint); cursor:default; opacity:.7; }
+  .btn-row{ display:flex; gap:14px; justify-content:center; flex-wrap:wrap; }
+  .signed-note{ margin-top:20px; font-size:12.5px; color:var(--faint); display:flex; align-items:center; justify-content:center; gap:6px; flex-wrap:wrap; }
+  .signed-note .dot{ width:6px; height:6px; border-radius:50%; background:var(--success); }
+
+  section{ padding:58px 0; border-top:1px solid var(--border); }
+  section h2{ font-size:27px; font-weight:800; margin-bottom:32px; text-align:center; text-wrap:balance; }
+  section .subhead{ text-align:center; font-size:14.5px; color:var(--muted); max-width:620px; margin:-20px auto 32px; }
+
+  .features{ display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:20px; }
+  .feature{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:22px; }
+  .feature .icon{ font-size:26px; margin-bottom:10px; }
+  .feature h3{ font-size:15.5px; font-weight:700; margin-bottom:8px; }
+  .feature p{ font-size:13.5px; color:var(--muted); line-height:1.55; }
+
+  .tools{ display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:8px; }
+  .tool-pill{ font-family:var(--mono); font-size:12.5px; background:var(--panel-2); border:1px solid var(--border); color:var(--muted); padding:7px 14px; border-radius:999px; }
+
+  .instruments{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:6px; }
+  .instr-pill{ font-size:12px; background:transparent; border:1px solid var(--border); color:var(--faint); padding:5px 12px; border-radius:999px; }
+
+  .gallery{ display:grid; grid-template-columns:1.3fr 1fr; gap:16px; }
+  .gallery a{ display:block; border-radius:12px; overflow:hidden; border:1px solid var(--border); background:var(--panel); }
+  .gallery a img{ width:100%; display:block; transition:transform .25s; }
+  .gallery a:hover img{ transform:scale(1.02); }
+  .gallery .col{ display:flex; flex-direction:column; gap:16px; }
+  @media (max-width:720px){ .gallery{ grid-template-columns:1fr; } }
+
+  .steps{ counter-reset:step; max-width:680px; margin:0 auto; }
+  .step{ display:flex; gap:16px; padding:16px 0; border-bottom:1px solid var(--border); }
+  .step:last-child{ border-bottom:none; }
+  .step .num{ font-family:var(--mono); font-weight:700; color:var(--accent); font-size:15px; flex-shrink:0; width:24px; }
+  .step h4{ font-size:14.5px; font-weight:700; margin-bottom:4px; }
+  .step p{ font-size:13px; color:var(--muted); line-height:1.6; }
+
+  .license-box{ max-width:600px; margin:0 auto; background:var(--panel); border:1px solid var(--border); border-radius:18px; padding:36px; text-align:center; }
+  .license-box .badge{ font-family:var(--mono); font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+  .license-box .price{ font-family:var(--mono); font-size:32px; font-weight:700; color:var(--accent); margin:12px 0 4px; }
+  .license-box ul{ list-style:none; text-align:left; margin:24px 0; padding:0; }
+  .license-box li{ font-size:13.5px; color:var(--muted); padding:6px 0; padding-left:22px; position:relative; }
+  .license-box li::before{ content:"✓"; position:absolute; left:0; color:var(--accent); font-weight:700; }
+  .license-box .promo-note{ margin-top:20px; font-size:12px; line-height:1.6; color:var(--faint); text-align:left; background:var(--panel-2); border-radius:8px; padding:12px 14px; }
+
+  .credit-box{ max-width:680px; margin:36px auto 0; font-size:12.5px; color:var(--faint); text-align:center; line-height:1.7; border-top:1px solid var(--border); padding-top:24px; }
+  .credit-box b{ color:var(--muted); }
+
+  footer{ border-top:1px solid var(--border); padding:32px 24px; text-align:center; font-size:12.5px; color:var(--faint); }
+  footer a{ color:var(--muted); text-decoration:none; }
+  footer a:hover{ color:var(--text); }
+  footer .links{ display:flex; gap:16px; justify-content:center; flex-wrap:wrap; margin-bottom:8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="brand"><span class="mark"><img src="assets/icon.png" alt=""></span> DisplayCAL-CG</div>
+    <div id="lang-switch">
+      <button data-lang="ro">RO</button>
+      <button data-lang="en">EN</button>
+      <button data-lang="es">ES</button>
+    </div>
+  </div>
+</header>
+
+<div class="hero wrap">
+  <div class="eyebrow" data-i18n="hero.eyebrow">Mac · Windows · Calibrare de culoare</div>
+  <h1 data-i18n-html="hero.h1">Calibrare &amp; profilare, <span class="accent">la nivel de laborator.</span></h1>
+  <p class="tagline" data-i18n="hero.tagline">Calibrează și caracterizează orice display cu instrumentele de măsurare profesionale pe care le folosești deja — profiluri ICC precise, verificare și raportare, 3D LUT-uri video, gamut mapping CIECAM02 — pe Mac și Windows, complet gratuit.</p>
+  <div class="btn-row">
+    <a class="btn btn-primary" data-i18n="hero.mac" href="https://github.com/gordasgdc/displaycal-py3/releases/latest/download/DisplayCAL-CG.pkg">⬇ Descarcă pentru Mac</a>
+    <a class="btn btn-disabled" data-i18n="hero.win" href="https://github.com/gordasgdc/displaycal-py3/releases">⏳ Windows — în curând</a>
+  </div>
+  <div class="signed-note"><span class="dot"></span><span data-i18n="hero.signed">Pachetul Mac e semnat și notarizat oficial de Apple — se instalează direct în /Applications, fără avertismente.</span></div>
+</div>
+
+<section>
+  <div class="wrap">
+    <h2 data-i18n="features.title">Ce include DisplayCAL-CG</h2>
+    <p class="subhead" data-i18n="features.subhead">9 unelte complete pentru fluxul întreg de calibrare — de la măsurare până la verificare și export.</p>
+    <div class="features">
+      <div class="feature">
+        <div class="icon">🎯</div>
+        <h3 data-i18n="f1.h">Profile ICC precise</h3>
+        <p data-i18n="f1.p">Calibrare + caracterizare completă, cu suport pentru zeci de colorimetre și spectrometre — de la unități de consum până la instrumente de referință.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">🖥️</div>
+        <h3 data-i18n="f2.h">Multi-display</h3>
+        <p data-i18n="f2.p">Calibrează separat fiecare monitor dintr-un setup multi-display, cu profiluri și curbe independente pentru fiecare.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">📊</div>
+        <h3 data-i18n="f3.h">Verificare & raportare</h3>
+        <p data-i18n="f3.p">Verifică acuratețea unui profil deja creat, cu rapoarte detaliate (Delta E, gamma, punct alb/negru) — știi exact cât de bine calibrat e ecranul.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">🎬</div>
+        <h3 data-i18n="f4.h">3D LUT pentru video</h3>
+        <p data-i18n="f4.p">Generează 3D LUT-uri video pentru monitoare de grading, exportabile direct în formatele folosite de DaVinci Resolve și alte unelte de post-producție.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">🌈</div>
+        <h3 data-i18n="f5.h">CIECAM02 gamut mapping</h3>
+        <p data-i18n="f5.p">Opțiune avansată de mapare a gamutului ținând cont de condițiile reale de vizualizare — pentru cei care au nevoie de acuratețe dincolo de calibrarea standard.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">🌍</div>
+        <h3 data-i18n="f6.h">Interfață completă în română</h3>
+        <p data-i18n="f6.p">Traducere completă a interfeței în limba română, pe lângă cele peste 15 limbi deja disponibile în proiectul original.</p>
+      </div>
+    </div>
+    <div class="tools">
+      <span class="tool-pill">DisplayCAL</span>
+      <span class="tool-pill">3D LUT Maker</span>
+      <span class="tool-pill">Curve Viewer</span>
+      <span class="tool-pill">ICC Profile Info</span>
+      <span class="tool-pill">Scripting Client</span>
+      <span class="tool-pill">Synthetic ICC</span>
+      <span class="tool-pill">Testchart Editor</span>
+      <span class="tool-pill">VRML to X3D</span>
+    </div>
+    <p class="subhead" style="margin-top:28px;" data-i18n="instruments.title">Compatibil cu instrumentele de măsurare cele mai folosite din industrie</p>
+    <div class="instruments">
+      <span class="instr-pill">X-Rite i1Display / i1Pro</span>
+      <span class="instr-pill">Datacolor Spyder</span>
+      <span class="instr-pill">Colorimètre ColorMunki</span>
+      <span class="instr-pill">Klein K10-A</span>
+      <span class="instr-pill">Konica Minolta</span>
+      <span class="instr-pill">JETI</span>
+      <span class="instr-pill">+ ArgyllCMS (motor de măsurare)</span>
+    </div>
+  </div>
+</section>
+
+<section id="galerie">
+  <div class="wrap">
+    <h2 data-i18n="gallery.title">Interfață completă în română</h2>
+    <p class="subhead" data-i18n="gallery.subhead">Captură reală din aplicație — fiecare pas al fluxului de calibrare, tradus integral.</p>
+    <div class="gallery">
+      <a href="assets/screenshot-main.jpg" target="_blank" rel="noopener"><img src="assets/screenshot-main.jpg" alt="DisplayCAL-CG — ecranul principal, în română"></a>
+      <div class="col">
+        <a href="assets/screenshot-lut3d.jpg" target="_blank" rel="noopener"><img src="assets/screenshot-lut3d.jpg" alt="DisplayCAL-CG — setări LUT 3D, în română"></a>
+        <a href="assets/screenshot-profile-info.jpg" target="_blank" rel="noopener"><img src="assets/screenshot-profile-info.jpg" alt="DisplayCAL-CG — ICC Profile Info, gamut și date profil"></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <h2 data-i18n="install.title">Instalare</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="num">1</div>
+        <div><h4 data-i18n="install.s1.h">Descarcă</h4><p data-i18n-html="install.s1.p">Alege pachetul de mai sus pentru Mac (<code>.pkg</code>) — varianta Windows urmează.</p></div>
+      </div>
+      <div class="step">
+        <div class="num">2</div>
+        <div><h4 data-i18n="install.s2.h">Instalează</h4><p data-i18n-html="install.s2.p"><b>Mac:</b> dublu-click pe <code>DisplayCAL-CG.pkg</code> — se instalează direct în /Applications, toate cele 9 unelte deodată, fără avertismente Gatekeeper (pachet semnat + notarizat).</p></div>
+      </div>
+      <div class="step">
+        <div class="num">3</div>
+        <div><h4 data-i18n="install.s3.h">Conectează instrumentul</h4><p data-i18n-html="install.s3.p">Conectează colorimetrul/spectrometrul înainte de a porni calibrarea — DisplayCAL-CG îl detectează automat la lansare, prin motorul de măsurare <code>ArgyllCMS</code> integrat.</p></div>
+      </div>
+      <div class="step">
+        <div class="num">4</div>
+        <div><h4 data-i18n="install.s4.h">Calibrează & profilează</h4><p data-i18n="install.s4.p">Alege setările țintă (gamma, punct alb, luminanță), pornește măsurarea, apoi verifică rezultatul cu raportul de acuratețe integrat.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="licenta">
+  <div class="wrap">
+    <h2 data-i18n="license.title">Gratuit & Open Source</h2>
+    <div class="license-box">
+      <div class="badge" data-i18n="license.plan">Licență GPLv3</div>
+      <div class="price" data-i18n="license.once">100% gratuit</div>
+      <ul>
+        <li data-i18n="license.li1">Fără trial, fără activare, fără plafon de utilizare</li>
+        <li data-i18n="license.li2">Cod sursă deschis, disponibil integral pe GitHub</li>
+        <li data-i18n="license.li3">Fără telemetrie sau colectare de date ascunsă</li>
+        <li data-i18n="license.li4">Actualizări gratuite, pe viață</li>
+      </ul>
+      <div class="promo-note" data-i18n="license.note">
+        DisplayCAL-CG e o distribuție întreținută de GDC a proiectului open-source DisplayCAL — rebranding, traducere română și pachete de instalare native pentru Mac și Windows, sub aceeași licență GPLv3. Nu există nicio formă de monetizare a acestei distribuții.
+      </div>
+    </div>
+    <div class="credit-box" data-i18n-html="credit.text">
+      DisplayCAL-CG se bazează integral pe proiectul <b>DisplayCAL</b>, creat de <b>Florian Höch</b> și <b>Erkan Özgür Yılmaz</b>, și pe motorul de măsurare <b>ArgyllCMS</b>, creat de <b>Graeme Gill</b>. Această distribuție (rebranding, traducere română, pachete native) e întreținută de Cristi Gordaș (GDC) — creditul pentru munca originală de calibrare/profilare aparține integral autorilor de mai sus.
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="links">
+    <a href="https://github.com/gordasgdc/displaycal-py3" data-i18n="footer.source">Cod sursă pe GitHub</a>
+    <a href="https://github.com/gordasgdc/displaycal-py3/releases" data-i18n="footer.releases">Toate versiunile</a>
+    <a href="https://github.com/eoyilmaz/displaycal-py3" data-i18n="footer.upstream">Proiectul original (upstream)</a>
+    <a href="https://gordas.dev/termeni">Termeni și Condiții</a>
+    <a href="https://gordas.dev/confidentialitate">Politică de Confidențialitate (GDPR)</a>
+    <a href="https://gordas.dev/cookie">Cookie-uri</a>
+    <a href="mailto:academiagdc@gmail.com">Contact</a>
+  </div>
+  <div data-i18n="footer.tag">DisplayCAL-CG — parte din ecosistemul GDC.</div>
+  <div style="margin-top:6px;font-size:11px;opacity:.75;">gordas.dev este o platformă administrată de dezvoltatori independenți. Aplicațiile și resursele sunt furnizate ca atare (AS IS), iar susținerea proiectului se bazează pe contribuții opționale de sprijin și donații.</div>
+</footer>
+
+<script>
+  const translations = {
+    ro: {
+      'hero.eyebrow': 'Mac · Windows · Calibrare de culoare',
+      'hero.h1': 'Calibrare &amp; profilare, <span class="accent">la nivel de laborator.</span>',
+      'hero.tagline': 'Calibrează și caracterizează orice display cu instrumentele de măsurare profesionale pe care le folosești deja — profiluri ICC precise, verificare și raportare, 3D LUT-uri video, gamut mapping CIECAM02 — pe Mac și Windows, complet gratuit.',
+      'hero.mac': '⬇ Descarcă pentru Mac', 'hero.win': '⏳ Windows — în curând',
+      'hero.signed': 'Pachetul Mac e semnat și notarizat oficial de Apple — se instalează direct în /Applications, fără avertismente.',
+      'features.title': 'Ce include DisplayCAL-CG',
+      'features.subhead': '9 unelte complete pentru fluxul întreg de calibrare — de la măsurare până la verificare și export.',
+      'f1.h': 'Profile ICC precise', 'f1.p': 'Calibrare + caracterizare completă, cu suport pentru zeci de colorimetre și spectrometre — de la unități de consum până la instrumente de referință.',
+      'f2.h': 'Multi-display', 'f2.p': 'Calibrează separat fiecare monitor dintr-un setup multi-display, cu profiluri și curbe independente pentru fiecare.',
+      'f3.h': 'Verificare & raportare', 'f3.p': 'Verifică acuratețea unui profil deja creat, cu rapoarte detaliate (Delta E, gamma, punct alb/negru) — știi exact cât de bine calibrat e ecranul.',
+      'f4.h': '3D LUT pentru video', 'f4.p': 'Generează 3D LUT-uri video pentru monitoare de grading, exportabile direct în formatele folosite de DaVinci Resolve și alte unelte de post-producție.',
+      'f5.h': 'CIECAM02 gamut mapping', 'f5.p': 'Opțiune avansată de mapare a gamutului ținând cont de condițiile reale de vizualizare — pentru cei care au nevoie de acuratețe dincolo de calibrarea standard.',
+      'f6.h': 'Interfață completă în română', 'f6.p': 'Traducere completă a interfeței în limba română, pe lângă cele peste 15 limbi deja disponibile în proiectul original.',
+      'instruments.title': 'Compatibil cu instrumentele de măsurare cele mai folosite din industrie',
+      'gallery.title': 'Interfață completă în română', 'gallery.subhead': 'Captură reală din aplicație — fiecare pas al fluxului de calibrare, tradus integral.',
+      'install.title': 'Instalare',
+      'install.s1.h': 'Descarcă', 'install.s1.p': 'Alege pachetul de mai sus pentru Mac (<code>.pkg</code>) — varianta Windows urmează.',
+      'install.s2.h': 'Instalează', 'install.s2.p': '<b>Mac:</b> dublu-click pe <code>DisplayCAL-CG.pkg</code> — se instalează direct în /Applications, toate cele 9 unelte deodată, fără avertismente Gatekeeper (pachet semnat + notarizat).',
+      'install.s3.h': 'Conectează instrumentul', 'install.s3.p': 'Conectează colorimetrul/spectrometrul înainte de a porni calibrarea — DisplayCAL-CG îl detectează automat la lansare, prin motorul de măsurare <code>ArgyllCMS</code> integrat.',
+      'install.s4.h': 'Calibrează & profilează', 'install.s4.p': 'Alege setările țintă (gamma, punct alb, luminanță), pornește măsurarea, apoi verifică rezultatul cu raportul de acuratețe integrat.',
+      'license.title': 'Gratuit & Open Source', 'license.plan': 'Licență GPLv3', 'license.once': '100% gratuit',
+      'license.li1': 'Fără trial, fără activare, fără plafon de utilizare', 'license.li2': 'Cod sursă deschis, disponibil integral pe GitHub',
+      'license.li3': 'Fără telemetrie sau colectare de date ascunsă', 'license.li4': 'Actualizări gratuite, pe viață',
+      'license.note': 'DisplayCAL-CG e o distribuție întreținută de GDC a proiectului open-source DisplayCAL — rebranding, traducere română și pachete de instalare native pentru Mac și Windows, sub aceeași licență GPLv3. Nu există nicio formă de monetizare a acestei distribuții.',
+      'credit.text': 'DisplayCAL-CG se bazează integral pe proiectul <b>DisplayCAL</b>, creat de <b>Florian Höch</b> și <b>Erkan Özgür Yılmaz</b>, și pe motorul de măsurare <b>ArgyllCMS</b>, creat de <b>Graeme Gill</b>. Această distribuție (rebranding, traducere română, pachete native) e întreținută de Cristi Gordaș (GDC) — creditul pentru munca originală de calibrare/profilare aparține integral autorilor de mai sus.',
+      'footer.source': 'Cod sursă pe GitHub', 'footer.releases': 'Toate versiunile', 'footer.upstream': 'Proiectul original (upstream)', 'footer.tag': 'DisplayCAL-CG — parte din ecosistemul GDC.',
+    },
+    en: {
+      'hero.eyebrow': 'Mac · Windows · Color calibration',
+      'hero.h1': 'Calibration &amp; profiling, <span class="accent">at lab-grade precision.</span>',
+      'hero.tagline': 'Calibrate and characterize any display with the measurement instruments you already own — precise ICC profiles, verification and reporting, video 3D LUTs, CIECAM02 gamut mapping — for Mac and Windows, completely free.',
+      'hero.mac': '⬇ Download for Mac', 'hero.win': '⏳ Windows — coming soon',
+      'hero.signed': 'The Mac package is officially signed and notarized by Apple — installs directly into /Applications, no warnings.',
+      'features.title': 'What DisplayCAL-CG includes',
+      'features.subhead': '9 complete tools for the whole calibration workflow — from measurement to verification and export.',
+      'f1.h': 'Precise ICC profiles', 'f1.p': 'Full calibration + characterization, with support for dozens of colorimeters and spectrometers — from consumer units to reference-grade instruments.',
+      'f2.h': 'Multi-display', 'f2.p': 'Calibrate each monitor in a multi-display setup separately, with independent profiles and curves for each.',
+      'f3.h': 'Verification & reporting', 'f3.p': 'Verify the accuracy of an existing profile, with detailed reports (Delta E, gamma, white/black point) — know exactly how well-calibrated your screen is.',
+      'f4.h': 'Video 3D LUTs', 'f4.p': 'Generate video 3D LUTs for grading monitors, exportable directly in the formats used by DaVinci Resolve and other post-production tools.',
+      'f5.h': 'CIECAM02 gamut mapping', 'f5.p': 'Advanced gamut mapping option that accounts for real viewing conditions — for those who need accuracy beyond standard calibration.',
+      'f6.h': 'Full Romanian interface', 'f6.p': 'Complete Romanian translation of the interface, alongside the 15+ languages already available in the original project.',
+      'instruments.title': 'Compatible with the industry\'s most-used measurement instruments',
+      'gallery.title': 'Full Romanian interface', 'gallery.subhead': 'Real screenshots from the app — every step of the calibration workflow, fully translated.',
+      'install.title': 'Installation',
+      'install.s1.h': 'Download', 'install.s1.p': 'Pick the package above for Mac (<code>.pkg</code>) — the Windows version is coming.',
+      'install.s2.h': 'Install', 'install.s2.p': '<b>Mac:</b> double-click <code>DisplayCAL-CG.pkg</code> — installs directly into /Applications, all 9 tools at once, no Gatekeeper warnings (signed + notarized package).',
+      'install.s3.h': 'Connect your instrument', 'install.s3.p': 'Connect your colorimeter/spectrometer before starting calibration — DisplayCAL-CG detects it automatically at launch, through the integrated <code>ArgyllCMS</code> measurement engine.',
+      'install.s4.h': 'Calibrate & profile', 'install.s4.p': 'Pick your target settings (gamma, white point, luminance), start the measurement, then verify the result with the built-in accuracy report.',
+      'license.title': 'Free & Open Source', 'license.plan': 'GPLv3 License', 'license.once': '100% free',
+      'license.li1': 'No trial, no activation, no usage cap', 'license.li2': 'Open source code, fully available on GitHub',
+      'license.li3': 'No telemetry or hidden data collection', 'license.li4': 'Free updates, for life',
+      'license.note': 'DisplayCAL-CG is a GDC-maintained distribution of the open-source DisplayCAL project — rebranding, Romanian translation, and native installers for Mac and Windows, under the same GPLv3 license. There is no monetization of this distribution.',
+      'credit.text': 'DisplayCAL-CG is built entirely on the <b>DisplayCAL</b> project, created by <b>Florian Höch</b> and <b>Erkan Özgür Yılmaz</b>, and the <b>ArgyllCMS</b> measurement engine, created by <b>Graeme Gill</b>. This distribution (rebranding, Romanian translation, native packages) is maintained by Cristi Gordaș (GDC) — credit for the original calibration/profiling work belongs entirely to the authors above.',
+      'footer.source': 'Source code on GitHub', 'footer.releases': 'All releases', 'footer.upstream': 'Original project (upstream)', 'footer.tag': 'DisplayCAL-CG — part of the GDC ecosystem.',
+    },
+    es: {
+      'hero.eyebrow': 'Mac · Windows · Calibración de color',
+      'hero.h1': 'Calibración y perfilado, <span class="accent">con precisión de laboratorio.</span>',
+      'hero.tagline': 'Calibra y caracteriza cualquier pantalla con los instrumentos de medición profesionales que ya tienes — perfiles ICC precisos, verificación e informes, 3D LUTs de vídeo, mapeo de gama CIECAM02 — para Mac y Windows, totalmente gratis.',
+      'hero.mac': '⬇ Descargar para Mac', 'hero.win': '⏳ Windows — próximamente',
+      'hero.signed': 'El paquete de Mac está firmado y notarizado oficialmente por Apple — se instala directamente en /Applications, sin avisos.',
+      'features.title': 'Qué incluye DisplayCAL-CG',
+      'features.subhead': '9 herramientas completas para todo el flujo de calibración — desde la medición hasta la verificación y exportación.',
+      'f1.h': 'Perfiles ICC precisos', 'f1.p': 'Calibración y caracterización completa, con soporte para decenas de colorímetros y espectrómetros — desde unidades de consumo hasta instrumentos de referencia.',
+      'f2.h': 'Multipantalla', 'f2.p': 'Calibra cada monitor de una configuración multipantalla por separado, con perfiles y curvas independientes para cada uno.',
+      'f3.h': 'Verificación e informes', 'f3.p': 'Verifica la precisión de un perfil ya creado, con informes detallados (Delta E, gamma, punto blanco/negro) — sabe exactamente cuán bien calibrada está tu pantalla.',
+      'f4.h': '3D LUTs para vídeo', 'f4.p': 'Genera 3D LUTs de vídeo para monitores de grading, exportables directamente en los formatos usados por DaVinci Resolve y otras herramientas de posproducción.',
+      'f5.h': 'Mapeo de gama CIECAM02', 'f5.p': 'Opción avanzada de mapeo de gama que tiene en cuenta las condiciones reales de visualización — para quienes necesitan precisión más allá de la calibración estándar.',
+      'f6.h': 'Interfaz completa en rumano', 'f6.p': 'Traducción completa de la interfaz al rumano, además de los más de 15 idiomas ya disponibles en el proyecto original.',
+      'instruments.title': 'Compatible con los instrumentos de medición más usados de la industria',
+      'gallery.title': 'Interfaz completa en rumano', 'gallery.subhead': 'Capturas reales de la app — cada paso del flujo de calibración, traducido íntegramente.',
+      'install.title': 'Instalación',
+      'install.s1.h': 'Descarga', 'install.s1.p': 'Elige el paquete de arriba para Mac (<code>.pkg</code>) — la versión de Windows está en camino.',
+      'install.s2.h': 'Instala', 'install.s2.p': '<b>Mac:</b> doble clic en <code>DisplayCAL-CG.pkg</code> — se instala directamente en /Applications, las 9 herramientas a la vez, sin avisos de Gatekeeper (paquete firmado y notarizado).',
+      'install.s3.h': 'Conecta tu instrumento', 'install.s3.p': 'Conecta el colorímetro/espectrómetro antes de iniciar la calibración — DisplayCAL-CG lo detecta automáticamente al iniciar, mediante el motor de medición <code>ArgyllCMS</code> integrado.',
+      'install.s4.h': 'Calibra y perfila', 'install.s4.p': 'Elige tus ajustes objetivo (gamma, punto blanco, luminancia), inicia la medición y luego verifica el resultado con el informe de precisión integrado.',
+      'license.title': 'Gratis y de código abierto', 'license.plan': 'Licencia GPLv3', 'license.once': '100% gratis',
+      'license.li1': 'Sin prueba, sin activación, sin límite de uso', 'license.li2': 'Código fuente abierto, disponible íntegramente en GitHub',
+      'license.li3': 'Sin telemetría ni recolección oculta de datos', 'license.li4': 'Actualizaciones gratuitas, de por vida',
+      'license.note': 'DisplayCAL-CG es una distribución mantenida por GDC del proyecto de código abierto DisplayCAL — rebranding, traducción al rumano e instaladores nativos para Mac y Windows, bajo la misma licencia GPLv3. No existe ninguna forma de monetización de esta distribución.',
+      'credit.text': 'DisplayCAL-CG se basa íntegramente en el proyecto <b>DisplayCAL</b>, creado por <b>Florian Höch</b> y <b>Erkan Özgür Yılmaz</b>, y en el motor de medición <b>ArgyllCMS</b>, creado por <b>Graeme Gill</b>. Esta distribución (rebranding, traducción al rumano, paquetes nativos) la mantiene Cristi Gordaș (GDC) — el crédito por el trabajo original de calibración/perfilado pertenece íntegramente a los autores mencionados.',
+      'footer.source': 'Código fuente en GitHub', 'footer.releases': 'Todas las versiones', 'footer.upstream': 'Proyecto original (upstream)', 'footer.tag': 'DisplayCAL-CG — parte del ecosistema GDC.',
+    },
+  };
+
+  function t(key) {
+    const lang = document.documentElement.lang || 'ro';
+    return (translations[lang] && translations[lang][key]) || translations.ro[key] || key;
+  }
+
+  function applyLanguage(lang) {
+    if (!translations[lang]) lang = 'ro';
+    document.documentElement.lang = lang;
+    document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.getAttribute('data-i18n')); });
+    document.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = t(el.getAttribute('data-i18n-html')); });
+    document.querySelectorAll('#lang-switch button').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-lang') === lang);
+    });
+    localStorage.setItem('displaycalcg_lang', lang);
+  }
+
+  document.querySelectorAll('#lang-switch button').forEach(btn => {
+    btn.addEventListener('click', () => applyLanguage(btn.getAttribute('data-lang')));
+  });
+
+  const savedLang = localStorage.getItem('displaycalcg_lang');
+  const browserLang = (navigator.language || 'ro').slice(0, 2);
+  const initialLang = savedLang || (translations[browserLang] ? browserLang : 'ro');
+  applyLanguage(initialLang);
+</script>
+
+</body>
+</html>

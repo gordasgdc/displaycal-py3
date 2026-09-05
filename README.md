@@ -3,6 +3,25 @@
 ![pypiversion](https://img.shields.io/pypi/v/DisplayCAL.svg)
 ![wheel](https://img.shields.io/pypi/wheel/DisplayCAL.svg)
 
+DisplayCAL-CG — GDC Distribution
+=================================
+
+This is **DisplayCAL-CG**, a GDC-maintained distribution of this project —
+signed and notarized native macOS installer (`.pkg`), a Windows installer
+(coming soon), and a complete Romanian translation of the interface, on top
+of the same code and the same GPLv3 license as the upstream project below.
+No licensing, no trial, no monetization of any kind.
+
+- **Download & website:** [gordas.dev/DisplayCAL-CG](https://gordas.dev/DisplayCAL-CG/)
+- **Releases (macOS `.pkg`):** [github.com/gordasgdc/displaycal-py3/releases](https://github.com/gordasgdc/displaycal-py3/releases)
+- **Maintained by:** Cristi Gordaș (GDC) — rebranding, Romanian translation,
+  and native packaging only. All credit for DisplayCAL itself belongs to the
+  original authors below.
+
+Everything from here down is the original upstream `README.md`, unchanged.
+
+---
+
 DisplayCAL Python 3 Project
 ===========================
 

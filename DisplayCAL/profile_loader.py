@@ -55,7 +55,7 @@ from DisplayCAL.icc_profile import (
     unset_display_profile,
 )
 from DisplayCAL.meta import (
-    DOMAIN,
+    UPSTREAM_RESOURCES_DOMAIN,
     VERSION_STRING,
 )
 from DisplayCAL.meta import (
@@ -205,7 +205,7 @@ def setup_profile_loader_task(exe: str, exedir: str, pydir: str) -> None:
                             "--offline",
                             "--command=run-apply-profiles",
                             "--",
-                            f"http://{DOMAIN}/0install/{APPNAME}.xml",
+                            f"http://{UPSTREAM_RESOURCES_DOMAIN}/0install/{APPNAME}.xml",
                             "--task",
                         ]
                     )
@@ -2776,7 +2776,7 @@ class ProfileLoader:
                             "--no-wait",
                             "--offline",
                             "--command=run-apply-profiles",
-                            f"http://{DOMAIN}/0install/{APPNAME}.xml",
+                            f"http://{UPSTREAM_RESOURCES_DOMAIN}/0install/{APPNAME}.xml",
                         ]
                     )
                 else:

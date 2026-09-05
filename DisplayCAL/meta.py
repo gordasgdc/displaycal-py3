@@ -66,6 +66,21 @@ GITHUB_API_URL = "https://api.github.com/repos/gordasgdc/displaycal-py3"
 # source instead of the stale local mirror.
 ARGYLL_CHANGELOG_DOMAIN = "www.argyllcms.com"
 ARGYLL_CHANGELOG_PATH = "doc/ChangesSummary.html"
+# Baza de date online cu matrici de corecție colorimetru (upload/căutare) e
+# o infrastructură SERVER-SIDE reală a upstream-ului (PHP + bază de date
+# comunitară de submisii) — nu ceva ce putem replica doar redirecționând
+# DOMAIN. Găsit real: `colorimetercorrections.{DOMAIN}` ar fi rezolvat la
+# `colorimetercorrections.gordas.dev`, un subdomeniu care nu există la noi,
+# rupând funcția (upload/căutare) complet. Rămâne pe serviciul original.
+COLORIMETER_CORRECTIONS_DOMAIN = "colorimetercorrections.displaycal.net"
+# Găsit real la audit (2026-09-05, cerut de Cristi — "unele link-uri nu se
+# deschid"): schimbarea globală a DOMAIN a rupt și downloadurile REALE de
+# fișiere pe care nu le găzduim noi — instalerul ArgyllCMS, firmware/pachete
+# de corecție Spyder2/Spyder4/i1D3/ColorMunki, feed-urile 0install (Linux),
+# pagina web a vizualizatorului X3D. Nu sunt branding, sunt infrastructură
+# server-side reală a upstream-ului — rămân pe domeniul lor original,
+# indiferent de DOMAIN-ul nostru de packaging.
+UPSTREAM_RESOURCES_DOMAIN = "displaycal.net"
 
 # Adresele REALE ale autorilor originali — NICIODATĂ derivate din DOMAIN
 # (vezi comentariul de mai sus), ca rebranding-ul să nu creeze o adresă de

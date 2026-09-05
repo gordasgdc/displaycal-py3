@@ -377,22 +377,21 @@ rezolvare de conflict necesară). Push-uit pe `origin/develop`.
 "gata" până nu e bifată aici cu verificare reală)
 
 - [x] **Sync upstream → fork** (fast-forward, verificat, push-uit).
-- [x] **Rebranding `DisplayCAL/meta.py`** — `NAME="DisplayCAL-CG"`,
-  `AUTHOR`/`AUTHOR_ASCII`/`DESCRIPTION`/`LONG_DESCRIPTION` extinse (credit
-  original PĂSTRAT, nu înlocuit — cerință GPLv3), `DOMAIN="gordas.dev"`
-  (afectează DOAR metadate de packaging — URL-uri installer, APPSTREAM_ID
-  — verificat cu `grep` ce anume citește `meta.DOMAIN` înainte de
-  schimbare), `GITHUB_API_URL`/`DEVELOPMENT_HOME_PAGE` redirecționate spre
-  `gordasgdc/displaycal-py3` (altfel update checker-ul propriu al
-  aplicației ar fi trimis userii spre release-urile upstream, nu ale
-  noastre — bug real prins înainte de a fi introdus, nu doar presupus).
+- [x] **Rebranding `DisplayCAL/meta.py`** — `AUTHOR`/`AUTHOR_ASCII`/
+  `DESCRIPTION`/`LONG_DESCRIPTION` extinse (credit original PĂSTRAT, nu
+  înlocuit — cerință GPLv3), `DOMAIN="gordas.dev"` (afectează DOAR
+  metadate de packaging — URL-uri installer, APPSTREAM_ID), `GITHUB_API_URL`/
+  `DEVELOPMENT_HOME_PAGE` redirecționate spre `gordasgdc/displaycal-py3`.
   `AUTHOR_EMAIL` **NU** derivat din noul `DOMAIN` — rămâne hardcodat la
-  adresele reale ale autorilor originali (`florian@displaycal.net`,
-  `eoyilmaz@gmail.com`), ca rebranding-ul să nu creeze o adresă de email
-  falsă pe domeniul nostru. Verificat cu import Python real — toate
-  valorile calculate corect (`APPSTREAM_ID` → `dev.gordas.DisplayCAL-CG`).
-- [ ] **`DisplayCAL/lang/ro.yaml`** — traducere completă RO (1280 chei).
-  NEÎNCEPUT.
+  adresele reale ale autorilor originali. **`NAME` RĂMÂNE `"DisplayCAL"`**
+  (NU `"DisplayCAL-CG"`) — corectat după un build real eșuat, vezi comentariul
+  extins din `meta.py` (`~70` de locuri din `_setup.py` folosesc `NAME` ca
+  identificator LITERAL de pachet Python, nu doar text de afișat — o
+  cratimă acolo rupe `distutils.versionpredicate` + mismatch-uiește
+  folderul fizic `DisplayCAL/`). Identitatea vizuală "DisplayCAL-CG" trăiește
+  în stringuri pure + iconițe + nume de pachete de distribuție, NU în `NAME`.
+- [x] **`DisplayCAL/lang/ro.yaml`** — traducere completă RO (1280 chei,
+  verificat set-egal cu `en.yaml`, zero mismatch de placeholder-uri).
 - [x] **9 iconițe noi** (`.icns`/`.ico`/`.png`, toate uneltele) — desenate
   vectorial cu Pillow (roată de culoare RGB pentru aplicația principală,
   pictogramă distinctă per unealtă), paleta "Shift" GDC. Nume confirmate
@@ -400,8 +399,81 @@ rezolvare de conflict necesară). Push-uit pe `origin/develop`.
   toate derivă din `NAME`/`APPNAME`). Verificat: 99/99 PNG-uri pe mărimi
   (10-512px) cu dimensiune exactă, toate cele 8 `.icns` validate
   ne-corupte (round-trip `iconutil`), fișierele vechi complet eliminate.
-- [ ] **`build_pkg.sh`** (macOS, semnare+notarizare Developer ID, pe modelul
-  `build_installer.sh` din CGConvertor). NEÎNCEPUT.
+- [x] **`build_pkg.sh`** (macOS, semnare Developer ID + notarizare +
+  stapling, `.pkg` cu instalare directă în `/Applications`). **GATA,
+  verificat real**: `dist/DisplayCAL-CG.pkg` (508MB) — `spctl --assess`
+  → `accepted, source=Notarized Developer ID`; `stapler validate` → OK.
+  16 rulări eșuate înainte de succes — cauze REALE găsite pe rând, nu
+  presupuse (toate documentate inline în `build_pkg.sh`):
+  1. `codesign --verify --deep --strict` respinge symlink-uri externe
+     bundle-ului — cele 8 unelte satelit (Testchart Editor etc.) sunt
+     bundle-uri mici (~400KB) care symlink-uiesc Frameworks/Resources
+     din `DisplayCAL.app` (design py2app intenționat, upstream nu
+     rulează niciodată acest verify). Fix: verify simplu, fără `--deep`.
+  2. `codesign --remove-signature` corupe `__LINKEDIT` pe dylib-uri deja
+     ad-hoc semnate din wheel-uri (`liblzma.5.dylib`, Pillow/.dylibs) —
+     eliminat strip-ul pentru dylib/so, păstrat doar pentru framework-uri
+     Qt (motiv diferit, documentat upstream).
+  3. Semnarea paralelă a tuturor 9 app-uri scria concurent peste ACELEAȘI
+     fișiere fizice (doar `DisplayCAL.app` le deține, restul symlink) —
+     fix: `DisplayCAL.app` semnat complet, singur, ÎNAINTE; cele 8
+     satelit în paralel după, fără să rescrie fișierele partajate.
+  4. Cauza REALĂ (nu #2/#3): macholib (py2app) corupe `__LINKEDIT` la
+     rescrierea unui LC_ID_DYLIB scurt/placeholder (`/DLC/...`) la unul
+     mai lung (`@executable_path/...`) — fix: `install_name_tool -id`
+     pre-rescrie ID-urile ÎNAINTE de py2app (unealtă Apple, realocă corect).
+  5. py2app însuși (`codesign_adhoc`/`_dosign --preserve-metadata=...`)
+     eșuează silențios pe dylib-uri nesemnate, lăsând un
+     `LC_CODE_SIGNATURE` orfan/corupt — fix: salvăm copii curate ale
+     `.dylibs/` ÎNAINTE de py2app, le suprascriem peste cele corupte
+     DUPĂ py2app, înainte de semnarea proprie.
+  6. Satelit apps au propriul interpretor `Contents/MacOS/python` REAL
+     (nu symlink) — o semnare non-deep a bundle-ului nu-l atinge (doar
+     executabilul desemnat) — respins la notarizare (fără timestamp/
+     hardened runtime). Fix: semnăm explicit ambele binare reale.
+  7. Unelte PySide6 fără extensie (`lrelease`, `Qt/libexec/*`) deja
+     ad-hoc semnate din Qt — `--deep` nu le re-semnează forțat. Fix:
+     semnare explicită pe bază de tip Mach-O, nu extensie de fișier.
+  8. `PIL`/`google` (native) bundle-uite în `python313.zip` — un fișier
+     ÎNTR-UN zip nu poate fi semnat individual. Fix: `"packages"` py2app
+     le extrage ca fișiere loose. `"google"` e namespace package (PEP
+     420, fără `__init__.py`) — `imp_find_module` clasic nu-l găsește
+     deloc; fix: `__init__.py` gol creat în venv, doar pentru build.
+  9. `py2app` însuși (unealtă de BUILD) ajungea bundle-at în app-ul
+     final — exclus explicit din `excludes`.
+  10. Resturi `.cpp.o` (obiecte compilate intern de PySide6/Qt QML
+      tooling, niciodată executate) bundle-ate accidental — șterse
+      din pachet înainte de semnare.
+- [x] **Audit link-uri din meniu + DOMAIN vs resurse upstream reale
+  (2026-09-05, cerut de Cristi — "unele link-uri nu se deschid")**.
+  Găsit BUG REAL, mai serios decât link-uri de meniu: rebranding-ul
+  `DOMAIN = "gordas.dev"` (sesiune anterioară) repointase din greșeală
+  și DOWNLOAD-uri de fișiere REALE, pe care NU le găzduim — instalerul
+  ArgyllCMS (`worker.py`), pachete firmware/corecție Spyder2/Spyder4/
+  i1D3/ColorMunki (`display_cal.py`), feed-uri 0install Linux
+  (`profile_loader.py`/`worker.py`), pagina web a vizualizatorului X3D
+  (`x3dom.py`), și baza de date online de corecții colorimetru
+  (upload/căutare, `display_cal.py`). Toate ar fi eșuat silențios la
+  prima utilizare reală (subdomenii/căi inexistente pe `gordas.dev`).
+  Fix: două constante noi în `meta.py` — `UPSTREAM_RESOURCES_DOMAIN =
+  "displaycal.net"` (Argyll/instrumente/0install/X3D — infrastructură
+  server-side reală a upstream-ului, nu ceva replicabil doar prin
+  redirect de domeniu) și `COLORIMETER_CORRECTIONS_DOMAIN =
+  "colorimetercorrections.displaycal.net"` — aplicate în toate cele 10
+  locuri identificate prin `grep` sistematic pe `{DOMAIN}` din tot
+  codul (nu doar cele raportate inițial, Regula 30). Link-uri de meniu
+  proprii (Help → "Mergi la site", About → link aplicație) repointate
+  spre `https://gordas.dev/DisplayCAL-CG/` (pagina dedicată, încă
+  neconstruită — vezi rândul de mai jos). Verificat: sintaxă + import
+  Python real pe toate fișierele atinse (`display_cal.py`/`worker.py`/
+  `profile_loader.py`/`x3dom.py`/`meta.py`) — nu doar `ast.parse`.
+  **Rămas de verificat, nerezolvat**: conținutul `README.html` bundle-uit
+  (deschis din Help → "Citește-mă") e cel VECHI, engleză/franceză,
+  upstream — trebuie înlocuit cu documentație nouă RO/EN/ES, publicată
+  pe pagina web (nu doar un fișier local), odată ce pagina există.
+  Banner-ul grafic din About (`theme/header.png`, cu textul "DisplayCAL³"
+  desenat direct în imagine) rămâne branding vizual upstream — decizie
+  de design amânată pentru etapa de identitate vizuală/website.
 - [ ] **Branding Inno Setup Windows** (fără semnare încă). NEÎNCEPUT.
 - [ ] **`docs/` GitHub Pages** pe acest repo + oglindă
   `gdc-plugin-manager-catalog-vendor/docs/DisplayCAL-CG/`. NEÎNCEPUT.

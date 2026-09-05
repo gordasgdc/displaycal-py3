@@ -21,7 +21,7 @@ from DisplayCAL import localization as lang
 from DisplayCAL.config import get_data_path
 from DisplayCAL.defaultpaths import CACHE as CACHEPATH
 from DisplayCAL.log import safe_print as _safe_print
-from DisplayCAL.meta import DOMAIN
+from DisplayCAL.meta import UPSTREAM_RESOURCES_DOMAIN
 from DisplayCAL.options import DEBUG
 from DisplayCAL.util_io import GzipFileProper
 from DisplayCAL.util_str import StrList, create_replace_function
@@ -291,7 +291,7 @@ class Tag:
 
         # Get HTML template from cache or online
         html = self.get_resource(
-            f"https://{DOMAIN}/x3d-viewer/release/x3d-viewer.html", True, force, cache
+            f"https://{UPSTREAM_RESOURCES_DOMAIN}/x3d-viewer/release/x3d-viewer.html", True, force, cache
         ).decode("utf-8")
         if cache or embed:
             # Update resources in HTML
