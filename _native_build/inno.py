@@ -16,7 +16,16 @@ def generate(pydir: Path, bdist_cmd: str, arch: str, dry_run: bool) -> None:
             template = inno_template.read()
             # print(template)
             inno_arch_raw = arch or get_platform().split("-")[1]
-            inno_arch = "x64" if inno_arch_raw == "amd64" else inno_arch_raw
+            # "x64" e depreciat de Inno Setup 7+, substituit automat cu
+            # "x64os" -- care cere ca sistemul de operare INSUSI sa fie
+            # x64, nu doar sa poata rula cod x64. Gasit real, nu presupus:
+            # un Windows ARM64 (Parallels pe Apple Silicon, care ruleaza
+            # x64 prin emulare nativa) a respins installerul cu "This
+            # program does not support the version of Windows your
+            # computer is running." -- "x64compatible" accepta AMBELE
+            # cazuri (x64 nativ SAU ARM64 cu emulare x64), fara sa piarda
+            # nimic pe un Windows x64 normal.
+            inno_arch = "x64compatible" if inno_arch_raw == "amd64" else inno_arch_raw
             inno_script = template % {
                 "AppCopyright": f"© {strftime('%Y')} {meta.AUTHOR}",
                 "AppName": meta.NAME,
