@@ -39,14 +39,17 @@
   header{ position:sticky; top:0; z-index:50; background:rgba(20,22,26,.82); backdrop-filter:blur(12px); border-bottom:1px solid var(--border); }
   .header-inner{ display:flex; align-items:center; justify-content:space-between; padding:14px 24px; max-width:1080px; margin:0 auto; }
   .brand{ display:flex; align-items:center; gap:10px; font-family:var(--mono); font-weight:700; font-size:15px; }
-  .brand .mark{ width:28px; height:28px; border-radius:8px; overflow:hidden; }
-  .brand .mark img{ width:100%; height:100%; }
+  .brand .mark{ width:28px; height:28px; border-radius:8px; background:var(--accent); color:var(--accent-ink); display:flex; align-items:center; justify-content:center; }
+  .brand .mark svg{ width:16px; height:16px; }
+  .btn svg{ width:15px; height:15px; flex-shrink:0; }
   #lang-switch{ display:flex; gap:4px; }
   #lang-switch button{ font-family:var(--mono); font-size:11.5px; font-weight:600; color:var(--muted); background:transparent; border:1px solid var(--border); border-radius:6px; padding:5px 9px; cursor:pointer; }
   #lang-switch button:hover{ color:var(--text); border-color:var(--accent); }
   #lang-switch button.active{ color:var(--accent-ink); background:var(--accent); border-color:var(--accent); }
 
   .hero{ padding:76px 0 52px; text-align:center; }
+  .hero .badge-lg{ width:88px; height:88px; border-radius:20px; margin:0 auto 22px; background:var(--accent); color:var(--accent-ink); display:flex; align-items:center; justify-content:center; box-shadow:0 20px 60px rgba(0,0,0,.4); }
+  .hero .badge-lg svg{ width:40px; height:40px; }
   .eyebrow{ display:inline-block; font-family:var(--mono); font-size:12px; color:var(--accent); background:rgba(232,150,60,.10); border:1px solid rgba(232,150,60,.3); padding:5px 12px; border-radius:999px; margin-bottom:22px; }
   .hero h1{ font-size:44px; font-weight:800; letter-spacing:-.02em; margin-bottom:16px; text-wrap:balance; }
   .hero h1 .accent{ color:var(--accent); }
@@ -68,7 +71,8 @@
 
   .features{ display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:20px; }
   .feature{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:22px; }
-  .feature .icon{ font-size:26px; margin-bottom:10px; }
+  .feature .icon{ margin-bottom:10px; color:var(--accent); }
+  .feature .icon svg{ width:26px; height:26px; display:block; }
   .feature h3{ font-size:15.5px; font-weight:700; margin-bottom:8px; }
   .feature p{ font-size:13.5px; color:var(--muted); line-height:1.55; }
 
@@ -111,9 +115,41 @@
 </head>
 <body>
 
+<!-- Sprite de iconite SVG, monocrome, tip contur — acelasi limbaj vizual
+     folosit pe mac-master-control-pro/, in loc de emoji colorate. -->
+<svg style="display:none" aria-hidden="true">
+  <defs>
+    <symbol id="icon-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.8" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="icon-monitors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2.5" y="5" width="12" height="9" rx="1.2"/><line x1="6" y1="17.5" x2="10.5" y2="17.5"/><line x1="8.5" y1="14" x2="8.5" y2="17.5"/>
+      <rect x="14.5" y="8.5" width="7" height="6" rx="1"/><line x1="18" y1="14.5" x2="18" y2="17"/>
+    </symbol>
+    <symbol id="icon-check-report" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M8 12l2.5 2.5L16 9"/>
+    </symbol>
+    <symbol id="icon-cube" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 3v18M4 7.5l8 4.5 8-4.5"/>
+    </symbol>
+    <symbol id="icon-gamut" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3l8 15H4L12 3z"/><circle cx="12" cy="14.2" r="2.6"/>
+    </symbol>
+    <symbol id="icon-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+      <circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><line x1="3" y1="12" x2="21" y2="12"/>
+    </symbol>
+    <symbol id="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3v13"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/>
+    </symbol>
+    <symbol id="icon-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/>
+    </symbol>
+  </defs>
+</svg>
+
 <header>
   <div class="header-inner">
-    <div class="brand"><span class="mark"><img src="assets/icon.png" alt=""></span> DisplayCAL-CG</div>
+    <div class="brand"><span class="mark"><svg><use href="#icon-target"/></svg></span> DisplayCAL-CG</div>
     <div id="lang-switch">
       <button data-lang="ro">RO</button>
       <button data-lang="en">EN</button>
@@ -123,12 +159,13 @@
 </header>
 
 <div class="hero wrap">
+  <div class="badge-lg"><svg><use href="#icon-target"/></svg></div>
   <div class="eyebrow" data-i18n="hero.eyebrow">Mac · Windows · Calibrare de culoare</div>
   <h1 data-i18n-html="hero.h1">Calibrare &amp; profilare, <span class="accent">la nivel de laborator.</span></h1>
   <p class="tagline" data-i18n="hero.tagline">Calibrează și caracterizează orice display cu instrumentele de măsurare profesionale pe care le folosești deja — profiluri ICC precise, verificare și raportare, 3D LUT-uri video, gamut mapping CIECAM02 — pe Mac și Windows, complet gratuit.</p>
   <div class="btn-row">
-    <a class="btn btn-primary" data-i18n="hero.mac" href="https://github.com/gordasgdc/displaycal-py3/releases/latest/download/DisplayCAL-CG.pkg">⬇ Descarcă pentru Mac</a>
-    <a class="btn btn-disabled" data-i18n="hero.win" href="https://github.com/gordasgdc/displaycal-py3/releases">⏳ Windows — în curând</a>
+    <a class="btn btn-primary" href="https://github.com/gordasgdc/displaycal-py3/releases/latest/download/DisplayCAL-CG.pkg"><svg><use href="#icon-download"/></svg> <span data-i18n="hero.mac">Descarcă pentru Mac</span></a>
+    <a class="btn btn-disabled" href="https://github.com/gordasgdc/displaycal-py3/releases"><svg><use href="#icon-clock"/></svg> <span data-i18n="hero.win">Windows — în curând</span></a>
   </div>
   <div class="signed-note"><span class="dot"></span><span data-i18n="hero.signed">Pachetul Mac e semnat și notarizat oficial de Apple — se instalează direct în /Applications, fără avertismente.</span></div>
 </div>
@@ -139,32 +176,32 @@
     <p class="subhead" data-i18n="features.subhead">9 unelte complete pentru fluxul întreg de calibrare — de la măsurare până la verificare și export.</p>
     <div class="features">
       <div class="feature">
-        <div class="icon">🎯</div>
+        <div class="icon"><svg><use href="#icon-target"/></svg></div>
         <h3 data-i18n="f1.h">Profile ICC precise</h3>
         <p data-i18n="f1.p">Calibrare + caracterizare completă, cu suport pentru zeci de colorimetre și spectrometre — de la unități de consum până la instrumente de referință.</p>
       </div>
       <div class="feature">
-        <div class="icon">🖥️</div>
+        <div class="icon"><svg><use href="#icon-monitors"/></svg></div>
         <h3 data-i18n="f2.h">Multi-display</h3>
         <p data-i18n="f2.p">Calibrează separat fiecare monitor dintr-un setup multi-display, cu profiluri și curbe independente pentru fiecare.</p>
       </div>
       <div class="feature">
-        <div class="icon">📊</div>
+        <div class="icon"><svg><use href="#icon-check-report"/></svg></div>
         <h3 data-i18n="f3.h">Verificare & raportare</h3>
         <p data-i18n="f3.p">Verifică acuratețea unui profil deja creat, cu rapoarte detaliate (Delta E, gamma, punct alb/negru) — știi exact cât de bine calibrat e ecranul.</p>
       </div>
       <div class="feature">
-        <div class="icon">🎬</div>
+        <div class="icon"><svg><use href="#icon-cube"/></svg></div>
         <h3 data-i18n="f4.h">3D LUT pentru video</h3>
         <p data-i18n="f4.p">Generează 3D LUT-uri video pentru monitoare de grading, exportabile direct în formatele folosite de DaVinci Resolve și alte unelte de post-producție.</p>
       </div>
       <div class="feature">
-        <div class="icon">🌈</div>
+        <div class="icon"><svg><use href="#icon-gamut"/></svg></div>
         <h3 data-i18n="f5.h">CIECAM02 gamut mapping</h3>
         <p data-i18n="f5.p">Opțiune avansată de mapare a gamutului ținând cont de condițiile reale de vizualizare — pentru cei care au nevoie de acuratețe dincolo de calibrarea standard.</p>
       </div>
       <div class="feature">
-        <div class="icon">🌍</div>
+        <div class="icon"><svg><use href="#icon-globe"/></svg></div>
         <h3 data-i18n="f6.h">Interfață completă în română</h3>
         <p data-i18n="f6.p">Traducere completă a interfeței în limba română, pe lângă cele peste 15 limbi deja disponibile în proiectul original.</p>
       </div>
@@ -272,7 +309,7 @@
       'hero.eyebrow': 'Mac · Windows · Calibrare de culoare',
       'hero.h1': 'Calibrare &amp; profilare, <span class="accent">la nivel de laborator.</span>',
       'hero.tagline': 'Calibrează și caracterizează orice display cu instrumentele de măsurare profesionale pe care le folosești deja — profiluri ICC precise, verificare și raportare, 3D LUT-uri video, gamut mapping CIECAM02 — pe Mac și Windows, complet gratuit.',
-      'hero.mac': '⬇ Descarcă pentru Mac', 'hero.win': '⏳ Windows — în curând',
+      'hero.mac': 'Descarcă pentru Mac', 'hero.win': 'Windows — în curând',
       'hero.signed': 'Pachetul Mac e semnat și notarizat oficial de Apple — se instalează direct în /Applications, fără avertismente.',
       'features.title': 'Ce include DisplayCAL-CG',
       'features.subhead': '9 unelte complete pentru fluxul întreg de calibrare — de la măsurare până la verificare și export.',
@@ -300,7 +337,7 @@
       'hero.eyebrow': 'Mac · Windows · Color calibration',
       'hero.h1': 'Calibration &amp; profiling, <span class="accent">at lab-grade precision.</span>',
       'hero.tagline': 'Calibrate and characterize any display with the measurement instruments you already own — precise ICC profiles, verification and reporting, video 3D LUTs, CIECAM02 gamut mapping — for Mac and Windows, completely free.',
-      'hero.mac': '⬇ Download for Mac', 'hero.win': '⏳ Windows — coming soon',
+      'hero.mac': 'Download for Mac', 'hero.win': 'Windows — coming soon',
       'hero.signed': 'The Mac package is officially signed and notarized by Apple — installs directly into /Applications, no warnings.',
       'features.title': 'What DisplayCAL-CG includes',
       'features.subhead': '9 complete tools for the whole calibration workflow — from measurement to verification and export.',
@@ -328,7 +365,7 @@
       'hero.eyebrow': 'Mac · Windows · Calibración de color',
       'hero.h1': 'Calibración y perfilado, <span class="accent">con precisión de laboratorio.</span>',
       'hero.tagline': 'Calibra y caracteriza cualquier pantalla con los instrumentos de medición profesionales que ya tienes — perfiles ICC precisos, verificación e informes, 3D LUTs de vídeo, mapeo de gama CIECAM02 — para Mac y Windows, totalmente gratis.',
-      'hero.mac': '⬇ Descargar para Mac', 'hero.win': '⏳ Windows — próximamente',
+      'hero.mac': 'Descargar para Mac', 'hero.win': 'Windows — próximamente',
       'hero.signed': 'El paquete de Mac está firmado y notarizado oficialmente por Apple — se instala directamente en /Applications, sin avisos.',
       'features.title': 'Qué incluye DisplayCAL-CG',
       'features.subhead': '9 herramientas completas para todo el flujo de calibración — desde la medición hasta la verificación y exportación.',

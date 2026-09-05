@@ -325,6 +325,40 @@ DOAR ce adaugă Claude de-acum înainte în acest fork (niciun commit nou al
 lui Claude nu conține `Co-Authored-By: Claude`), nu istoria unui proiect
 open-source terț cu mulți autori legitimi.
 
+**33. Iconițe SVG monocrome, tip contur — niciodată emoji, pe nicio pagină
+web GDC (2026-09-05).** Cerut explicit de Cristi, după ce a comparat
+`gordas.dev/DisplayCAL-CG/` (emoji colorate ca iconițe de feature) cu
+`gordas.dev/mac-master-control-pro/` (sprite SVG monocrom, `currentColor`,
+stil contur) — a doua variantă e standardul, prima nu mai e acceptabilă.
+Regulă obligatorie pentru orice pagină de prezentare/descărcare GDC nouă
+sau atinsă de-acum înainte:
+- Un singur `<svg style="display:none">` cu `<symbol>`-uri, inserat o
+  singură dată în `<body>`, referit prin `<svg><use href="#icon-x"/></svg>`
+  oriunde e nevoie (brand mark din header, badge mare din hero, iconițe de
+  feature, iconițe din butoane) — niciodată emoji Unicode (⬇ 🎯 🖥️ 📊 etc.)
+  ca iconiță funcțională sau decorativă principală.
+- Stil vizual: `fill="none" stroke="currentColor" stroke-width="1.6-1.8"
+  stroke-linecap="round"` (contur simplu, 24×24 viewBox) — culoarea vine
+  din CSS (`color:var(--accent)` pe containerul părinte), nu hardcodată în
+  SVG. Vezi sprite-ul complet de referință din `mac-master-control-pro/`
+  (`gear`, `zap`, `piechart`, `globe`, `cloud`, `trash`, `wrench`, `shield`,
+  `cpu`, `box`, `harddrive`, `download`, etc.) — reutilizează un icon
+  existent din acel sprite dacă se potrivește semantic, înainte de a
+  desena unul nou.
+- **Atenție la `data-i18n`/`textContent` pe elemente care conțin și un
+  `<svg>`** (ex. un buton cu iconiță + text) — `el.textContent = ...` la
+  schimbarea de limbă ȘTERGE orice copil SVG din acel element. Textul
+  tradus trebuie să stea într-un `<span data-i18n="...">` COPIL, separat
+  de `<svg>`, niciodată direct pe elementul care conține iconița.
+- **Nu retroactiv, la fiecare pagină deodată** — orice aplicație/pagină
+  care încă folosește emoji ca iconițe de feature se aliniază la acest
+  model DOAR la următoarea ei atingere/actualizare reală, nu într-o
+  sesiune dedicată exclusiv migrării tuturor paginilor existente.
+- **Bonus, găsit în aceeași sesiune**: bulina de status colorată
+  (`.dot`/`.signed-note .dot`, un `<span>` cu `background` CSS) NU intră
+  sub această regulă — e un indicator de stare semantic (verde =
+  verificat), nu o iconiță de conținut, poate rămâne CSS pur.
+
 ## [PARTEA 2: SPECIFICAȚII TEHNICE PROIECT — DisplayCAL-CG]
 
 ### Context (2026-09-05)
