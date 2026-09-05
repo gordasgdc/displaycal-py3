@@ -393,7 +393,13 @@ rezolvare de conflict necesară). Push-uit pe `origin/develop`.
   valorile calculate corect (`APPSTREAM_ID` → `dev.gordas.DisplayCAL-CG`).
 - [ ] **`DisplayCAL/lang/ro.yaml`** — traducere completă RO (1280 chei).
   NEÎNCEPUT.
-- [ ] **9 iconițe noi** (`.icns`/`.ico`/`.png`, toate uneltele). NEÎNCEPUT.
+- [x] **9 iconițe noi** (`.icns`/`.ico`/`.png`, toate uneltele) — desenate
+  vectorial cu Pillow (roată de culoare RGB pentru aplicația principală,
+  pictogramă distinctă per unealtă), paleta "Shift" GDC. Nume confirmate
+  direct în cod (`_setup.py`/`config.py`/`worker.py`/`postinstall.py`,
+  toate derivă din `NAME`/`APPNAME`). Verificat: 99/99 PNG-uri pe mărimi
+  (10-512px) cu dimensiune exactă, toate cele 8 `.icns` validate
+  ne-corupte (round-trip `iconutil`), fișierele vechi complet eliminate.
 - [ ] **`build_pkg.sh`** (macOS, semnare+notarizare Developer ID, pe modelul
   `build_installer.sh` din CGConvertor). NEÎNCEPUT.
 - [ ] **Branding Inno Setup Windows** (fără semnare încă). NEÎNCEPUT.
