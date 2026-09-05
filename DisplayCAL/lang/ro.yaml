@@ -1,0 +1,2688 @@
+"*": |-
+  Note to translators: Keys which are not yet translated are marked with a leading asterisk (*). Please remove the asterisk when translated. Please keep placeholders (percent sign followed by format string, e.g. %s, %i, %f etc.) intact.
+"!author": |-
+  Cristi Gordaș (GDC) — DisplayCAL-CG Edition
+"!language": |-
+  Română
+"!language_name": |-
+  ROMANIAN
+"3dlut": |-
+  LUT 3D
+"3dlut.1dlut.videolut.nonlinear": |-
+  Calibrarea 1D LUT a tabelelor gamma ale plăcii video este neliniară, dar LUT-ul 3D conține calibrarea 1D LUT deja aplicată. Asigură-te că resetezi manual tabelele gamma ale plăcii video la liniar înainte de a folosi LUT-ul 3D, sau creează un LUT 3D fără calibrare aplicată (pentru a face asta, activează „Arată opțiuni avansate” din meniul „Opțiuni” și dezactivează „Aplică calibrarea (vcgt)” precum și „Creează LUT 3D după profilare” din setările LUT 3D, apoi creează un nou LUT 3D).
+"3dlut.bitdepth.input": |-
+  Adâncime de biți intrare LUT 3D
+"3dlut.bitdepth.output": |-
+  Adâncime de biți ieșire LUT 3D
+"3dlut.confirm_relcol_rendering_intent": |-
+  Vrei ca LUT-ul 3D să folosească și punctul alb măsurat (intenția de randare a LUT-ului 3D va fi setată pe colorimetric relativ)?
+"3dlut.content.colorspace": |-
+  Spațiu de culoare al conținutului
+"3dlut.create": |-
+  Creează LUT 3D...
+"3dlut.create_after_profiling": |-
+  Creează LUT 3D după profilare
+"3dlut.enable": |-
+  Activează LUT 3D
+"3dlut.encoding.input": |-
+  Codare intrare
+"3dlut.encoding.output": |-
+  Codare ieșire
+"3dlut.encoding.output.warning.madvr": |-
+  Avertisment: Această codare de ieșire nu este recomandată și va cauza clipping dacă madVR nu este configurat să producă „TV levels (16-235)” sub „Devices” → „%s” → „Properties”. Folosește pe propriul risc!
+"3dlut.encoding.type_2": |-
+  TV Rec. 2020 YCbCr UHD
+"3dlut.encoding.type_5": |-
+  TV Rec. 709 1250/50Hz YCbCr HD
+"3dlut.encoding.type_6": |-
+  TV Rec. 601 YCbCr SD
+"3dlut.encoding.type_7": |-
+  TV Rec. 709 1125/60Hz YCbCr HD
+"3dlut.encoding.type_C": |-
+  TV Rec. 2020 Constant Luminance YCbCr UHD
+"3dlut.encoding.type_T": |-
+  TV RGB 16-235 (clip WTW)
+"3dlut.encoding.type_X": |-
+  TV xvYCC Rec. 709 YCbCr HD
+"3dlut.encoding.type_n": |-
+  RGB interval complet 0-255
+"3dlut.encoding.type_t": |-
+  TV RGB 16-235
+"3dlut.encoding.type_x": |-
+  TV xvYCC Rec. 601 YCbCr (primare Rec. 709) SD
+"3dlut.format": |-
+  Format fișier LUT 3D
+"3dlut.format.3dl": |-
+  Autodesk / Kodak (.3dl)
+"3dlut.format.ReShade": |-
+  ReShade (.png, .fx)
+"3dlut.format.cube": |-
+  IRIDAS (.cube)
+"3dlut.format.dcl": |-
+  DeviceControl (.dcl)
+"3dlut.format.eeColor": |-
+  eeColor Processor (.txt)
+"3dlut.format.icc": |-
+  Profil device link (.icc/.icm)
+"3dlut.format.madVR": |-
+  madVR (.3dlut)
+"3dlut.format.madVR.hdr": |-
+  Procesează conținut HDR
+"3dlut.format.madVR.hdr.confirm": |-
+  Ține cont că trebuie să fi profilat monitorul în mod HDR. Dacă monitorul nu suportă HDR nativ, apasă „Anulează”.
+"3dlut.format.madVR.hdr_to_sdr": |-
+  Convertește conținut HDR în SDR
+"3dlut.format.mga": |-
+  Pandora (.mga)
+"3dlut.format.png": |-
+  PNG (.png)
+"3dlut.format.spi3d": |-
+  Sony Imageworks (.spi3d)
+"3dlut.frame.title": |-
+  Creează LUT 3D
+"3dlut.hdr.rolloff.diffuse_white": |-
+  Alb difuz (referință 94,38 cd/m²)
+"3dlut.hdr.system_gamma": |-
+  Gamma de sistem (referință 1,2)
+"3dlut.holder.assign_preset": |-
+  Alocă LUT 3D presetării:
+"3dlut.holder.out_of_memory": |-
+  %s a rămas fără spațiu de stocare pentru LUT 3D (sunt necesari cel puțin %i KB). Te rugăm să ștergi câteva LUT-uri 3D din %s pentru a face loc altora noi. Consultă documentația %s pentru mai multe informații.
+"3dlut.input.colorspace": |-
+  Spațiu de culoare sursă
+"3dlut.input.profile": |-
+  Profil sursă
+"3dlut.install": |-
+  Instalează LUT 3D
+"3dlut.install.failure": |-
+  Instalarea LUT 3D a eșuat (eroare necunoscută).
+"3dlut.install.success": |-
+  Instalarea LUT 3D a reușit!
+"3dlut.install.unsupported": |-
+  Instalarea LUT 3D nu este suportată pentru formatul LUT 3D selectat.
+"3dlut.madvr.colorspace.unsupported": |-
+  Spațiul de culoare sursă %s cu coordonatele de cromaticitate primară xy roșu %.4f %.4f, verde %.4f %.4f, albastru %.4f %.4f nu este suportat de madVR pentru instalare automată. Alocă LUT-ul 3D manual în madVR.
+"3dlut.save_as": |-
+  Salvează LUT 3D ca...
+"3dlut.settings": |-
+  Setări LUT 3D
+"3dlut.size": |-
+  Rezoluție LUT 3D
+"3dlut.tab.enable": |-
+  Activează fila LUT 3D
+"3dlut.use_abstract_profile": |-
+  Profil abstract („Look”)
+"CMP_Digital_Target-3.cie": |-
+  CMP Digital Target 3
+"CMP_Digital_Target-4.cie": |-
+  CMP Digital Target 4
+"CMYK_IDEAlliance_ControlStrip_2009.ti1": |-
+  CMYK IDEAlliance Control Strip 2009
+"CMYK_IDEAlliance_ISO_12647-7_Control_Wedge_2013.ti1": |-
+  CMYK IDEAlliance ISO 12647-7 Control Wedge 2013
+"CMYK_ISO_12647-7_outer_gamut.ti1": |-
+  CMYK ISO 12647-7 outer gamut
+"ColorChecker.cie": |-
+  ColorChecker
+"ColorCheckerDC.cie": |-
+  ColorChecker DC
+"ColorCheckerPassport.cie": |-
+  ColorChecker Passport
+"ColorCheckerSG.cie": |-
+  ColorChecker SG
+"FograStrip2.ti1": |-
+  Fogra Media Wedge CMYK V2.0
+"FograStrip3.ti1": |-
+  Fogra Media Wedge CMYK V3.0
+"ISO_12646-2008_color_accuracy_and_gray_balance.ti1": |-
+  ISO 12646:2008 acuratețe de culoare și balans de gri
+"ISO_14861_color_accuracy_RGB318.ti1": |-
+  ISO 14861:2015 acuratețe de culoare și balans de gri
+"QPcard_201.cie": |-
+  QPcard 201
+"QPcard_202.cie": |-
+  QPcard 202
+"SpyderChecker24.cie": |-
+  SpyderCHECKR24 (D65)
+"SpyderChecker.cie": |-
+  SpyderCHECKR (D65)
+"Untethered": |-
+  Fără fir (untethered)
+"[rgb]TRC": |-
+  Curbe de răspuns tonal
+"aborted": |-
+  ...anulat.
+"aborting": |-
+  Se anulează, te rugăm așteaptă (poate dura câteva secunde)...
+"abstract_profile": |-
+  Profil abstract
+"active_matrix_display": |-
+  Monitor cu matrice activă
+"adaptive_mode_unavailable": |-
+  Modul adaptiv este disponibil doar cu ArgyllCMS 1.1.0 RC3 sau mai nou.
+"add": |-
+  Adaugă...
+"adjust_rolloff": |-
+  Ajustează roll-off-ul
+"advanced": |-
+  Avansat
+"allow_skip_sensor_cal": |-
+  Permite omiterea auto-calibrării instrumentului
+"ambient.measure": |-
+  Măsoară ambientul
+"ambient.measure.color.unsupported": |-
+  %s: Culoarea luminii ambientale nu a putut fi determinată cu acest instrument, deoarece senzorul de ambient pare a fi monocromatic (a obținut doar o citire a nivelului de lumină).
+"ambient.measure.light_level.missing": |-
+  Nu s-a obținut o citire a nivelului de lumină.
+"ambient.set": |-
+  Vrei să setezi și nivelul luminii ambientale la valoarea măsurată?
+"app.client.connect": |-
+  Clientul de scripting %s:%s s-a conectat
+"app.client.disconnect": |-
+  Clientul de scripting %s:%s s-a deconectat
+"app.client.ignored": |-
+  Încercarea de conectare a clientului de scripting %s:%s a fost refuzată: %s
+"app.client.network.disallowed": |-
+  Încercarea de conectare a clientului de scripting %s:%s a fost refuzată: Clienții de rețea nu sunt permiși.
+"app.confirm_restore_defaults": |-
+  Chiar vrei să renunți la modificări și să restaurezi setările implicite?
+"app.detected": |-
+  %s detectat.
+"app.detected.calibration_loading_disabled": |-
+  %s detectat. Încărcarea calibrării a fost dezactivată.
+"app.detection_lost": |-
+  %s nu mai este detectat.
+"app.detection_lost.calibration_loading_enabled": |-
+  %s nu mai este detectat. Încărcarea calibrării a fost activată.
+"app.incoming_message": |-
+  Cerere de scripting primită de la %s:%s: %s
+"app.incoming_message.invalid": |-
+  Cerere de scripting invalidă!
+"app.listening": |-
+  Se configurează gazda de scripting la %s:%s
+"app.otherinstance": |-
+  %s rulează deja.
+"app.otherinstance.notified": |-
+  Instanța deja pornită a fost notificată.
+"apply": |-
+  Aplică
+"apply_black_output_offset": |-
+  Aplică offset de ieșire negru (100%)
+"apply_cal": |-
+  Aplică calibrarea (vcgt)
+"apply_cal.error": |-
+  Calibrarea nu a putut fi aplicată.
+"archive.create": |-
+  Creează arhivă comprimată...
+"archive.import": |-
+  Importă arhivă...
+"archive.include_3dluts": |-
+  Vrei să incluzi fișierele LUT 3D în arhivă (nerecomandat, duce la o arhivă mai mare)?
+"argyll.debug.warning1": |-
+  Te rugăm folosește această opțiune doar dacă chiar ai nevoie de informații de depanare (de ex. pentru diagnosticarea funcționării ArgyllCMS)! De obicei e utilă doar dezvoltatorilor de software pentru diagnosticarea și rezolvarea problemelor. Sigur vrei să activezi ieșirea de depanare?
+"argyll.debug.warning2": |-
+  Nu uita să dezactivezi ieșirea de depanare pentru funcționarea normală a aplicației.
+"argyll.dir": |-
+  Director executabile ArgyllCMS:
+"argyll.dir.invalid": |-
+  Executabilele ArgyllCMS nu au fost găsite!
+  Selectează directorul care conține fișierele executabile (posibil cu prefixul sau sufixul „argyll-” / „-argyll”): %s
+"argyll.use_homebrew": |-
+  Folosește instalarea Homebrew (%s)
+"argyll.error.detail": |-
+  Mesaj detaliat de eroare ArgyllCMS:
+"argyll.instrument.configuration_files.install": |-
+  Instalează fișierele de configurare pentru instrumente ArgyllCMS...
+"argyll.instrument.configuration_files.install.success": |-
+  Instalarea fișierelor de configurare pentru instrumente ArgyllCMS s-a finalizat.
+"argyll.instrument.configuration_files.uninstall": |-
+  Dezinstalează fișierele de configurare pentru instrumente ArgyllCMS...
+"argyll.instrument.configuration_files.uninstall.success": |-
+  Dezinstalarea fișierelor de configurare pentru instrumente ArgyllCMS s-a finalizat.
+"argyll.instrument.driver.missing": |-
+  Driverul ArgyllCMS pentru dispozitivul tău de măsurare pare să nu fie instalat sau e instalat greșit. Verifică dacă dispozitivul de măsurare apare în Device Manager Windows sub „Argyll LibUSB-1.0A devices” și (re)instalează driverul dacă e necesar. Consultă documentația pentru instrucțiuni de instalare.
+"argyll.instrument.drivers.install": |-
+  Instalează driverele de instrumente ArgyllCMS...
+"argyll.instrument.drivers.install.confirm": |-
+  Trebuie să instalezi driverele specifice ArgyllCMS doar dacă ai un instrument de măsurare care nu e ColorMunki Display, i1 Display Pro, Huey, ColorHug, specbos, spectraval sau K-10.
+
+  Vrei să continui?
+"argyll.instrument.drivers.install.failure": |-
+  Instalarea driverelor de instrumente ArgyllCMS a eșuat.
+"argyll.instrument.drivers.install.restart": |-
+  Trebuie să dezactivezi Driver Signature Enforcement pentru a instala driverele de instrumente ArgyllCMS. Pentru asta, sistemul trebuie repornit. Selectează „Depanare” pe pagina care va apărea, apoi „Opțiuni avansate”, „Setări pornire” și în final „Repornește”. La pornire, selectează „Dezactivează Driver Signature Enforcement”. După repornire, alege din nou „Instalează driverele de instrumente ArgyllCMS...” din meniu pentru a instala driverele. Dacă nu vezi opțiunea „Depanare”, consultă secțiunea „Instalarea driverului de instrument pe Windows” din documentația DisplayCAL pentru o metodă alternativă de dezactivare a Driver Signature Enforcement.
+"argyll.instrument.drivers.uninstall": |-
+  Dezinstalează driverele de instrumente ArgyllCMS...
+"argyll.instrument.drivers.uninstall.confirm": |-
+  Notă: Dezinstalarea nu afectează driverele de instrumente aflate în uz, doar elimină driverul din Driver Store-ul Windows. Dacă vrei să revii la un driver oficial al producătorului pentru instrumentul tău, va trebui să folosești Device Manager Windows pentru a comuta manual la driverul producătorului. Pentru asta, click-dreapta pe instrument și selectează „Actualizează driverul...”, apoi alege „Caut pe computerul meu software pentru driver”, „Aleg dintr-o listă de drivere de pe computerul meu” și în final selectează driverul producătorului pentru instrumentul tău din listă.
+
+  Vrei să continui?
+"argyll.instrument.drivers.uninstall.failure": |-
+  Dezinstalarea driverelor de instrumente ArgyllCMS a eșuat.
+"argyll.instrument.drivers.uninstall.success": |-
+  Dezinstalarea driverelor de instrumente ArgyllCMS s-a finalizat.
+"argyll.malformed_ccxx": |-
+  ArgyllCMS nu poate funcționa cât timp există fișiere de corecție colorimetru malformate. Vor fi mutate automat la coșul de gunoi.
+"argyll.util.not_found": |-
+  Executabilul ArgyllCMS „%s” nu a fost găsit!
+"as_measured": |-
+  Ca măsurat
+"audio.lib": |-
+  Modul audio: %s
+"auth": |-
+  Autentificare
+"auth.failed": |-
+  Autentificarea a eșuat.
+"auto": |-
+  Automat
+"auto_optimized": |-
+  Auto-optimizat
+"autostart_remove_old": |-
+  Se elimină intrarea veche de pornire automată
+"backing_xyz": |-
+  Backing XYZ
+"backlight": |-
+  Retroiluminare
+"bitdepth": |-
+  Adâncime de biți
+"black": |-
+  Negru
+"black_lab": |-
+  Negru L*a*b*
+"black_point": |-
+  Punct negru
+"black_point_compensation": |-
+  Compensare punct negru
+"black_point_compensation.3dlut.warning": |-
+  La crearea unui LUT 3D, opțiunea de compensare a punctului negru din profilare ar trebui dezactivată, deoarece afectează funcția de ajustare a curbei tonale. Vrei să dezactivezi compensarea punctului negru?
+"black_point_compensation.info": |-
+  Compensarea punctului negru previne eficient „black crush”-ul, dar reduce acuratețea conversiei de culoare.
+"black_white": |-
+  Alb-negru
+"black_xyz": |-
+  Negru XYZ
+"blacklevel": |-
+  Nivel negru
+"blue": |-
+  Albastru
+"blue_gamma": |-
+  Gamma albastru
+"blue_lab": |-
+  Albastru L*a*b*
+"blue_matrix_column": |-
+  Coloană matrice albastru
+"blue_maximum": |-
+  Maxim albastru
+"blue_minimum": |-
+  Minim albastru
+"blue_tone_response_curve": |-
+  Curbă de răspuns tonal albastru
+"blue_xyz": |-
+  Albastru XYZ
+"bradford": |-
+  Bradford (recomandare ICC)
+"brightness": |-
+  Luminozitate
+"browse": |-
+  Răsfoiește...
+"bs": |-
+  Bianco & Schettini
+"bs_pc": |-
+  Bianco & Schettini cu constrângere de pozitivitate
+"bug_report": |-
+  Raportează o eroare...
+"button.calibrate": |-
+  Doar calibrare
+"button.calibrate_and_profile": |-
+  Calibrare & profilare
+"button.profile": |-
+  Doar profilare
+"cal_extraction_failed": |-
+  Datele de calibrare nu au putut fi extrase din profil.
+"calculated_checksum": |-
+  Sumă de control calculată
+"calibrate_instrument": |-
+  Auto-calibrarea instrumentului
+"calibration": |-
+  Calibrare
+"calibration.ambient_viewcond_adjust": |-
+  Ajustare nivel lumină ambientală
+"calibration.ambient_viewcond_adjust.info": |-
+  Pentru a efectua o ajustare a condițiilor de vizualizare la calcularea curbelor de calibrare, bifează căsuța și introdu nivelul luminii ambientale. Poți și măsura opțional lumina ambientală, dacă e suportat de instrument.
+"calibration.black_luminance": |-
+  Nivel negru
+"calibration.black_output_offset": |-
+  Offset de ieșire negru
+"calibration.black_point_correction": |-
+  Corecție punct negru
+"calibration.black_point_correction_choice": |-
+  Poți dezactiva corecția punctului negru, pentru a optimiza nivelul negru și contrastul (recomandat pentru majoritatea monitoarelor LCD), sau o poți activa pentru ca negrul să aibă aceeași nuanță ca punctul alb (recomandat pentru majoritatea monitoarelor CRT). Selectează preferința ta pentru corecția punctului negru.
+"calibration.black_point_rate": |-
+  Rată
+"calibration.check_all": |-
+  Verifică setările
+"calibration.complete": |-
+  Calibrare finalizată!
+"calibration.create_fast_matrix_shaper": |-
+  Creează profil matrice
+"calibration.create_fast_matrix_shaper_choice": |-
+  Vrei să creezi un profil rapid tip „matrix shaper” din măsurătorile de calibrare, sau doar să calibrezi?
+"calibration.do_not_use_video_lut": |-
+  Nu folosi tabelul gamma al plăcii video pentru a aplica calibrarea
+"calibration.do_not_use_video_lut.warning": |-
+  Chiar vrei să schimbi setarea recomandată?
+"calibration.embed": |-
+  Încorporează curbele de calibrare în profil
+"calibration.file": |-
+  Setări
+"calibration.file.invalid": |-
+  Fișierul de setări ales nu este valid.
+"calibration.file.none": |-
+  <Niciunul>
+"calibration.incomplete": |-
+  Calibrarea nu a fost finalizată.
+"calibration.interactive_display_adjustment": |-
+  Ajustare interactivă a monitorului
+"calibration.interactive_display_adjustment.black_level.crt": |-
+  Selectează „Începe măsurătoarea” și ajustează luminozitatea și/sau controalele de offset RGB ale monitorului pentru a atinge nivelul dorit.
+"calibration.interactive_display_adjustment.black_point.crt": |-
+  Selectează „Începe măsurătoarea” și ajustează controalele de offset RGB ale monitorului pentru a atinge punctul negru dorit.
+"calibration.interactive_display_adjustment.check_all": |-
+  Selectează „Începe măsurătoarea” pentru a verifica setările generale.
+"calibration.interactive_display_adjustment.generic_hint.plural": |-
+  O potrivire bună se obține când toate barele pot fi aduse la poziția marcată din centru.
+"calibration.interactive_display_adjustment.generic_hint.singular": |-
+  O potrivire bună se obține când bara poate fi adusă la poziția marcată din centru.
+"calibration.interactive_display_adjustment.start": |-
+  Începe măsurătoarea
+"calibration.interactive_display_adjustment.stop": |-
+  Oprește măsurătoarea
+"calibration.interactive_display_adjustment.white_level.crt": |-
+  Selectează „Începe măsurătoarea” și ajustează contrastul și/sau controalele de câștig RGB ale monitorului pentru a atinge nivelul dorit.
+"calibration.interactive_display_adjustment.white_level.lcd": |-
+  Selectează „Începe măsurătoarea” și ajustează controlul de retroiluminare/luminozitate al monitorului pentru a atinge nivelul dorit.
+"calibration.interactive_display_adjustment.white_point": |-
+  Selectează „Începe măsurătoarea” și ajustează temperatura de culoare și/sau controalele de câștig RGB ale monitorului pentru a atinge punctul alb dorit.
+"calibration.load": |-
+  Încarcă setări...
+"calibration.load.handled_by_os": |-
+  Încărcarea calibrării este gestionată de sistemul de operare.
+"calibration.load_error": |-
+  Curbele de calibrare nu au putut fi încărcate.
+"calibration.load_from_cal": |-
+  Încarcă curbele de calibrare dintr-un fișier de calibrare...
+"calibration.load_from_cal_or_profile": |-
+  Încarcă curbele de calibrare dintr-un fișier de calibrare sau profil...
+"calibration.load_from_display_profile": |-
+  Încarcă curbele de calibrare din profilul curent al monitorului
+"calibration.load_from_display_profiles": |-
+  Încarcă calibrarea din profilul (profilele) curent(e) al(e) monitorului
+"calibration.load_from_profile": |-
+  Încarcă curbele de calibrare dintr-un profil...
+"calibration.load_success": |-
+  Curbele de calibrare au fost încărcate cu succes.
+"calibration.loading": |-
+  Se încarcă curbele de calibrare din fișier...
+"calibration.loading_from_display_profile": |-
+  Se încarcă curbele de calibrare din profilul curent al monitorului...
+"calibration.luminance": |-
+  Nivel alb
+"calibration.lut_viewer.title": |-
+  Curbe
+"calibration.preserve": |-
+  Păstrează starea de calibrare
+"calibration.preview": |-
+  Previzualizează calibrarea
+"calibration.quality": |-
+  Calitate calibrare
+"calibration.quality.high": |-
+  Ridicată
+"calibration.quality.low": |-
+  Scăzută
+"calibration.quality.medium": |-
+  Medie
+"calibration.quality.ultra": |-
+  Ultra
+"calibration.quality.verylow": |-
+  Foarte scăzută
+"calibration.reset": |-
+  Resetează tabelul gamma al plăcii video
+"calibration.reset_error": |-
+  Tabelul gamma al plăcii video nu a putut fi resetat.
+"calibration.reset_success": |-
+  Tabelul gamma al plăcii video a fost resetat cu succes.
+"calibration.resetting": |-
+  Se resetează tabelul gamma al plăcii video la liniar...
+"calibration.settings": |-
+  Setări de calibrare
+"calibration.show_actual_lut": |-
+  Arată curbele de calibrare din placa video
+"calibration.show_lut": |-
+  Arată curbele
+"calibration.skip": |-
+  Continuă la profilare
+"calibration.speed": |-
+  Viteză calibrare
+"calibration.speed.high": |-
+  Ridicată
+"calibration.speed.low": |-
+  Scăzută
+"calibration.speed.medium": |-
+  Medie
+"calibration.speed.veryhigh": |-
+  Foarte ridicată
+"calibration.speed.verylow": |-
+  Foarte scăzută
+"calibration.start": |-
+  Continuă la calibrare
+"calibration.update": |-
+  Actualizează calibrarea
+"calibration.update_profile_choice": |-
+  Vrei să actualizezi și curbele de calibrare din profilul existent, sau doar să calibrezi?
+"calibration.use_linear_instead": |-
+  Folosește calibrare liniară în loc
+"calibration.verify": |-
+  Verifică calibrarea
+"calibration_profiling.complete": |-
+  Calibrare și profilare finalizate!
+"calibrationloader.description": |-
+  Setează profilele ICC și încarcă curbele de calibrare pentru toate monitoarele configurate
+"can_be_used_independently": |-
+  Poate fi folosit independent
+"cancel": |-
+  Anulează
+"cat02": |-
+  CAT02 (din CIECAM02)
+"cat02bs": |-
+  CAT02 (din CIECAM02, modificare Brill & Süsstrunk)
+"cat97s": |-
+  CAT97s (din CIECAM97s)
+"cathode_ray_tube_display": |-
+  Monitor cu tub catodic (CRT)
+"ccmx.use_four_color_matrix_method": |-
+  Minimizează diferența de cromaticitate xy
+"ccss.CCFLFamily_07Feb11": |-
+  Familie LCD CCFL (AC, EIZO, HP)
+"ccss.FSI_XM55U_23Jan19": |-
+  Familie WOLED, mod gamut SDR Rec. 709 (FSI XM55U/XM65U, LG OLED)
+"ccss.GBrLED_25Jul12": |-
+  LCD GB-r-LED IPS (Dell U2413)
+"ccss.HP_DC3": |-
+  LCD PFS Phosphor WLED IPS, 94% Adobe RGB/90% P3 (HP DreamColor)
+"ccss.HP_DreamColor_Z24x_NewPanel": |-
+  LCD PFS Phosphor WLED IPS, 98% Adobe RGB/96% P3 (HP DreamColor Z24x G2)
+"ccss.HP_ZBOOK": |-
+  LCD PFS Phosphor WLED IPS, 100% Adobe RGB (HP ZBook)
+"ccss.LG OLED 6-Series (i1 Pro 2, ColorMunki Photo)": |-
+  WOLED (LG OLED seria 6)
+"ccss.MacBookProRetina2016": |-
+  LCD PFS Phosphor WLED IPS, 99% P3 (MacBook Pro Retina 2016)
+"ccss.NEC_64_690E_PA242W_2013-02-28": |-
+  LCD GB-r-LED IPS (NEC PA242W)
+"ccss.OLEDFamily_20Jul12": |-
+  RGB OLED (Sony PVM-2541)
+"ccss.OLEDFamily_28Aug18": |-
+  Familie RGB OLED (Sony PVM-2541, Samsung Galaxy S7, Lenovo LEN4140)
+"ccss.PFS_Phosphor_Adobe_RGB_31Jan17": |-
+  LCD PFS Phosphor WLED, 98% Adobe RGB
+"ccss.PFS_Phosphor_Family_31Jan17": |-
+  Familie LCD PFS Phosphor WLED
+"ccss.Panasonic VVX17P051J00": |-
+  LCD PFS Phosphor WLED IPS, 94% P3 (Panasonic VVX17P051J00 în Lenovo P70)
+"ccss.PlasmaFamily_20Jul12": |-
+  Plasmă
+"ccss.ProjectorFamily_07Feb11": |-
+  Familie proiectoare (Marantz, HP, Panasonic)
+"ccss.RGBLEDFamily_07Feb11": |-
+  Familie LCD RGB LED (HP, SOYO)
+"ccss.RG_Phosphor_Family_13Dec11": |-
+  Familie LCD RG Phosphor LED (AUO B156HW01 V.4 în Lenovo W520/W530)
+"ccss.RG_Phosphor_Family_25Jul12": |-
+  Familie LCD GB-r-LED/RG Phosphor LED (AUO B156HW01 V.4, Dell U2413)
+"ccss.Samsung Q9 75_ (i1 Pro)": |-
+  LCD Quantum Dot LED (Samsung QLED Q9)
+"ccss.WGCCFLFamily_07Feb11": |-
+  Familie LCD CCFL Wide Gamut (NEC PA241W/PA271W)
+"ccss.WLEDFamily_07Feb11": |-
+  Familie LCD White LED (AC, LG, Samsung)
+"ccss.WRGB_OLED_LG": |-
+  WOLED, mod gamut SDR Rec. 709 (LG OLED B7)
+"ccxx.ti1": |-
+  Testchart pentru corecția colorimetrului
+"centered": |-
+  Centrat
+"channel_1_c_xy": |-
+  Canal 1 (C) xy
+"channel_1_gamma_at_50_input": |-
+  Gamma canal 1 la 50% intrare
+"channel_1_is_linear": |-
+  Canalul 1 este liniar
+"channel_1_maximum": |-
+  Maxim canal 1
+"channel_1_minimum": |-
+  Minim canal 1
+"channel_1_r_xy": |-
+  Canal 1 (R) xy
+"channel_1_unique_values": |-
+  Valori unice canal 1
+"channel_2_g_xy": |-
+  Canal 2 (G) xy
+"channel_2_gamma_at_50_input": |-
+  Gamma canal 2 la 50% intrare
+"channel_2_is_linear": |-
+  Canalul 2 este liniar
+"channel_2_m_xy": |-
+  Canal 2 (M) xy
+"channel_2_maximum": |-
+  Maxim canal 2
+"channel_2_minimum": |-
+  Minim canal 2
+"channel_2_unique_values": |-
+  Valori unice canal 2
+"channel_3_b_xy": |-
+  Canal 3 (B) xy
+"channel_3_gamma_at_50_input": |-
+  Gamma canal 3 la 50% intrare
+"channel_3_is_linear": |-
+  Canalul 3 este liniar
+"channel_3_maximum": |-
+  Maxim canal 3
+"channel_3_minimum": |-
+  Minim canal 3
+"channel_3_unique_values": |-
+  Valori unice canal 3
+"channel_3_y_xy": |-
+  Canal 3 (Y) xy
+"channel_4_k_xy": |-
+  Canal 4 (K) xy
+"channels": |-
+  Canale
+"characterization_device_values": |-
+  Valori dispozitiv de caracterizare
+"characterization_measurement_values": |-
+  Valori măsurătoare de caracterizare
+"characterization_target": |-
+  Țintă de caracterizare
+"checking_lut_access": |-
+  Se verifică accesul la tabelul gamma al plăcii video pentru monitorul %s...
+"checksum": |-
+  Sumă de control
+"checksum_ok": |-
+  Sumă de control OK
+"chromatic_adaptation": |-
+  Adaptare cromatică...
+"chromatic_adaptation_matrix": |-
+  Matrice de adaptare cromatică
+"chromatic_adaptation_transform": |-
+  Transformare de adaptare cromatică
+"chromaticity_illuminant_relative": |-
+  Cromaticitate (relativă la iluminant)
+"chromecast_limitations_warning": |-
+  Te rugăm ține cont că acuratețea Chromecast nu este la fel de bună ca a unui monitor conectat direct sau madTPG, din cauza conversiei RGB în YCbCr și a upscaling-ului folosite de Chromecast.
+"cie2012_2": |-
+  CIE 2012 2°
+"cie2015_2": |-
+  CIE 2015 2°
+"clear": |-
+  Golește
+"close": |-
+  Închide
+"cmccat97": |-
+  CMCCAT97
+"cmccat2000": |-
+  CMCCAT2000
+"color": |-
+  Culoare
+"color_look_up_table": |-
+  Tabel de căutare culoare (LUT)
+"color_model": |-
+  Model de culoare
+"color_space_conversion_profile": |-
+  Profil de conversie a spațiului de culoare
+"colorant_order": |-
+  Ordinea coloranților
+"colorants_pcs_relative": |-
+  Coloranți (relativ la PCS)
+"colorimeter_correction.create": |-
+  Creează corecție de colorimetru...
+"colorimeter_correction.create.details": |-
+  Verifică câmpurile de mai jos și modifică-le dacă e necesar. Descrierea ar trebui să conțină și detalii importante (de ex. setări specifice ale monitorului, observator CIE nestandard sau similar).
+"colorimeter_correction.create.failure": |-
+  Crearea corecției a eșuat.
+"colorimeter_correction.create.info": |-
+  Pentru a crea o corecție de colorimetru, trebuie mai întâi să măsori culorile de test necesare cu un spectrometru, iar dacă vrei să creezi o matrice de corecție în loc de o corecție spectrală, și cu colorimetrul.
+
+  Alternativ, poți folosi măsurători existente alegând „Răsfoiește...”.
+"colorimeter_correction.create.success": |-
+  Corecția a fost creată cu succes.
+"colorimeter_correction.create.warning": |-
+  Asigură-te că măsori monitorul în gamutul lui nativ și nu-l restrângi artificial (prin moduri de emulare sau mijloace similare) când creezi o corecție de colorimetru.
+"colorimeter_correction.file.none": |-
+  Niciuna
+"colorimeter_correction.import": |-
+  Importă corecții de colorimetru din alt software de profilare a monitorului...
+"colorimeter_correction.import.choose": |-
+  Alege fișierul de corecție a colorimetrului de importat.
+"colorimeter_correction.import.failure": |-
+  Nu s-a putut importa nicio corecție de colorimetru.
+"colorimeter_correction.import.partial_warning": |-
+  Nu toate corecțiile de colorimetru au putut fi importate din %s. %i din %i intrări au fost omise.
+"colorimeter_correction.import.success": |-
+  Corecțiile de colorimetru și/sau modurile de măsurare au fost importate cu succes din următoarele aplicații:
+
+  %s
+"colorimeter_correction.info": |-
+  Informații corecție colorimetru
+"colorimeter_correction.instrument_mismatch": |-
+  Corecția de colorimetru selectată nu este potrivită pentru instrumentul selectat.
+"colorimeter_correction.upload": |-
+  Încarcă corecție de colorimetru...
+"colorimeter_correction.upload.confirm": |-
+  Vrei să încarci corecția de colorimetru în baza de date online (recomandat)? Orice fișier încărcat va fi considerat plasat în domeniul public, ca să poată fi folosit liber.
+"colorimeter_correction.upload.deny": |-
+  Această corecție de colorimetru nu poate fi încărcată.
+"colorimeter_correction.upload.exists": |-
+  Corecția de colorimetru există deja în baza de date.
+"colorimeter_correction.upload.failure": |-
+  Corecția nu a putut fi introdusă în baza de date online.
+"colorimeter_correction.upload.success": |-
+  Corecția a fost încărcată cu succes în baza de date online.
+"colorimeter_correction.web_check": |-
+  Verifică online pentru corecție de colorimetru...
+"colorimeter_correction.web_check.choose": |-
+  Au fost găsite următoarele corecții de colorimetru pentru monitorul și instrumentul selectate:
+"colorimeter_correction.web_check.failure": |-
+  Nu a fost găsită nicio corecție de colorimetru pentru monitorul și instrumentul selectate.
+"colorimeter_correction.web_check.info": |-
+  Te rugăm ține cont că toate corecțiile de colorimetru au fost contribuite de diverși utilizatori, iar utilitatea lor pentru situația ta particulară rămâne la latitudinea ta. Ele pot sau nu să îmbunătățească acuratețea absolută a colorimetrului tău cu monitorul tău.
+"colorimeter_correction_matrix_file": |-
+  Corecție
+"colorimeter_correction_matrix_file.choose": |-
+  Alege corecție de colorimetru...
+"colorimetric_intent_image_state": |-
+  Stare imagine colorimetrică
+"colors_pcs_relative": |-
+  Culori (relativ la PCS)
+"colorspace": |-
+  Spațiu de culoare
+"colorspace.show_outline": |-
+  Arată conturul
+"commandline": |-
+  Linie de comandă:
+"commands": |-
+  Comenzi
+"comparison_profile": |-
+  Profil de comparație
+"comport_detected": |-
+  A fost detectată o schimbare în configurația instrumentului/portului.
+"compression.gzip": |-
+  Compresie GZIP
+"computer.name": |-
+  Nume calculator
+"connected.to.at": |-
+  Conectat la %s pe %s:%s
+"connecting.to": |-
+  Se conectează la %s:%s...
+"connection.broken": |-
+  Conexiune întreruptă
+"connection.established": |-
+  Conexiune stabilită
+"connection.fail": |-
+  Eroare de conexiune (%s)
+"connection.fail.http": |-
+  Eroare HTTP %s
+"connection.waiting": |-
+  Se așteaptă conexiune la
+"continue": |-
+  Continuă
+"contrast": |-
+  Contrast
+"contribute": |-
+  Contribuie
+"converting": |-
+  Se convertește
+"copyright": |-
+  Drepturi de autor
+"corrected": |-
+  corectat
+"create_profile": |-
+  Creează profil din datele de măsurare...
+"create_profile_from_edid": |-
+  Creează profil din datele EDID...
+"created": |-
+  Creat
+"creator": |-
+  Creator
+"current": |-
+  Curent
+"custom": |-
+  Personalizat
+"cyan": |-
+  Cyan
+"d3-e4-s2-g28-m0-b0-f0.ti1": |-
+  Testchart mic pentru profile de tip matrice
+"d3-e4-s3-g52-m3-b0-f0.ti1": |-
+  Testchart implicit
+"d3-e4-s4-g52-m4-b0-f0.ti1": |-
+  Testchart mic pentru profile LUT
+"d3-e4-s5-g52-m5-b0-f0.ti1": |-
+  Testchart extins pentru profile LUT
+"d3-e4-s9-g52-m9-b0-f0.ti1": |-
+  Testchart mare pentru profile LUT
+"d3-e4-s17-g52-m17-b0-f0.ti1": |-
+  Testchart foarte mare pentru profile LUT
+"deactivated": |-
+  dezactivat
+"default": |-
+  Implicit
+"default.icc": |-
+  Implicit (Gamma 2.2)
+"default_crt": |-
+  CRT implicit
+"default_rendering_intent": |-
+  Intenție de randare implicită
+"delete": |-
+  Șterge
+"delta_e_2000_to_blackbody_locus": |-
+  ΔE 2000 față de locul corpului negru
+"delta_e_2000_to_daylight_locus": |-
+  ΔE 2000 față de locul luminii de zi
+"delta_e_to_locus": |-
+  ΔE*00 față de locul %s
+"description": |-
+  Descriere
+"description_ascii": |-
+  Descriere (ASCII)
+"description_macintosh": |-
+  Descriere (Macintosh)
+"description_unicode": |-
+  Descriere (Unicode)
+"deselect_all": |-
+  Deselectează tot
+"detect_displays_and_ports": |-
+  Detectează monitoarele și instrumentele
+"device": |-
+  Dispozitiv
+"device.name.placeholder": |-
+  <Numele dispozitivului>
+"device_color_components": |-
+  Componente de culoare dispozitiv
+"device_manager.launch": |-
+  Lansează Device Manager
+"device_manufacturer_name": |-
+  Numele producătorului dispozitivului
+"device_manufacturer_name_ascii": |-
+  Numele producătorului dispozitivului (ASCII)
+"device_manufacturer_name_macintosh": |-
+  Numele producătorului dispozitivului (Macintosh)
+"device_manufacturer_name_unicode": |-
+  Numele producătorului dispozitivului (Unicode)
+"device_model_name": |-
+  Numele modelului dispozitivului
+"device_model_name_ascii": |-
+  Numele modelului dispozitivului (ASCII)
+"device_model_name_macintosh": |-
+  Numele modelului dispozitivului (Macintosh)
+"device_model_name_unicode": |-
+  Numele modelului dispozitivului (Unicode)
+"device_to_pcs_intent_0": |-
+  Dispozitiv către PCS: Intenția 0
+"device_to_pcs_intent_1": |-
+  Dispozitiv către PCS: Intenția 1
+"device_to_pcs_intent_2": |-
+  Dispozitiv către PCS: Intenția 2
+"devicelink_profile": |-
+  Profil device link
+"dialog.argyll.notfound.choice": |-
+  ArgyllCMS, motorul de culoare necesar pentru a rula DisplayCAL, pare să nu fie instalat pe acest calculator. Vrei să-l descarci automat sau să-l cauți manual?
+"dialog.cal_info": |-
+  Va fi folosit fișierul de calibrare „%s”. Vrei să continui?
+"dialog.confirm_cancel": |-
+  Chiar vrei să anulezi?
+"dialog.confirm_delete": |-
+  Chiar vrei să ștergi fișierul (fișierele) selectat(e)?
+"dialog.confirm_overwrite": |-
+  Fișierul „%s” există deja. Vrei să-l suprascrii?
+"dialog.confirm_uninstall": |-
+  Chiar vrei să dezinstalezi fișierul (fișierele) selectat(e)?
+"dialog.current_cal_warning": |-
+  Vor fi folosite curbele de calibrare curente. Vrei să continui?
+"dialog.do_not_show_again": |-
+  Nu mai arăta acest mesaj
+"dialog.enter_password": |-
+  Te rugăm introdu parola.
+"dialog.install_profile": |-
+  Vrei să instalezi profilul „%s” și să-l faci implicit pentru monitorul „%s”?
+"dialog.linear_cal_info": |-
+  Vor fi folosite curbe de calibrare liniare. Vrei să continui?
+"dialog.load_cal": |-
+  Încarcă setări
+"dialog.select_argyll_version": |-
+  A fost găsită versiunea %s a ArgyllCMS. Versiunea selectată curent este %s. Vrei să folosești versiunea mai nouă?
+"dialog.set_argyll_bin": |-
+  Localizează directorul unde se află executabilele ArgyllCMS.
+"dialog.set_profile_save_path": |-
+  Creează directorul de profile „%s” aici:
+"dialog.set_testchart": |-
+  Alege fișierul testchart
+"dialog.ti3_no_cal_info": |-
+  Datele de măsurare nu conțin curbe de calibrare. Chiar vrei să continui?
+"digital_camera": |-
+  Cameră foto digitală
+"digital_cinema_projector": |-
+  Proiector de cinema digital
+"digital_motion_picture_camera": |-
+  Cameră video digitală de film
+"direction.backward": |-
+  PCS → B2A → dispozitiv
+"direction.backward.inverted": |-
+  PCS ← B2A ← dispozitiv
+"direction.forward": |-
+  Dispozitiv → A2B → PCS
+"direction.forward.inverted": |-
+  Dispozitiv ← A2B ← PCS
+"directory": |-
+  Director
+"disconnected.from": |-
+  Deconectat de la %s:%s
+"display": |-
+  Monitor
+"display-instrument": |-
+  Monitor & instrument
+"display.connection.type": |-
+  Conexiune
+"display.levels_issue_detected": |-
+  Diferența de luminanță măsurată între nivelul RGB 0 și 16 este sub 0,02 cd/m², ceea ce indică clipping. Probabil setarea de nivel de intrare și/sau nivel de negru a monitorului este incorectă, și/sau configurația nivelurilor de ieșire a driverului grafic este greșită.
+
+  Dacă monitorul tău are o setare pentru nivelurile de intrare, setează-o pe RGB interval complet (0-255). Dacă monitorul nu are o astfel de setare, setează driverul grafic să producă interval limitat (16-235). Selectează „Reîncearcă” după fiecare schimbare.
+
+  Dacă nici monitorul, nici driverul grafic nu au o setare de interval, poți repara nivelurile de ieșire folosind tabelul gamma al plăcii video apăsând „Continuă”, dar reține că aceasta e cea mai puțin recomandată soluție.
+"display.manufacturer": |-
+  Producător monitor
+"display.output": |-
+  Ieșire #
+"display.primary": |-
+  (Principal)
+"display.properties": |-
+  Proprietăți monitor
+"display.reset.info": |-
+  Te rugăm resetează monitorul la setările din fabrică, apoi ajustează luminozitatea la un nivel confortabil.
+"display.settings": |-
+  Setări monitor
+"display.tech": |-
+  Tehnologie monitor
+"display.tech.CRT": |-
+  CRT
+"display.tech.DLP Projector": |-
+  Proiector DLP
+"display.tech.DLP Projector RGB Filter Wheel": |-
+  Proiector DLP cu roată de filtre RGB
+"display.tech.DLP Projector RGBCMY Filter Wheel": |-
+  Proiector DLP cu roată de filtre RGBCMY
+"display.tech.DLP Projector RGBW Filter Wheel": |-
+  Proiector DLP cu roată de filtre RGBW
+"display.tech.DPL Projector RGBW Filter Wheel": |-
+  Proiector DLP cu roată de filtre RGBW
+"display.tech.LCD": |-
+  LCD
+"display.tech.LCD CCFL": |-
+  LCD CCFL
+"display.tech.LCD CCFL IPS": |-
+  LCD CCFL IPS
+"display.tech.LCD CCFL TFT": |-
+  LCD CCFL TFT
+"display.tech.LCD CCFL PVA": |-
+  LCD CCFL PVA
+"display.tech.LCD CCFL VPA": |-
+  LCD CCFL PVA
+"display.tech.LCD CCFL Wide Gamut": |-
+  LCD CCFL Wide Gamut
+"display.tech.LCD CCFL Wide Gamut IPS": |-
+  LCD CCFL Wide Gamut IPS
+"display.tech.LCD CCFL Wide Gamut TFT": |-
+  LCD CCFL Wide Gamut TFT
+"display.tech.LCD CCFL Wide Gamut PVA": |-
+  LCD CCFL Wide Gamut PVA
+"display.tech.LCD CCFL Wide Gamut VPA": |-
+  LCD CCFL Wide Gamut PVA
+"display.tech.LCD GB-R Phosphor": |-
+  LCD GB-r-LED
+"display.tech.LCD GB-R Phosphor IPS": |-
+  LCD GB-r-LED IPS
+"display.tech.LCD GB-R Phosphor TFT": |-
+  LCD GB-r-LED TFT
+"display.tech.LCD GB-R Phosphor PVA": |-
+  LCD GB-r-LED PVA
+"display.tech.LCD GB-R Phosphor VPA": |-
+  LCD GB-r-LED PVA
+"display.tech.LCD PFS Phosphor": |-
+  LCD PFS Phosphor WLED
+"display.tech.LCD PFS Phosphor IPS": |-
+  LCD PFS Phosphor WLED IPS
+"display.tech.LCD PFS Phosphor TFT": |-
+  LCD PFS Phosphor WLED TFT
+"display.tech.LCD PFS Phosphor PVA": |-
+  LCD PFS Phosphor WLED PVA
+"display.tech.LCD PFS Phosphor VPA": |-
+  LCD PFS Phosphor WLED PVA
+"display.tech.LCD RG Phosphor": |-
+  LCD RG Phosphor LED
+"display.tech.LCD RG Phosphor IPS": |-
+  LCD RG Phosphor LED IPS
+"display.tech.LCD RG Phosphor TFT": |-
+  LCD RG Phosphor LED TFT
+"display.tech.LCD RG Phosphor PVA": |-
+  LCD RG Phosphor LED PVA
+"display.tech.LCD RG Phosphor VPA": |-
+  LCD RG Phosphor LED PVA
+"display.tech.LCD RGB LED": |-
+  LCD RGB LED
+"display.tech.LCD RGB LED IPS": |-
+  LCD RGB LED IPS
+"display.tech.LCD RGB LED TFT": |-
+  LCD RGB LED TFT
+"display.tech.LCD RGB LED PVA": |-
+  LCD RGB LED PVA
+"display.tech.LCD RGB LED VPA": |-
+  LCD RGB LED PVA
+"display.tech.LCD White LED": |-
+  LCD White LED
+"display.tech.LCD White LED IPS": |-
+  LCD White LED IPS
+"display.tech.LCD White LED TFT": |-
+  LCD White LED TFT
+"display.tech.LCD White LED PVA": |-
+  LCD White LED PVA
+"display.tech.LCD White LED VPA": |-
+  LCD White LED PVA
+"display.tech.LED AMOLED": |-
+  AMOLED
+"display.tech.LED OLED": |-
+  OLED
+"display.tech.LED WOLED": |-
+  WOLED
+"display.tech.Plasma": |-
+  Plasmă
+"display.tech.Unknown": |-
+  Necunoscută
+"display_detected": |-
+  A fost detectată o schimbare în configurația monitorului.
+"display_device_profile": |-
+  Profil monitor
+"display_lut.link": |-
+  Leagă/dezleagă accesul monitorului și al tabelului gamma al plăcii video
+"display_peak_luminance": |-
+  Luminanță de vârf țintă
+"display_profile.not_detected": |-
+  Niciun profil curent detectat pentru monitorul „%s”
+"display_short": |-
+  Monitor (abreviat)
+"displayport": |-
+  DisplayPort
+"displays.identify": |-
+  Identifică monitoarele
+"dlp_screen": |-
+  Ecran DLP
+"donation_header": |-
+  Susținerea ta contează!
+"donation_message": |-
+  Dacă vrei să susții dezvoltarea, asistența tehnică și disponibilitatea continuă a DisplayCAL și ArgyllCMS, te rugăm să iei în considerare o contribuție financiară. Deoarece DisplayCAL nu ar fi util fără ArgyllCMS, toate contribuțiile primite pentru DisplayCAL vor fi împărțite între cele două proiecte.
+
+  Pentru o utilizare personală ușoară, non-comercială, o contribuție unică poate fi potrivită. Dacă folosești DisplayCAL profesional, o contribuție anuală sau lunară ar face o mare diferență în asigurarea continuității ambelor proiecte.
+
+  Mulțumim tuturor contribuitorilor!
+"download": |-
+  Descarcă
+"download.fail": |-
+  Descărcarea a eșuat:
+"download.fail.empty_response": |-
+  Descărcarea a eșuat: %s a returnat un document gol.
+"download.fail.wrong_size": |-
+  Descărcarea a eșuat: Fișierul nu are dimensiunea așteptată de %s octeți (s-au primit %s octeți).
+"download.retrying": |-
+  Se reîncearcă descărcarea (%i/%i) în %.1f s...
+"archive.extract.fail.delete": |-
+  Extragerea arhivei a eșuat, se șterge fișierul: %s
+"download_install": |-
+  Descarcă & instalează
+"downloading": |-
+  Se descarcă
+"drift_compensation.blacklevel": |-
+  Compensare drift nivel negru
+"drift_compensation.blacklevel.info": |-
+  Compensarea drift-ului de nivel negru încearcă să contracareze devierile de măsurare cauzate de drift-ul de calibrare a negrului unui instrument de măsurare aflat în încălzire. Pentru asta, un petic de test negru este măsurat periodic, ceea ce crește timpul total necesar măsurătorilor. Multe colorimetre au compensare de temperatură încorporată, caz în care compensarea drift-ului de nivel negru nu ar trebui să fie necesară, dar majoritatea spectrometrelor nu sunt compensate termic.
+"drift_compensation.whitelevel": |-
+  Compensare drift nivel alb
+"drift_compensation.whitelevel.info": |-
+  Compensarea drift-ului de nivel alb încearcă să contracareze devierile de măsurare cauzate de schimbările de luminanță ale unui monitor aflat în încălzire. Pentru asta, un petic de test alb este măsurat periodic, ceea ce crește timpul total necesar măsurătorilor.
+"dry_run": |-
+  Simulare (dry run)
+"dry_run.end": |-
+  Simularea s-a încheiat.
+"dry_run.info": |-
+  Simulare. Verifică jurnalul pentru a vedea linia de comandă.
+"duration": |-
+  Durată
+"dvi": |-
+  DVI
+"dye_sublimation_printer": |-
+  Imprimantă cu sublimare de cerneală
+"edid.crc32": |-
+  Sumă de control EDID CRC32
+"edid.serial": |-
+  Serie EDID
+"elapsed_time": |-
+  Timp scurs
+"electrophotographic_printer": |-
+  Imprimantă electrofotografică
+"electrostatic_printer": |-
+  Imprimantă electrostatică
+"enable_argyll_debug": |-
+  Activează ieșirea de depanare ArgyllCMS
+"enable_spyder2": |-
+  Activează colorimetrul Spyder 2...
+"enable_spyder2_failure": |-
+  Spyder 2 nu a putut fi activat. Instalează manual software-ul Spyder 2 dacă nu a fost deja instalat, apoi rulează din nou această comandă.
+"enable_spyder2_success": |-
+  Spyder 2 a fost activat cu succes.
+"entries": |-
+  Intrări
+"enumerate_ports.auto": |-
+  Detectează automat instrumentele
+"enumerating_displays_and_comports": |-
+  Se enumeră monitoarele și porturile de comunicare...
+"environment": |-
+  Mediu
+"error": |-
+  Eroare
+"error.access_denied.write": |-
+  Nu ai acces de scriere la %s
+"error.already_exists": |-
+  Numele „%s” nu poate fi folosit, deoarece există deja un alt obiect cu același nume. Alege alt nume sau alt director.
+"error.autostart_creation": |-
+  Crearea intrării de pornire automată pentru %s pentru a încărca curbele de calibrare la autentificare a eșuat.
+"error.autostart_remove_old": |-
+  Vechea intrare de pornire automată care încarcă curbele de calibrare la autentificare nu a putut fi eliminată: %s
+"error.autostart_system": |-
+  Intrarea de pornire automată la nivel de sistem pentru încărcarea curbelor de calibrare la autentificare nu a putut fi creată, deoarece directorul de pornire automată la nivel de sistem nu a putut fi determinat.
+"error.autostart_user": |-
+  Intrarea de pornire automată specifică utilizatorului pentru încărcarea curbelor de calibrare la autentificare nu a putut fi creată, deoarece directorul de pornire automată specific utilizatorului nu a putut fi determinat.
+"error.cal_extraction": |-
+  Calibrarea nu a putut fi extrasă din „%s”.
+"error.calibration.file_missing": |-
+  Fișierul de calibrare „%s” lipsește.
+"error.calibration.file_not_created": |-
+  Nu a fost creat niciun fișier de calibrare.
+"error.copy_failed": |-
+  Fișierul „%s” nu a putut fi copiat în „%s”.
+"error.deletion": |-
+  A apărut o eroare la mutarea fișierelor la %s. Unele fișiere s-ar putea să nu fi fost eliminate.
+"error.dir_creation": |-
+  Directorul „%s” nu a putut fi creat. Poate există restricții de acces. Permite accesul de scriere sau alege alt director.
+"error.dir_notdir": |-
+  Directorul „%s” nu a putut fi creat, deoarece există deja un alt obiect cu același nume. Alege alt director.
+"error.file.create": |-
+  Fișierul „%s” nu a putut fi creat.
+"error.file.open": |-
+  Fișierul „%s” nu a putut fi deschis.
+"error.file_type_unsupported": |-
+  Tip de fișier nesuportat.
+"error.generic": |-
+  A apărut o eroare internă.
+
+  Cod eroare: %s
+  Mesaj eroare: %s
+"error.luminance.invalid": |-
+  Luminanța de vârf măsurată a fost invalidă. Asigură-te că senzorul instrumentului nu este obstrucționat și îndepărtează orice capac de protecție (dacă există).
+"error.luminance.not_monotonically_increasing": |-
+  Răspunsul de luminanță măsurat este puternic non-monoton (defect de dispozitiv sau instrument). Nu se pot genera curbe de răspuns tonal.
+"error.malformed_cgats": |-
+  Fișierul %s „%s” este malformat.
+"error.measurement.file_invalid": |-
+  Fișierul de măsurare „%s” este invalid.
+"error.measurement.file_missing": |-
+  Fișierul de măsurare „%s” lipsește.
+"error.measurement.file_not_created": |-
+  Nu a fost creat niciun fișier de măsurare.
+"error.measurement.missing_spectral": |-
+  Fișierul de măsurare nu conține valori spectrale.
+"error.measurement.one_colorimeter": |-
+  Este necesară exact o măsurătoare de colorimetru.
+"error.measurement.one_reference": |-
+  Este necesară exact o măsurătoare de referință.
+"error.no_files_extracted_from_archive": |-
+  Niciun fișier nu a fost extras din „%s”.
+"error.not_a_session_archive": |-
+  Arhiva „%s” nu pare a fi o arhivă de sesiune.
+"error.profile.file_missing": |-
+  Profilul „%s” lipsește.
+"error.profile.file_not_created": |-
+  Nu a fost creat niciun profil.
+"error.source_dest_same": |-
+  Profilul sursă și cel de destinație sunt identice.
+"error.spyderx.black_cal_offsets_too_high": |-
+  Offset-urile de auto-calibrare ale instrumentului sunt prea mari. Asigură-te că nicio lumină nu ajunge pe senzor în timpul auto-calibrării instrumentului (pune capacul bine).
+"error.testchart.creation_failed": |-
+  Fișierul testchart „%s” nu a putut fi creat. Poate există restricții de acces, sau fișierul sursă nu există.
+"error.testchart.invalid": |-
+  Fișierul testchart „%s” este invalid.
+"error.testchart.missing": |-
+  Fișierul testchart „%s” lipsește.
+"error.testchart.missing_fields": |-
+  Fișierul testchart „%s” nu conține câmpurile necesare: %s
+"error.testchart.read": |-
+  Fișierul testchart „%s” nu a putut fi citit.
+"error.tmp_creation": |-
+  Directorul de lucru temporar nu a putut fi creat.
+"error.trashcan_unavailable": |-
+  %s nu este disponibil. Niciun fișier nu a fost eliminat.
+"errors.none_found": |-
+  Nicio eroare găsită.
+"estimated_measurement_time": |-
+  Timp estimat de măsurare aproximativ %s oră/ore %s minute
+"exceptions": |-
+  Excepții...
+"executable": |-
+  Executabil
+"export": |-
+  Exportă...
+"extra_args": |-
+  Setează argumente suplimentare de linie de comandă...
+"factory_default": |-
+  Implicit din fabrică
+"failure": |-
+  ...eșuat!
+"ffp_insertion": |-
+  Inserare full field pattern
+"file.hash.malformed": |-
+  Integritatea %s nu poate fi verificată deoarece fișierul de sumă de control este malformat.
+"file.hash.missing": |-
+  Integritatea %s nu poate fi verificată deoarece nu are o intrare în fișierul de sumă de control.
+"file.hash.verification.fail": |-
+  Verificarea sumei de control a eșuat pentru %s:
+
+  Așteptat %s
+  Real %s
+"file.invalid": |-
+  Fișier invalid.
+"file.missing": |-
+  Fișierul „%s” nu există.
+"file.notfile": |-
+  „%s” nu este un fișier.
+"file.select": |-
+  Selectează fișierul
+"filename": |-
+  Nume fișier
+"filename.upload": |-
+  Nume fișier de încărcat
+"filetype.7z": |-
+  Fișiere 7-Zip
+"filetype.any": |-
+  Orice tip de fișier
+"filetype.cal": |-
+  Fișiere de calibrare (*.cal)
+"filetype.cal_icc": |-
+  Fișiere de calibrare și profil (*.cal;*.icc;*.icm)
+"filetype.ccmx": |-
+  Matrice de corecție/Mostre spectrale de calibrare (*.ccmx;*.ccss)
+"filetype.html": |-
+  Fișiere HTML (*.html;*.htm)
+"filetype.icc": |-
+  Fișiere de profil (*.icc;*.icm)
+"filetype.icc_mpp": |-
+  Fișiere de profil (*.icc;*.icm;*.mpp)
+"filetype.icc_ti1_ti3": |-
+  Fișiere testchart (*.icc;*.icm;*.ti1;*.ti3)
+"filetype.icc_ti3": |-
+  Fișiere de măsurare (*.icc;*.icm;*.ti3)
+"filetype.log": |-
+  Fișiere jurnal (*.log)
+"filetype.png": |-
+  Portable Network Graphics (*.png)
+"filetype.tgz": |-
+  Arhivă TAR comprimată
+"filetype.ti1": |-
+  Fișiere testchart (*.ti1)
+"filetype.ti1_ti3_txt": |-
+  Fișiere testchart (*.ti1), fișiere de măsurare (*.ti3;*.txt)
+"filetype.ti3": |-
+  Fișiere de măsurare (*.ti3)
+"filetype.tif": |-
+  Fișier imagine cu etichete (*.tif)
+"filetype.txt": |-
+  DeviceCorrections.txt
+"filetype.vrml": |-
+  Fișiere VRML (*.wrl)
+"filetype.x3d": |-
+  Fișiere X3D (*.x3d)
+"filetype.zip": |-
+  Fișiere ZIP
+"film_scanner": |-
+  Scaner de film
+"film_writer": |-
+  Recorder de film
+"finish": |-
+  Finalizează
+"fix_output_levels_using_vcgt": |-
+  Repară nivelurile de ieșire folosind tabelul gamma al plăcii video
+"flare": |-
+  Reflexie parazită (flare)
+"flexography": |-
+  Flexografie
+"focal_plane_colorimetry_estimates": |-
+  Estimări colorimetrice ale planului focal
+"forced": |-
+  forțat
+"format.select": |-
+  Selectează formatul dorit.
+"fullscreen.message": |-
+  Mod ecran complet activat.
+  Apasă ESC pentru a ieși din ecran complet.
+"fullscreen.osx.warning": |-
+  Dacă intri în modul ecran complet folosind butonul de zoom din bara de titlu, apasă CMD + TAB pentru a reveni la modul normal după ce fereastra a fost închisă. Alternativ, poți intra în ecran complet cu dublu-click pe bara de titlu sau ținând apăsată tasta OPTION în timp ce apeși butonul de zoom.
+"gamap.default_intent": |-
+  Intenție de randare implicită
+"gamap.intents.a": |-
+  Colorimetric absolut
+"gamap.intents.aa": |-
+  Aparență absolută
+"gamap.intents.aw": |-
+  Colorimetric absolut cu scalarea punctului alb
+"gamap.intents.la": |-
+  Aparență cu luminanță potrivită
+"gamap.intents.lp": |-
+  Aparență perceptuală cu păstrarea luminanței
+"gamap.intents.ms": |-
+  Păstrează saturația
+"gamap.intents.p": |-
+  Perceptual
+"gamap.intents.pa": |-
+  Aparență perceptuală
+"gamap.intents.r": |-
+  Colorimetric relativ
+"gamap.intents.s": |-
+  Saturație
+"gamap.out_viewcond": |-
+  Condiții de vizualizare destinație
+"gamap.perceptual": |-
+  Mapare de gamut pentru intenția perceptuală
+"gamap.profile": |-
+  Profil sursă
+"gamap.saturation": |-
+  Mapare de gamut pentru intenția de saturație
+"gamap.src_viewcond": |-
+  Condiții de vizualizare sursă
+"gamap.viewconds.cx": |-
+  Transparențe de tăiere pe o cutie de vizualizare
+"gamap.viewconds.jd": |-
+  Proiector în mediu întunecat
+"gamap.viewconds.jm": |-
+  Proiector în mediu slab luminat
+"gamap.viewconds.mb": |-
+  Monitor în mediu de lucru luminos
+"gamap.viewconds.md": |-
+  Monitor în mediu de lucru întunecat
+"gamap.viewconds.mt": |-
+  Monitor în mediu de lucru tipic
+"gamap.viewconds.ob": |-
+  Scenă originală - exterior luminos
+"gamap.viewconds.pc": |-
+  Mediu critic de evaluare a printurilor (ISO-3664 P1)
+"gamap.viewconds.pcd": |-
+  Photo CD - scenă originală exterioară
+"gamap.viewconds.pe": |-
+  Mediu de evaluare a printurilor (CIE 116-1995)
+"gamap.viewconds.pp": |-
+  Print reflectiv practic (ISO-3664 P2)
+"gamap.viewconds.tv": |-
+  Studio TV/film
+"gamapframe.title": |-
+  Opțiuni avansate de mapare a gamutului
+"gamut": |-
+  Gamut
+"gamut.coverage": |-
+  Acoperire gamut
+"gamut.view.create": |-
+  Se generează vizualizări de gamut...
+"gamut.volume": |-
+  Volum gamut
+"gamut_mapping.ciecam02": |-
+  Mapare de gamut CIECAM02
+"gamut_mapping.mode": |-
+  Mod de mapare a gamutului
+"gamut_mapping.mode.b2a": |-
+  PCS-către-dispozitiv
+"gamut_mapping.mode.inverse_a2b": |-
+  Dispozitiv-către-PCS invers
+"gamut_plot.tooltip": |-
+  Click și trage mouse-ul în interiorul graficului pentru a muta vizualizarea, sau zoom cu rotița mouse-ului și tastele +/-. Dublu-click resetează vizualizarea.
+"generic_name_value_data": |-
+  Date generice nume-valoare
+"geometry": |-
+  Geometrie
+"glossy": |-
+  Lucios
+"go_to": |-
+  Mergi la %s
+"go_to_website": |-
+  Mergi la site
+"gravure": |-
+  Heliogravură
+"gray_tone_response_curve": |-
+  Curbă de răspuns tonal gri
+"grayscale": |-
+  tonuri de gri
+"green": |-
+  Verde
+"green_gamma": |-
+  Gamma verde
+"green_lab": |-
+  Verde L*a*b*
+"green_matrix_column": |-
+  Coloană matrice verde
+"green_maximum": |-
+  Maxim verde
+"green_minimum": |-
+  Minim verde
+"green_tone_response_curve": |-
+  Curbă de răspuns tonal verde
+"green_xyz": |-
+  Verde XYZ
+"grid_steps": |-
+  Pași grilă
+"hdmi": |-
+  HDMI
+"hdr_maxcll": |-
+  Nivel maxim de lumină al conținutului
+"hdr_mincll": |-
+  Nivel minim de lumină al conținutului
+"header": |-
+  Calibrare și caracterizare monitor pe baza ArgyllCMS
+"help_support": |-
+  Ajutor și asistență...
+"host.invalid.lookup_failed": |-
+  Gazdă invalidă (căutarea adresei a eșuat)
+"hpe_d65": |-
+  Hunt-Pointer-Estevez (HPE), iluminant D65
+"hpe_e": |-
+  Hunt-Pointer-Estevez (HPE), iluminant E
+"hue": |-
+  Nuanță
+"icc_absolute_colorimetric": |-
+  Colorimetric absolut ICC
+"icc_version": |-
+  Versiune ICC
+"if_available": |-
+  dacă e disponibil
+"illuminant": |-
+  Iluminant
+"illuminant_relative_cct": |-
+  CCT relativ la iluminant
+"illuminant_relative_lab": |-
+  L*a*b* relativ la iluminant
+"illuminant_relative_xyz": |-
+  XYZ relativ la iluminant
+"illuminant_xyz": |-
+  XYZ iluminant
+"illumination": |-
+  Iluminare
+"in": |-
+  În
+"info.3dlut_settings": |-
+  Un <font weight='bold'>LUT 3D</font> (LUT = tabel de căutare) sau un profil ICC device link poate fi folosit de aplicații compatibile LUT 3D sau device link ICC pentru <font weight='bold'>corecție completă de culoare a monitorului</font>.
+
+  <font weight='bold'>Crearea mai multor LUT-uri 3D (suplimentare) dintr-un profil existent</font>
+  Cu profilul dorit selectat sub „Setări”, debifează căsuța „Creează LUT 3D după profilare”.
+
+  <font weight='bold'>Alegerea spațiului de culoare sursă și a curbei de răspuns tonal potrivite</font>
+  Pentru LUT-uri 3D și profile device link ICC, spațiul de culoare sursă și curba de răspuns tonal trebuie setate în avans și devin o parte fixă a transformării generale de culoare (spre deosebire de profilele de dispozitiv ICC, care sunt legate dinamic, în timp real). De exemplu, materialul video HD este de obicei masterizat conform standardului Rec. 709 cu fie o curbă de putere pură de aproximativ 2,2-2,4 (relativă, cu offset de ieșire negru de 100%), fie curbă de răspuns tonal Rec. 1886 (absolută, cu offset de ieșire negru 0%). O împărțire între stil Rec. 1886 și putere pură este de asemenea posibilă setând offset-ul de ieșire negru la o valoare între 0% și 100%.
+
+  <font weight='bold'>Gamma „absolută” vs. „relativă”</font>
+  Pentru a compensa un nivel de negru diferit de zero al unui monitor real, curba de răspuns tonal trebuie deplasată și scalată corespunzător.
+  Gamma „absolută” produce o ieșire reală la 50% intrare care nu se potrivește cu cea a unei curbe de putere idealizate (decât dacă nivelul de negru e zero).
+  Gamma „relativă” produce o ieșire reală la 50% intrare care se potrivește cu cea a unei curbe de putere idealizate.
+
+  <font weight='bold'>Intenție de randare</font>
+  Dacă ai calibrat la un punct alb diferit de cel impus de spațiul de culoare sursă și vrei să-l folosești pe acela pentru LUT-ul 3D, selectează „Colorimetric relativ”. Altfel, selectează „Colorimetric absolut cu scalarea punctului alb” (scalarea punctului alb va preveni clipping-ul în modul colorimetric absolut, care ar putea apărea dacă punctul alb al spațiului de culoare sursă este în afara gamutului monitorului). Ai și opțiunea de a folosi o intenție de randare non-colorimetrică, care poate comprima sau expanda spațiul de culoare sursă pentru a se încadra în gamutul monitorului (nerecomandat când e necesară acuratețea colorimetrică).
+"info.calibration_settings": |-
+  <font weight='bold'>Calibrarea</font> se face prin <font weight='bold'>ajustarea interactivă a monitorului</font> pentru a atinge punctul alb și/sau luminanța aleasă, plus, opțional, crearea de <font weight='bold'>curbe de calibrare 1D LUT</font> (LUT = tabel de căutare) pentru a atinge curba de răspuns tonal aleasă și a asigura balansul de gri. Reține că dacă în timpul calibrării vrei doar să ajustezi monitorul și să omiți generarea curbelor 1D LUT, trebuie să setezi curba de răspuns tonal pe „Ca măsurat”. Calibrarea 1D LUT <font weight='bold'>nu</font> poate fi folosită pentru corecție completă de culoare a monitorului — trebuie să creezi un <font weight='bold'>profil de dispozitiv ICC</font> sau un <font weight='bold'>LUT 3D</font> și să le folosești cu aplicații care le suportă pentru acest scop. Totuși, calibrarea 1D LUT completează profilarea și calibrarea LUT 3D.
+"info.display_instrument": |-
+  <font weight='bold'>Dezactivează toate setările dinamice de imagine ale monitorului</font>, dacă e cazul. Asta poate include funcții precum contrast dinamic, dimming, luminozitate automată și caracteristici similare.
+
+  Asigură-te că lumina nu cade direct pe ecranul monitorului.
+
+  Dacă monitorul tău e un televizor <font weight='bold'>OLED</font> sau <font weight='bold'>Plasmă</font>, sau alt tip cu ieșire de lumină variabilă în funcție de conținutul imaginii, activează <font weight='bold'>compensarea drift-ului de nivel alb</font>.
+
+  Dacă instrumentul tău e un <font weight='bold'>spectrometru</font> și îl folosești în mod de contact pe un monitor cu nivel de negru stabil, ai putea vrea să activezi <font weight='bold'>compensarea drift-ului de nivel negru al instrumentului</font>.
+
+  Dacă instrumentul tău e un <font weight='bold'>colorimetru</font>, ar trebui să folosești un <font weight='bold'>mod de măsurare</font> sau o <font weight='bold'>corecție</font> potrivite pentru monitorul sau tipul de tehnologie al monitorului tău. Reține că unele instrumente (de ex. K-10, Spyder4/5/X) pot oferi o selecție de moduri de măsurare deja calibrate pentru tipuri specifice de monitoare.
+"info.display_instrument.warmup": |-
+  Ar trebui să lași monitorul să se <font weight='bold'>încălzească</font> cel puțin <font weight='bold'>30 de minute</font> înainte de a începe măsurătorile. Dacă folosești instrumentul în mod de contact, e bine să-l lași pe monitor și în această perioadă.
+"info.display_tech": |-
+  <font weight='bold'>LCD White LED</font> (WLED cu gamut de culoare normal și acoperire sRGB de până la 100%) este cea mai comună tehnologie de retroiluminare LCD. Monitoarele din această categorie includ majoritatea laptopurilor, notebook-urilor, monitoarelor allround/office și non-HDR pentru gaming din 2010 și mai noi, precum și Apple iMac/MacBook din 2009 până la mijlocul lui 2015.
+
+  <font weight='bold'>LCD PFS Phosphor WLED</font> are un gamut de culoare larg, în două variante comune, cu acoperire P3 sau Adobe RGB de aproximativ 90-99% (conform datelor producătorului). Monitoare comune din categoria gamutului P3 includ Apple iMac 4K/5K Retina (sfârșit de 2015 și mai noi), MacBook Pro Retina (sfârșit de 2016 și mai noi), precum și unele monitoare desktop compatibile HDR. Categoria gamutului Adobe RGB include monitoare profesionale precum EIZO CG2730, HP DreamColor Z24x G2 sau NEC PA271Q.
+
+  <font weight='bold'>LCD Quantum Dot LED</font> are un gamut de culoare larg cu acoperire P3 aproape completă, folosit de obicei în televizoarele Samsung QLED.
+
+  <font weight='bold'>WOLED</font> are un gamut de culoare larg cu acoperire P3 ridicată, folosit de obicei în televizoarele LG OLED.
+
+  <font weight='bold'>RGB OLED/AMOLED</font> are un gamut de culoare larg cu acoperire Adobe RGB și/sau P3 aproape completă, folosit în unele monitoare și laptopuri profesionale, precum și în smartphone-uri de calitate ridicată.
+
+  <font weight='bold'>LCD GB-r-LED</font> (cunoscut și ca GB-LED) are un gamut de culoare larg cu acoperire Adobe RGB de aproximativ 99% (conform datelor producătorului). Monitoare comune din această categorie includ Dell U2413, EIZO CG247/CG277 și NEC PA242W/PA272W.
+
+  <font weight='bold'>LCD RGB LED</font> are un gamut de culoare larg cu acoperire Adobe RGB aproape completă. Monitoare comune din această categorie includ Samsung XL20/XL24/XL30 și HP DreamColor LP2480zx.
+
+  <font weight='bold'>LCD CCFL</font> și <font weight='bold'>LCD CCFL Wide Gamut</font> sunt tehnologii de retroiluminare mai vechi, folosite de obicei în monitoare din 2009 și mai vechi.
+"info.display_tech.linklabel.displayspecifications.com": |-
+  Găsește-ți monitorul/televizorul și tehnologia corespunzătoare pe displayspecifications.com
+"info.display_tech.linklabel.everymac.com": |-
+  Găsește-ți iMac/MacBook/iPad și tehnologia de monitor corespunzătoare pe everymac.com
+"info.display_tech.show": |-
+  Arată informații despre tehnologiile comune de monitor
+"info.mr_settings": |-
+  Poți <font weight='bold'>verifica acuratețea</font> unui profil ICC sau LUT 3D printr-un raport de măsurare care conține statistici detaliate despre erorile de culoare ale peticilor măsurate.
+
+  Când verifici un LUT 3D, asigură-te că folosești aceleași setări cu care a fost creat LUT-ul 3D.
+
+  <font weight='bold'>Sfat:</font> Pentru a crea un raport de auto-verificare în loc de un raport de măsurare, ține apăsată tasta ALT de pe tastatură.
+"info.profile_settings": |-
+  <font weight='bold'>Profilarea</font> este procesul de <font weight='bold'>caracterizare</font> a monitorului și înregistrarea răspunsului lui într-un <font weight='bold'>profil de dispozitiv ICC</font>. Profilul de dispozitiv ICC poate fi folosit de aplicații care suportă managementul de culoare ICC pentru <font weight='bold'>corecție completă de culoare a monitorului</font>, și/sau poate fi folosit pentru a crea un <font weight='bold'>LUT 3D</font> (LUT = tabel de căutare), care servește același scop pentru aplicații care suportă LUT-uri 3D.
+
+  Numărul de petice măsurate influențează acuratețea atinsă de profilul rezultat. Pentru un profil de calitate rezonabilă bazat pe matrice 3x3 și curbe, câteva zeci de petice pot fi suficiente dacă monitorul are proprietăți bune de amestecare aditivă a culorilor și liniaritate. Unele monitoare profesionale se încadrează în această categorie. Dacă se dorește cea mai bună acuratețe posibilă, se recomandă un profil bazat pe LUT cu de la câteva sute până la câteva mii de petice. Setarea de testchart <font weight='bold'>„Auto-optimizat”</font> ține cont automat de neliniaritățile și răspunsul real al monitorului și ar trebui folosită pentru cele mai bune rezultate de calitate. Cu asta, poți ajusta un cursor pentru a alege un compromis între acuratețea profilului rezultat și timpul de măsurare și calcul.
+"infoframe.default_text": |-
+
+"infoframe.title": |-
+  Jurnal
+"infoframe.toggle": |-
+  Arată fereastra de jurnal
+"initial": |-
+  Inițial
+"initializing_gui": |-
+  Se inițializează interfața grafică...
+"ink_jet_printer": |-
+  Imprimantă cu jet de cerneală
+"input_device_profile": |-
+  Profil dispozitiv de intrare
+"input_table": |-
+  Tabel de intrare
+"install_display_profile": |-
+  Instalează profilul monitorului...
+"install_local_system": |-
+  Instalează la nivel de sistem
+"install_user": |-
+  Instalează doar pentru utilizatorul curent
+"instrument": |-
+  Instrument
+"instrument.calibrate": |-
+  Pune capacul opac pe instrument (dacă e cazul), sau așază-l pe o suprafață mată, întunecată, sau pe referința lui de calibrare (dacă e cazul), apoi apasă OK pentru auto-calibrarea instrumentului.
+"instrument.calibrate.colormunki": |-
+  Setează senzorul ColorMunki în poziția de auto-calibrare și apasă OK pentru a calibra instrumentul.
+"instrument.calibrate.reflective": |-
+  Așază instrumentul pe referința lui albă reflectivă, seria nr. %s, și apasă OK pentru auto-calibrarea instrumentului.
+"instrument.calibrate.spyderx": |-
+  Pune capacul opac pe instrument, sau așază-l pe o suprafață mată, întunecată, apoi apasă OK pentru auto-calibrarea instrumentului.
+"instrument.calibrating": |-
+  Se calibrează instrumentul...
+"instrument.colormunki": |-
+  ColorMunki Design/Photo, i1Studio
+"instrument.connect": |-
+  Te rugăm conectează acum instrumentul de măsurare.
+"instrument.initializing": |-
+  Se configurează instrumentul, te rugăm așteaptă...
+"instrument.measure_ambient": |-
+  Dacă instrumentul tău are nevoie de un capac special pentru a măsura ambientul, te rugăm atașează-l. Pentru a măsura lumina ambientală, așază instrumentul cu fața în sus, lângă monitor. Sau, dacă vrei să măsori o cabină de vizualizare, pune un card gri fără metamerism în cabină și îndreaptă instrumentul spre el. Instrucțiuni suplimentare despre măsurarea ambientului pot fi disponibile în documentația instrumentului tău. Apasă OK pentru a începe măsurătoarea.
+"instrument.place_on_screen": |-
+  Așază instrumentul pe fereastra de test și apasă OK pentru a continua.
+"instrument.place_on_screen.madvr": |-
+  (%i) Te rugăm așază %s pe zona de test
+"instrument.reposition_sensor": |-
+  Măsurătoarea a eșuat deoarece senzorul instrumentului este poziționat greșit. Corectează poziția senzorului, apoi apasă OK pentru a continua.
+"internal": |-
+  Intern
+"interval": |-
+  Interval
+"invert_selection": |-
+  Inversează selecția
+"ipt": |-
+  IPT
+"is_embedded": |-
+  Este încorporat
+"is_illuminant": |-
+  Este iluminant
+"is_linear": |-
+  Este liniar
+"lang.confirm_restart": |-
+  Limba se va schimba la următoarea pornire a DisplayCAL. Vrei să repornești DisplayCAL acum?
+"laptop.icc": |-
+  Laptop (Gamma 2.2)
+"level": |-
+  Nivel
+"libXss.so": |-
+  Extensia X11 screen saver
+"library.not_found.warning": |-
+  Biblioteca „%s” (%s) nu a fost găsită. Asigură-te că este instalată înainte de a continua.
+"license": |-
+  Licență
+"license_info": |-
+  Licențiat sub GPL
+"linear": |-
+  liniar
+"link.address.copy": |-
+  Copiază adresa link-ului
+"log.autoshow": |-
+  Arată automat fereastra de jurnal
+"luminance": |-
+  Luminanță
+"lut_access": |-
+  Acces tabel gamma placă video
+"lut_access.unsupported": |-
+  Driverele sau hardware-ul tău grafic nu suportă rampe gamma încărcabile sau calibrare. Poate fi nevoie să actualizezi driverele dispozitivului.
+"macos.bugs.cal.warning": |-
+  Aplicațiile care folosesc CMM-ul Apple (modulul de management al culorii), precum macOS Preview și QuickLook, nu suportă corecția de nuanță a punctului negru de calibrare.
+
+  Aplicațiile care folosesc propriul management de culoare nu sunt afectate (precum Adobe Creative Suite folosind Adobe ACE, sau aplicații grafice open-source folosind littleCMS precum GIMP sau Krita, sau aplicații ce folosesc LUT-uri 3D pentru managementul culorii).
+
+  Vrei să dezactivezi corecția de nuanță a punctului negru de calibrare?
+"macos.bugs.profile.warning": |-
+  Aplicațiile care folosesc CMM-ul Apple (modulul de management al culorii), precum macOS Preview și QuickLook, nu suportă alte tipuri de profil de monitor în afară de curbă unică + matrice cu compensare a punctului negru.
+
+  Aplicațiile care folosesc propriul management de culoare nu sunt afectate (precum Adobe Creative Suite folosind Adobe ACE, sau aplicații grafice open-source folosind littleCMS precum GIMP sau Krita, sau aplicații ce folosesc LUT-uri 3D pentru managementul culorii).
+
+  Vrei să setezi tipul profilului pe curbă unică + matrice și să activezi compensarea punctului negru?
+"madhcnet.outdated": |-
+  Versiunea instalată de %s găsită la %s este învechită. Actualizează la cea mai recentă versiune madVR (cel puțin %i.%i.%i.%i).
+"madtpg.launch.failure": |-
+  madTPG nu a fost găsit sau nu a putut fi lansat.
+"madvr.not_found": |-
+  Filtrul DirectShow madVR nu a fost găsit în registry. Asigură-te că este instalat.
+"madvr.outdated": |-
+  Versiunea de madVR folosită este învechită. Actualizează la cea mai recentă versiune (cel puțin %i.%i.%i.%i).
+"madvr.wrong_levels_detected": |-
+  Diferența de luminanță măsurată între nivelul RGB 0 și 16 este sub 0,02 cd/m². Fie setarea de nivel de intrare și/sau nivel de negru a monitorului este incorectă, și/sau configurația nivelurilor de ieșire a plăcii video și/sau madVR este greșită — dacă driverul plăcii tale video este setat să producă RGB interval complet (0-255), schimbă nivelurile de ieșire madVR pentru monitorul tău la niveluri TV (16-235).
+"magenta": |-
+  Magenta
+"make_and_model": |-
+  Marcă și model
+"manufacturer": |-
+  Producător
+"mastering_display_black_luminance": |-
+  Nivel negru monitor de masterizare
+"mastering_display_peak_luminance": |-
+  Luminanță de vârf monitor de masterizare
+"matrix": |-
+  Matrice
+"matte": |-
+  Mat
+"max": |-
+  Max
+"maximal": |-
+  Maxim
+"measure": |-
+  Măsoară
+"measure.darken_background": |-
+  Fundal negru
+"measure.darken_background.warning": |-
+  Atenție: Dacă alegi „fundal negru”, acesta va acoperi tot ecranul și nu vei putea vedea fereastra de ajustare a monitorului! Dacă ai o configurație cu mai multe monitoare, mută fereastra de ajustare pe alt monitor înainte de a începe măsurătoarea, sau folosește tastatura (pentru a anula măsurătoarea, apasă Q. Dacă măsurătoarea rulează deja, așteaptă puțin, apoi apasă din nou Q).
+"measure.override_display_settle_time_mult": |-
+  Suprascrie multiplicatorul timpului de stabilizare a monitorului
+"measure.override_min_display_update_delay_ms": |-
+  Suprascrie întârzierea minimă de actualizare a monitorului
+"measure.testchart": |-
+  Măsoară testchart
+"specplot.choose": |-
+  Alege un fișier pentru specplot
+"specplot.run": |-
+  Rulează specplot...
+"measureframe.center": |-
+  Centrează
+"measureframe.center.manual": |-
+  Te rugăm așază această fereastră în centrul ecranului
+"measureframe.info": |-
+  Mută fereastra de măsurare în poziția dorită pe ecran și redimensioneaz-o dacă e necesar. Aproximativ toată suprafața ferestrei va fi folosită pentru afișarea peticilor de măsurare, cercul fiind doar un ghid care te ajută să poziționezi dispozitivul de măsurare.
+
+  Așază dispozitivul de măsurare pe fereastră și apasă „Începe măsurătoarea”. Pentru a anula și a reveni la fereastra principală, închide fereastra de măsurare.
+"measureframe.measurebutton": |-
+  Începe măsurătoarea
+"measureframe.title": |-
+  Zonă de măsurare
+"measureframe.zoomin": |-
+  Mărește
+"measureframe.zoommax": |-
+  Maximizează/Restaurează
+"measureframe.zoomnormal": |-
+  Dimensiune normală
+"measureframe.zoomout": |-
+  Micșorează
+"measurement.play_sound": |-
+  Feedback acustic la măsurători continue
+"measurement.untethered": |-
+  Măsurătoare fără fir (untethered)
+"measurement_file.check_sanity": |-
+  Verifică fișierul de măsurare...
+"measurement_file.check_sanity.auto": |-
+  Verifică automat fișierele de măsurare
+"measurement_file.check_sanity.auto.warning": |-
+  Reține că verificarea automată a măsurătorilor este o funcție experimentală. Folosește pe propriul risc.
+"measurement_file.choose": |-
+  Alege un fișier de măsurare
+"measurement_file.choose.colorimeter": |-
+  Alege un fișier de măsurare al colorimetrului
+"measurement_file.choose.reference": |-
+  Alege un fișier de măsurare de referință
+"measurement_mode": |-
+  Mod
+"measurement_mode.adaptive": |-
+  Adaptiv
+"measurement_mode.dlp": |-
+  DLP
+"measurement_mode.factory": |-
+  Calibrare din fabrică
+"measurement_mode.generic": |-
+  Generic
+"measurement_mode.highres": |-
+  HiRes
+"measurement_mode.lcd": |-
+  LCD (generic)
+"measurement_mode.lcd.ccfl": |-
+  LCD CCFL
+"measurement_mode.lcd.ccfl.2": |-
+  LCD CCFL Tip 2
+"measurement_mode.lcd.oled": |-
+  OLED
+"measurement_mode.lcd.white_led": |-
+  LCD White LED
+"measurement_mode.lcd.wide_gamut.ccfl": |-
+  LCD CCFL Wide Gamut
+"measurement_mode.lcd.wide_gamut.gb_led": |-
+  LCD GB-r-LED
+"measurement_mode.lcd.wide_gamut.led": |-
+  LCD PFS Phosphor WLED, RGB LED
+"measurement_mode.lcd.wide_gamut.rgb_led": |-
+  LCD RGB LED
+"measurement_mode.raw": |-
+  Brut (raw)
+"measurement_mode.refresh": |-
+  Refresh (generic)
+"measurement_report": |-
+  Raport de măsurare...
+"measurement_report.update": |-
+  Actualizează raportul de măsurare sau uniformitate...
+"measurement_report_choose_chart": |-
+  Alege testchart-ul de măsurat.
+"measurement_report_choose_chart_or_reference": |-
+  Alege un testchart sau o referință.
+"measurement_report_choose_profile": |-
+  Alege profilul de validat.
+"measurement_type": |-
+  Tip măsurătoare
+"measurements.complete": |-
+  Măsurători finalizate! Vrei să deschizi directorul cu fișierele de măsurare?
+"measurements.invalid": |-
+  Măsurătorile sunt invalide.
+"measuring.characterization": |-
+  Se măsoară eșantioanele de culoare pentru caracterizare...
+"media_attributes": |-
+  Atribute mediu
+"media_black_point": |-
+  Punct negru mediu
+"media_relative_colorimetric": |-
+  Colorimetric relativ la mediu
+"media_white_point": |-
+  Punct alb mediu
+"menu.about": |-
+  Despre...
+"menu.file": |-
+  Fișier
+"menu.help": |-
+  ?
+"menu.language": |-
+  Limbă
+"menu.options": |-
+  Opțiuni
+"menu.tools": |-
+  Unelte
+"menuitem.quit": |-
+  Ieșire
+"menuitem.set_argyll_bin": |-
+  Localizează executabilele ArgyllCMS...
+"metadata": |-
+  Metadate
+"method": |-
+  Metodă
+"min": |-
+  Min
+"minimal": |-
+  Minim
+"model": |-
+  Model
+"motion_picture_film_scanner": |-
+  Scaner de film pentru cinema
+"mswin.open_display_settings": |-
+  Deschide setările de afișare Windows...
+"named_color_profile": |-
+  Profil de culori numite
+"named_colors": |-
+  Culori numite
+"native": |-
+  Nativ
+"negative": |-
+  Negativ
+"no": |-
+  Nu
+"no_settings": |-
+  Fișierul nu conține setări.
+"none": |-
+  Niciunul
+"not_applicable": |-
+  Nu se aplică
+"not_connected": |-
+  Neconectat
+"not_found": |-
+  „%s” nu a fost găsit.
+"not_now": |-
+  Nu acum
+"number_of_entries": |-
+  Numărul de intrări
+"number_of_entries_per_channel": |-
+  Numărul de intrări per canal
+"observer": |-
+  Observator
+"observer.1931_2": |-
+  CIE 1931 2°
+"observer.1955_2": |-
+  Stiles & Burch 1955 2°
+"observer.1964_10": |-
+  CIE 1964 10°
+"observer.1964_10c": |-
+  CIE 1964 10° / hibrid 1931 2°
+"observer.1978_2": |-
+  Judd & Vos 1978 2°
+"observer.2012_2": |-
+  CIE 2012 2°
+"observer.2012_10": |-
+  CIE 2012 10°
+"observer.2015_2": |-
+  CIE 2015 2°
+"observer.2015_10": |-
+  CIE 2015 10°
+"observer.shaw": |-
+  Shaw & Fairchild 1997 2°
+"oem.import.auto": |-
+  Dacă colorimetrul tău a venit cu un CD software pentru Windows, te rugăm introdu-l acum (anulează orice instalare automată de software care ar putea porni).
+
+  Dacă nu ai un CD și fișierele necesare nu pot fi găsite altfel, vor fi descărcate de pe web.
+"oem.import.auto.download_selection": |-
+  A fost făcută o preselecție pe baza instrumentului (instrumentelor) detectat(e). Selectează fișierul (fișierele) de descărcat.
+"oem.import.auto_windows": |-
+  Dacă software-ul producătorului pentru colorimetrul tău este instalat, fișierele necesare pot fi găsite automat în majoritatea cazurilor.
+"office_web.icc": |-
+  Birou & Web (D65, Gamma 2.2)
+"offset": |-
+  Offset
+"offset_lithography": |-
+  Litografie offset
+"ok": |-
+  OK
+"or": |-
+  sau
+"osd": |-
+  OSD
+"other": |-
+  Altul
+"out": |-
+  Ieșire
+"out_of_gamut_tag": |-
+  Etichetă în afara gamutului
+"output.profile": |-
+  Profil destinație
+"output_device_profile": |-
+  Profil dispozitiv de ieșire
+"output_levels": |-
+  Niveluri de ieșire
+"output_offset": |-
+  Offset de ieșire
+"output_table": |-
+  Tabel de ieșire
+"overwrite": |-
+  Suprascrie
+"panel.surface": |-
+  Suprafață panou
+"panel.type": |-
+  Tip panou
+"passive_matrix_display": |-
+  Monitor cu matrice pasivă
+"patch.layout.select": |-
+  Selectează un aspect de petice:
+"patches": |-
+  Petice
+"patterngenerator.prisma.specify_host": |-
+  Te rugăm specifică hostname-ul procesorului tău video Prisma, de ex. prisma-0123 (Windows) sau prisma-0123.local (Linux/Mac OS X). Poți găsi hostname-ul pe o etichetă de pe partea de jos a Prisma-ei, dacă nu a fost schimbat prin interfața web administrativă a Prisma-ei. Alternativ, introdu adresa IP (dacă e cunoscută), de ex. 192.168.1.234
+"patterngenerator.sync_lost": |-
+  S-a pierdut sincronizarea cu generatorul de pattern.
+"pause": |-
+  Pauză
+"pcs_illuminant_xyz": |-
+  XYZ iluminant PCS
+"pcs_relative_cct": |-
+  CCT relativ la PCS
+"pcs_relative_lab": |-
+  L*a*b* relativ la PCS
+"pcs_relative_xyz": |-
+  XYZ relativ la PCS
+"pcs_to_device_intent_0": |-
+  PCS către dispozitiv: Intenția 0
+"pcs_to_device_intent_1": |-
+  PCS către dispozitiv: Intenția 1
+"pcs_to_device_intent_2": |-
+  PCS către dispozitiv: Intenția 2
+"perceptual": |-
+  Perceptual
+"photo.icc": |-
+  Foto (D50, Gamma 2.2)
+"photo_imagesetter": |-
+  Photo imagesetter
+"photographic_paper_printer": |-
+  Imprimantă pentru hârtie fotografică
+"platform": |-
+  Platformă
+"please_wait": |-
+  Te rugăm așteaptă...
+"port.invalid": |-
+  Port invalid: %s
+"positive": |-
+  Pozitiv
+"preferred_cmm": |-
+  CMM preferat
+"prepress.icc": |-
+  Prepress (D50, 130 cd/m², L*)
+"preserve_hue": |-
+  Păstrează nuanța
+"preserve_luminance": |-
+  Păstrează luminanța
+"preserve_saturation": |-
+  Păstrează saturația
+"preset": |-
+  Presetare
+"preview": |-
+  Previzualizare
+"profile": |-
+  Profil
+"profile.advanced_gamap": |-
+  Avansat...
+"profile.b2a.hires": |-
+  Îmbunătățește rezoluția efectivă a tabelului colorimetric PCS-către-dispozitiv
+"profile.b2a.lowres.warning": |-
+  Profilul pare să nu aibă tabele PCS-către-dispozitiv de înaltă calitate, esențiale pentru funcționarea corectă. Vrei să generezi acum tabele de înaltă calitate? Va dura câteva minute.
+"profile.b2a.smooth": |-
+  Netezire
+"profile.choose": |-
+  Alege un profil.
+"profile.confirm_regeneration": |-
+  Vrei să regenerezi profilul?
+"profile.current": |-
+  Profil curent
+"profile.do_not_install": |-
+  Nu instala profilul
+"profile.iccv4.unsupported": |-
+  Profilele ICC versiunea 4 nu sunt suportate.
+"profile.import.success": |-
+  Profilul a fost importat. S-ar putea să fie nevoie să-l aloci și activezi manual în setările de sistem „Culoare”.
+"profile.info": |-
+  Informații profil
+"profile.info.show": |-
+  Arată informații despre profil
+"profile.install": |-
+  Instalează profilul
+"profile.install.error": |-
+  Profilul nu a putut fi instalat/activat.
+"profile.install.success": |-
+  Profilul a fost instalat și activat.
+"profile.install.warning": |-
+  Profilul a fost instalat, dar pot exista probleme.
+"profile.install_local_system": |-
+  Instalează profilul ca implicit de sistem
+"profile.install_network": |-
+  Instalează profilul la nivel de rețea
+"profile.install_user": |-
+  Instalează profilul doar pentru utilizatorul curent
+"profile.invalid": |-
+  Profil invalid.
+"profile.load_error": |-
+  Profilul monitorului nu a putut fi încărcat.
+"profile.load_on_login": |-
+  Încarcă calibrarea la autentificare
+"profile.load_on_login.handled_by_os": |-
+  Lasă sistemul de operare să gestioneze încărcarea calibrării (precizie și fiabilitate scăzute)
+"profile.name": |-
+  Nume profil
+"profile.name.placeholders": |-
+  Poți folosi următorii marcatori în numele profilului:
+
+  %a	Nume abreviat al zilei săptămânii
+  %A	Nume complet al zilei săptămânii
+  %b	Nume abreviat al lunii
+  %B	Nume complet al lunii
+  %d	Ziua lunii
+  %H	Oră (format 24 de ore)
+  %I	Oră (format 12 ore)
+  %j	Ziua anului
+  %m	Luna
+  %M	Minut
+  %p	AM/PM
+  %S	Secundă
+  %U	Săptămână (duminica prima zi a săptămânii)
+  %w	Ziua săptămânii (duminica e 0)
+  %W	Săptămână (lunea prima zi a săptămânii)
+  %y	An fără secol
+  %Y	An cu secol
+"profile.no_embedded_ti3": |-
+  Profilul nu conține date de măsurare compatibile Argyll.
+"profile.no_suitable_pcs_candidate": |-
+  Nu a fost găsit niciun candidat PCS potrivit pentru primarele monitorului.
+"profile.no_targ": |-
+  Profilul nu conține informații despre țintă.
+"profile.no_vcgt": |-
+  Profilul nu conține curbe de calibrare.
+"profile.only_named_color": |-
+  Pot fi folosite doar profile de tip „Culoare numită”.
+"profile.quality": |-
+  Calitate profil
+"profile.quality.b2a.low": |-
+  Tabele PCS-către-dispozitiv de calitate scăzută
+"profile.quality.b2a.low.info": |-
+  Alege această opțiune dacă profilul va fi folosit doar cu mapare de gamut inversă dispozitiv-către-PCS pentru a crea un device link sau LUT 3D
+"profile.required_tags_missing": |-
+  Profilului îi lipsesc etichete necesare: %s
+"profile.self_check": |-
+  Auto-verificare profil ΔE*76
+"profile.self_check.avg": |-
+  medie
+"profile.self_check.max": |-
+  maxim
+"profile.self_check.rms": |-
+  RMS
+"profile.set_save_path": |-
+  Alege calea de salvare...
+"profile.settings": |-
+  Setări de profilare
+"profile.share": |-
+  Încarcă profilul...
+"profile.share.avg_dE_too_high": |-
+  Profilul produce un delta E prea mare (real = %s, prag = %s).
+"profile.share.b2a_resolution_too_low": |-
+  Rezoluția tabelelor PCS-către-dispozitiv ale profilului este prea scăzută.
+"profile.share.enter_info": |-
+  Poți partaja profilul tău cu alți utilizatori prin serviciul OpenSUSE „ICC Profile Taxi”.
+
+  Te rugăm oferă o descriere semnificativă și introdu mai jos proprietățile monitorului. Citește setările monitorului din meniul OSD al acestuia și introdu doar setările aplicabile monitorului tău care au fost schimbate față de valorile implicite.
+
+  Exemplu: Pentru majoritatea monitoarelor, acestea sunt numele presetării alese, luminozitatea, contrastul, temperatura de culoare și/sau câștigurile RGB ale punctului alb, precum și gamma. Pe laptopuri și notebook-uri, de obicei doar luminozitatea. Dacă ai schimbat setări suplimentare în timp ce calibrai monitorul, introdu-le și pe acelea, dacă e posibil.
+"profile.share.meta_missing": |-
+  Profilul nu conține informațiile meta necesare.
+"profile.share.success": |-
+  Profil încărcat cu succes.
+"profile.tags.A2B0.shaper_curves.input": |-
+  Curbe shaper de intrare A2B0
+"profile.tags.A2B0.shaper_curves.output": |-
+  Curbe shaper de ieșire A2B0
+"profile.tags.A2B1.shaper_curves.input": |-
+  Curbe shaper de intrare A2B1
+"profile.tags.A2B1.shaper_curves.output": |-
+  Curbe shaper de ieșire A2B1
+"profile.tags.A2B2.shaper_curves.input": |-
+  Curbe shaper de intrare A2B2
+"profile.tags.A2B2.shaper_curves.output": |-
+  Curbe shaper de ieșire A2B2
+"profile.tags.B2A0.shaper_curves.input": |-
+  Curbe shaper de intrare B2A0
+"profile.tags.B2A0.shaper_curves.output": |-
+  Curbe shaper de ieșire B2A0
+"profile.tags.B2A1.shaper_curves.input": |-
+  Curbe shaper de intrare B2A1
+"profile.tags.B2A1.shaper_curves.output": |-
+  Curbe shaper de ieșire B2A1
+"profile.tags.B2A2.shaper_curves.input": |-
+  Curbe shaper de intrare B2A2
+"profile.tags.B2A2.shaper_curves.output": |-
+  Curbe shaper de ieșire B2A2
+"profile.testchart_recommendation": |-
+  Pentru un profil de calitate mai ridicată, se recomandă un testchart cu mai multe eșantioane, dar va dura mai mult de măsurat. Vrei să folosești testchart-ul recomandat?
+"profile.type": |-
+  Tip profil
+"profile.type.gamma_matrix": |-
+  Gamma + matrice
+"profile.type.lut.lab": |-
+  LUT L*a*b*
+"profile.type.lut.xyz": |-
+  LUT XYZ
+"profile.type.lut_matrix.xyz": |-
+  LUT XYZ + matrice
+"profile.type.lut_rg_swapped_matrix.xyz": |-
+  LUT XYZ + matrice inversată
+"profile.type.shaper_matrix": |-
+  Curbe + matrice
+"profile.type.single_gamma_matrix": |-
+  Gamma unică + matrice
+"profile.type.single_shaper_matrix": |-
+  Curbă unică + matrice
+"profile.unsupported": |-
+  Tip de profil (%s) și/sau spațiu de culoare (%s) nesuportat(e).
+"profile.update": |-
+  Actualizează profilul
+"profile_associations": |-
+  Asocieri de profil...
+"profile_associations.changing_system_defaults.warning": |-
+  Modifici acum setările implicite de sistem
+"profile_associations.use_my_settings": |-
+  Folosește setările mele pentru acest monitor
+"profile_class": |-
+  Clasă profil
+"profile_connection_space_pcs": |-
+  Spațiu de conexiune profil (PCS)
+"profile_loader": |-
+  Încărcător de profil
+"profile_loader.disable": |-
+  Dezactivează încărcătorul de profil
+"profile_loader.exceptions.known_app.error": |-
+  Încărcătorul de profil se dezactivează automat cât timp %s rulează. Nu poți suprascrie acest comportament.
+"profile_loader.exit_warning": |-
+  Chiar vrei să închizi încărcătorul de profil? Calibrarea nu va mai fi reîncărcată automat dacă schimbi configurația monitorului!
+"profile_loader.fix_profile_associations": |-
+  Repară automat asocierile de profil
+"profile_loader.fix_profile_associations_warning": |-
+  Cât timp încărcătorul de profil rulează, poate gestiona asocierile de profil când schimbi configurația monitorului.
+
+  Înainte de a continua, asigură-te că asocierile de profil arătate mai sus sunt corecte. Dacă nu sunt, urmează acești pași:
+
+  1. Deschide setările de afișare Windows.
+  2. Activează toate monitoarele conectate (desktop extins).
+  3. Deschide asocierile de profil.
+  4. Asigură-te că fiecare monitor are profilul corect alocat. Apoi închide asocierile de profil.
+  5. În setările de afișare Windows, revino la configurația anterioară de monitoare și închide setările de afișare.
+  6. Acum poți activa „Repară automat asocierile de profil”.
+"profile_loader.info": |-
+  Starea de calibrare a fost (re)aplicată de %i ori până acum astăzi.
+  Click-dreapta pe iconiță pentru meniu.
+"profiling": |-
+  Profilare
+"profiling.complete": |-
+  Profilare finalizată!
+"profiling.incomplete": |-
+  Profilarea nu a fost finalizată.
+"projection_television": |-
+  Televizor cu proiecție
+"projector": |-
+  Proiector
+"projector_mode_unavailable": |-
+  Modul proiector este disponibil doar cu ArgyllCMS 1.1.0 Beta sau mai nou.
+"quality.ultra.warning": |-
+  Calitatea Ultra nu ar trebui folosită aproape niciodată, cu excepția demonstrării faptului că nu ar trebui folosită aproape niciodată (timp de procesare lung!). Poate alege calitate ridicată sau medie în loc.
+"readme": |-
+  Citește-mă
+"ready": |-
+  Gata.
+"red": |-
+  Roșu
+"red_gamma": |-
+  Gamma roșu
+"red_lab": |-
+  Roșu L*a*b*
+"red_matrix_column": |-
+  Coloană matrice roșu
+"red_maximum": |-
+  Maxim roșu
+"red_minimum": |-
+  Minim roșu
+"red_tone_response_curve": |-
+  Curbă de răspuns tonal roșu
+"red_xyz": |-
+  Roșu XYZ
+"reference": |-
+  Referință
+"reflection_hardcopy_original_colorimetry": |-
+  Colorimetrie originală hardcopy prin reflexie
+"reflection_print_output_colorimetry": |-
+  Colorimetrie de ieșire print prin reflexie
+"reflective": |-
+  Reflectiv
+"reflective_scanner": |-
+  Scaner reflectiv
+"remaining_time": |-
+  Timp rămas (aprox.)
+"remove": |-
+  Elimină
+"rendering_intent": |-
+  Intenție de randare
+"report": |-
+  Raport
+"report.calibrated": |-
+  Raport pe monitor calibrat
+"report.uncalibrated": |-
+  Raport pe monitor necalibrat
+"report.uniformity": |-
+  Măsoară uniformitatea monitorului...
+"reset": |-
+  Resetează
+"resources.notfound.error": |-
+  Eroare fatală: Un fișier necesar nu a fost găsit:
+"resources.notfound.warning": |-
+  Avertisment: Unele fișiere necesare nu au fost găsite:
+"response.invalid": |-
+  Răspuns invalid de la %s: %s
+"response.invalid.missing_key": |-
+  Răspuns invalid de la %s: Cheie lipsă „%s”: %s
+"response.invalid.value": |-
+  Răspuns invalid de la %s: Valoarea cheii „%s” nu se potrivește cu valoarea așteptată „%s”: %s
+"restore_defaults": |-
+  Restaurează implicite
+"retry": |-
+  Reîncearcă
+"rgb.trc": |-
+  Funcție de transfer RGB
+"rgb.trc.averaged": |-
+  funcție de transfer RGB mediată
+"sRGB.icc": |-
+  sRGB
+"saturation": |-
+  Saturație
+"save": |-
+  Salvează
+"save_as": |-
+  Salvează ca...
+"scene_appearance_estimates": |-
+  Estimări de aparență a scenei
+"scene_colorimetry_estimates": |-
+  Estimări colorimetrice ale scenei
+"scripting-client": |-
+  Client de scripting DisplayCAL
+"scripting-client.cmdhelptext": |-
+  Apasă tasta tab la un prompt de comandă gol pentru a vedea comenzile posibile în contextul curent, sau pentru a auto-completa literele deja tastate. Tastează „getcommands” pentru o listă a comenzilor suportate și parametrilor posibili pentru aplicația conectată.
+"scripting-client.detected-hosts": |-
+  Gazde de scripting detectate:
+"select_all": |-
+  Selectează tot
+"self_check_report": |-
+  Raport de auto-verificare...
+"serial_number": |-
+  Nr. serie
+"set_as_default": |-
+  Setează ca implicit
+"setting.keep_current": |-
+  Păstrează setarea curentă
+"settings.additional": |-
+  Setări suplimentare
+"settings.basic": |-
+  Setări de bază
+"settings.new": |-
+  <Curent>
+"settings_loaded": |-
+  Au fost încărcate curbele de calibrare și următoarele setări de calibrare: %s. Celelalte opțiuni de calibrare au fost restaurate la implicit, iar opțiunile de profilare nu au fost schimbate.
+"settings_loaded.cal": |-
+  Profilul conținea doar setări de calibrare. Celelalte opțiuni nu au fost schimbate. Nu au fost găsite curbe de calibrare.
+"settings_loaded.cal_and_lut": |-
+  Profilul conținea doar setări de calibrare. Celelalte opțiuni nu au fost schimbate, iar curbele de calibrare au fost încărcate.
+"settings_loaded.cal_and_profile": |-
+  Setările au fost încărcate. Nu au fost găsite curbe de calibrare.
+"settings_loaded.profile": |-
+  Profilul conținea doar setări de profilare. Celelalte opțiuni nu au fost schimbate. Nu au fost găsite curbe de calibrare.
+"settings_loaded.profile_and_lut": |-
+  Profilul conținea doar setări de profilare. Celelalte opțiuni nu au fost schimbate, iar curbele de calibrare au fost încărcate.
+"sharp": |-
+  Ascuțit
+"show_advanced_options": |-
+  Arată opțiuni avansate
+"show_notifications": |-
+  Arată notificări
+"silkscreen": |-
+  Serigrafie
+"simulation_profile": |-
+  Profil de simulare
+"size": |-
+  Dimensiune
+"skip_legacy_serial_ports": |-
+  Omite porturile seriale vechi
+"softproof.icc": |-
+  Softproof (5800K, 160 cd/m², L*)
+"spectral": |-
+  Spectral
+"spectral_resolution": |-
+  Rezoluție spectrală
+"splash.simple": |-
+  Folosește ecran de pornire simplu
+"ssl.certificate_verify_failed": |-
+  Certificatul de la distanță nu a putut fi verificat.
+"ssl.certificate_verify_failed.root_ca_missing": |-
+  Certificatul de la distanță nu a putut fi verificat deoarece nu a fost găsit niciun certificat rădăcină potrivit pe sistemul local.
+"ssl.handshake_failure": |-
+  Eșec de handshake. Nu s-a putut stabili o conexiune sigură.
+"startup": |-
+  Se pornește...
+"startup_sound.enable": |-
+  Activează sunetul de pornire
+"success": |-
+  ...ok.
+"surround_xyz": |-
+  XYZ surround
+"synthicc.create": |-
+  Creează profil ICC sintetic...
+"target": |-
+  Țintă
+"tc.3d": |-
+  Creează fișier 3D de diagnostic
+"tc.I": |-
+  Grilă cubică centrată pe corp, spațiu perceptual
+"tc.Q": |-
+  Umplere cvasi-aleatorie a spațiului perceptual
+"tc.R": |-
+  Spațiu perceptual aleatoriu
+"tc.adaption": |-
+  Adaptare
+"tc.algo": |-
+  Distribuție
+"tc.angle": |-
+  Unghi
+"tc.black": |-
+  Petice negre
+"tc.dark_emphasis": |-
+  Accent pe regiunea întunecată
+"tc.fullspread": |-
+  Petice iterative
+"tc.gray": |-
+  Petice neutre
+"tc.i": |-
+  Grilă cubică centrată pe corp, spațiu dispozitiv
+"tc.limit.sphere": |-
+  Limitează eșantioanele la sferă
+"tc.limit.sphere_radius": |-
+  Rază
+"tc.multidim": |-
+  Multidimensional
+"tc.multidim.patches": |-
+  pași = %s petice (%s neutre)
+"tc.neutral_axis_emphasis": |-
+  Accent pe axa neutră
+"tc.ofp": |-
+  Eșantionare optimizată a punctului celui mai îndepărtat
+"tc.patch": |-
+  Petic
+"tc.patches.selected": |-
+  selectate
+"tc.patches.total": |-
+  Total petice
+"tc.precond": |-
+  Profil de precondiționare
+"tc.precond.notset": |-
+  Selectează un profil de precondiționare.
+"tc.preview.create": |-
+  Se creează previzualizarea, te rugăm așteaptă...
+"tc.q": |-
+  Umplere cvasi-aleatorie a spațiului dispozitiv
+"tc.r": |-
+  Spațiu dispozitiv aleatoriu
+"tc.single": |-
+  Petice pe canal unic
+"tc.single.perchannel": |-
+  per canal
+"tc.t": |-
+  Eșantionare incrementală a punctului îndepărtat
+"tc.vrml.black_offset": |-
+  Offset negru RGB (L*)
+"tc.vrml.use_D50": |-
+  Alb RGB neutru
+"tc.white": |-
+  Petice albe
+"technology": |-
+  Tehnologie
+"tempdir_should_still_contain_files": |-
+  Fișierele create ar trebui să fie încă în directorul temporar „%s”.
+"testchart.add_saturation_sweeps": |-
+  Adaugă tranziții de saturație
+"testchart.add_ti3_patches": |-
+  Adaugă petice de referință...
+"testchart.auto_optimize.untethered.unsupported": |-
+  Monitorul virtual fără fir nu suportă auto-optimizarea testchart-ului.
+"testchart.change_patch_order": |-
+  Schimbă ordinea peticelor
+"testchart.confirm_select": |-
+  Fișier salvat. Vrei să selectezi acest testchart?
+"testchart.create": |-
+  Creează testchart
+"testchart.discard": |-
+  Renunță
+"testchart.dont_select": |-
+  Nu selecta
+"testchart.edit": |-
+  Editează testchart...
+"testchart.export.repeat_patch": |-
+  Repetă fiecare petic:
+"testchart.file": |-
+  Testchart
+"testchart.info": |-
+  Numărul de petice din testchart-ul selectat
+"testchart.interleave": |-
+  Interleave
+"testchart.maximize_RGB_difference": |-
+  Maximizează diferența RGB
+"testchart.maximize_lightness_difference": |-
+  Maximizează diferența de luminozitate
+"testchart.maximize_rec709_luma_difference": |-
+  Maximizează diferența de luma
+"testchart.optimize_display_response_delay": |-
+  Minimizează întârzierea de răspuns a monitorului
+"testchart.patch_sequence": |-
+  Secvență de petice
+"testchart.patches_amount": |-
+  Numărul de petice
+"testchart.read": |-
+  Se citește testchart-ul...
+"testchart.save_or_discard": |-
+  Testchart-ul nu a fost salvat.
+"testchart.select": |-
+  Selectează
+"testchart.separate_fixed_points": |-
+  Alege peticele de adăugat într-un pas separat.
+"testchart.set": |-
+  Alege fișierul testchart...
+"testchart.shift_interleave": |-
+  Deplasare & interleave
+"testchart.sort_RGB_blue_to_top": |-
+  Sortează RGB, albastru sus
+"testchart.sort_RGB_cyan_to_top": |-
+  Sortează RGB, cyan sus
+"testchart.sort_RGB_gray_to_top": |-
+  Sortează RGB, gri sus
+"testchart.sort_RGB_green_to_top": |-
+  Sortează RGB, verde sus
+"testchart.sort_RGB_magenta_to_top": |-
+  Sortează RGB, magenta sus
+"testchart.sort_RGB_red_to_top": |-
+  Sortează RGB, roșu sus
+"testchart.sort_RGB_white_to_top": |-
+  Sortează RGB, alb sus
+"testchart.sort_RGB_yellow_to_top": |-
+  Sortează RGB, galben sus
+"testchart.sort_by_BGR": |-
+  Sortează după BGR
+"testchart.sort_by_HSI": |-
+  Sortează după HSI
+"testchart.sort_by_HSL": |-
+  Sortează după HSL
+"testchart.sort_by_HSV": |-
+  Sortează după HSV
+"testchart.sort_by_L": |-
+  Sortează după L*
+"testchart.sort_by_RGB": |-
+  Sortează după RGB
+"testchart.sort_by_RGB_sum": |-
+  Sortează după suma RGB
+"testchart.sort_by_rec709_luma": |-
+  Sortează după luma
+"testchart.vary_RGB_difference": |-
+  Variază diferența RGB
+"testchart_or_reference": |-
+  Testchart sau referință
+"thermal_wax_printer": |-
+  Imprimantă cu ceară termică
+"tone_values": |-
+  Valori tonale
+"transfer_function": |-
+  Funcție de transfer
+"translations": |-
+  Traduceri
+"transparency": |-
+  Transparență
+"trashcan.linux": |-
+  coșul de gunoi
+"trashcan.mac": |-
+  coșul de gunoi
+"trashcan.windows": |-
+  coșul de reciclare
+"tray_icon_animation": |-
+  Animează iconița din tray
+"trc": |-
+  Curbă tonală
+"trc.dicom": |-
+  DICOM
+"trc.gamma": |-
+  Gamma
+"trc.hlg": |-
+  Hybrid Log-Gamma
+"trc.lstar": |-
+  L*
+"trc.rec709": |-
+  Rec. 709
+"trc.rec1886": |-
+  Rec. 1886
+"trc.should_use_viewcond_adjust": |-
+  Când folosești curbele SMPTE 240M sau Rec. 709, ar trebui să folosești și o ajustare pentru nivelurile tale de lumină ambientală, pentru rezultate corecte. Pentru asta, bifează căsuța de lângă „Nivel lumină ambientală” și introdu o valoare în Lux. Poți și măsura opțional lumina ambientală în timpul calibrării, dacă e suportat de instrument.
+"trc.smpte240m": |-
+  SMPTE 240M
+"trc.smpte2084": |-
+  SMPTE 2084
+"trc.smpte2084.hardclip": |-
+  SMPTE 2084 (clip dur)
+"trc.smpte2084.rolloffclip": |-
+  SMPTE 2084 (roll-off)
+"trc.srgb": |-
+  sRGB
+"trc.type.absolute": |-
+  Absolută
+"trc.type.relative": |-
+  Relativă
+"turn_off": |-
+  Oprește
+"turn_on": |-
+  Pornește
+"type": |-
+  Tip
+"udev_hotplug.unavailable": |-
+  Nici udev, nici hotplug nu au fost detectate.
+"ui.use_qt": |-
+  Folosește interfața Qt (experimental)
+"ui.use_qt.confirm_restart": |-
+  Setul de unelte al interfeței se va schimba la următoarea pornire a DisplayCAL. Vrei să repornești DisplayCAL acum?
+"unassigned": |-
+  Nealocat
+"uninstall": |-
+  Dezinstalează
+"uninstall_display_profile": |-
+  Dezinstalează profilul monitorului...
+"unknown": |-
+  Necunoscut
+"unmodified": |-
+  Nemodificat
+"unnamed": |-
+  Nedenumit
+"unspecified": |-
+  Nespecificat
+"update_check": |-
+  Verifică actualizări pentru aplicație...
+"update_check.fail": |-
+  Verificarea actualizărilor a eșuat:
+"update_check.fail.version": |-
+  Fișierul de versiune de la distanță de pe serverul %s nu a putut fi analizat.
+"update_check.new_version": |-
+  Este disponibilă o actualizare: %s
+"update_check.onstartup": |-
+  Verifică actualizări pentru aplicație la pornire
+"update_check.uptodate": |-
+  %s este la zi.
+"update_now": |-
+  Actualizează acum
+"upload": |-
+  Încarcă
+"use_fancy_progress": |-
+  Folosește fereastră de progres elaborată
+"use_separate_lut_access": |-
+  Folosește acces separat la tabelul gamma al plăcii video
+"use_simulation_profile_as_output": |-
+  Folosește profilul de simulare ca profil de monitor
+"vcgt": |-
+  Curbe de calibrare
+"vcgt.mismatch": |-
+  Tabelele gamma ale plăcii video pentru monitorul %s nu se potrivesc cu starea dorită.
+"vcgt.unknown_format": |-
+  Format necunoscut al tabelului gamma al plăcii video în profilul „%s”.
+"verification": |-
+  Verificare
+"verification.settings": |-
+  Setări de verificare
+"verify.ti1": |-
+  Testchart de verificare
+"verify_extended.ti1": |-
+  Testchart extins de verificare
+"verify_grayscale.ti1": |-
+  Testchart de verificare a balansului de gri
+"verify_large.ti1": |-
+  Testchart mare de verificare
+"verify_video.ti1": |-
+  Testchart de verificare (video)
+"verify_video_extended.ti1": |-
+  Testchart extins de verificare (video)
+"verify_video_extended_hlg_p3_2020.ti1": |-
+  Testchart extins de verificare (video HDR, Rec. 2020/P3, Hybrid Log-Gamma)
+"verify_video_extended_smpte2084_100_p3_2020.ti1": |-
+  Testchart extins de verificare (video HDR, Rec. 2020/P3, SMPTE 2084, 100 cd/m²)
+"verify_video_extended_smpte2084_200_p3_2020.ti1": |-
+  Testchart extins de verificare (video HDR, Rec. 2020/P3, SMPTE 2084, 200 cd/m²)
+"verify_video_extended_smpte2084_500_p3_2020.ti1": |-
+  Testchart extins de verificare (video HDR, Rec. 2020/P3, SMPTE 2084, 500 cd/m²)
+"verify_video_extended_smpte2084_1000_p3_2020.ti1": |-
+  Testchart extins de verificare (video HDR, Rec. 2020/P3, SMPTE 2084, 1000 cd/m²)
+"verify_video_large.ti1": |-
+  Testchart mare de verificare (video)
+"verify_video_xl.ti1": |-
+  Testchart extra mare de verificare (video)
+"verify_video_xxl.ti1": |-
+  Testchart XXL de verificare (video)
+"verify_video_xxxl.ti1": |-
+  Testchart XXXL de verificare (video)
+"verify_xl.ti1": |-
+  Testchart extra mare de verificare
+"verify_xxl.ti1": |-
+  Testchart XXL de verificare
+"verify_xxxl.ti1": |-
+  Testchart XXXL de verificare
+"vga": |-
+  VGA
+"video.icc": |-
+  Video (D65, Rec. 1886)
+"video_Prisma.icc": |-
+  LUT 3D video pentru Prisma (D65, Rec. 709 / Rec. 1886)
+"video_ReShade.icc": |-
+  LUT 3D video pentru ReShade (D65, Rec. 709 / Rec. 1886)
+"video_camera": |-
+  Cameră video
+"video_card_gamma_table": |-
+  Tabel gamma placă video
+"video_eeColor.icc": |-
+  LUT 3D video pentru eeColor (D65, Rec. 709 / Rec. 1886)
+"video_madVR.icc": |-
+  LUT 3D video pentru madVR (D65, Rec. 709 / Rec. 1886)
+"video_madVR_ST2084.icc": |-
+  LUT 3D video pentru madVR HDR (D65, Rec. 2020 / SMPTE 2084 / BT.2390)
+"video_monitor": |-
+  Monitor video
+"video_resolve.icc": |-
+  LUT 3D video pentru Resolve (D65, Rec. 709 / Rec. 1886)
+"video_resolve_ST2084_clip.icc": |-
+  LUT 3D video pentru Resolve HDR (D65, Rec. 2020 / SMPTE 2084)
+"view.3d": |-
+  Vizualizare 3D
+"viewing_conditions": |-
+  Condiții de vizualizare
+"viewing_conditions_description": |-
+  Descrierea condițiilor de vizualizare
+"vrml_to_x3d_converter": |-
+  Convertor VRML în X3D
+"warning": |-
+  Avertisment
+"warning.already_exists": |-
+  Fișierul „%s” există deja la locația aleasă și va fi suprascris. Vrei să continui?
+"warning.autostart_system": |-
+  Directorul de pornire automată la nivel de sistem nu a putut fi determinat.
+"warning.autostart_user": |-
+  Directorul de pornire automată specific utilizatorului nu a putut fi determinat.
+"warning.discard_changes": |-
+  Chiar vrei să renunți la modificările aduse setărilor curente?
+"warning.gamap.out_viewcond.nondisplay": |-
+  Condiția de vizualizare destinație „%s” nu este o condiție de vizualizare de monitor. Vrei totuși să o folosești?
+"warning.input_value_clipping": |-
+  Avertisment: Valorile sub punctul negru al profilului monitorului vor fi tăiate (clipping)!
+"warning.suspicious_delta_e": |-
+  Avertisment: Au fost găsite măsurători suspecte. Reține că această verificare presupune un monitor de tip sRGB. Dacă monitorul tău diferă de această presupunere (de ex. are un gamut foarte larg sau o curbă de răspuns tonal prea diferită de sRGB), atunci erorile găsite probabil nu sunt relevante.
+
+  A fost întrunit unul sau toate criteriile următoare:
+
+  • Petice consecutive cu numere RGB diferite, dar cu un ΔE*00 suspect de mic al măsurătorilor între ele.
+  • Gri RGB cu numere RGB crescătoare față de peticul anterior, dar luminozitate (L*) în scădere.
+  • Gri RGB cu numere RGB descrescătoare față de peticul anterior, dar luminozitate (L*) în creștere.
+  • ΔE*00 și ΔL*00 sau ΔH*00 sau ΔC*00 neobișnuit de mari ale măsurătorilor față de echivalentul sRGB al numerelor RGB.
+
+  Asta ar putea sugera erori de măsurare. Valorile considerate problematice (ceea ce nu trebuie să fie neapărat adevărat!) sunt evidențiate cu roșu. Verifică măsurătorile cu atenție și marchează-le pe cele pe care vrei să le accepți. Poți edita și valorile RGB și XYZ.
+"warning.suspicious_delta_e.info": |-
+  Explicația coloanelor Δ:
+
+  ΔE*00 XYZ A/B: ΔE*00 al valorilor măsurate față de valorile măsurate ale peticului anterior. Dacă această valoare lipsește, nu a fost un factor în verificare. Dacă e prezentă, e considerată prea mică.
+
+  0,5 ΔE*00 RGB A/B: ΔE*00 al echivalentului sRGB al numerelor RGB față de echivalentul sRGB al numerelor RGB ale peticului anterior (cu un factor de 0,5). Dacă această valoare e prezentă, reprezintă valoarea de comparație (minimă) în timpul verificării pentru un ΔE*00 XYZ A/B presupus prea mic. Servește ca orientare foarte aproximativă.
+
+  ΔE*00 RGB-XYZ: ΔE*00 al valorilor măsurate față de echivalentul sRGB al numerelor RGB.
+  ΔL*00 RGB-XYZ: ΔL*00 al valorilor măsurate față de echivalentul sRGB al numerelor RGB.
+  ΔC*00 RGB-XYZ: ΔC*00 al valorilor măsurate față de echivalentul sRGB al numerelor RGB.
+  ΔH*00 RGB-XYZ: ΔH*00 al valorilor măsurate față de echivalentul sRGB al numerelor RGB.
+"warning.system_file": |-
+  Avertisment: „%s” este un fișier de sistem. Chiar vrei să continui?
+"webserver.waiting": |-
+  Serverul web așteaptă la
+"welcome": |-
+  Bine ai venit!
+"welcome_back": |-
+  Bine ai revenit!
+"white": |-
+  Alb
+"whitepoint": |-
+  Punct alb
+"whitepoint.colortemp": |-
+  Temperatură de culoare
+"whitepoint.colortemp.locus.blackbody": |-
+  Corp negru
+"whitepoint.colortemp.locus.curve": |-
+  Curbă de temperatură de culoare
+"whitepoint.colortemp.locus.daylight": |-
+  Lumină de zi
+"whitepoint.set": |-
+  Vrei să setezi și punctul alb la valoarea măsurată?
+"whitepoint.simulate": |-
+  Simulează punctul alb
+"whitepoint.simulate.relative": |-
+  Relativ la punctul alb al profilului monitorului
+"whitepoint.visual_editor": |-
+  Editor vizual de punct alb
+"whitepoint.visual_editor.display_changed.warning": |-
+  Atenție: Configurația monitorului s-a schimbat, iar editorul vizual de punct alb s-ar putea să nu mai poată restaura corect profilele monitorului. Verifică cu atenție asocierile de profil ale monitorului după închiderea editorului și repornește DisplayCAL.
+"whitepoint.visual_editor.panel.dock": |-
+  Atașează panoul la fereastra editorului
+"whitepoint.visual_editor.panel.float": |-
+  Detașează panoul în propria fereastră
+"whitepoint.xy": |-
+  Coordonate de cromaticitate
+"window.title": |-
+  DisplayCAL-CG
+"windows.version.unsupported": |-
+  Această versiune de Windows nu este suportată.
+"windows_only": |-
+  Doar Windows
+"working_dir": |-
+  Director de lucru:
+"xyz_scaling": |-
+  Scalare XYZ („wrong von Kries”)
+"yellow": |-
+  Galben
+"yellow_lab": |-
+  Galben L*a*b*
+"yellow_xyz": |-
+  Galben XYZ
+"yes": |-
+  Da
