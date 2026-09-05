@@ -76,9 +76,29 @@ AUTHOR_EMAIL = ", ".join(
         f"eoyilmaz{chr(0o100)}gmail.com",
     ]
 )
-NAME = "DisplayCAL-CG"
-APPSTREAM_ID = ".".join(reversed(["DisplayCAL-CG", *DOMAIN.split(".")]))
-NAME_HTML = '<span class="appname">Display<span>CAL</span>-CG</span>'
+# NAME NU devine "DisplayCAL-CG" (2026-09-05, corectat dupa un build real
+# esuat — nu doar presupus corect din citirea codului): `NAME` e folosit in
+# ~70 de locuri din `_setup.py` ca identificator LITERAL de pachet Python
+# (`package_dir: {NAME: NAME}`, `provides: [NAME]`, chei in `package_data`),
+# nu doar ca text de afisat. Doua erori reale, gasite abia rulind efectiv
+# `pip install -e .`:
+#   1. `distutils.versionpredicate` respinge `provides=["DisplayCAL-CG"]`
+#      (cratima nu e permisa intr-un identificator "Provides" — ValueError).
+#   2. Chiar daca (1) ar fi ocolit, `package_dir`/`package_data` cauta un
+#      folder fizic numit "DisplayCAL-CG" — care nu exista (folderul de pe
+#      disc, si toate cele ~mii de `import DisplayCAL`/`from DisplayCAL...`
+#      din tot codul, raman "DisplayCAL", neschimbabil fara un refactor
+#      urias si riscant al intregului pachet).
+# Identitatea vizuala "DisplayCAL-CG" ramane completa — nume produs,
+# iconite, pagina web, installer — dar traieste EXCLUSIV in stringuri pure
+# (AUTHOR/DESCRIPTION mai sus, NAME_HTML), in numele pachetelor de
+# distributie (.pkg/.exe, construite de scripturile noastre proprii de
+# packaging, NU de acest NAME), si in fisierele de iconite (care raman
+# denumite dupa NAME="DisplayCAL", neschimbat — continutul lor e noul
+# desen, doar numele fisierului e cel vechi).
+NAME = "DisplayCAL"
+APPSTREAM_ID = ".".join(reversed([NAME, *DOMAIN.split(".")]))
+NAME_HTML = '<span class="appname">Display<span>CAL</span></span>'
 
 PY_MINVERSION = (3, 10)
 PY_MAXVERSION = (3, 14)
