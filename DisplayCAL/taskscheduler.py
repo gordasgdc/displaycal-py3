@@ -377,10 +377,7 @@ class Task(_Dict2XML):
             xmlfilename (str): The filename to write the XML to.
         """
         with open(xmlfilename, "wb") as xmlfile:
-            str_self = str(self)
-            if isinstance(str_self, str):
-                str_self = str_self.encode()
-            xmlfile.write(codecs.BOM_UTF16_LE + str_self)
+            xmlfile.write(codecs.BOM_UTF16_LE + self.to_xml_bytes())
 
     def __str__(self) -> str:
         """Convert the task to a string representation in XML format.
@@ -388,13 +385,24 @@ class Task(_Dict2XML):
         Returns:
             str: The string representation of the task in XML format.
         """
-        return (
-            universal_newlines(
-                f'<?xml version="1.0" encoding="UTF-16"?>\n{super().__str__()}'
-            )
-            .replace("\n", "\r\n")
-            .encode("UTF-16-LE")
-        )
+        return universal_newlines(
+            f'<?xml version="1.0" encoding="UTF-16"?>\n{super().__str__()}'
+        ).replace("\n", "\r\n")
+
+    def to_xml_bytes(self) -> bytes:
+        """Encode the task's XML representation as UTF-16-LE bytes.
+
+        BUG REAL (gasit direct la instalare pe Windows, nu presupus):
+        `__str__` incalca fara sa vrea contractul lui `str()` - intoarcea
+        `bytes` (rest de portare Python 2, unde `str` == bytes), ceea ce
+        Python 3 respinge cu exact eroarea din teren: "TypeError: __str__
+        returned non-string (type bytes)". Codificarea in bytes traieste
+        acum aici, separat, apelata explicit din `write_xml`.
+
+        Returns:
+            bytes: The UTF-16-LE encoded XML representation.
+        """
+        return str(self).encode("UTF-16-LE")
 
 
 class TaskScheduler:

@@ -254,7 +254,15 @@ def setup_profile_loader_task(exe: str, exedir: str, pydir: str) -> None:
                 triggers=[daily],
                 actions=actions,
             )
-        except Exception:
+        except Exception as exception:
+            # BUG REAL, gasit direct (nu presupus) la instalarea pe
+            # Windows 11 ARM64: `exception` era setat DOAR daca DEBUG
+            # era True, dar folosit necondiționat mai jos -- pe orice
+            # build normal (DEBUG=False), asta arunca
+            # "UnboundLocalError: cannot access local variable
+            # 'exception'", ascunzand complet eroarea reala (aici, un
+            # `TypeError: __str__ returned non-string (type bytes)` in
+            # taskscheduler.write_xml).
             if DEBUG:
                 exception = traceback.format_exc()
             print(
