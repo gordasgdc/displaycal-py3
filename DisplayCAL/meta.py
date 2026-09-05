@@ -28,10 +28,19 @@ if os.path.isfile(VERSION_FILE):
 VERSION_STRING = VERSION_STRING or "0.0.0"
 """str: The version number of DisplayCAL."""
 
-AUTHOR = "Florian Höch, Erkan Özgür Yılmaz"  # noqa: RUF001
-AUTHOR_ASCII = "Florian Hoech, Erkan Ozgur Yilmaz"
+# DisplayCAL-CG Edition (2026-09-05, by Cristi Gordaș / GDC): fork rebranded
+# per the fork's own scope decision — GPLv3 §5/§7 requires we keep the
+# original authors' notices intact and forbids adding restrictions, but
+# does NOT forbid a derivative distribution stating its own identity. We
+# ADD our credit, we never remove Höch/Yılmaz's. AUTHOR_EMAIL stays hardcoded
+# to their REAL addresses (not derived from DOMAIN below) — DOMAIN here
+# only drives *our* packaging metadata (installer URLs, APPSTREAM_ID), it
+# must never silently become part of an email address that isn't ours.
+AUTHOR = "Florian Höch, Erkan Özgür Yılmaz — DisplayCAL-CG Edition by Cristi Gordaș (GDC)"  # noqa: RUF001
+AUTHOR_ASCII = "Florian Hoech, Erkan Ozgur Yilmaz - DisplayCAL-CG Edition by Cristi Gordas (GDC)"
 DESCRIPTION = (
-    "Display calibration and profiling with a focus on accuracy and versatility"
+    "Display calibration and profiling with a focus on accuracy and versatility "
+    "(DisplayCAL-CG Edition)"
 )
 LONG_DESCRIPTION = (
     "Calibrate and characterize your display devices using one of many supported "
@@ -39,26 +48,37 @@ LONG_DESCRIPTION = (
     "available options for advanced users, such as  verification and reporting "
     "functionality to evaluate ICC profiles and display devices, creating video 3D "
     "LUTs, as well as optional CIECAM02 gamut mapping to take into account varying "
-    "viewing conditions."
+    "viewing conditions. This is DisplayCAL-CG, a GDC distribution of the open-source "
+    "DisplayCAL project (originally by Florian Höch and Erkan Özgür Yılmaz), packaged "
+    "and localized for the GDC ecosystem under the same GPLv3 license."
 )
-DOMAIN = "displaycal.net"
-DEVELOPMENT_HOME_PAGE = "https://github.com/eoyilmaz/displaycal-py3"
-GITHUB_API_URL = "https://api.github.com/repos/eoyilmaz/displaycal-py3"
+# DisplayCAL-CG's own packaging domain — drives installer URLs/APPSTREAM_ID
+# ONLY (see native_build/templates.py, inno.py). Never used to construct
+# AUTHOR_EMAIL (see above).
+DOMAIN = "gordas.dev"
+# Points the fork's OWN built-in update checker (update_check.py) at OUR
+# releases, not upstream's — a rebranded app must never send users to a
+# different project's GitHub page when it says "check for updates".
+DEVELOPMENT_HOME_PAGE = "https://github.com/gordasgdc/displaycal-py3"
+GITHUB_API_URL = "https://api.github.com/repos/gordasgdc/displaycal-py3"
 # ArgyllCMS publishes its own changelog; displaycal.net only ever mirrored an
 # old copy of it (last updated for V3.0.1), so fetch it straight from the
 # source instead of the stale local mirror.
 ARGYLL_CHANGELOG_DOMAIN = "www.argyllcms.com"
 ARGYLL_CHANGELOG_PATH = "doc/ChangesSummary.html"
 
+# Adresele REALE ale autorilor originali — NICIODATĂ derivate din DOMAIN
+# (vezi comentariul de mai sus), ca rebranding-ul să nu creeze o adresă de
+# email falsă pe domeniul nostru.
 AUTHOR_EMAIL = ", ".join(
     [
-        f"florian{chr(0o100)}{DOMAIN}",
+        f"florian{chr(0o100)}displaycal.net",
         f"eoyilmaz{chr(0o100)}gmail.com",
     ]
 )
-NAME = "DisplayCAL"
-APPSTREAM_ID = ".".join(reversed([NAME, *DOMAIN.split(".")]))
-NAME_HTML = '<span class="appname">Display<span>CAL</span></span>'
+NAME = "DisplayCAL-CG"
+APPSTREAM_ID = ".".join(reversed(["DisplayCAL-CG", *DOMAIN.split(".")]))
+NAME_HTML = '<span class="appname">Display<span>CAL</span>-CG</span>'
 
 PY_MINVERSION = (3, 10)
 PY_MAXVERSION = (3, 14)
