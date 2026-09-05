@@ -505,26 +505,54 @@ rezolvare de conflict necesară). Push-uit pe `origin/develop`.
   (deschis din Help → "Citește-mă") e cel VECHI, engleză/franceză,
   upstream — trebuie înlocuit cu documentație nouă RO/EN/ES, publicată
   pe pagina web (nu doar un fișier local), odată ce pagina există.
-  Banner-ul grafic din About (`theme/header.png`, cu textul "DisplayCAL³"
-  desenat direct în imagine) rămâne branding vizual upstream — decizie
-  de design amânată pentru etapa de identitate vizuală/website.
-- [x] **Branding Inno Setup Windows** — imaginile wizard-ului
-  (`misc/media/install.bmp`, `icon-install.bmp`, aveau logo-ul vechi
-  upstream) regenerate cu identitatea GDC; `.iss`-ul (`misc/DisplayCAL-
-  Setup-py2exe.iss`) folosește deja `%(AppName)s`/`%(AppPublisher)s`/etc.
-  substituite din `meta.py` (deja corect — `NAME`/`AUTHOR`/`DOMAIN` erau
-  fixate din sesiunea de rebranding), nimic de editat acolo.
-  **BLOCAT, real, nu amânat**: build-ul EFECTIV (`.exe`) NU poate fi produs
-  din acest mediu — `py2exe`/`native_build.py inno` rulează STRICT pe
-  Windows (`sys.platform == "win32"`, verificat de două ori independent
-  în `_native_build/cli.py`), py2exe nici nu se instalează pe macOS. Vezi
-  `build_installer_windows.md` (nou, la rădăcina repo-ului) — pași compleți,
-  gata de rulat de Cristi (sau altcineva) pe o mașină Windows reală.
-  Fără semnare de cod încă (fără certificat, decizie deja confirmată).
-- [ ] **`docs/` GitHub Pages** pe acest repo + oglindă
-  `gdc-plugin-manager-catalog-vendor/docs/DisplayCAL-CG/`. NEÎNCEPUT.
-- [ ] **`catalog.json`** → intrare nouă în `apps[]`. NEÎNCEPUT.
-- [ ] **Fork `release_builds.yml`** + pas de semnare Mac local. NEÎNCEPUT.
+  Banner-ul grafic din About/header (`theme/header.png`/`header@2x.png`/
+  `header_minimal*.png`) — logo-ul vechi upstream ("DisplayCAL³", glow
+  colorat) înlocuit cu identitatea GDC (roată de culoare + insignă "CG"),
+  la cererea explicită a lui Cristi (2026-09-05, "sunt cele clasice care
+  nu-mi plac"). **Rămas, netratat**: cele câteva capturi deja publicate
+  pe pagina web arată încă bannerul vechi (poze, nu se actualizează
+  singure) — de refăcut la următoarea sesiune de capturi.
+- [x] **Instalator Windows (Inno Setup) — COMPLET, testat real pe Windows
+  11 ARM64 (Parallels), nu doar generat.** Imaginile wizard-ului
+  (`misc/media/install.bmp`, `icon-install.bmp`) regenerate cu identitatea
+  GDC. Trei bug-uri REALE găsite abia la build/instalare efectivă pe
+  Windows (nu doar citire de cod):
+  1. `native_build.py inno` folosea encoding `MBCS` (specific Windows) —
+     inofensiv pe Windows real, dar confirmă că scriptul chiar trebuie
+     rulat acolo, nu cross-compilat.
+  2. **Identificator arhitectură Inno Setup** (`_native_build/inno.py`) —
+     `"x64"` (depreciat de Inno Setup 7+, substituit automat cu `"x64os"`)
+     respingea instalarea pe Windows ARM64 cu "This program does not
+     support the version of Windows your computer is running" — Windows
+     ARM64 rulează x64 prin emulare, dar SISTEMUL DE OPERARE nu e x64.
+     Fix: `"x64compatible"` (acceptă ambele cazuri).
+  3. **Crash real la instalare** (`DisplayCAL/taskscheduler.py`,
+     `Task.__str__`) — rest de portare Python 2: `__str__` făcea
+     `.encode("UTF-16-LE")`, deci întorcea `bytes`, nu `str` — Python 3
+     respinge asta cu `TypeError: __str__ returned non-string`. Mascat de
+     un al doilea bug în `profile_loader.py` (variabila `exception`
+     folosită necondiționat, deși setată doar dacă `DEBUG=True`) care
+     transforma eroarea reală într-un `UnboundLocalError` de neînțeles.
+     Ambele reparate; encoding-ul mutat într-o metodă nouă,
+     `to_xml_bytes()`, separată de `__str__`.
+  `py2exe` (0.14.2.0) nu publică pachete pentru `win_arm64` — pe un
+  Windows ARM64 e nevoie de un Python x64 separat (rulează prin emulare
+  nativă), documentat explicit în `build_installer_windows.md`.
+  Instalerul (`DisplayCAL-CG-Setup.exe` + `DisplayCAL-3.10.0.dev82-Setup.exe`,
+  Regula 17) urcat pe release-ul GitHub existent, buton activ pe pagina
+  web. Fără semnare de cod încă (fără certificat, decizie deja confirmată)
+  — SmartScreen arată avertisment, documentat pe pagina web.
+- [x] **`docs/` GitHub Pages** pe acest repo + oglindă
+  `gdc-plugin-manager-catalog-vendor/docs/DisplayCAL-CG/`. Live la
+  `gordas.dev/DisplayCAL-CG/` (verificat HTTP 200). RO/EN/ES, iconițe SVG
+  monocrome (Regula 33), galerie de capturi reale, butoane de descărcare
+  Mac + Windows funcționale (verificate HTTP 200 pe linkurile
+  `releases/latest/download/...`).
+- [x] **`catalog.json`** → intrare nouă în `apps[]` (`displaycal-cg`),
+  plus copertă nouă (`docs/covers/DisplayCAL-CG.png`).
+- [ ] **Fork `release_builds.yml`** + pas de semnare Mac local. NEÎNCEPUT
+  — build-urile Mac/Windows actuale sunt rulate manual (`build_pkg.sh`
+  local pe Mac, pași manuali pe Windows), nu automatizate încă prin CI.
 
 **Limitare reală, cunoscută dinainte**: nicio testare funcțională a
 calibrării propriu-zise (are nevoie de un colorimetru/spectrofotometru

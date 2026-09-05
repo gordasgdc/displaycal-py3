@@ -64,21 +64,30 @@ Python — apare afișat în consolă la pasul `native_build.py inno`, sub
 Rezultatul e `dist\DisplayCAL-<versiune>-Setup.exe` — instalerul complet,
 cu branding GDC (nume, iconițe, culori wizard), toate cele 9 unelte.
 
+## Status (2026-09-05): VERIFICAT REAL, nu doar generat
+
+Build complet, testat pe Windows 11 ARM64 (Parallels pe Apple Silicon —
+cazul cel mai dificil, cere emulare x64). Trei bug-uri reale găsite și
+reparate în timpul acestui build (encoding Inno Setup, identificator de
+arhitectură "x64" vs "x64compatible", crash real la instalare din
+`taskscheduler.py`) — vezi jurnalul complet din `CLAUDE.md`. Instalerul
+rezultat a fost publicat pe release-ul GitHub existent și e live pe
+pagina web (`gordas.dev/DisplayCAL-CG/`).
+
+**Notă importantă pentru Windows ARM64** (Parallels pe Apple Silicon,
+Snapdragon etc.): `py2exe` nu publică pachete pentru `win_arm64` — dacă
+`py --list` arată doar o versiune `-arm64`, trebuie instalat separat un
+Python **x64** de la python.org (ediția "Windows installer (64-bit)", NU
+"ARM64") — rulează prin emulare x64 nativă a Windows-ului, fără nicio
+problemă. Verifică apoi cu `py --list` că apare o intrare fără sufixul
+"arm64", și folosește explicit acel tag (`py -3.12 -m venv .venv`, unde
+`3.12` fără sufix e cel x64).
+
 ## Ce lipsește, deliberat, deocamdată
 
 - **Semnare cod (Authenticode)** — nu există încă certificat de semnare
   Windows (decizie confirmată de Cristi la începutul proiectului) —
-  installerul rămâne nesemnat, Windows SmartScreen va arăta un
-  avertisment "Windows protected your PC" la prima rulare (userul
-  trebuie să apese "More info" → "Run anyway"). De adăugat quando există
-  un certificat.
-- **Publicare pe GitHub Releases** — după ce `.exe`-ul e construit și
-  testat local, se urcă drept asset pe același release `v3.10.0.dev82-cg.1`
-  (sau următorul), cu DOUĂ nume (Regula 17): unul versionat
-  (`DisplayCAL-CG-<versiune>-Setup.exe`) și unul stabil
-  (`DisplayCAL-CG-Setup.exe`, folosit de linkul `releases/latest/download/`
-  de pe `docs/index.html`/pagina web — buton deja pregătit, doar dezactivat
-  ("în curând") până apare acest fișier).
-- **Testare reală a instalerului** — pasul de instalare efectivă (wizard,
-  scurtături, dezinstalare) nu poate fi verificat automat de Claude, cere
-  o mașină Windows reală.
+  installerul rămâne nesemnat, Windows SmartScreen arată un avertisment
+  "Windows protected your PC" la prima rulare (userul trebuie să apese
+  "More info" → "Run anyway", documentat pe pagina web). De adăugat quando
+  există un certificat.
