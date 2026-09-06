@@ -756,3 +756,52 @@ build/release nou) rămâne un pas cerut explicit într-o sesiune Claude
 Code — workflow-ul doar SEMNALEAZĂ, nu sincronizează singur (sincronizarea
 reală poate necesita rezolvare de conflicte/verificare manuală, nu e
 sigur de automatizat orbește).
+
+## Etapa 2026-09-06 (4) — Automatizare CI pentru build-ul Windows la fiecare tag (`release_builds.yml`)
+
+Cerută de Cristi cât timp aștepta să ajungă la calculator pentru fix-ul
+de permisiuni de mai sus. Închide TODO-ul rămas deschis din Progress
+("Fork `release_builds.yml`... NEÎNCEPUT — build-urile Mac/Windows
+actuale sunt rulate manual").
+
+**Cauza reală, verificată, a inactivității CI-ului**: `release_builds.yml`
+(moștenit de la upstream) se declanșa doar pe tag-uri `[0-9]*.[0-9]*.[0-9]*`
+— tag-urile REALE ale acestui fork arată `v3.10.0.dev82-cg.1` (prefix
+`v` + sufix propriu `-cg.N`, Regula 14), deci acest CI nu a rulat
+NICIODATĂ pentru fork-ul nostru. Fix: trigger nou `v*-cg.*`, păstrat pe
+lângă cel vechi (compatibilitate upstream).
+
+**Decizie de scop, nu doar reparație**: jobul `macOS` (construiește
+`.dmg` ad-hoc-semnat) și cele 3 joburi Linux (`.deb`/`.rpm`/AppImage/
+Flatpak) au fost DEZACTIVATE (`if: false`, nu șterse — sincronizare mai
+ușoară cu upstream-ul) — Mac rămâne construit LOCAL (`build_pkg.sh`,
+semnare Developer ID reală + notarizare, certificatul nu există în CI),
+iar Linux nu e parte din livrarea oficială a fork-ului (doar Mac .pkg +
+Windows .exe, decizie confirmată anterior). Jobul `windows` a fost
+simplificat de la matrice x64+arm64 la DOAR x64 (Windows ARM64 rulează
+x64 prin emulare nativă — `x64compatible` deja folosit în
+`_native_build/inno.py` pentru exact acest motiv), ca self-updater-ul/
+pagina web să caute UN SINGUR nume stabil de fișier, nu unul per-arhitectură.
+
+**Bug real prevenit, nu doar reparat**: `generate_release_notes: true`
+(original upstream) ar fi publicat automat mesajele BRUTE de commit ca
+note de lansare PUBLICE — Regula 29 interzice exact asta (commit-urile
+acestui fork sunt scrise ca jurnal tehnic detaliat, cu context intern).
+Înlocuit cu un text fix, minimal, orientat spre client.
+
+**Nume de fișiere aliniate cu ce e deja publicat manual** (verificat cu
+`gh release view --json assets` pe release-ul existent, nu presupus):
+ieșirea brută Inno Setup rămâne `DisplayCAL-{VERSION_STRING}-Setup.exe`
+(deja versionată, Regula 17), plus o copie nouă sub numele STABIL
+`DisplayCAL-CG-Setup.exe` (Regula 9 — cel căutat de `self_updater.py`).
+
+**Verificat**: `python3 -c "import yaml; yaml.safe_load(...)"` — sintaxă
+OK. `actionlint` (instalat cu `brew install actionlint`, nou pe acest
+Mac) — 0 erori pe jobul `windows`/`release` modificate (avertismentele
+rămase sunt fie `if: false` intenționat, fie probleme shellcheck
+PRE-EXISTENTE în upstream, în joburile acum dezactivate, neatinse).
+**Rămas de verificat REAL**: niciun tag de test nu a fost împins în
+această sesiune (ar fi creat un release GitHub "junk" și ar fi consumat
+minute CI reale) — fluxul complet (build Windows → upload artefact →
+creare/actualizare release) se confirmă la următorul tag real
+(`v{versiune}-cg.{N}`) împins de Cristi.

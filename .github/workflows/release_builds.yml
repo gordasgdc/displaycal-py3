@@ -3,10 +3,22 @@ name: Release Builds
 # Triggered when `make new-release` pushes a version tag to GitHub.
 # Builds all platform artifacts, then creates the GitHub release and
 # attaches them.  PyPI upload remains in `make new-release` (twine).
+#
+# [2026-09-06, fork GDC] Tag-urile ACESTUI fork arata `v3.10.0.dev82-cg.1`
+# (versiune upstream + sufix propriu de build "-cg.N", vezi CLAUDE.md) -
+# pattern-ul original de mai jos (`[0-9]*.[0-9]*.[0-9]*`) nu se potrivea
+# NICIODATA cu ele, deci acest CI nu s-a declansat vreodata pentru
+# fork-ul nostru (build-urile Windows au fost mereu manuale pana acum).
+# Jobul macOS/linux* raman DEZACTIVATE (`if: false`) - Mac se construieste
+# LOCAL (`build_pkg.sh`, semnare Developer ID reala + notarizare, nu ceva
+# reproductibil in CI fara certificate), iar pachetele Linux nu sunt (inca)
+# parte din livrarea oficiala a fork-ului (doar Mac .pkg + Windows .exe,
+# vezi CLAUDE.md "Decizii de scop confirmate de Cristi").
 on:
   push:
     tags:
-      - '[0-9]*.[0-9]*.[0-9]*'  # e.g. 3.9.18, 3.9.18.1
+      - 'v*-cg.*'  # v3.10.0.dev82-cg.1, v3.10.1-cg.1, etc. - tag-urile fork-ului
+      - '[0-9]*.[0-9]*.[0-9]*'  # pastrat pentru compatibilitate cu upstream
 
 permissions:
   contents: write  # required to create GitHub releases
@@ -14,22 +26,15 @@ permissions:
 jobs:
 
   # -----------------------------------------------------------------------
-  # Windows  (x64 + ARM64)
+  # Windows  (x64 - acopera si Windows ARM64, care ruleaza x64 prin
+  # emulare nativa a OS-ului, vezi comentariul "x64compatible" din
+  # _native_build/inno.py; nu mai construim un installer arm64 separat
+  # ca upstream-ul, ca sa avem UN SINGUR nume stabil de descarcat -
+  # self_updater.py/Regula 9 cer un link fix, nu unul per-arhitectura).
   # -----------------------------------------------------------------------
   windows:
-    name: Build on Windows (${{ matrix.architecture }})
-    strategy:
-      fail-fast: false
-      matrix:
-        architecture: [x64, arm64]
-        include:
-          - architecture: x64
-            os: windows-latest
-            python-version: '3.11'
-          - architecture: arm64
-            os: windows-11-arm
-            python-version: '3.13'
-    runs-on: ${{ matrix.os }}
+    name: Build on Windows (x64)
+    runs-on: windows-latest
 
     steps:
       - name: Checkout code
@@ -37,33 +42,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python 3.11
         uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
-          architecture: ${{ matrix.architecture }}
+          python-version: '3.11'
+          architecture: x64
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
 
-      - name: Install Inno Setup (ARM64 runner)
-        if: matrix.architecture == 'arm64'
-        run: choco install innosetup -y
-
       - name: Fix user Scripts missing from PATH
         run: |
           $ScriptsPath = python -c "import sysconfig,os; print(sysconfig.get_path('scripts'))"
           Add-Content $env:GITHUB_PATH $ScriptsPath
-
-      - name: Install py2exe from source (ARM64)
-        if: matrix.architecture == 'arm64'
-        run: |
-          git clone --depth 1 https://github.com/py2exe/py2exe.git C:\py2exe_src
-          uv pip install --system wheel setuptools
-          $env:PYTHONPATH = "C:\py2exe_src"
-          uv pip install --system --no-build-isolation C:\py2exe_src
 
       - name: Install Python dependencies
         run: |
@@ -78,7 +71,6 @@ jobs:
       - name: Build DisplayCAL
         run: |
           uv build
-          $version = Get-Content DisplayCAL\VERSION
           $wheel_file = Get-ChildItem dist\*.whl | Select-Object -First 1
           uv pip install --system $wheel_file
           copy misc/net.displaycal.DisplayCAL.appdata.xml dist/net.displaycal.DisplayCAL.appdata.xml
@@ -92,22 +84,36 @@ jobs:
       - name: Build Windows Installer
         run: |
           cd dist
-          iscc.exe DisplayCAL-Setup-py2exe.win-${{ matrix.architecture == 'x64' && 'amd64' || 'arm64' }}-py${{ matrix.python-version }}.iss
+          iscc.exe DisplayCAL-Setup-py2exe.win-amd64-py3.11.iss
 
-      - name: Rename installer to release name
+      # [2026-09-06] Doua nume, exact ca cele publicate deja manual pe
+      # release-urile existente (verificat cu `gh release view --json
+      # assets`): numele BRUT de iesire al Inno Setup (versionat, Regula
+      # 17) + o copie STABILA `DisplayCAL-CG-Setup.exe` (Regula 9 -
+      # self_updater.py/pagina web cauta mereu acest nume fix).
+      - name: Duplicate installer under the stable download name
         run: |
-          Move-Item dist/DisplayCAL-*-Setup.exe dist/DisplayCAL-${{ github.ref_name }}-Windows-${{ matrix.architecture }}.exe
+          $raw = Get-ChildItem dist\DisplayCAL-*-Setup.exe | Select-Object -First 1
+          Copy-Item $raw.FullName dist\DisplayCAL-CG-Setup.exe
 
-      - name: Upload installer artifact
+      - name: Upload installer artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: windows-${{ matrix.architecture }}
-          path: dist/DisplayCAL-${{ github.ref_name }}-Windows-${{ matrix.architecture }}.exe
+          name: windows-x64
+          path: |
+            dist/DisplayCAL-*-Setup.exe
+            dist/DisplayCAL-CG-Setup.exe
 
   # -----------------------------------------------------------------------
-  # macOS  (arm64 + x86_64)
+  # macOS  (arm64 + x86_64) - DEZACTIVAT pentru fork-ul GDC (2026-09-06).
+  # Mac se construieste LOCAL (`build_pkg.sh`), cu semnare Developer ID
+  # reala + notarizare (certificatul nu exista in CI) - jobul ad-hoc-semnat
+  # de mai jos construieste un .dmg, nu .pkg-ul nostru cu instalare directa
+  # in /Applications (Regula 5). Pastrat neSTERS, doar dezactivat, ca sa
+  # ramana usor de sincronizat cu upstream-ul fara conflict mare de fisier.
   # -----------------------------------------------------------------------
   macOS:
+    if: false
     name: Build on macOS (${{ matrix.os }} ${{ matrix.architecture }})
     strategy:
       fail-fast: false
@@ -249,9 +255,13 @@ jobs:
           path: dist/DisplayCAL-${{ github.ref_name }}-macOS-*.dmg
 
   # -----------------------------------------------------------------------
-  # Linux  (DEB + RPM, amd64/x86_64)
+  # Linux (DEB + RPM) - DEZACTIVAT pentru fork-ul GDC (2026-09-06): Linux
+  # nu e (inca) parte din livrarea oficiala a acestui fork (doar Mac .pkg
+  # + Windows .exe - vezi CLAUDE.md "Decizii de scop confirmate de
+  # Cristi"). Pastrat neSTERS pentru sincronizare usoara cu upstream-ul.
   # -----------------------------------------------------------------------
   linux:
+    if: false
     name: Build Linux packages (DEB/RPM)
     runs-on: ubuntu-latest
 
@@ -453,9 +463,11 @@ jobs:
             dist/DisplayCAL-${{ github.ref_name }}-Linux-x86_64.rpm
 
   # -----------------------------------------------------------------------
-  # Linux  (AppImage, x86_64)
+  # Linux (AppImage) - DEZACTIVAT pentru fork-ul GDC (2026-09-06), acelasi
+  # motiv ca jobul `linux` de mai sus.
   # -----------------------------------------------------------------------
   linux-appimage:
+    if: false
     name: Build Linux AppImage
     runs-on: ubuntu-latest
 
@@ -505,9 +517,11 @@ jobs:
           path: dist/DisplayCAL-${{ github.ref_name }}-Linux-x86_64.AppImage
 
   # -----------------------------------------------------------------------
-  # Linux  (Flatpak, x86_64)
+  # Linux (Flatpak) - DEZACTIVAT pentru fork-ul GDC (2026-09-06), acelasi
+  # motiv ca celelalte joburi Linux de mai sus.
   # -----------------------------------------------------------------------
   linux-flatpak:
+    if: false
     name: Build Linux Flatpak
     runs-on: ubuntu-latest
 
@@ -547,8 +561,13 @@ jobs:
   # Create GitHub Release and attach all platform assets
   # -----------------------------------------------------------------------
   release:
+    # [2026-09-06] `needs` restrans la `windows` (singurul job activ pentru
+    # acest fork) - macOS/linux* raman `if: false` (skipped), iar un job
+    # care depinde de un job SKIPPED e la randul lui SKIPPED implicit
+    # (nu doar "succes automat") - un `needs` cu ele in lista ar fi
+    # anulat complet acest job de release.
     name: Create GitHub Release
-    needs: [windows, macOS, linux, linux-appimage, linux-flatpak]
+    needs: [windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -560,12 +579,23 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      # [2026-09-06] `generate_release_notes: true` (original upstream)
+      # ar publica automat mesajele BRUTE de commit ca note de lansare
+      # publice - Regula 29 (zero informatie interna in orice loc PUBLIC:
+      # nume, citate, cauze tehnice de debugging) - inacceptabil pentru
+      # commit-urile acestui fork, scrise ca jurnal tehnic detaliat.
+      # Text fix, minimal, orientat spre client, in schimb.
       - name: Create GitHub Release with assets
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: DisplayCAL ${{ github.ref_name }}
-          generate_release_notes: true
+          name: DisplayCAL-CG ${{ github.ref_name }}
+          body: |
+            Instalator Windows nou pentru DisplayCAL-CG.
+
+            Descarcă `DisplayCAL-CG-Setup.exe` mai jos, sau direct de pe
+            pagina de descărcare: https://gordas.dev/DisplayCAL-CG/
+          generate_release_notes: false
           draft: false
           prerelease: false
           files: artifacts/**
