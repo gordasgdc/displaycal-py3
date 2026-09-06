@@ -650,3 +650,61 @@ fizică reală cu fereastra de sistem, la fel ca la toate celelalte
 Self-Updatere din ecosistem (Regula 20, WARNING permanent). Cristi
 trebuie să confirme manual, o singură dată, pe un build `.pkg`/installer
 Windows real, că "Update now" chiar descarcă+instalează+relansează.
+
+## Etapa 2026-09-06 (2) — Iconiță principală + header rebrandate pe motivul "sfere RGB + fascicul"
+
+Cerință directă a lui Cristi, uitându-se la splash screen-ul (neschimbat,
+original upstream — `theme/splash.png` + `theme/splash_anim/`): *"îmi
+place foarte mult imaginea asta... cred că arată mai bine pe DisplayCAL"*
+— confirmat, la întrebare, că vrea schimbarea ATÂT pe iconița aplicației
+cât și pe header-ul din fereastra principală/About, înlocuind motivul
+"roată de culoare" (desenat vectorial acum câteva sesiuni, paleta Shift
+GDC) cu motivul original "sfere RGB + fascicul curcubeu" (deja folosit
+NESCHIMBAT în `headericon.png`/`splash_anim` — artă originală DisplayCAL,
+nu una nouă).
+
+**Descoperire importantă la implementare**: motivul vechi (roata de
+culoare) și textul "DisplayCAL"/insigna "CG" din `header.png` se
+SUPRAPUN vizual în designul original (textul e desenat PESTE colțul
+stâng-sus al roții) — o ștergere geometrică simplă (cerc plin) peste
+zona roții ar fi șters și textul de dedesubt. Fix: mascare pe CULOARE, nu
+pe formă — `_wheel_mask()` (script local, nerulat din build) identifică
+exact pixelii care aparțineau paletei vechi a roții (albastru/roșu/verde,
++ inelul mic din jurul găurii centrale a roții, distins de inelul mare
+exterior doar prin rază de la centru, aceeași culoare amber) prin
+distanță de culoare, dilatare ușoară (proporțională cu mărimea imaginii —
+o dilatare fixă în pixeli "mânca" prea mult text la `header.png` 1x,
+222px) + blur pentru tranziție netedă — text/inel exterior/fundal rămân
+BYTE-IDENTICE, fiindcă nu au fost niciodată de culoarea roții.
+
+**Sursa artei noi**: un cadru din `splash_anim` (`splash_anim_16.png`,
+fasciculul complet înflorit), decupat pe clusterul de sfere — preferat
+în locul lui `headericon@2x.png` (colțuri OPACE, tăiate dur din compunerea
+header-ului vechi — ar fi lăsat o muchie pătrată vizibilă la compunere)
+— cu o vinietă radială suplimentară pe alpha (forțează transparență
+completă dincolo de 90% din rază) ca sigurantă in plus impotriva
+oricarei muchii reziduale.
+
+**Fișiere atinse** (verificat cu `git status`, NIMIC altceva — cele 8
+iconițe ale uneltelor satelit au propriile glife distincte, neatinse de
+roata de culoare, deci nu aveau nevoie de nicio schimbare):
+`theme/header.png`, `theme/header@2x.png`, `theme/icons/{10,16,22,24,32,
+48,64,72,128,256,512}/displaycal.png`, `theme/icons/DisplayCAL.icns`
+(regenerat cu `iconutil -c icns`, verificat prin round-trip
+`iconutil -c iconset` — 9 reprezentări extrase corect), `theme/icons/
+DisplayCAL.ico` (regenerat cu Pillow, multi-size 16/32/48/64/128/256).
+
+**Verificat vizual, iterativ** — 3 defecte reale găsite și reparate pe
+parcurs (nu declarat "gata" la prima încercare): (1) muchie pătrată
+vizibilă din sursa opacă inițială → schimbat sursa; (2) `sqrt` pe
+`int16` producea overflow/`NaN` silențios pe diferențele de culoare
+mari → cast explicit la `float32`; (3) inelul mic din jurul găurii
+centrale a rămas vizibil ca artefact fantomă (aceeași culoare ca inelul
+mare, needetectat de paleta roții) → adăugat un al doilea criteriu de
+mascare, pe rază de la centru, specific acelei zone.
+
+**Rămas de făcut la viitorul build**: `.icns`/`.ico` regenerate ating
+DOAR iconița aplicației principale (`DisplayCAL.icns`/`.ico`, cea din
+Dock/Taskbar) — pachetele `.pkg`/installer Windows trebuie reconstruite
+(`build_pkg.sh`/`native_build.py inno`) ca utilizatorii să vadă efectiv
+iconița nouă; niciun rebuild real nu a fost făcut în această sesiune.
