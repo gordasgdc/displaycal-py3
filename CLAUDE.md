@@ -805,3 +805,49 @@ această sesiune (ar fi creat un release GitHub "junk" și ar fi consumat
 minute CI reale) — fluxul complet (build Windows → upload artefact →
 creare/actualizare release) se confirmă la următorul tag real
 (`v{versiune}-cg.{N}`) împins de Cristi.
+
+## Etapa 2026-09-06 (5) — Publicat `v3.10.0.dev82-cg.2`: primul release REAL cu tot ce s-a lucrat azi
+
+**Descoperire critică la audit**: release-ul LIVE (`v3.10.0.dev82-cg.1`,
+publicat 2026-09-05) NU conținea NIMIC din ce s-a lucrat azi — logo nou
+(sfere), self-updater reparat, PDF-uri, sincronizare upstream, fix CI.
+Un client care descărca "cel mai nou" .pkg/.exe primea în continuare
+build-ul VECHI, cu update-checker-ul STRICAT (bug-ul de parsare a
+tag-ului, reparat azi, dar nepublicat).
+
+**Bug real găsit ȘI reparat înainte de publicare**: primul `git push` al
+tag-ului `-cg.2` a picat CI-ul ("Release Builds") — `copy
+misc/net.displaycal.DisplayCAL.appdata.xml` (job-ul Windows) căuta un
+fișier cu numele VECHI, redenumit la rebranding-ul de acum câteva sesiuni
+(`dev.gordas.DisplayCAL.appdata.xml`) — scăpat atunci din audit (Regula
+30), afecta 4 locuri în 2 workflow-uri (`release_builds.yml`,
+`nightly_builds.yml`), toate reparate. Tag-ul mutat pe commit-ul cu fix-ul,
+CI rerulat — succes.
+
+**Publicat, verificat real, nu presupus**: `DisplayCAL-CG.pkg` (Mac,
+semnat+notarizat+stapled, `spctl: accepted`) + `DisplayCAL-CG-Setup.exe`
+(Windows, construit de CI) pe același release `v3.10.0.dev82-cg.2`.
+Ambele link-uri `releases/latest/download/...` — HTTP 200.
+
+**LIMITARE REALĂ DE DESIGN, confirmată, NU un bug nou** — update-checker-ul
+(in-app) NU va notifica automat userii deja instalați pe `cg.1` despre
+acest `cg.2`. Motiv: `parse_release_tag_version()` (fix-ul de azi) ia
+DELIBERAT doar partea dinaintea primului `-` din tag (`3.10.0.dev82`),
+ca update-checker-ul să rămână compatibil cu schema de versionare a
+upstream-ului (deja documentat la Regula 14, secțiunea Partea 2: "sufixul
+de build NU schimbă numărul de bază"). Efect secundar acceptat: DOUĂ
+tag-uri cu ACELAȘI număr de bază (`cg.1` vs `cg.2`) produc tuplul IDENTIC
+`(3,10,0)` — comparația nu vede nicio diferență, deci niciun pop-up de
+update. **Userii de pe `cg.1` nu vor fi anunțați automat** de acest
+release — doar userii NOI (descărcare de pe site) primesc build-ul
+corect. Identic cu bootstrap-ul deja documentat la DataMover
+(`v2.5.3`→`v2.5.4`): fix-ul ajută abia din momentul în care userul are deja
+un build care-l conține. Nu există soluție fără a renunța la compatibi-
+litatea cu schema upstream — discuție de scop separată, dacă Cristi vrea
+vreodată să schimbe asta.
+
+**Verificat**: `spctl -a -vvv -t install` pe .pkg — accepted, Notarized
+Developer ID. Parser testat standalone cu tag-ul real nou — confirmă
+limitarea de mai sus (ambele tag-uri dau `(3,10,0)`). Release notes
+curățate (Regula 29 — textul generat de CI era deja curat, doar extins
+să menționeze ambele platforme).
