@@ -511,41 +511,23 @@ def app_update_check(
         if not wx.GetApp():
             return
     elif snapshot:
-        # Snapshot — fetch the version file directly from the project domain
+        # [FIX real, 2026-09-06, raportat de Cristi cu eroare exacta]
+        # Canalul "snapshot" upstream fetch-uieste `/SNAPSHOT_VERSION`
+        # direct de pe DOMAIN — un fisier real pe care upstream-ul original
+        # il gazduia pentru build-uri de dezvoltare intre release-uri.
+        # Acest fork NU publica niciun canal de snapshot pe `gordas.dev`
+        # (doar release-uri GitHub numerotate, cu sufix `-cg.N`) — fisierul
+        # nu exista acolo, iar raspunsul primit (pagina implicita a site-ului,
+        # nu un numar de versiune) nu poate fi parsat ca atare, producand
+        # "update_check.fail.version" la FIECARE pornire pentru orice user
+        # (versiunea fork-ului contine intentionat ".devNN", mostenit din
+        # schema upstream — vezi Regula 14/Partea 2 — ceea ce declanseaza
+        # automat acest lant, linia 613-614 mai sus). Acelasi tipar de bug
+        # deja documentat la auditul de DOMAIN din 2026-09-05 (resurse reale
+        # ale upstream-ului, nepublicate pe domeniul nostru) — fix identic:
+        # tratam canalul ca indisponibil pentru acest fork, fara eroare.
         curversion_tuple = VERSION_TUPLE
-        chglog_file = "SNAPSHOT_CHANGES.html"
-        resp = http_request(
-            parent,
-            DOMAIN,
-            "GET",
-            "/SNAPSHOT_VERSION",
-            failure_msg=lang.getstr("update_check.fail"),
-            silent=silent,
-        )
-        if resp is False:
-            # Fetch failed: treat as "no update" and fall through to the
-            # "up to date" branches below (which also check ArgyllCMS and
-            # instrument setup), regardless of silent/non-silent.
-            new_version_tuple = curversion_tuple
-        else:
-            data = resp.read()
-            if not wx.GetApp():
-                return
-            try:
-                new_version_tuple = tuple(int(n) for n in data.decode().split("."))
-            except ValueError:
-                print(lang.getstr("update_check.fail.version", DOMAIN))
-                if not silent:
-                    wx.CallAfter(
-                        InfoDialog,
-                        parent,
-                        msg=lang.getstr("update_check.fail.version", DOMAIN),
-                        ok=lang.getstr("ok"),
-                        bitmap=get_icon(32, "dialog-error"),
-                        log=False,
-                    )
-                    return
-                new_version_tuple = (0, 0, 0, 0)
+        new_version_tuple = curversion_tuple
     else:
         # Stable
         print(lang.getstr("update_check"))
