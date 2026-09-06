@@ -87,7 +87,7 @@ jobs:
           echo "VERSION=$version" >> $env:GITHUB_ENV
           $wheel_file = Get-ChildItem dist\*.whl | Select-Object -First 1
           uv pip install --system $wheel_file
-          copy misc/net.displaycal.DisplayCAL.appdata.xml dist/net.displaycal.DisplayCAL.appdata.xml
+          copy misc/dev.gordas.DisplayCAL.appdata.xml dist/dev.gordas.DisplayCAL.appdata.xml
 
       - name: Run freeze.py
         run: |
@@ -418,7 +418,7 @@ jobs:
 
           # AppStream metadata
           mkdir -p "${STAGING}/usr/share/metainfo"
-          cp misc/net.displaycal.DisplayCAL.appdata.xml "${STAGING}/usr/share/metainfo/"
+          cp misc/dev.gordas.DisplayCAL.appdata.xml "${STAGING}/usr/share/metainfo/"
 
       - name: Write post-install script
         run: |

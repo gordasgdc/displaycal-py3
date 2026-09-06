@@ -73,7 +73,7 @@ jobs:
           uv build
           $wheel_file = Get-ChildItem dist\*.whl | Select-Object -First 1
           uv pip install --system $wheel_file
-          copy misc/net.displaycal.DisplayCAL.appdata.xml dist/net.displaycal.DisplayCAL.appdata.xml
+          copy misc/dev.gordas.DisplayCAL.appdata.xml dist/dev.gordas.DisplayCAL.appdata.xml
 
       - name: Run freeze.py
         run: python DisplayCAL\freeze.py
@@ -333,7 +333,7 @@ jobs:
           cp misc/45-Argyll.rules "${STAGING}/usr/lib/udev/rules.d/"
 
           mkdir -p "${STAGING}/usr/share/metainfo"
-          cp misc/net.displaycal.DisplayCAL.appdata.xml "${STAGING}/usr/share/metainfo/"
+          cp misc/dev.gordas.DisplayCAL.appdata.xml "${STAGING}/usr/share/metainfo/"
 
       - name: Write post-install script
         run: |
