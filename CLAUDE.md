@@ -708,3 +708,51 @@ DOAR iconița aplicației principale (`DisplayCAL.icns`/`.ico`, cea din
 Dock/Taskbar) — pachetele `.pkg`/installer Windows trebuie reconstruite
 (`build_pkg.sh`/`native_build.py inno`) ca utilizatorii să vadă efectiv
 iconița nouă; niciun rebuild real nu a fost făcut în această sesiune.
+
+## Etapa 2026-09-06 (3) — Detectare automată sincronizare upstream (issue GitHub)
+
+Cerință directă a lui Cristi: *"să ne dăm seama că trebuie să
+actualizăm, că s-a creat actualizare în depozitul original... să avem
+posibilitatea să creăm noua actualizare"*. Sesiunile Claude Code nu
+rulează continuu — soluția e un workflow GitHub Actions programat, nu o
+"veghe" a lui Claude.
+
+**`.github/workflows/check-upstream.yml` (nou)** — rulează zilnic
+(09:00 UTC) + la cerere (`workflow_dispatch`): compară HEAD-ul REAL al
+`eoyilmaz/displaycal-py3` (branch `develop`, via `git ls-remote`, fără
+clonare completă) cu ultimul SHA upstream cunoscut ca sincronizat în
+acest fork (`.github/upstream-sync-state.json`, nou — actualizat manual/
+de o sesiune Claude la fiecare `git merge upstream/develop` real). Dacă
+diferă, deschide UN SINGUR issue GitHub (label `upstream-sync`, nu
+recreat de fiecare rulare — comentează pe cel existent dacă e deja
+deschis); dacă fork-ul e la zi, închide automat issue-ul rămas deschis.
+
+**Bug real găsit și reparat la primul test live**: `gh label create`/
+`gh issue *` fără `-R` explicit au eșuat cu `HTTP 403: Resource not
+accessible` — CLI-ul `gh` a rezolvat ambiguu repo-ul țintă la
+`eoyilmaz/displaycal-py3` (upstream), nu la fork (`gordasgdc/
+displaycal-py3`), fiindcă un pas anterior din același job adăugase
+remote-ul `upstream` local (`git remote add upstream ...` pentru
+numărarea commit-urilor) — cu DOUĂ remote-uri prezente, `gh` nu mai
+alege implicit `origin`. Fix: `-R "${{ github.repository }}"` explicit
+pe toate cele 5 comenzi `gh label`/`gh issue`.
+
+**Descoperire secundară**: repo-ul avea Issues DEZACTIVATE din setările
+GitHub (`hasIssuesEnabled: false`) — activat (`gh repo edit
+--enable-issues`), altfel workflow-ul nu avea unde scrie notificarea.
+
+**Verificat REAL, de 3 ori, nu doar sintaxă YAML**: (1) rulare cu SHA
+sincronizat corect → `needs_sync=false`, niciun issue creat; (2) SHA
+vechi injectat temporar → issue #1 creat corect, cu link către
+comparația de commit-uri upstream; (3) SHA corect restaurat → issue #1
+închis automat de aceeași rulare următoare. Fluxul complet (creare +
+auto-închidere) funcționează cap-coadă pe GitHub real, nu doar simulat.
+
+**Cum se folosește practic**: Cristi vede notificarea nativă GitHub
+(email/mobil) când apare issue-ul nou. Sincronizarea efectivă
+(`git fetch upstream && git merge upstream/develop`, actualizarea
+`.github/upstream-sync-state.json` cu noul SHA, apoi eventual un
+build/release nou) rămâne un pas cerut explicit într-o sesiune Claude
+Code — workflow-ul doar SEMNALEAZĂ, nu sincronizează singur (sincronizarea
+reală poate necesita rezolvare de conflicte/verificare manuală, nu e
+sigur de automatizat orbește).
