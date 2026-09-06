@@ -190,6 +190,7 @@ config = {
             "x3d-viewer/*.js",
             "xrc/*.xrc",
             "VERSION",
+            "CG_BUILD",
         ]
     },
     "xtra_package_data": {NAME: {"win32": [f"theme/icons/{NAME}-uninstall.ico"]}},

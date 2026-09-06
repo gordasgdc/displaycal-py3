@@ -171,6 +171,7 @@ from DisplayCAL.meta import (
     ARGYLL_CHANGELOG_DOMAIN,
     ARGYLL_CHANGELOG_PATH,
     AUTHOR,
+    CG_BUILD,
     COLORIMETER_CORRECTIONS_DOMAIN,
     DEVELOPMENT_HOME_PAGE,
     DOMAIN,
@@ -385,8 +386,8 @@ def show_ccxx_error_dialog(exception: Exception, path: str, parent: wx.Window) -
 
 
 def parse_release_tag_version(tag_name: str) -> tuple[int, ...] | None:
-    """Extract a comparable (major, minor, patch) tuple from a GitHub
-    release tag name.
+    """Extract a comparable (major, minor, patch, cg_build) tuple from a
+    GitHub release tag name.
 
     [2026-09-06] Nou — tag-urile acestui fork arata ``v3.10.0.dev82-cg.1``
     (versiune upstream + sufix propriu de build, Regula 14 nota specifica
@@ -396,11 +397,22 @@ def parse_release_tag_version(tag_name: str) -> tuple[int, ...] | None:
     "Parsing error", desi exista mereu o versiune noua reala. Aceeasi
     normalizare ca `meta.VERSION_TUPLE` (strip "v", ia doar partea
     dinaintea primului "-", primele 3 segmente numerice).
+
+    [FIX 2026-09-06 (2)] Adaugat al 4-lea element, `cg_build` — fara el,
+    doua tag-uri cu ACELASI numar de baza (`v3.10.0.dev82-cg.1` vs
+    `-cg.2`) produceau tuplul IDENTIC `(3,10,0)`, deci userii deja
+    instalati pe un build vechi NU erau niciodata anuntati de unul nou cu
+    acelasi numar de baza (limitare documentata explicit, Etapa
+    2026-09-06 (5)). Extrage numarul dupa "-cg." daca exista in tag; 0
+    daca tag-ul nu are deloc acest sufix (ex. un tag upstream simplu).
     """
-    core = tag_name.strip().lstrip("vV").split("-")[0]
+    stripped = tag_name.strip().lstrip("vV")
+    core = stripped.split("-")[0]
     parts = core.split(".")[:3]
+    cg_match = re.search(r"-cg\.(\d+)", stripped)
+    cg_build = int(cg_match.group(1)) if cg_match else 0
     try:
-        return tuple(int(p) for p in parts)
+        return (*(int(p) for p in parts), cg_build)
     except ValueError:
         return None
 
@@ -456,7 +468,10 @@ def is_new_update() -> bool | tuple | None:
         print(f"Error checking for updates: Parsing error - {e!s}")
         return None
 
-    current_version = VERSION_TUPLE[:3]
+    # [FIX 2026-09-06 (2)] Include CG_BUILD in comparatie — vezi
+    # comentariul din parse_release_tag_version. Fara asta, doua tag-uri
+    # cu acelasi numar de baza (`cg.1`/`cg.2`) nu se deosebeau niciodata.
+    current_version = (*VERSION_TUPLE[:3], CG_BUILD)
     if latest_version_tuple > current_version:
         print("New updates available!")
         return latest_version_tuple
@@ -526,12 +541,18 @@ def app_update_check(
         # deja documentat la auditul de DOMAIN din 2026-09-05 (resurse reale
         # ale upstream-ului, nepublicate pe domeniul nostru) — fix identic:
         # tratam canalul ca indisponibil pentru acest fork, fara eroare.
-        curversion_tuple = VERSION_TUPLE
+        curversion_tuple = (*VERSION_TUPLE[:3], CG_BUILD)
         new_version_tuple = curversion_tuple
     else:
         # Stable
         print(lang.getstr("update_check"))
-        curversion_tuple = VERSION_TUPLE
+        # [FIX 2026-09-06 (2)] Include CG_BUILD — trebuie sa aiba EXACT
+        # aceeasi forma (4 elemente) ca tuplul intors de is_new_update()
+        # mai jos, altfel compararea `new_version_tuple > curversion_tuple`
+        # de la finalul functiei ar considera orice tag cu acelasi numar
+        # de baza drept "mai nou" doar pentru ca are un al 4-lea element
+        # (Python: `(3,10,0,2) > (3,10,0)` e True — prefix mai scurt).
+        curversion_tuple = (*VERSION_TUPLE[:3], CG_BUILD)
         chglog_file = "CHANGES.html"
         resp = is_new_update()
         if resp is False or resp is None:
@@ -751,7 +772,13 @@ def app_update_confirm(
     else:
         ok = lang.getstr("go_to_website")
         alt = None
-    newversion = ".".join(str(n) for n in new_version_tuple)
+    # [FIX 2026-09-06 (2)] `new_version_tuple` poate avea acum un al
+    # 4-lea element (numarul de build propriu, `cg_build`) — afisat
+    # separat ("3.10.0 (cg.3)"), NU concatenat direct ca "3.10.0.3", care
+    # ar parea gresit un al 4-lea segment de versiune upstream.
+    newversion = ".".join(str(n) for n in new_version_tuple[:3])
+    if len(new_version_tuple) > 3 and new_version_tuple[3]:
+        newversion += f" (cg.{new_version_tuple[3]})"
     if argyll:
         newversion_desc = "ArgyllCMS"
         try:

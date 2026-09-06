@@ -51,6 +51,7 @@ from DisplayCAL.argyll import get_argyll_latest_version
 from DisplayCAL.meta import (
     ARGYLL_CHANGELOG_DOMAIN,
     ARGYLL_CHANGELOG_PATH,
+    CG_BUILD,
     DEVELOPMENT_HOME_PAGE,
     DOMAIN,
     GITHUB_API_URL,
@@ -66,18 +67,27 @@ ARGYLL_HOME_PAGE = "https://www.argyllcms.com/"
 
 
 def _parse_release_tag_version(tag_name: str) -> tuple[int, ...] | None:
-    """Extract a comparable (major, minor, patch) tuple from a GitHub
-    release tag name — deliberate duplicate of
+    """Extract a comparable (major, minor, patch, cg_build) tuple from a
+    GitHub release tag name — deliberate duplicate of
     ``display_cal.parse_release_tag_version`` (this module must stay
     importable without ``wx``, see the module docstring). This fork's
     tags look like ``v3.10.0.dev82-cg.1`` (upstream version + our own
     build suffix, see CLAUDE.md), not a plain ``X.Y.Z`` — strip a leading
     "v", keep only what precedes the first "-", and take the first 3
-    numeric dot-separated segments."""
-    core = tag_name.strip().lstrip("vV").split("-")[0]
+    numeric dot-separated segments.
+
+    [FIX 2026-09-06 (2)] 4th element `cg_build`, parsed from "-cg.N" in
+    the (unstripped) tag — see the sibling docstring in ``display_cal.py``
+    for why (two tags with the same base number were previously
+    indistinguishable, so installed-but-outdated users were never
+    notified). 0 if the tag has no such suffix."""
+    stripped = tag_name.strip().lstrip("vV")
+    core = stripped.split("-")[0]
     parts = core.split(".")[:3]
+    cg_match = re.search(r"-cg\.(\d+)", stripped)
+    cg_build = int(cg_match.group(1)) if cg_match else 0
     try:
-        return tuple(int(p) for p in parts)
+        return (*(int(p) for p in parts), cg_build)
     except ValueError:
         return None
 
@@ -236,15 +246,19 @@ def check_app_update(
     if latest is None:
         print(f"Error checking for updates: Parsing error - unparseable tag_name {data.get('tag_name')!r}")
         return None
-    current = tuple(current_version or VERSION_TUPLE)[:3]
+    # [FIX 2026-09-06 (2)] Include CG_BUILD — vezi comentariul din
+    # display_cal.parse_release_tag_version/is_new_update pentru motiv.
+    current = (*tuple(current_version or VERSION_TUPLE)[:3], CG_BUILD)
     if latest <= current:
         print("No new updates available.")
         return None
     print("New updates available!")
-    newversion = ".".join(str(n) for n in latest)
+    newversion = ".".join(str(n) for n in latest[:3])
+    if len(latest) > 3 and latest[3]:
+        newversion += f" (cg.{latest[3]})"
     return UpdateCheckResult(
         component="app",
-        current_version=".".join(str(n) for n in current),
+        current_version=".".join(str(n) for n in current[:3]),
         new_version=newversion,
         changelog_html=fetch_changelog_html(DOMAIN, "CHANGES.html", True),
         download_url=resolve_app_download_url(data, newversion),

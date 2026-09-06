@@ -442,7 +442,10 @@ def test_is_new_update_returns_version_when_newer(monkeypatch):
         "DisplayCAL.display_cal.requests.get", lambda *a, **kw: mock_resp
     )
     result = display_cal.is_new_update()
-    assert result == (99, 0, 0)
+    # [FIX 2026-09-06 (2)] parse_release_tag_version() now returns a
+    # 4th element (this fork's own "-cg.N" build number, 0 when the tag
+    # has no such suffix) — see its docstring.
+    assert result == (99, 0, 0, 0)
 
 
 def test_is_new_update_returns_false_when_current(monkeypatch):
@@ -538,10 +541,16 @@ def test_get_download_url_returns_none_on_unsupported_platform(monkeypatch):
 @pytest.mark.parametrize(
     "tag_name,expected",
     [
-        ("v3.10.0.dev82-cg.1", (3, 10, 0)),
-        ("3.9.8", (3, 9, 8)),
-        ("v3.9.9", (3, 9, 9)),
-        ("v3.10.1", (3, 10, 1)),
+        # [FIX 2026-09-06 (2)] 4th element = this fork's own "-cg.N" build
+        # number (0 when the tag has no such suffix) — see the function's
+        # docstring for why (two tags with the same base version were
+        # previously indistinguishable).
+        ("v3.10.0.dev82-cg.1", (3, 10, 0, 1)),
+        ("v3.10.0.dev82-cg.2", (3, 10, 0, 2)),
+        ("v3.10.0.dev82-cg.10", (3, 10, 0, 10)),
+        ("3.9.8", (3, 9, 8, 0)),
+        ("v3.9.9", (3, 9, 9, 0)),
+        ("v3.10.1", (3, 10, 1, 0)),
         ("nightly", None),
         ("", None),
     ],

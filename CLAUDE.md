@@ -952,3 +952,143 @@ pre-existente, neatinse de această modificare.
 poate genera/manipula certificatul, Regula 34). Fără acest pas, jobul
 Windows continuă nesemnat — nicio regresie, doar funcționalitate
 neactivată încă.
+
+## Etapa 2026-09-06 (7) — Fix real: eroare "update_check.fail.version" la fiecare pornire
+
+**Raportat de Cristi cu screenshot exact**: la fiecare lansare (sau la
+"Verifică actualizări" manual) apărea un dialog de eroare — "Fișierul de
+versiune de la distanță de pe serverul gordas.dev nu a putut fi
+analizat."
+
+**Cauza reală, verificată direct în cod** (`display_cal.py`,
+`app_update_check`): linia 613-614 (veche) declanșează AUTOMAT o a doua
+verificare, pe canalul "snapshot" (`elif not argyll and not snapshot:
+app_update_check(parent, silent, True)`), de fiecare dată când userul e
+deja la zi pe canalul stabil. Acel canal fetch-uia `/SNAPSHOT_VERSION`
+DIRECT de pe `DOMAIN` (`gordas.dev`) — un fișier real, existent pe
+domeniul upstream-ului original (pentru build-uri de dezvoltare între
+release-uri), dar NICIODATĂ publicat de acest fork (publicăm doar
+release-uri GitHub numerotate, `v{VERSION}-cg.{N}`, nu un canal rulant de
+snapshot-uri). Răspunsul primit de pe `gordas.dev` (probabil pagina
+implicită a site-ului, nu un fișier de versiune) eșua la parsarea ca
+tuplu de numere — exact eroarea din screenshot. Se declanșa la FIECARE
+pornire pentru ORICE user, indiferent dacă era la zi sau nu pe canalul
+stabil (real relevant), fiindcă versiunea acestui fork conține
+intenționat `.devNN` (moștenit din schema upstream, Regula 14).
+
+**Exact tiparul de bug deja documentat la auditul de DOMAIN din
+2026-09-05** (rebranding-ul `DOMAIN → gordas.dev` a rupt resurse reale pe
+care nu le găzduim) — de această dată în canalul de update-check, nu
+descărcări de firmware/instrumente.
+
+**Fix**: ramura `elif snapshot:` din `app_update_check` nu mai face
+niciun fetch — tratează explicit acest canal ca "la zi" (`new_version_
+tuple = curversion_tuple`), fără eroare, fără dialog. **Canalul STABIL
+(GitHub Releases, `is_new_update()`) rămâne complet neschimbat și
+funcțional** — asta e verificarea reală de care au nevoie userii, nu
+canalul de snapshot.
+
+**Discuție cu Cristi**: a întrebat explicit cum funcționează detectarea
+de update la noi — confirmat fluxul complet (GitHub Releases API →
+`parse_release_tag_version` → comparație cu `VERSION_TUPLE` → dialog cu
+"Actualizează acum"/"Mai târziu" dacă e mai nou), inclusiv limitarea deja
+documentată (comparația ignoră sufixul `-cg.N`, deci userii de pe `cg.1`
+nu sunt notificați automat de `cg.2` — discuție separată, neînceput încă,
+dacă Cristi decide să o rezolve).
+
+**Verificat**: `python3 -c "import ast; ast.parse(...)"` — sintaxă OK.
+Regula 32 verificată înainte de commit — 6 apariții găsite, toate
+confirmate commit-uri UPSTREAM vechi (iunie 2026, autori `youfeng`/`Erkan
+Ozgur Yilmaz`), acoperite de excepția deja documentată la Regula 32.
+
+**Rămas de făcut**: niciun build/release nou publicat încă în această
+sesiune — fix-ul e doar commis local (`develop`, `05ba9649`), fără
+push/tag. Cristi decide dacă/când publicăm o versiune nouă
+(`v3.10.0.dev82-cg.3` sau similar) cu acest fix inclus.
+
+## Etapa 2026-09-06 (8) — Comparație de versiune completă (`-cg.N`), nu doar primele 3 cifre
+
+**Cerut explicit de Cristi**, imediat după fix-ul de mai sus, ca urmare
+firească a discuției despre cum funcționează detectarea de update:
+"vrei să reparăm și asta (să comparăm întregul tag, nu doar primele 3
+cifre), da vreau" — rezolvă limitarea deja documentată la Etapa (5):
+userii de pe `cg.1` nu erau anunțați automat de `cg.2` (tuplul de
+comparație includea DOAR primele 3 cifre din tag, `(3,10,0)`, identic
+pentru orice sufix `-cg.N`).
+
+**Problemă reală de rezolvat mai întâi**: aplicația rulantă NU știa
+NICIODATĂ propriul ei număr de build `-cg.N` — acela există DOAR ca sufix
+de tag git, niciodată scris în vreun fișier bundle-uit în aplicație
+(`VERSION_STRING`/`VERSION_TUPLE` reflectă STRICT schema upstream,
+deliberat, per Regula 14). Fără să știe "sunt eu însumi cg.2", aplicația
+nu putea niciodată compara corect cu "există un cg.3".
+
+**Fix — nouă sursă de adevăr, `DisplayCAL/CG_BUILD`** (fișier nou, plat,
+un singur număr, exact ca `VERSION` deja existent):
+- `meta.py`: citește `CG_BUILD` la fel ca `VERSION_FILE` (fallback 0 dacă
+  lipsește/nevalid — sigur, niciodată o eroare de import).
+- `_setup.py`/`freeze.py`: `"CG_BUILD"` adăugat alături de `"VERSION"` în
+  listele de resurse bundle-uite (2 locuri, verificate cu `grep` — nu 4 ca
+  la `README.html`/Etapa (2026-09-05), fișier mai puțin referit).
+- **Trebuie incrementat manual de Cristi (sau la următoarea sesiune
+  Claude) la fiecare tag `-cg.N` nou publicat** — exact ca `VERSION`
+  (upstream) sau orice altă constantă de versiune (Regula 14) — setat
+  acum la `2` (valoarea tag-ului CURENT publicat, `cg.2`; va deveni `3`
+  când se publică fix-ul acesta ca `cg.3`).
+
+**`parse_release_tag_version()`/`_parse_release_tag_version()`** (ambele
+copii, `display_cal.py` + `update_check.py`, trebuie sa ramana in sincron
+per docstring-ul modulului) — extind tuplul returnat la 4 elemente
+`(major, minor, patch, cg_build)`, extras cu `re.search(r"-cg\.(\d+)",
+tag)` din tag-ul NEtrunchiat (0 daca tag-ul nu are acest sufix — ex. un
+tag upstream simplu). **`is_new_update()`/`check_app_update()`**: tuplul
+"versiune curentă" folosit in comparație devine `(*VERSION_TUPLE[:3],
+CG_BUILD)`, ACELAȘI numar de elemente ca tuplul nou parsat — esential,
+altfel comparația de tupluri Python ar considera GREȘIT orice tag cu 4
+elemente drept "mai nou" doar pentru ca are un element in plus (`(3,10,0,2)
+> (3,10,0)` e `True` in Python, chiar daca primele 3 sunt egale — prefix
+mai scurt = "mai mic"). Corectat in AMBELE locuri unde tuplul curent se
+construia inainte (`curversion_tuple` ramura "stable" ȘI ramura
+"snapshot", desi cea din urma e deja dezactivata la fix-ul anterior —
+consecventa, nu strict necesar acolo).
+
+**Afișare**: `newversion` (textul aratat userului in dialogul de update)
+nu mai concateneaza cele 4 elemente direct (`"3.10.0.2"`, ar parea gresit
+un al 4-lea segment de versiune upstream) — primele 3 ramân
+`"3.10.0"`, cu sufixul propriu afișat separat, `" (cg.3)"`, DOAR daca
+existent (>0).
+
+**Teste actualizate** (`tests/test_display_cal.py`) — tuplurile
+așteptate de `test_parse_release_tag_version`/`test_is_new_update_
+returns_version_when_newer` extinse la 4 elemente; `test_is_new_update_
+returns_false_when_current` verificat manual (nu modificat) — ramane
+corect neschimbat, fiindca tag-ul simulat acolo (fara sufix `-cg.N`) da
+`cg_build=0 < CG_BUILD real (2)`, deci `latest > current` ramane `False`
+oricum. Testele din `tests/test_update_check.py` (`TestCheckAppUpdate`)
+verificate manual, la fel — raman corecte neschimbate (logica identica,
+verificata linie cu linie).
+
+**Verificat REAL** (nu doar sintactic — `wx`/`numpy` nu instalabile ușor
+in acest mediu de test, deci logica de parsare/comparație extrasă
+standalone, IDENTICA cu codul din fișiere, intr-un script separat):
+```
+OK  v3.10.0.dev82-cg.1  -> (3, 10, 0, 1)
+OK  v3.10.0.dev82-cg.2  -> (3, 10, 0, 2)
+OK  v3.10.0.dev82-cg.3  -> (3, 10, 0, 3)
+OK  v3.10.0.dev82-cg.10 -> (3, 10, 0, 10)   # numere cu 2+ cifre, nu doar string-compare
+OK  3.10.0               -> (3, 10, 0, 0)
+OK  not-a-version        -> None
+current=(3,10,0,2); cg.3 > current -> True   (update REAL detectat acum)
+cg.2 > current -> False                       (deja la zi, fara notificare falsa)
+```
+Confirmat și separat: `meta.CG_BUILD` citit corect din fișierul nou
+(`== 2`, valoarea reala scrisa in `DisplayCAL/CG_BUILD`).
+
+**Verificat sintactic**: `ast.parse` pe toate cele 6 fișiere atinse
+(`meta.py`, `display_cal.py`, `update_check.py`, `_setup.py`,
+`freeze.py`, `tests/test_display_cal.py`) — 0 erori.
+
+**Rămas de făcut**: la fiecare tag `-cg.N` viitor, incrementează
+`DisplayCAL/CG_BUILD` INAINTE de a publica tag-ul (altfel aplicația nou
+construita s-ar crede pe ea insasi "in urma" fata de propriul ei tag).
+Fix-ul ramane doar commis local (nu push/tag) — la fel ca Etapa (7).

@@ -28,6 +28,30 @@ if os.path.isfile(VERSION_FILE):
 VERSION_STRING = VERSION_STRING or "0.0.0"
 """str: The version number of DisplayCAL."""
 
+# [2026-09-06] Numarul de build propriu al fork-ului GDC — tag-urile
+# publicate arata `v{VERSION_STRING}-cg.{N}` (Regula 14, Partea 2), dar
+# `VERSION_STRING`/`VERSION_TUPLE` de mai sus reflecta STRICT schema
+# upstream, fara acest sufix (deliberat, ca update-checker-ul sa ramana
+# compatibil cu comparatia upstream de baza — vezi Regula 14). Fara sa
+# stim in cod PROPRIUL nostru numar de build curent, update-checker-ul nu
+# putea niciodata sa deosebeasca doua tag-uri cu ACELASI numar de baza
+# (`cg.1` vs `cg.2`) — userii de pe un build vechi nu erau anuntati de
+# unul nou (limitare documentata explicit, Etapa 2026-09-06 (5)). Citit
+# la fel ca VERSION_FILE de mai sus (fisier plat, un singur numar),
+# bundle-uit identic in pachete (`_setup.py`/`freeze.py`) — se
+# incrementeaza manual, o data per tag `-cg.N` nou publicat.
+CG_BUILD_FILE = os.path.join(base_path, "CG_BUILD")
+if not os.path.isfile(CG_BUILD_FILE):
+    CG_BUILD_FILE = os.path.join(base_path, "DisplayCAL", "CG_BUILD")
+CG_BUILD = 0
+if os.path.isfile(CG_BUILD_FILE):
+    with open(CG_BUILD_FILE, encoding="utf-8") as f:
+        try:
+            CG_BUILD = int(f.read().strip())
+        except ValueError:
+            CG_BUILD = 0
+"""int: This fork's own build number (the `-cg.N` tag suffix)."""
+
 # DisplayCAL-CG Edition (2026-09-05, by Cristi Gordaș / GDC): fork rebranded
 # per the fork's own scope decision — GPLv3 §5/§7 requires we keep the
 # original authors' notices intact and forbids adding restrictions, but
