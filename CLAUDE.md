@@ -516,10 +516,10 @@ rezolvare de conflict necesară). Push-uit pe `origin/develop`.
   audit complet, nu doar locul raportat) — se bundle-uiesc automat în
   `.app`/installer Windows la fel ca README.html, fără cod de packaging
   nou. O copie identică merge și în `docs/` pentru pagina web de
-  descărcare. **Doar ghidul RO există momentan** (verificat: se
-  generează, `get_data_path`-compatibil ca nume); EN/ES sunt following-up,
-  ghid_ro.py→ghid_en.py/ghid_es.py (declarativ, ușor de tradus). **Rămas
-  de verificat real**: un build `.pkg` complet, ca să confirme că
+  descărcare. **[COMPLETAT 2026-09-06]** `ghid_en.py`/`ghid_es.py` scrise
+  și ele — toate 3 PDF-urile (RO/EN/ES) se generează curat din
+  `generate_guides.py`, verificate vizual de Cristi ("arata foarte bine").
+  **Rămas de verificat real**: un build `.pkg` complet, ca să confirme că
   "Citește-mă" chiar deschide PDF-ul din `.app` instalat (nu doar din
   sursă) — Claude nu a rulat un rebuild+reinstall complet în această
   sesiune, doar regenerarea PDF-urilor + verificare sintaxă pe fișierele
