@@ -1,0 +1,110 @@
+name: Check upstream for new commits
+
+# [2026-09-06] Cerut de Cristi: "sa ne dam seama ca trebuie sa actualizam,
+# ca s-a creat actualizare in depozitul original de unde am copiat".
+# Ruleaza zilnic + la cerere, compara HEAD-ul upstream-ului real
+# (eoyilmaz/displaycal-py3, branch develop) cu ultimul commit upstream
+# STIUT ca sincronizat in acest fork (.github/upstream-sync-state.json,
+# actualizat manual la fiecare `git merge upstream/develop` real) - daca
+# difera, deschide (sau actualizeaza) UN SINGUR issue GitHub, nu unul nou
+# de fiecare data. Cristi vede notificarea nativa GitHub (email/mobil),
+# apoi cere sincronizarea intr-o sesiune Claude Code noua.
+
+"on":
+  schedule:
+    - cron: "0 9 * * *"  # 09:00 UTC, zilnic
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  check-upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Compare upstream HEAD vs last synced commit
+        id: compare
+        run: |
+          set -euo pipefail
+          UPSTREAM_URL="https://github.com/eoyilmaz/displaycal-py3.git"
+          UPSTREAM_BRANCH="develop"
+
+          UPSTREAM_HEAD=$(git ls-remote "$UPSTREAM_URL" "refs/heads/$UPSTREAM_BRANCH" | cut -f1)
+          echo "upstream_head=$UPSTREAM_HEAD" >> "$GITHUB_OUTPUT"
+
+          STATE_FILE=".github/upstream-sync-state.json"
+          if [ -f "$STATE_FILE" ]; then
+            LAST_SYNCED=$(python3 -c "import json; print(json.load(open('$STATE_FILE'))['last_synced_upstream_sha'])")
+          else
+            LAST_SYNCED=""
+          fi
+          echo "last_synced=$LAST_SYNCED" >> "$GITHUB_OUTPUT"
+
+          if [ "$UPSTREAM_HEAD" != "$LAST_SYNCED" ]; then
+            echo "needs_sync=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs_sync=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Count new upstream commits (informativ, poate esua tacut)
+        id: count
+        if: steps.compare.outputs.needs_sync == 'true' && steps.compare.outputs.last_synced != ''
+        continue-on-error: true
+        run: |
+          git fetch --unshallow origin || true
+          git remote add upstream https://github.com/eoyilmaz/displaycal-py3.git
+          git fetch upstream develop
+          COUNT=$(git rev-list --count "${{ steps.compare.outputs.last_synced }}..${{ steps.compare.outputs.upstream_head }}" 2>/dev/null || echo "necunoscut")
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure the "upstream-sync" label exists
+        if: steps.compare.outputs.needs_sync == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "upstream-sync" --color "0E8A16" \
+            --description "Upstream-ul are commit-uri noi, necesita sincronizare" \
+            --force
+
+      - name: Open or update sync-needed issue
+        if: steps.compare.outputs.needs_sync == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPSTREAM_HEAD: ${{ steps.compare.outputs.upstream_head }}
+          COMMIT_COUNT: ${{ steps.count.outputs.count }}
+        run: |
+          set -euo pipefail
+          TITLE="Sincronizare upstream disponibilă"
+          EXISTING=$(gh issue list --label "upstream-sync" --state open --json number --jq '.[0].number' || echo "")
+          cat > /tmp/issue-body.md <<EOF
+          Upstream-ul (eoyilmaz/displaycal-py3, branch \`develop\`) are commit-uri noi față de ultima sincronizare a acestui fork.
+
+          - HEAD upstream curent: \`${UPSTREAM_HEAD}\`
+          - Commit-uri noi (aproximativ): ${COMMIT_COUNT:-necunoscut}
+          - Compară direct: https://github.com/eoyilmaz/displaycal-py3/commits/develop
+
+          Pentru sincronizare: pornește o sesiune Claude Code în acest repo și cere "sincronizează cu upstream" — face \`git fetch upstream && git merge upstream/develop\`, verifică fast-forward curat, actualizează \`.github/upstream-sync-state.json\` cu noul SHA, apoi (dacă e cazul) pregătește un build/release nou.
+
+          _Acest issue e generat automat, zilnic — se închide singur la următoarea verificare după ce sincronizarea e făcută (SHA-ul din \`.github/upstream-sync-state.json\` se actualizează)._
+          EOF
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body-file /tmp/issue-body.md
+          else
+            gh issue create --title "$TITLE" --label "upstream-sync" --body-file /tmp/issue-body.md
+          fi
+
+      - name: Close stale sync-needed issue if already up to date
+        if: steps.compare.outputs.needs_sync == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          EXISTING=$(gh issue list --label "upstream-sync" --state open --json number --jq '.[0].number' || echo "")
+          if [ -n "$EXISTING" ]; then
+            gh issue close "$EXISTING" --comment "Fork-ul e la zi cu upstream-ul (sincronizat) — închis automat."
+          fi

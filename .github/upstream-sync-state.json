@@ -1,0 +1,5 @@
+{
+  "last_synced_upstream_sha": "06317b851c55b79e78aeafa05b24179eca3602b2",
+  "last_synced_at": "2026-09-06T08:32:16Z",
+  "note": "Actualizat manual (sau de o sesiune Claude Code) la fiecare 'git merge upstream/develop' real. Workflow-ul .github/workflows/check-upstream.yml compara acest SHA cu HEAD-ul live al upstream-ului."
+}
