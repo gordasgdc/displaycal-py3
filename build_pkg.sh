@@ -33,6 +33,16 @@ if [ ! -d "$VENV" ]; then
 fi
 
 echo "==> Curăț build-uri py2app anterioare (păstrez dist/copyright + appdata.xml, regenerate de setup())…"
+# [2026-09-06] Garda impotriva unui `dist/` cu fisiere ramase root:wheel
+# (ex. dintr-un test anterior cu `sudo installer -pkg ... -target /` care
+# a atins accidental folderul local) - fara ea, `rm -rf` de mai jos esueaza
+# PARTIAL sub `set -e`, oprind scriptul la mijloc cu un dist/ pe jumatate
+# curatat, in loc de un mesaj clar. Acelasi tipar ca Regula 23 (DataMover).
+if find "$DIST_DIR" -maxdepth 3 -user root -print -quit 2>/dev/null | grep -q .; then
+    echo "EROARE: '$DIST_DIR/' conține fișiere deținute de root. Rulează manual:" >&2
+    echo "    sudo rm -rf $(pwd)/$DIST_DIR" >&2
+    exit 1
+fi
 rm -rf "$DIST_DIR"/py2app.macosx* "$DIST_DIR"/*.pkg "$DIST_DIR"/payload "$DIST_DIR"/Distribution.xml "$DIST_DIR"/LICENSE.txt
 
 echo "==> pip install -e . (verifică integritatea pachetului Python, regenerează dist/copyright)…"
