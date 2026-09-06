@@ -499,49 +499,56 @@ def test_app_update_check_silent_reaches_argyll_prompt_when_missing(
 
 # ---------------------------------------------------------------------------
 # get_download_url() unit tests
+#
+# [2026-09-06] Rescrise: get_download_url() nu mai ghiceste un nume de
+# asset per-versiune (numele ghicite nu au existat NICIODATA printre
+# asset-urile reale ale acestui fork - verificat cu
+# `gh release view --json assets`) - foloseste acum linkul STABIL
+# `releases/latest/download/<nume-fix>` (Regula 9), independent de
+# RELEASE_DATA/versiune.
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
-    "plat,machine,version,expected_filename",
+    "plat,expected_filename",
     [
-        ("win32", "AMD64", "3.9.0", "DisplayCAL-3.9.0-Windows-x64.exe"),
-        ("win32", "ARM64", "3.9.0", "DisplayCAL-3.9.0-Windows-arm64.exe"),
-        ("darwin", "arm64", "3.9.0", "DisplayCAL-3.9.0-macOS-arm64.dmg"),
-        ("darwin", "aarch64", "3.9.0", "DisplayCAL-3.9.0-macOS-arm64.dmg"),
-        ("darwin", "x86_64", "3.9.0", "DisplayCAL-3.9.0-macOS-x86.dmg"),
-        ("linux", "x86_64", "3.9.0", "displaycal-3.9.0.tar.gz"),
+        ("win32", "DisplayCAL-CG-Setup.exe"),
+        ("darwin", "DisplayCAL-CG.pkg"),
     ],
 )
-def test_get_download_url(monkeypatch, plat, machine, version, expected_filename):
-    """get_download_url() returns the correct asset URL for each platform."""
-    fake_assets = [
-        {
-            "name": expected_filename,
-            "browser_download_url": f"https://example.com/{expected_filename}",
-        },
-    ]
-    monkeypatch.setattr(display_cal, "RELEASE_DATA", {"assets": fake_assets})
+def test_get_download_url(monkeypatch, plat, expected_filename):
+    """get_download_url() returns the stable release-asset URL for the platform."""
     monkeypatch.setattr(display_cal.sys, "platform", plat)
-    monkeypatch.setattr(display_cal.platform, "machine", lambda: machine)
-    assert (
-        display_cal.get_download_url(version)
-        == f"https://example.com/{expected_filename}"
+    assert display_cal.get_download_url("3.9.0") == (
+        f"{display_cal.DEVELOPMENT_HOME_PAGE}/releases/latest/download/{expected_filename}"
     )
 
 
-def test_get_download_url_returns_none_when_no_matching_asset(monkeypatch):
-    """get_download_url() returns None when no asset matches the current platform."""
-    monkeypatch.setattr(display_cal, "RELEASE_DATA", {"assets": []})
+def test_get_download_url_returns_none_on_unsupported_platform(monkeypatch):
+    """get_download_url() returns None on platforms with no published installer."""
     monkeypatch.setattr(display_cal.sys, "platform", "linux")
-    monkeypatch.setattr(display_cal.platform, "machine", lambda: "x86_64")
     assert display_cal.get_download_url("3.9.0") is None
 
 
-def test_get_download_url_returns_none_before_release_data_loaded(monkeypatch):
-    """get_download_url() returns None gracefully when called before is_new_update()."""
-    monkeypatch.setattr(display_cal, "RELEASE_DATA", None)
-    assert display_cal.get_download_url("3.9.0") is None
+# ---------------------------------------------------------------------------
+# parse_release_tag_version() unit tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "tag_name,expected",
+    [
+        ("v3.10.0.dev82-cg.1", (3, 10, 0)),
+        ("3.9.8", (3, 9, 8)),
+        ("v3.9.9", (3, 9, 9)),
+        ("v3.10.1", (3, 10, 1)),
+        ("nightly", None),
+        ("", None),
+    ],
+)
+def test_parse_release_tag_version(tag_name, expected):
+    """parse_release_tag_version() handles this fork's `v<ver>-cg.N` tags."""
+    assert display_cal.parse_release_tag_version(tag_name) == expected
 
 
 def test_create_profile_name_crc32_with_bytes_edid(

@@ -384,28 +384,46 @@ def show_ccxx_error_dialog(exception: Exception, path: str, parent: wx.Window) -
     show_result_dialog(msg, parent)
 
 
-def get_download_url(newversion: str) -> str | None:
-    """Return the GitHub release asset download URL for the current platform."""
-    if RELEASE_DATA is None:
+def parse_release_tag_version(tag_name: str) -> tuple[int, ...] | None:
+    """Extract a comparable (major, minor, patch) tuple from a GitHub
+    release tag name.
+
+    [2026-09-06] Nou — tag-urile acestui fork arata ``v3.10.0.dev82-cg.1``
+    (versiune upstream + sufix propriu de build, Regula 14 nota specifica
+    acestui repo), nu un simplu ``X.Y.Z`` — un `int()` direct pe fiecare
+    bucata desparțită prin "." (cum facea codul vechi) pica pe prima
+    bucata ("v3") si intreaga verificare de actualizari raporta tacut
+    "Parsing error", desi exista mereu o versiune noua reala. Aceeasi
+    normalizare ca `meta.VERSION_TUPLE` (strip "v", ia doar partea
+    dinaintea primului "-", primele 3 segmente numerice).
+    """
+    core = tag_name.strip().lstrip("vV").split("-")[0]
+    parts = core.split(".")[:3]
+    try:
+        return tuple(int(p) for p in parts)
+    except ValueError:
         return None
+
+
+def get_download_url(newversion: str) -> str | None:
+    """Return the GitHub release asset download URL for the current platform.
+
+    [2026-09-06] Rescris pentru fork-ul GDC — numele ghicite mai jos
+    (`DisplayCAL-{ver}-Windows-x64.exe`, `-macOS-arm64.dmg`) nu au existat
+    NICIODATA printre asset-urile reale ale acestui fork (verificat cu
+    `gh release view --json assets`): Mac publica `.pkg`
+    (`DisplayCAL-CG.pkg`), Windows publica `DisplayCAL-CG-Setup.exe` — deci
+    aceasta functie returna mereu None aici, silentios. Foloseste acum
+    numele STABILE (`releases/latest/download/...`, Regula 9), nu unul
+    per-versiune ghicit din lista de asset-uri.
+    """
     if sys.platform == "win32":
-        machine = platform.machine().lower()
-        if machine in ("arm64", "aarch64"):
-            filename = f"{APPNAME}-{newversion}-Windows-arm64.exe"
-        else:
-            filename = f"{APPNAME}-{newversion}-Windows-x64.exe"
+        filename = "DisplayCAL-CG-Setup.exe"
     elif sys.platform == "darwin":
-        machine = platform.machine().lower()
-        if machine in ("arm64", "aarch64"):
-            filename = f"{APPNAME}-{newversion}-macOS-arm64.dmg"
-        else:
-            filename = f"{APPNAME}-{newversion}-macOS-x86.dmg"
+        filename = "DisplayCAL-CG.pkg"
     else:
-        filename = f"{APPNAME.lower()}-{newversion}.tar.gz"
-    for asset in RELEASE_DATA["assets"]:
-        if asset["name"] == filename:
-            return asset["browser_download_url"]
-    return None
+        return None
+    return f"{DEVELOPMENT_HOME_PAGE}/releases/latest/download/{filename}"
 
 
 def is_new_update() -> bool | tuple | None:
@@ -431,7 +449,9 @@ def is_new_update() -> bool | tuple | None:
     try:
         data = response.json()
         RELEASE_DATA = data
-        latest_version_tuple = tuple(int(n) for n in data["tag_name"].split("."))
+        latest_version_tuple = parse_release_tag_version(data["tag_name"])
+        if latest_version_tuple is None:
+            raise ValueError(f"unparseable tag_name {data['tag_name']!r}")
     except (KeyError, ValueError, IndexError) as e:
         print(f"Error checking for updates: Parsing error - {e!s}")
         return None
@@ -671,6 +691,57 @@ def app_up_to_date(parent: None | wx.Window = None, appname: str = APPNAME) -> N
         parent.menuitem_app_auto_update_check.Check(bool(getcfg("update_check")))
 
 
+def start_self_update(parent: None | wx.Window, download_url: str) -> None:
+    """Download the new installer and launch it — real self-update
+    (Regula 20 din ecosistemul GDC), fara un tab de browser intermediar.
+
+    Ruleaza descarcarea+lansarea pe un thread separat (poate dura, mai
+    ales pe conexiuni lente - installer-ul Mac are ~500MB) cu un
+    `wx.BusyInfo` cat timp asteapta, apoi trece pe thread-ul UI
+    (`wx.CallAfter`) ca sa inchida indicatorul si sa raporteze rezultatul.
+    """
+    busy = wx.BusyInfo("Se descarcă actualizarea DisplayCAL-CG…", parent)
+
+    def worker():
+        from DisplayCAL.self_updater import perform_self_update
+
+        started_ok, error = perform_self_update(download_url)
+        wx.CallAfter(_finish_self_update, parent, busy, started_ok, error)
+
+    threading.Thread(target=worker, daemon=True).start()
+
+
+def _finish_self_update(
+    parent: None | wx.Window, busy: "wx.BusyInfo", started_ok: bool, error: str | None
+) -> None:
+    """Runs on the UI thread once the background download/launch attempt
+    from :func:`start_self_update` has finished (or failed)."""
+    del busy  # destroyed by going out of scope / garbage collection
+    if started_ok:
+        # Instalarea a pornit (fereastra nativa a installer-ului Mac/
+        # Windows preia de aici) - inchidem aplicatia curenta ca
+        # installer-ul sa poata suprascrie fisierele fara conflict,
+        # exact ca la restul aplicatiilor GDC (Regula 20).
+        wx.GetApp().ExitMainLoop() if wx.GetApp() else None
+        os._exit(0)
+    else:
+        InfoDialog(
+            parent,
+            msg=(
+                "Actualizarea automată nu a putut porni"
+                + (f":\n\n{error}" if error else ".")
+                + "\n\nPoți descărca și instala manual de pe pagina de "
+                "descărcări."
+            ),
+            ok=lang.getstr("ok"),
+            bitmap=get_icon(32, "dialog-error"),
+        )
+        try:
+            launch_file(f"{DEVELOPMENT_HOME_PAGE}/releases")
+        except Exception as e:
+            print(f"Error opening releases page: {e!s}")
+
+
 def app_update_confirm(
     parent: None | wx.Window = None,
     new_version_tuple: tuple = (0, 0, 0, 0),
@@ -773,9 +844,13 @@ def app_update_confirm(
         if zeroinstall:
             return
         if not argyll:
-            # Download the update from GitHub based on the user's platform
+            # [2026-09-06] Actualizare REALA (descarca + instaleaza), nu
+            # doar un tab de browser deschis - cerut explicit de Cristi,
+            # ca la restul aplicatiilor GDC. Vezi self_updater.py.
             download_url = get_download_url(newversion)
-            if download_url is not None:
+            if download_url is not None and sys.platform in ("darwin", "win32"):
+                start_self_update(parent, download_url)
+            elif download_url is not None:
                 try:
                     webbrowser.open_new_tab(download_url)
                 except Exception as e:

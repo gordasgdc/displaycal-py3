@@ -65,6 +65,23 @@ from DisplayCAL.worker import http_request
 ARGYLL_HOME_PAGE = "https://www.argyllcms.com/"
 
 
+def _parse_release_tag_version(tag_name: str) -> tuple[int, ...] | None:
+    """Extract a comparable (major, minor, patch) tuple from a GitHub
+    release tag name — deliberate duplicate of
+    ``display_cal.parse_release_tag_version`` (this module must stay
+    importable without ``wx``, see the module docstring). This fork's
+    tags look like ``v3.10.0.dev82-cg.1`` (upstream version + our own
+    build suffix, see CLAUDE.md), not a plain ``X.Y.Z`` — strip a leading
+    "v", keep only what precedes the first "-", and take the first 3
+    numeric dot-separated segments."""
+    core = tag_name.strip().lstrip("vV").split("-")[0]
+    parts = core.split(".")[:3]
+    try:
+        return tuple(int(p) for p in parts)
+    except ValueError:
+        return None
+
+
 @dataclass
 class UpdateCheckResult:
     """A newer version was found for one component ("app" or "argyll")."""
@@ -103,28 +120,26 @@ def fetch_latest_release_data(timeout: int = 10) -> dict | None:
 
 
 def resolve_app_download_url(release_data: dict, newversion: str) -> str | None:
-    """Return the release asset URL matching the current platform, if any.
+    """Return the stable release-asset URL for the current platform.
 
-    Toolkit-neutral port of ``display_cal.get_download_url``.
+    [2026-09-06] Toolkit-neutral port of ``display_cal.get_download_url``
+    — rewritten the same way: the guessed per-version filenames
+    (``{APPNAME}-{ver}-Windows-x64.exe``, ``-macOS-arm64.dmg``) never
+    matched any asset actually published by this fork (verified with
+    ``gh release view --json assets``: real names are
+    ``DisplayCAL-CG-Setup.exe``/``DisplayCAL-CG.pkg``), so this always
+    silently returned None. Uses the STABLE ``releases/latest/download/``
+    name instead (Regula 9) — ``newversion``/``release_data`` are kept as
+    parameters for signature compatibility with callers, not used to
+    build the URL anymore.
     """
     if sys.platform == "win32":
-        machine = platform.machine().lower()
-        if machine in ("arm64", "aarch64"):
-            filename = f"{APPNAME}-{newversion}-Windows-arm64.exe"
-        else:
-            filename = f"{APPNAME}-{newversion}-Windows-x64.exe"
+        filename = "DisplayCAL-CG-Setup.exe"
     elif sys.platform == "darwin":
-        machine = platform.machine().lower()
-        if machine in ("arm64", "aarch64"):
-            filename = f"{APPNAME}-{newversion}-macOS-arm64.dmg"
-        else:
-            filename = f"{APPNAME}-{newversion}-macOS-x86.dmg"
+        filename = "DisplayCAL-CG.pkg"
     else:
-        filename = f"{APPNAME.lower()}-{newversion}.tar.gz"
-    for asset in release_data.get("assets", []):
-        if asset.get("name") == filename:
-            return asset.get("browser_download_url")
-    return None
+        return None
+    return f"{DEVELOPMENT_HOME_PAGE}/releases/latest/download/{filename}"
 
 
 def resolve_argyll_download_url(newversion: str, domain: str) -> str:
@@ -217,10 +232,9 @@ def check_app_update(
     data = fetch_latest_release_data()
     if data is None:
         return None
-    try:
-        latest = tuple(int(n) for n in data["tag_name"].split("."))
-    except (KeyError, ValueError, IndexError, AttributeError, TypeError) as exception:
-        print(f"Error checking for updates: Parsing error - {exception}")
+    latest = _parse_release_tag_version(data.get("tag_name", ""))
+    if latest is None:
+        print(f"Error checking for updates: Parsing error - unparseable tag_name {data.get('tag_name')!r}")
         return None
     current = tuple(current_version or VERSION_TUPLE)[:3]
     if latest <= current:

@@ -41,38 +41,25 @@ class TestFetchLatestReleaseData:
 
 
 class TestResolveAppDownloadUrl:
+    # [2026-09-06] Rescrise: resolve_app_download_url() nu mai ghiceste un
+    # nume de asset per-versiune (nu a corespuns NICIODATA cu asset-urile
+    # reale ale acestui fork) - foloseste linkul STABIL
+    # `releases/latest/download/<nume-fix>` (Regula 9).
     @pytest.mark.parametrize(
-        "plat,machine,version,expected_filename",
+        "plat,expected_filename",
         [
-            ("win32", "AMD64", "3.9.0", "DisplayCAL-3.9.0-Windows-x64.exe"),
-            ("win32", "ARM64", "3.9.0", "DisplayCAL-3.9.0-Windows-arm64.exe"),
-            ("darwin", "arm64", "3.9.0", "DisplayCAL-3.9.0-macOS-arm64.dmg"),
-            ("darwin", "aarch64", "3.9.0", "DisplayCAL-3.9.0-macOS-arm64.dmg"),
-            ("darwin", "x86_64", "3.9.0", "DisplayCAL-3.9.0-macOS-x86.dmg"),
-            ("linux", "x86_64", "3.9.0", "displaycal-3.9.0.tar.gz"),
+            ("win32", "DisplayCAL-CG-Setup.exe"),
+            ("darwin", "DisplayCAL-CG.pkg"),
         ],
     )
-    def test_matches_platform_asset(
-        self, monkeypatch, plat, machine, version, expected_filename
-    ):
-        release_data = {
-            "assets": [
-                {
-                    "name": expected_filename,
-                    "browser_download_url": f"https://example.com/{expected_filename}",
-                }
-            ]
-        }
+    def test_matches_platform_asset(self, monkeypatch, plat, expected_filename):
         monkeypatch.setattr(uc.sys, "platform", plat)
-        monkeypatch.setattr(uc.platform, "machine", lambda: machine)
-        assert (
-            uc.resolve_app_download_url(release_data, version)
-            == f"https://example.com/{expected_filename}"
+        assert uc.resolve_app_download_url({"assets": []}, "3.9.0") == (
+            f"{uc.DEVELOPMENT_HOME_PAGE}/releases/latest/download/{expected_filename}"
         )
 
-    def test_returns_none_when_no_matching_asset(self, monkeypatch):
+    def test_returns_none_on_unsupported_platform(self, monkeypatch):
         monkeypatch.setattr(uc.sys, "platform", "linux")
-        monkeypatch.setattr(uc.platform, "machine", lambda: "x86_64")
         assert uc.resolve_app_download_url({"assets": []}, "3.9.0") is None
 
 

@@ -577,3 +577,76 @@ rezolvare de conflict necesară). Push-uit pe `origin/develop`.
 calibrării propriu-zise (are nevoie de un colorimetru/spectrofotometru
 fizic conectat) — verificarea se oprește la "se instalează, pornește,
 interfața arată/traduce corect".
+
+## Etapa 2026-09-06 — Self-Updater REAL (descarcă + instalează) + 2 bug-uri reale găsite în verificarea de actualizări
+
+Cerință directă a lui Cristi: *"ar trebui să se instaleze noua
+actualizare, la fel cum sunt și la celelalte aplicații [GDC]... nu se
+poate implementa sau se poate implementa la actualizare să apară dacă
+există o nouă versiune, să se facă install-ul respectiv"*. Până acum,
+"Update now" din dialogul de actualizare (`app_update_confirm`,
+`display_cal.py`) doar deschidea un tab de browser cu link-ul de
+descărcare — user-ul trebuia să descarce și să instaleze manual.
+
+**2 bug-uri REALE găsite la implementare (nu presupuse — verificate cu
+`gh release view --json assets` pe releases reale ale fork-ului)**:
+
+1. **Verificarea de versiune era complet STRICATĂ pentru acest fork.**
+   `is_new_update()`/`check_app_update()` parsau `tag_name`-ul direct cu
+   `tuple(int(n) for n in tag_name.split("."))` — funcționează pentru un
+   tag simplu `"3.10.1"`, dar tag-urile REALE ale acestui fork arată
+   `v3.10.0.dev82-cg.1` (versiune upstream + sufix propriu de build,
+   Regula 14). `int("v3")` aruncă `ValueError` IMEDIAT → prins și raportat
+   tăcut ca "Parsing error" → aplicația credea mereu că nu există
+   actualizare, indiferent de ce era publicat real pe GitHub. Fix:
+   `parse_release_tag_version()` (nou, `display_cal.py` — duplicat
+   deliberat, cu aceeași logică, în `update_check.py` ca
+   `_parse_release_tag_version()`, fiindcă acel modul trebuie să rămână
+   importabil FĂRĂ `wx`, per propriul docstring) — normalizează exact ca
+   `meta.VERSION_TUPLE` (strip `v`, ia partea dinaintea primului `-`,
+   primele 3 segmente numerice).
+2. **Link-ul de descărcare nu a rezolvat NICIODATĂ la un asset real.**
+   `get_download_url()`/`resolve_app_download_url()` ghiceau un nume de
+   fișier per-versiune+arhitectură (`DisplayCAL-{ver}-Windows-x64.exe`,
+   `-macOS-arm64.dmg`) — nume care nu au existat NICIODATĂ printre
+   asset-urile publicate de acest fork (confirmat: Mac publică
+   `DisplayCAL-CG.pkg`, Windows `DisplayCAL-CG-Setup.exe`, fără sufixe de
+   arhitectură/extensie `.dmg`). Fix: ambele funcții folosesc acum linkul
+   STABIL `releases/latest/download/<nume-fix>` (Regula 9), care nu
+   depinde deloc de versiune/listă de assets.
+
+**Self-Updater real (`DisplayCAL/self_updater.py`, nou)** — port 1:1 în
+Python al rețetei deja folosite în ecosistemul GDC (`DataMover/core/
+updater.py`, `SelfUpdater.swift`/`.cs`, Regula 20):
+- **Mac**: descarcă `.pkg`-ul, îl instalează prin promptul NATIV de
+  parolă admin (`osascript ... with administrator privileges` — NICIODATĂ
+  `sudo` interactiv sau Terminal vizibil), apoi relansează aplicația
+  (`open -a DisplayCAL-CG`).
+- **Windows**: descarcă installer-ul Inno Setup (`.exe`) și îl lansează
+  direct (`subprocess.Popen`) — fereastra NATIVĂ a wizard-ului preia de
+  aici (pagina de licență, Next/Install), NICIODATĂ un browser.
+- Legat de `app_update_confirm` (ramura non-Argyll): `start_self_update()`
+  (nou) rulează descărcarea pe un thread separat cu `wx.BusyInfo` cât
+  timp așteaptă, apoi (`wx.CallAfter`) închide aplicația curentă
+  (`os._exit(0)`) dacă instalarea a pornit cu succes, sau arată o eroare
+  cu fallback la pagina de releases dacă descărcarea eșuează.
+
+**Verificat REAL**: `parse_release_tag_version("v3.10.0.dev82-cg.1")` →
+`(3, 10, 0)` (corect — înainte pica cu `ValueError`). Harness standalone
+pentru `self_updater.py` (fără `wx`, deci rulabil direct): descărcare
+reală a unui fișier de test de pe GitHub (conținut verificat byte-cu-byte),
+`install_and_relaunch_mac` construiește corect scriptul + apelează
+`osascript` (mock pe `subprocess.Popen`, ca să nu ceară efectiv parola în
+sesiunea asta). Teste unitare existente (`test_display_cal.py`,
+`test_update_check.py`) rescrise ca să reflecte comportamentul NOU
+(corect), nu cel vechi (stricat) — nu au putut fi rulate cu `pytest` în
+această sesiune (`display_cal.py` importă `wx` la nivel de modul,
+instalarea completă a `wxPython` într-un venv de test a fost sărită ca
+disproporționată pentru scopul verificării).
+
+**Rămas de verificat real**: pasul efectiv de instalare (promptul de
+parolă admin pe Mac, wizardul Inno pe Windows) — cere interacțiune
+fizică reală cu fereastra de sistem, la fel ca la toate celelalte
+Self-Updatere din ecosistem (Regula 20, WARNING permanent). Cristi
+trebuie să confirme manual, o singură dată, pe un build `.pkg`/installer
+Windows real, că "Update now" chiar descarcă+instalează+relansează.
