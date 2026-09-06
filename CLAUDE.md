@@ -359,6 +359,63 @@ sau atinsă de-acum înainte:
   sub această regulă — e un indicator de stare semantic (verde =
   verificat), nu o iconiță de conținut, poate rămâne CSS pur.
 
+**34. Semnare Windows (Code Signing) obligatorie la build — Self-Signed
+ca implicit pentru testare internă, real (comercial) la lansare publică
+(2026-09-06).** Cerut explicit de Cristi, după clarificarea (verificată
+tehnic, nu presupusă) că un certificat self-signed NU elimină avertismentul
+SmartScreen/"Unknown Publisher" pentru publicul larg — doar un certificat
+real de la o CA publică (cu reputație acumulată) sau un certificat EV fac
+asta; din iunie 2023, CA/Browser Forum obligă orice certificat OV/EV nou
+să fie stocat pe token hardware/HSM cloud (Azure Trusted Signing, DigiCert
+KeyLocker, SSL.com eSigner), NU ca `.pfx` exportabil. Decizie explicită
+Cristi: self-signed ACUM (testare internă + cerc restrâns, cu `.cer`
+importat manual de colaboratori în Trusted Root), evaluare Azure Trusted
+Signing/EV la lansarea comercială publică — regula de mai jos NU
+presupune că self-signed rezolvă SmartScreen pentru clienți finali, e
+DOAR pentru etapa de testare.
+- **Certificatul (privat, cu cheie) NU trece NICIODATĂ prin conversația cu
+  Claude** — generarea (`New-SelfSignedCertificate`, doar posibilă pe
+  Windows real, Claude nu poate rula asta de pe Mac) și încărcarea ca
+  secret CI (`gh secret set`, valoare base64 a `.pfx` + parola) se fac
+  DIRECT de Cristi, pe mașina lui Windows — identic cu regula deja
+  existentă pentru parole/chei (Claude nu vede/manipulează credențiale).
+- **CI-ul de build Windows verifică ÎNTÂI existența secretelor** (ex.
+  `WIN_SELFSIGN_PFX_BASE64`/`WIN_SELFSIGN_PFX_PASSWORD`) — dacă lipsesc,
+  build-ul continuă NESEMNAT (exact ca varianta Mac, `APPLE_SIGN_IDENTITY_APP`
+  nesetat → semnare ad-hoc, niciodată o eroare de build). Dacă sunt
+  prezente: decodează `.pfx`-ul temporar, semnează cu `signtool.exe`
+  (localizat dinamic din Windows Kits, NU hardcodat o versiune) atât
+  executabilul PyInstaller cât și installer-ul final Inno Setup, cu
+  timestamp (`/tr .../td sha256`) ca semnătura să rămână validă și după
+  expirarea certificatului, apoi ȘTERGE fișierul `.pfx` temporar de pe
+  disc imediat după folosire.
+- **Verificare post-semnare obligatorie în CI**: `Get-AuthenticodeSignature`
+  (confirmă DOAR că fișierul are efectiv o semnătură atașată — nu
+  `signtool verify /pa`, care validează lanțul de încredere complet și
+  eșuează mereu pe un runner CI proaspăt, unde certificatul self-signed
+  nu e importat în Trusted Root; asta e normal pentru testare internă,
+  nu un eșec real) pe fiecare executabil semnat, ÎNAINTE ca pasul de
+  build să fie considerat trecut — o semnare care "reușește" silențios
+  dar produce un binar nesemnat/corupt nu trebuie să treacă drept succes.
+  **[CORECȚIE 2026-09-06]**: prima implementare folosea `signtool verify
+  /pa`, care a picat CI-ul chiar și după o semnare reușită — descoperit
+  la primul test real, corectat imediat.
+- **Exportul `.cer` (public, fără cheie privată)** se publică alături de
+  installer (asset de release sau folder `dist/`) — colaboratorii îl
+  importă o SINGURĂ dată în Trusted Root, apoi orice build viitor semnat
+  cu ACELAȘI certificat (persistent via secret CI, NU regenerat la
+  fiecare build — un cert nou la fiecare release ar rupe încrederea deja
+  acordată) e automat de încredere pe mașinile lor.
+- **Aplicare**: la fiecare build de release/actualizare Windows, pe orice
+  aplicație din `~/Developer/` care produce un `.exe`/installer Windows —
+  aplicată incremental, la următoarea atingere reală a fiecărui repo
+  (Regula 11), nu retroactiv peste tot dintr-o sesiune dedicată.
+- **Implementare de referință**: CGConvertor (`build-windows.spec` +
+  `.github/workflows/build-windows.yml`, 2026-09-06) — vezi
+  `codesigning/README-windows.md` din acel repo pentru pașii exacți pe
+  care Cristi trebuie să-i ruleze o singură dată (generare cert + upload
+  secret CI).
+
 ## [PARTEA 2: SPECIFICAȚII TEHNICE PROIECT — DisplayCAL-CG]
 
 ### Context (2026-09-05)
@@ -851,3 +908,47 @@ Developer ID. Parser testat standalone cu tag-ul real nou — confirmă
 limitarea de mai sus (ambele tag-uri dau `(3,10,0)`). Release notes
 curățate (Regula 29 — textul generat de CI era deja curat, doar extins
 să menționeze ambele platforme).
+
+## Etapa 2026-09-06 (6) — Semnare Windows Self-Signed (Regula 34), aplicată pe `release_builds.yml`
+
+Aplicat pattern-ul deja funcțional din CGConvertor pe jobul `windows` din
+`.github/workflows/release_builds.yml` (singurul workflow care produce
+efectiv `DisplayCAL-CG-Setup.exe`, confirmat activ: rulare `Release
+Builds` cu succes pe tagul `v3.10.0.dev82-cg.2`, `gh run list`).
+Confirmat înainte de orice modificare, nu presupus: `misc/DisplayCAL-
+Setup-py2exe.iss` NU e cod moștenit — e template-ul real citit de
+`_native_build/inno.py` (`Path(pydir, "misc", f"{meta.NAME}-Setup-
+{tmpl_type}.iss")`) pentru a genera scriptul Inno Setup folosit la build.
+
+Fișiere noi: `codesigning/sign-windows.ps1`, `codesigning/generate-self-
+signed-cert.ps1`, `codesigning/README-windows.md` (adaptate 1:1 după
+CGConvertor — nume certificat `displaycal-cg-selfsign.*`, repo
+`gordasgdc/displaycal-py3`). **NU copiate din CGConvertor** fișierele de
+semnare Mac (`README.md`, `ci-import-certs.sh`, `entitlements.plist`,
+`sign-and-notarize.sh`) — DisplayCAL-CG are deja propriul flux Mac
+funcțional (`build_pkg.sh`, Developer ID real + notarizare), neatins.
+
+`release_builds.yml`: `env: HAS_WIN_SELFSIGN` adăugat la nivel de job
+`windows` (același motiv ca în CGConvertor — `secrets` nepermis direct
+în `if:` de pas, confirmat `actionlint`), plus un pas nou "Semneaza
+installer-ul Windows" (`if: env.HAS_WIN_SELFSIGN == 'true'`) rulat pe
+ieșirea BRUTĂ a Inno Setup, ÎNAINTE de duplicarea sub numele stabil
+`DisplayCAL-CG-Setup.exe` — copia stabilă moștenește aceeași semnătură.
+Fără secrete setate încă (`WIN_SELFSIGN_PFX_BASE64`/`_PASSWORD` nu există
+ca secrete pe acest repo la momentul commit-ului), build-ul continuă
+nesemnat exact ca înainte — nicio schimbare de comportament până Cristi
+rulează `generate-self-signed-cert.ps1` pe Windows real și încarcă
+secretele (vezi `codesigning/README-windows.md`).
+
+**Verificat**: `python3 -c "import yaml; yaml.safe_load(...)"` — OK.
+`actionlint .github/workflows/release_builds.yml` — 0 erori/avertismente
+noi pe jobul `windows` (35-136) sau `release` (585+); toate cele 7
+avertismente rămase (linia `if: false` ×4, shellcheck ×3) cad exclusiv în
+joburile macOS/linux/linux-appimage/linux-flatpak, deja dezactivate și
+pre-existente, neatinse de această modificare.
+
+**Rămas de făcut, real, de către Cristi**: rulare unică
+`generate-self-signed-cert.ps1` pe Windows + `gh secret set` (Claude nu
+poate genera/manipula certificatul, Regula 34). Fără acest pas, jobul
+Windows continuă nesemnat — nicio regresie, doar funcționalitate
+neactivată încă.

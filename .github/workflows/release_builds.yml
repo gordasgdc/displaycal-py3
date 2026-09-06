@@ -35,6 +35,12 @@ jobs:
   windows:
     name: Build on Windows (x64)
     runs-on: windows-latest
+    # [2026-09-06, Regula 34] `secrets` NU e permis direct intr-un `if:`
+    # de pas (confirmat cu actionlint - "context 'secrets' is not allowed
+    # here") - valoarea trece printr-un `env:` la nivel de JOB (aici
+    # `secrets` E permis), iar pasii citesc `env.HAS_WIN_SELFSIGN`.
+    env:
+      HAS_WIN_SELFSIGN: ${{ secrets.WIN_SELFSIGN_PFX_BASE64 != '' }}
 
     steps:
       - name: Checkout code
@@ -85,6 +91,22 @@ jobs:
         run: |
           cd dist
           iscc.exe DisplayCAL-Setup-py2exe.win-amd64-py3.11.iss
+
+      # [2026-09-06, Regula 34] Semnare Self-Signed, testare interna - nu
+      # face nimic (exit 0) daca secretele nu sunt setate, deci build-ul
+      # ramane nesemnat exact ca inainte pana Cristi incarca certificatul
+      # (vezi codesigning/README-windows.md). Ruleaza pe iesirea BRUTA a
+      # Inno Setup, INAINTE de duplicarea sub numele stabil de mai jos, ca
+      # ambele fisiere publicate sa poarte aceeasi semnatura.
+      - name: Semneaza installer-ul Windows (Self-Signed, test intern)
+        if: ${{ env.HAS_WIN_SELFSIGN == 'true' }}
+        shell: pwsh
+        env:
+          WIN_SELFSIGN_PFX_BASE64: ${{ secrets.WIN_SELFSIGN_PFX_BASE64 }}
+          WIN_SELFSIGN_PFX_PASSWORD: ${{ secrets.WIN_SELFSIGN_PFX_PASSWORD }}
+        run: |
+          $raw = Get-ChildItem dist\DisplayCAL-*-Setup.exe | Select-Object -First 1
+          .\codesigning\sign-windows.ps1 -TargetPath $raw.FullName
 
       # [2026-09-06] Doua nume, exact ca cele publicate deja manual pe
       # release-urile existente (verificat cu `gh release view --json
