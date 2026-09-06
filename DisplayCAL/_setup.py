@@ -120,6 +120,9 @@ config = {
         "LICENSE.txt",
         "README.html",
         "README-fr.html",
+        "DisplayCAL-CG_Ghid_RO.pdf",
+        "DisplayCAL-CG_Guide_EN.pdf",
+        "DisplayCAL-CG_Guia_ES.pdf",
         "screenshots/*.png",
         "theme/*.png",
         "theme/*.css",
@@ -236,6 +239,9 @@ def create_app_symlinks(dist_dir: str, scripts: list[tuple[str, str]]) -> None:
         ("CHANGES.html", "CHANGES.html"),
         ("README.html", "README.html"),
         ("README-fr.html", "README-fr.html"),
+        ("DisplayCAL-CG_Ghid_RO.pdf", "DisplayCAL-CG_Ghid_RO.pdf"),
+        ("DisplayCAL-CG_Guide_EN.pdf", "DisplayCAL-CG_Guide_EN.pdf"),
+        ("DisplayCAL-CG_Guia_ES.pdf", "DisplayCAL-CG_Guia_ES.pdf"),
         ("LICENSE.txt", "LICENSE.txt"),
     ]:
         tgt = os.path.join(dist_dir, tgt)
@@ -1199,6 +1205,12 @@ def _run_install_or_uninstall(
                     "LICENSE.txt",
                     "README.html",
                     "README-fr.html",
+                    # [2026-09-06] Ghidul PDF GDC (RO/EN/ES) — vezi
+                    # docs/guides/generate_guides.py + readme_handler
+                    # (display_cal.py), deschis din Ajutor -> "Citeste-ma".
+                    "DisplayCAL-CG_Ghid_RO.pdf",
+                    "DisplayCAL-CG_Guide_EN.pdf",
+                    "DisplayCAL-CG_Guia_ES.pdf",
                     "beep.wav",
                     "cacert.pem",
                     "camera_shutter.wav",
@@ -1226,6 +1238,9 @@ def _run_install_or_uninstall(
                     "LICENSE.txt",
                     "README.html",
                     "README-fr.html",
+                    "DisplayCAL-CG_Ghid_RO.pdf",
+                    "DisplayCAL-CG_Guide_EN.pdf",
+                    "DisplayCAL-CG_Guia_ES.pdf",
                 ]:
                     path = os.path.join(doc, fname)
                     if path not in paths:

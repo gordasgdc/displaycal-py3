@@ -501,10 +501,29 @@ rezolvare de conflict necesară). Push-uit pe `origin/develop`.
   neconstruită — vezi rândul de mai jos). Verificat: sintaxă + import
   Python real pe toate fișierele atinse (`display_cal.py`/`worker.py`/
   `profile_loader.py`/`x3dom.py`/`meta.py`) — nu doar `ast.parse`.
-  **Rămas de verificat, nerezolvat**: conținutul `README.html` bundle-uit
-  (deschis din Help → "Citește-mă") e cel VECHI, engleză/franceză,
-  upstream — trebuie înlocuit cu documentație nouă RO/EN/ES, publicată
-  pe pagina web (nu doar un fișier local), odată ce pagina există.
+  **[REZOLVAT 2026-09-06]** `README.html` bundle-uit (deschis din Help →
+  "Citește-mă") era cel VECHI, engleză/franceză, upstream. Acum
+  `readme_handler` (`display_cal.py`) deschide ghidul PDF ultra-detaliat
+  GDC — `DisplayCAL-CG_Ghid_RO.pdf`/`_Guide_EN.pdf`/`_Guia_ES.pdf`
+  (`docs/guides/ghid_*.py` + `_engine.py`, port al arhitecturii PDF
+  DataMover — TOC real, casete de accent, pași numerotați, tabele de
+  opțiuni; capturi reale ale UI din `docs/guides/img/`) — ales după codul
+  de limbă curent al aplicației (`lang.getcode()`); `README-fr.html`/
+  `README.html` rămân fallback pentru orice altă limbă. PDF-urile ies la
+  RĂDĂCINA repo-ului (`generate_guides.py`, lângă `README.html`) — adăugate
+  în TOATE cele 4 liste de resurse care menționau `README.html`
+  (`DisplayCAL/_setup.py` ×3, `DisplayCAL/freeze.py` ×1 — Regula 30,
+  audit complet, nu doar locul raportat) — se bundle-uiesc automat în
+  `.app`/installer Windows la fel ca README.html, fără cod de packaging
+  nou. O copie identică merge și în `docs/` pentru pagina web de
+  descărcare. **Doar ghidul RO există momentan** (verificat: se
+  generează, `get_data_path`-compatibil ca nume); EN/ES sunt following-up,
+  ghid_ro.py→ghid_en.py/ghid_es.py (declarativ, ușor de tradus). **Rămas
+  de verificat real**: un build `.pkg` complet, ca să confirme că
+  "Citește-mă" chiar deschide PDF-ul din `.app` instalat (nu doar din
+  sursă) — Claude nu a rulat un rebuild+reinstall complet în această
+  sesiune, doar regenerarea PDF-urilor + verificare sintaxă pe fișierele
+  Python atinse.
   Banner-ul grafic din About/header (`theme/header.png`/`header@2x.png`/
   `header_minimal*.png`) — logo-ul vechi upstream ("DisplayCAL³", glow
   colorat) înlocuit cu identitatea GDC (roată de culoare + insignă "CG"),

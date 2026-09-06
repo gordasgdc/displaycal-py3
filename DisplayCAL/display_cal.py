@@ -20645,12 +20645,29 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self.aboutdialog.Show()
 
     def readme_handler(self, event: wx.Event) -> None:
-        """Open the README file in the default web browser.
+        """Open the DisplayCAL-CG user guide (or upstream README as fallback).
+
+        [2026-09-06] "Citește-mă" deschide acum ghidul PDF ultra-detaliat
+        GDC (RO/EN/ES, docs/guides/ghid_*.py + _engine.py), pe limba curenta
+        a aplicatiei - inlocuieste README.html-ul vechi upstream (engleza/
+        franceza) pentru aceste 3 limbi. README-fr.html si README.html
+        raman fallback-ul pentru orice alta limba/daca PDF-ul lipseste
+        dintr-un build vechi.
 
         Args:
             event (wx.Event): The event that triggered the action.
         """
-        readme = get_data_path("README-fr.html") if lang.getcode() == "fr" else None
+        guide_by_lang = {
+            "ro": "DisplayCAL-CG_Ghid_RO.pdf",
+            "en": "DisplayCAL-CG_Guide_EN.pdf",
+            "es": "DisplayCAL-CG_Guia_ES.pdf",
+        }
+        readme = None
+        guide_name = guide_by_lang.get(lang.getcode())
+        if guide_name:
+            readme = get_data_path(guide_name)
+        if not readme and lang.getcode() == "fr":
+            readme = get_data_path("README-fr.html")
         if not readme:
             readme = get_data_path("README.html")
         if readme:
