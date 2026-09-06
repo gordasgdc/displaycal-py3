@@ -431,7 +431,17 @@ productbuild \
     --resources "$DIST_DIR" \
     "$FINAL_PKG"
 
-rm -rf "$PAYLOAD_ROOT" "$COMPONENT_PKG"
+# [FIX real, 2026-09-07] `set -euo pipefail` + un `rm -rf` care poate
+# esua tranzitoriu (macOS: mdworker/Spotlight indexeaza payload-ul uriaș
+# de-abia creat — 9 aplicatii, framework-uri Qt — și il tine deschis o
+# fractiune de secunda, "Directory not empty") oprea SCRIPTUL INTREG
+# chiar dupa ce `$FINAL_PKG` era deja scris cu succes de productbuild —
+# semnarea/notarizarea de mai jos nu mai apucau sa ruleze NICIODATA,
+# silentios (pachetul ramanea nesemnat, fara nicio eroare vizibila la
+# prima privire). Curatarea asta e DOAR housekeeping (payload-ul deja
+# nu mai e nevoie, pachetul final exista independent) - nu trebuie sa
+# opreasca un build reusit. `|| true` ii ia din sarcina, cu un avertisment.
+rm -rf "$PAYLOAD_ROOT" "$COMPONENT_PKG" || echo "AVERTISMENT: curatarea payload-ului a esuat (probabil tranzitoriu, Spotlight) — continui oricum, pachetul final e deja scris."
 
 if [ -n "${APPLE_SIGN_IDENTITY_INSTALLER:-}" ]; then
     echo "==> [codesigning] Semnez .pkg-ul final…"

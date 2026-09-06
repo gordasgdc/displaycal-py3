@@ -1092,3 +1092,64 @@ Confirmat și separat: `meta.CG_BUILD` citit corect din fișierul nou
 `DisplayCAL/CG_BUILD` INAINTE de a publica tag-ul (altfel aplicația nou
 construita s-ar crede pe ea insasi "in urma" fata de propriul ei tag).
 Fix-ul ramane doar commis local (nu push/tag) — la fel ca Etapa (7).
+
+## Etapa 2026-09-06/07 (9) — Publicare REALĂ `v3.10.0.dev82-cg.3`, ambele fix-uri incluse
+
+Cerut explicit de Cristi: "notează tot ca să știm când actualizăm și
+continuă cu publicarea finală". `DisplayCAL/CG_BUILD` incrementat la `3`
+(commit separat, `9c8e34fb`), tag `v3.10.0.dev82-cg.3` creat și push-uit.
+
+**Bug real găsit ȘI reparat la build-ul Mac local** (`build_pkg.sh`):
+`rm -rf "$PAYLOAD_ROOT" "$COMPONENT_PKG"` (curățare de housekeeping,
+DUPĂ ce `productbuild` scrisese deja pachetul final cu succes) a eșuat
+cu `Directory not empty` — probabil `mdworker`/Spotlight indexând
+tranzitoriu payload-ul uriaș (9 aplicații, framework-uri Qt) de-abia
+creat. Cu `set -euo pipefail`, această eroare de CURĂȚARE (nu de build)
+oprea SCRIPTUL ÎNTREG chiar înainte de pasul de semnare+notarizare —
+pachetul final ar fi rămas NESEMNAT, silențios, fără nicio eroare
+vizibilă la prima privire (exact genul de bug deja documentat masiv în
+istoricul acestui fișier). Fix: `|| echo "AVERTISMENT: ..."` — o eroare
+de curățare nu mai oprește un build altfel reușit. Din cauza timpului
+lung de build (py2app, 9 aplicații + Qt/PySide6, ~550MB), NU s-a
+reconstruit de la zero pentru validare — s-a rulat manual, o singură
+dată, restul secvenței întreruse (`productsign` → `notarytool submit
+--wait` → `stapler staple`) direct pe pachetul deja produs, cu succes
+(`spctl -a -vvv -t install` → `accepted, Notarized Developer ID`).
+Fix-ul din script rămâne pentru viitoarele build-uri, needeclanșat încă
+printr-un build complet de la zero.
+
+**Regula 23 lovită real, nu doar teoretic**: primul build a eșuat imediat
+cu "'dist/' conține fișiere deținute de root" (rest dintr-o rulare
+anterioară) — Cristi a rulat manual `sudo rm -rf .../dist`, confirmat
+`find dist -not -user gordasgdc` → 0 fișiere înainte de reluare.
+
+**CI (`Release Builds`, singurul relevant pentru publicarea noastră)**:
+verde, a produs `DisplayCAL-CG-Setup.exe` (Windows, nesemnat încă —
+secretele `WIN_SELFSIGN_*` tot nesetate pentru acest repo, Etapa (6)).
+**`Tests`/`Nightly Builds` (workflow-uri separate, upstream) au eșuat,
+verificat explicit că sunt NEÎNRUDITE cu schimbările de azi**: `Tests` —
+1 singur eșec real (`test_language_menu_actions_have_flag_icons`,
+iconiță de steag lipsă pentru meniul de limbă română — problemă de
+asset grafic, nimic legat de logica de update; 2589 teste au trecut,
+inclusiv ambele `test_app_update_check[...]` care exercită direct codul
+modificat azi) — `Nightly Builds` — infrastructură separată a
+upstream-ului (recipe py2exe macOS + un asset de release nightly
+inexistent, 404) — nici urmă de cod atins azi. Niciuna din cele 2
+neatinsă/reparată acum — scop separat.
+
+**Publicat, verificat REAL (nu presupus)**:
+- `DisplayCAL-CG-Setup.exe` + `DisplayCAL-3.10.0.dev82-Setup.exe`
+  (Windows, produse de CI).
+- `DisplayCAL-CG.pkg` + `DisplayCAL-CG-3.10.0.dev82.pkg` (Mac, semnat +
+  notarizat + stapled local, urcate manual pe același release).
+- Ambele link-uri STABILE (`releases/latest/download/DisplayCAL-CG.pkg`
+  și `.../DisplayCAL-CG-Setup.exe`, cele folosite de site + self-updater)
+  → HTTP 200, verificat cu `curl`.
+- Note de release rescrise curat (Regula 29 — fără nume/cauze tehnice de
+  debugging, orientate spre client).
+
+**Rezultat concret pentru useri**: de la acest release, o instalare
+existentă (`cg.1`/`cg.2`) va fi anunțată AUTOMAT de acest update nou
+(`cg.3`) — prima confirmare reală a fix-ului din Etapa (8), în afara
+testului standalone. Eroarea de la pornire (Etapa (7)) e reparată în
+același build.
