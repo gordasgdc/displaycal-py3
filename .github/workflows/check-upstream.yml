@@ -67,7 +67,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh label create "upstream-sync" --color "0E8A16" \
+          gh label create "upstream-sync" -R "${{ github.repository }}" --color "0E8A16" \
             --description "Upstream-ul are commit-uri noi, necesita sincronizare" \
             --force
 
@@ -80,7 +80,7 @@ jobs:
         run: |
           set -euo pipefail
           TITLE="Sincronizare upstream disponibilă"
-          EXISTING=$(gh issue list --label "upstream-sync" --state open --json number --jq '.[0].number' || echo "")
+          EXISTING=$(gh issue list -R "${{ github.repository }}" --label "upstream-sync" --state open --json number --jq '.[0].number' || echo "")
           cat > /tmp/issue-body.md <<EOF
           Upstream-ul (eoyilmaz/displaycal-py3, branch \`develop\`) are commit-uri noi față de ultima sincronizare a acestui fork.
 
@@ -93,9 +93,9 @@ jobs:
           _Acest issue e generat automat, zilnic — se închide singur la următoarea verificare după ce sincronizarea e făcută (SHA-ul din \`.github/upstream-sync-state.json\` se actualizează)._
           EOF
           if [ -n "$EXISTING" ]; then
-            gh issue comment "$EXISTING" --body-file /tmp/issue-body.md
+            gh issue comment "$EXISTING" -R "${{ github.repository }}" --body-file /tmp/issue-body.md
           else
-            gh issue create --title "$TITLE" --label "upstream-sync" --body-file /tmp/issue-body.md
+            gh issue create -R "${{ github.repository }}" --title "$TITLE" --label "upstream-sync" --body-file /tmp/issue-body.md
           fi
 
       - name: Close stale sync-needed issue if already up to date
@@ -104,7 +104,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          EXISTING=$(gh issue list --label "upstream-sync" --state open --json number --jq '.[0].number' || echo "")
+          EXISTING=$(gh issue list -R "${{ github.repository }}" --label "upstream-sync" --state open --json number --jq '.[0].number' || echo "")
           if [ -n "$EXISTING" ]; then
-            gh issue close "$EXISTING" --comment "Fork-ul e la zi cu upstream-ul (sincronizat) — închis automat."
+            gh issue close "$EXISTING" -R "${{ github.repository }}" --comment "Fork-ul e la zi cu upstream-ul (sincronizat) — închis automat."
           fi
