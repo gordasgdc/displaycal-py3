@@ -416,6 +416,91 @@ DOAR pentru etapa de testare.
   care Cristi trebuie să-i ruleze o singură dată (generare cert + upload
   secret CI).
 
+**35. Fluxul de actualizare se VERIFICĂ pe client real, nu se presupune —
+obligatoriu la FIECARE release (2026-09-11).** Cerut explicit de Cristi după
+un caz real: un client a trimis o captură în care GDC Plugin Manager v1.27.0
+arăta „Sunteți pe cea mai nouă versiune", deși live era 1.30.0. Auditul a
+găsit **trei defecte independente**, toate invizibile din repo — codul era
+corect, `update.json` din repo era corect, dar clientul instalat tot nu primea
+nimic:
+
+1. **Schimbarea formatului `update.json` rupe clienții deja instalați.** Pe
+   2026-09-03 fișierul a trecut de la un câmp `version` la rădăcină la secțiuni
+   separate `mac`/`windows`. Clienții ≤1.27 decodează `version` și
+   `download_url` ca fiind OBLIGATORII de la rădăcină → `JSONDecoder` aruncă →
+   verificarea eșuează **TĂCUT** și cade pe „ești la zi". Nu apare nicio
+   eroare, nicăieri. Erau blocați permanent, fără nicio cale de ieșire în
+   afară de reinstalare manuală — pe care n-aveau de unde s-o bănuiască.
+2. **Oglinda servită public rămâne în urma sursei din repo.** `gordas.dev` e
+   servit din `gdc-plugin-manager-catalog-vendor/docs/`, unde fiecare aplicație
+   are o COPIE a lui `update.json`. Un bump în repo-ul aplicației NU actualizează
+   oglinda. Găsite în urmă cu până la 3 versiuni (datamover 2.11.0 vs 2.14.0,
+   gdc-production-manager 2.0.2 vs 2.0.4, media-flow-monitor 1.9.1 vs 1.9.3).
+3. **`releases/latest` nu pointează unde crezi.** Un release nou care n-are
+   asset pentru o platformă lasă linkul stabil al acelei platforme mort (404),
+   sau „latest" rămâne pe un release mai vechi și clientul descarcă o versiune
+   anterioară celei anunțate.
+
+**Regula, obligatorie înainte de a declara ORICE release ca fiind gata:**
+
+- **Rulează verificatorul**, nu bifa din memorie:
+  `~/Developer/_gdc-tools/verify-update-flow.sh <update_url> <versiune> [link_stabil...]`
+  Verifică live: fișierul e accesibil, e JSON valid, versiunea SERVITĂ e chiar
+  cea publicată, câmpurile de compatibilitate pentru clienții vechi există, și
+  fiecare link stabil răspunde 200 real (urmărind redirectările GitHub).
+- **Formatul `update.json` nu se schimbă niciodată eliminând câmpuri.** Orice
+  câmp pe care o versiune publicată îl decodează ca obligatoriu rămâne în fișier
+  PENTRU TOTDEAUNA, chiar dacă versiunile noi nu-l mai folosesc. Un câmp nou se
+  adaugă pe lângă, niciodată în locul celui vechi. Costul e câțiva octeți;
+  alternativa e o categorie întreagă de clienți blocată definitiv, în tăcere.
+- **Când un singur câmp de versiune deservește ambele platforme**, valoarea e
+  MINIMUL dintre ele — niciodată maximul. Altfel o platformă e trimisă spre o
+  versiune care nu există pentru ea.
+- **Oglinda de pe `gordas.dev` se sincronizează în același commit** cu bump-ul
+  din repo-ul aplicației. Un `update.json` corect în repo, dar vechi pe server,
+  e exact la fel de rupt ca unul greșit.
+- **După publicare, verifică pe release-ul REAL** că `releases/latest`
+  pointează la tag-ul nou ȘI că are asset pentru FIECARE platformă pe care
+  `update.json` o anunță. Un release doar-Windows face 404 linkul Mac, deși
+  nimic din repo nu arată asta.
+- **Un update checker nu trebuie să eșueze tăcut.** La orice atingere a
+  codului de verificare, o eroare de rețea/decodare se loghează explicit
+  (`DiagnosticLog`, Regula 25) — „n-am putut verifica" și „ești la zi" sunt
+  două stări diferite și nu trebuie să arate identic utilizatorului.
+
+**36. Verificările se automatizează, nu se țin minte — `~/Developer/_gdc-tools/`
+(2026-09-11).** Cerut explicit de Cristi, după ce trei defecte de release au
+trecut neobservate deși toate regulile existau scrise: *"să nu depinzi de
+memorie, să-ți creezi tot timpul acea structură automatizată"*.
+
+Motivul e concret: o regulă scrisă într-un jurnal de 1000 de linii e bifată
+din memorie, iar memoria ratează exact cazurile rare — cele care produc
+bug-uri. O verificare rulată produce un rezultat, nu o impresie.
+
+**Uneltele existente** (comune tuturor repo-urilor, nu duplicate per proiect):
+- **`preflight-release.sh`** — rulat în rădăcina oricărui repo GDC înainte de
+  a declara un release gata. Verifică automat Regulile 32 (zero atribuire
+  Claude), 14 (versiuni sincronizate în toate fișierele care le țin), 25
+  (CHANGELOG actualizat), 29 (zero informație internă în notele publice) și
+  23 (`dist/` deținut de root).
+  `cd ~/Developer/<Repo> && ~/Developer/_gdc-tools/preflight-release.sh [versiune]`
+- **`verify-update-flow.sh`** — Regula 35, verificare live a fluxului de
+  actualizare (fișier accesibil, versiune servită, compatibilitate cu clienții
+  vechi, linkuri stabile 200 real).
+- **`clean-claude-attribution.sh`** — curățarea istoricului (Regula 32).
+
+**Regula de lucru:**
+- Înainte de a raporta un release ca fiind gata, rulează preflight-ul ȘI
+  verificatorul de update. Un „am verificat" fără ieșirea comenzii nu e o
+  verificare.
+- **Orice bug de proces descoperit devine o verificare în unealtă**, în aceeași
+  sesiune — nu doar un paragraf nou de jurnal. Dacă un defect a putut trece o
+  dată, va trece din nou; singura apărare care ține este una executabilă.
+- Uneltele trăiesc într-un singur loc (`~/Developer/_gdc-tools/`), niciodată
+  copiate per repo — o copie divergentă e mai rea decât lipsa ei.
+- Ieșirea lor e în română, explicită, și spune ce anume să faci la eșec, nu
+  doar că ceva e greșit.
+
 ## [PARTEA 2: SPECIFICAȚII TEHNICE PROIECT — DisplayCAL-CG]
 
 ### Context (2026-09-05)
