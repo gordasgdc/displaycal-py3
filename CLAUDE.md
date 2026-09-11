@@ -500,6 +500,18 @@ bug-uri. O verificare rulată produce un rezultat, nu o impresie.
   copiate per repo — o copie divergentă e mai rea decât lipsa ei.
 - Ieșirea lor e în română, explicită, și spune ce anume să faci la eșec, nu
   doar că ceva e greșit.
+- **Versionate pe GitHub** (`gordasgdc/gdc-tools`, repo PRIVAT — conțin detalii
+  interne de proces, Regula 29). Pe o mașină nouă:
+  `git clone git@github.com:gordasgdc/gdc-tools.git ~/Developer/_gdc-tools`.
+  Orice verificare nouă se comite acolo, nu rămâne doar local — o unealtă care
+  trăiește pe un singur disc e la o defecțiune distanță de a nu mai exista.
+- **`audit-ecosystem.sh`** (a treia unealtă) — compară, pentru toate
+  aplicațiile deodată, versiunea din COD cu cea PUBLICATĂ. Diferența dintre
+  ele e exact ce vede (sau nu vede) clientul.
+- **Un fals pozitiv se repară imediat**, nu se tolerează: ascunde golurile
+  adevărate în zgomot. (Prima rulare a `audit-ecosystem.sh` raporta „?" la
+  cinci aplicații doar fiindcă nu știa unde își țin versiunea — reparat în
+  aceeași sesiune.)
 
 ## [PARTEA 2: SPECIFICAȚII TEHNICE PROIECT — DisplayCAL-CG]
 
