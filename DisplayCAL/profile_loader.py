@@ -3811,6 +3811,7 @@ class ProfileLoader:
             if (
                 not self._reset_gamma_ramps
                 and (self._manual_restore or profile_association_changed)
+                and profile is not None
                 and profile.tags.get("vcgt")
             ):
                 print(lang.getstr("calibration.loading_from_display_profile"))
@@ -3841,6 +3842,8 @@ class ProfileLoader:
             vcgt_values = vcgt.get_values()[:3]
             if self._reset_gamma_ramps:
                 print("Caching linear gamma ramps")
+            elif profile is None:
+                print("Using temporary linear gamma ramps for profile", desc)
             else:
                 print("Caching implicit linear gamma ramps for profile", desc)
         else:
@@ -3859,11 +3862,15 @@ class ProfileLoader:
                 if j == 0:
                     vcgt_value += 1
                 vcgt_ramp_hack[k][j] = vcgt_value
-        self.ramps[self._reset_gamma_ramps or key] = (
-            vcgt_ramp,
-            vcgt_ramp_hack,
-            vcgt_values,
-        )
+        # A failed read must not turn the linear fallback into a cached
+        # calibration. The file may become readable without its association
+        # or modification time changing (e.g. after a sharing violation).
+        if self._reset_gamma_ramps or profile is not None:
+            self.ramps[self._reset_gamma_ramps or key] = (
+                vcgt_ramp,
+                vcgt_ramp_hack,
+                vcgt_values,
+            )
         recheck = True
         return recheck, vcgt_ramp, vcgt_ramp_hack, vcgt_values
 
@@ -3903,7 +3910,8 @@ class ProfileLoader:
                 self.profiles[key].tags.get("vcgt")
             except Exception as exception:
                 print(exception)
-                self.profiles[key] = ICCProfile()
+                self.profiles[key] = None
+                return vcgt_values, None
         profile = self.profiles[key]
         if isinstance(profile.tags.get("vcgt"), VideoCardGammaType):
             # Get display profile vcgt
