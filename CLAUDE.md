@@ -513,6 +513,55 @@ bug-uri. O verificare rulată produce un rezultat, nu o impresie.
   cinci aplicații doar fiindcă nu știa unde își țin versiunea — reparat în
   aceeași sesiune.)
 
+**37. Tematizare și contrast — zero culori hardcodate în interfață
+(2026-09-14).** Cerut explicit de Cristi după un defect real în DataMover pe
+Windows: în Dark Mode apărea text negru pe fundal închis, iar fereastra de
+progres a actualizării rămânea albă imaculată cu carduri închise la culoare.
+Cauzele, ambele găsite în cod, nu presupuse: (a) 22 de culori literale scrise
+direct pe controale (`Foreground="Gray"`, `Background="#161616"`), care nu se
+schimbă niciodată la comutarea temei; (b) o fereastră declarată ca `<Window>`
+simplu, nu `ui:FluentWindow` — WPF îi desenează implicit fundalul ALB,
+ignorând complet tema aplicației.
+
+**Interzis, pe orice control de interfață (XAML/WPF sau SwiftUI):** valori
+literale de culoare pentru `Foreground`, `Background`, `BorderBrush` — nici
+nume (`Black`, `White`, `Gray`, `Orange`), nici hex (`#000000`, `#FFFFFF`).
+
+**Obligatoriu:**
+- **WPF**: toate culorile trec prin `{DynamicResource ...}` către un dicționar
+  de temă unic al aplicației, iar acesta își ia culorile din tema activă
+  (WPF-UI: `ApplicationBackgroundColor`, `TextFillColorPrimary`,
+  `CardBackgroundFillColorDefault`, `CardStrokeColorDefault`). Aliasurile se
+  definesc ca `<SolidColorBrush Color="{DynamicResource <cheie temă>}"/>` —
+  NICIODATĂ ca două seturi de culori fixe, câte unul per temă, fiindcă acelea
+  trebuie ținute sincronizate manual, adică exact problema pe care regula o
+  interzice, mutată un nivel mai sus.
+- **SwiftUI**: culori semantice (`.primary`, `.secondary`, `Color(nsColor:)`)
+  sau Asset Catalog cu variantă Light/Dark. `.black`/`.white` doar în grafică
+  (desene, măști), niciodată ca text sau fundal de container.
+- **Stiluri implicite**: fiecare aplicație definește stiluri fără `x:Key`
+  pentru `TextBlock` și `TextBox`, ca orice control adăugat ulterior să
+  pornească deja tematizat. Asta e partea care face regula să se respecte
+  singură, fără ca cineva să-și amintească.
+- **Fiecare fereastră, dialog și pop-up** își setează explicit fundalul și
+  textul din resurse de temă. Un `<Window>` fără `Background` tematizat e
+  alb, indiferent de tema aplicației.
+- **Starea dezactivată** se tratează cu o culoare explicită vizibilă
+  (`#8E8E93`) și `Opacity="1"`, nu cu estomparea implicită a WPF: pe fundal
+  închis, un text deja gri devenit 40% transparent ajunge invizibil.
+- **Culorile semantice** (succes/avertisment/eroare) sunt intenționat
+  identice în ambele teme, dar se definesc O SINGURĂ DATĂ ca resurse cu nume,
+  niciodată scrise literal pe un control.
+
+**Verificare obligatorie înainte de orice release**, în toate cele trei moduri
+(Sistem, Light, Dark), plus auditul automat (Regula 36):
+
+    ~/Developer/_gdc-tools/audit-theme-colors.sh
+
+Auditul pică build-ul dacă găsește culori literale pe controale sau ferestre
+fără fundal tematizat. Rularea lui NU înlocuiește privitul cu ochii în ambele
+teme — el prinde cauza, nu simptomul.
+
 ## [PARTEA 2: SPECIFICAȚII TEHNICE PROIECT — DisplayCAL-CG]
 
 ### Context (2026-09-05)
