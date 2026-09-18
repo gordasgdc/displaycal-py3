@@ -5,562 +5,12 @@
 
 Citit automat de Claude Code la fiecare sesiune în acest repo.
 
-## [PARTEA 1: REGULI GLOBALE ECOSISTEM GDC — identică în toate proiectele GDC]
+## [PARTEA 1: REGULI GLOBALE ECOSISTEM GDC] — mutată în `~/Developer/CLAUDE.md`
 
-> Acest bloc e sincronizat manual în `CLAUDE.md`-ul TUTUROR proiectelor din
-> `~/Developer/` (CGConvertor, CursorPro, DataMover, GDCPluginManager,
-> GDCPluginManagerWin, GDCVault, GDCVaultWin, gdc-plugin-manager-catalog-vendor,
-> gdc-plugin-manager-files, gdc-production-manager, gdc-resolve-encoder,
-> displaycal-py3, și orice proiect GDC nou). Dacă modifici o regulă aici,
-> propag-o manual și în celelalte fișiere — nu există un fișier
-> partajat/include, fiecare `CLAUDE.md` e citit independent per-repo. Vezi
-> jurnalul "Sincronizare CLAUDE.md" din secțiunea Partea 2 a fiecărui repo
-> pentru data ultimei unificări.
-
-**1. Directoare & structură.** Toate proiectele GDC trăiesc exclusiv în
-`~/Developer/<NumeProiect>/`, niciodată în `~/Downloads` sau `~/Desktop`
-(curățate automat de CleanMyMac/Hazel pe acest Mac — au șters repo-uri de
-sursă în trecut). Niciun repo nou nu se creează/clonează în afara
-`~/Developer/`. Certificatele Apple (`.p12`/`.cer`) și orice cheie privată
-(`.p8`/`.key`/`.pem`/`.mobileprovision`) stau EXCLUSIV în
-`~/Developer/Certificates/` (folder în afara oricărui repo git) — niciodată
-comise, indiferent de `.gitignore`.
-
-**2. Securitate — zero secrete în git.** `.git/config` nu conține niciodată
-un token în clar în URL-ul remote-ului (`https://user:TOKEN@github.com/...`)
-— autentificare exclusiv prin `gh` (credential helper) sau SSH. Orice token
-găsit expus se elimină din config imediat; revocarea efectivă din GitHub
-Settings e un pas manual al lui Cristi (Claude nu poate revoca un token).
-Un secret comis vreodată în istoricul git (verificat cu
-`git log --all -p | grep` sau echivalent) trebuie semnalat explicit, nu doar
-curățat din starea curentă.
-
-**3. Licențiere & Donație (GDC Plugin Manager / Furnizor).** Toate
-aplicațiile standalone GDC folosesc `LicenseCore`/`MachineID` (Ed25519,
-aceeași cheie publică hardcodată în tot ecosistemul — copiată byte-for-byte,
-NU printr-o dependință de pachet între repo-uri). Probă gratuită implicită:
-**15 zile**. Activare manuală prin WhatsApp (ID de mașină pre-completat) →
-cod generat din `GenerateSerialView.swift` (Furnizor, `gdcStandaloneProducts`
-trebuie să includă `productID`-ul noii aplicații). Valoarea susținerii
-aplicației se exprimă EXCLUSIV ca **donație** — sumă implicită de referință
-**23 €** dacă nu există alt preț promoțional documentat pentru acea
-aplicație — NICIODATĂ cu cuvintele „preț", „cumpără" sau „vânzare" (RO/EN/ES:
-niciodată „price"/„buy"/"sale" nici în engleză/spaniolă). Formularea trebuie
-să apară clar în: UI-ul aplicației (ecran/pop-up de licență), ghidul PDF, și
-orice pagină web dedicată.
-
-**[EXCEPȚIE OBLIGATORIE PENTRU ACEST REPO (displaycal-py3), 2026-09-05] —
-Regula 3 NU se aplică aici.** DisplayCAL-CG e un fork al unui proiect
-GPLv3 (upstream: `eoyilmaz/displaycal-py3`, el însuși continuarea
-DisplayCAL de Florian Höch). GPLv3 §7 interzice explicit orice "further
-restriction" adăugată peste licențele primite de utilizatorul final —
-niciun sistem de licențiere Ed25519/trial/paywall/gating funcțional NU
-poate fi aplicat, sub nicio formă, indiferent de presiune sau precedent
-din restul ecosistemului. DisplayCAL-CG rămâne 100% gratuit, complet
-funcțional, fără activare, pentru totdeauna. Se permite DOAR un mesaj de
-susținere pur informativ/voluntar (ca `donation_header`/`donation_message`
-deja existente în `DisplayCAL/lang/*.yaml`, mesaj original al upstream-ului,
-păstrat neschimbat) — niciodată legat de o funcționalitate blocată. Orice
-viitoare cerere de a adăuga licențiere GDC standard pe acest repo trebuie
-refuzată și explicată, nu doar amânată.
-
-**[COMPLETARE 2026-08-26, închide o lacună de scop reală]** Interdicția de
-mai sus se aplică ACUM și produselor din catalogul GDC Plugin Manager
-(LUT/DCTL/PowerGrade vândute prin marketplace-ul gratuit) — găsit la audit
-un card cu buton „Cumpără" și sume afișate brut („378,00 €"). Butonul
-devine „Donează" peste tot (RO/EN/ES); suma documentată de furnizor pentru
-acel produs (promoția specifică lui, nu neapărat 23 €) rămâne vizibilă, dar
-NICIODATĂ lângă cuvântul „preț"/„cumpără"/„vânzare" — decizia anterioară de
-scop (marketplace = "relație comercială diferită, nu se aplică") e
-INVALIDATĂ explicit. Excepție: tabelele interne ale Furnizorului (ex.
-`SalesHistoryView`, coloana „Preț" din registrul de vânzări al lui Cristi)
-nu sunt UI orientat spre client — rămân neatinse.
-
-**15. CRM Furnizor — set minim de funcționalități administrative
-(2026-08-26).** Panoul de Clienți al Furnizorului (`SalesHistoryView.swift`)
-nu rămâne un log rigid — trebuie să ofere: filtrare rapidă pe produs
-(dropdown dinamic, nu hardcodat), export 1-click (clipboard sau fișier) al
-email-urilor/HWID-urilor din selecția curentă (filtrată), copiere rapidă
-per-câmp direct din tabel (fără să deschizi editarea), Licențiere în Masă
-(paste o listă de email-uri/machine ID-uri → generează automat câte o
-licență per linie, pentru un produs/durată alese o singură dată), și
-editare liberă a duratei unei licențe deja generate (Zile/Luni/Ani/
-Lifetime). Furnizorul arată versiunea curentă în UI, la fel ca orice
-aplicație client — nu e scutit de Regula 7 doar pentru că e un instrument
-intern.
-
-**16. Design Web "Shift" — compact, fără spații goale (2026-08-26).**
-Completare la Regula 12: paginile de prezentare NU doar adoptă paleta
-amber/cupru — trebuie și dense/aerisite corect, nu găunoase. `min-height:
-100svh` pe un hero cu conținut scurt lasă spațiu gol enorm pe orice ecran
-mai mare — evită-l sau limitează-l (ex. `78svh`); padding-ul secțiunilor
-(`section`) rămâne generos dar nu excesiv (60px, nu 90px+). Orice accent
-vechi (verde/teal/albastru folosit ca accent PRIMAR, nu ca stare
-semantică precum "verificat cu succes") se înlocuiește cu amber/cupru —
-o variabilă CSS poate păstra alt NUME istoric (`--scope`, `--accent-copy`)
-atât timp cât VALOAREA ei devine amber, ca să nu rescrii zeci de
-apariții `var(--x)` din foaia de stil.
-
-**4. Manager de Dependențe (Standard GDC, opt-in).** Aplicația de bază
-rămâne lightweight — orice dependință externă opțională/grea (ex. FFmpeg
-static) se descarcă LA CERERE, nu bundle-uită implicit dacă poate fi evitat.
-Indicator global 🔴/🟢 vizibil în header/meniu: verde doar dacă TOATE
-componentele obligatorii (non-opționale) sunt OK; componentele opționale
-(ex. Homebrew pe Mac) nu blochează starea verde. Click pe indicator deschide
-un panou dedicat ("Verificare & Dependențe Sistem") cu o listă modulară de
-componente (model generic `DependencyItem` — id, nume, opțional/obligatoriu,
-verificare headless, acțiune, niciodată câmpuri hardcodate per-dependință),
-fiecare cu propriul status + buton de acțiune (descărcare automată a unui
-binar static, sau copiere comandă de instalare). Verificarea rulează headless
-la fiecare deschidere a panoului/meniului, actualizând starea instant.
-
-**[NOTĂ pentru acest repo]**: ArgyllCMS (dependința externă critică a
-DisplayCAL) are DEJA propriul flux de descărcare/verificare nativ, matur
-(`dialog.argyll.notfound.choice` etc.) — nu se înlocuiește cu
-`DependencyManager` generic GDC, ar duplica funcționalitate existentă și
-testată de comunitatea upstream.
-
-**5. Instalare Autonomă.** Mac: `.pkg` semnat Developer ID Application +
-Installer, notarizat, stapled, cu `pkgbuild --install-location "/"` și
-payload la `Applications/<App>.app` — instalare DIRECTĂ în `/Applications`
-la dublu-click, fără drag-and-drop manual (verificabil cu
-`pkgutil --payload-files`). Windows: installer Inno Setup cu
-`DefaultDirName={autopf}\GDC\<App>` (Program Files) sau varianta x86,
-scurtături automate Desktop + Start Menu, dezinstalare nativă prin
-"Apps & Features" (fără script separat necesar dacă Inno Setup o acoperă).
-
-**6. Packaging Mac — arhivă cu STRICT 3 fișiere.** Orice
-`<App>-Mac.zip` livrat clientului conține la rădăcină EXACT: (1)
-executabilul/`.pkg`-ul semnat+notarizat+stapled, (2)
-`Dezinstalare_<App>.command` (dezinstalare completă: procese, TCC dacă
-relevant, `~/Library/Application Support`, `Caches`, `Preferences`,
-`Saved Application State`, `Logs`, orice item Keychain scris de aplicație),
-(3) `Instructiuni_Utilizare.pdf` (RO/EN/ES). NICIODATĂ hack-uri
-`xattr -dr com.apple.quarantine` sau launchere `Instalare_*.command` —
-pachetul stapled e acceptat nativ de Gatekeeper. Curățarea unei instalări
-vechi se face în `installer/scripts/preinstall` (`pkgbuild --scripts`,
-pkill + `rm -rf`), niciodată legat de quarantine.
-
-**7. UI Standard — varianta "Shift".** Temă dark, profesională, inspirată de
-paginile de Color din DaVinci Resolve (fundal `#14161A`/`#1A1D22`, accent
-cald cupru/amber sau altă culoare distinctă per-aplicație, text `#EDEFF2`).
-Număr de versiune vizibil în UI (About/Meniu/Settings/Footer), fără excepție.
-Update Checker automat la lansare + verificare manuală, conectat la
-`update.json`/GitHub Releases API, cu notificare atât banner discrét CÂT ȘI
-pop-up modal (o singură dată per versiune nouă, stare de dismissal comună
-între cele două) — un simplu banner nu e suficient. `mandatory: true` în
-`update.json` ignoră dismissal-ul anterior.
-
-**[NOTĂ pentru acest repo]**: interfața DisplayCAL (wxPython) NU se
-rescrie în stilul "Shift" — e un proiect upstream matur, cu propria temă
-și convenții UI, folosit de o comunitate mare de utilizatori familiarizați
-cu aspectul actual. Rebranding-ul se limitează la nume/logo/traducere, nu
-la un redesign vizual complet.
-
-**8. Documentație PDF — standard ultra-detaliat.** Orice
-`Instructiuni_Utilizare.pdf` (RO/EN/ES) se redactează pentru un utilizator
-complet începător, zero presupuneri, cu secțiunile relevante aplicației:
-(a) Panoul de Dependențe — ce înseamnă 🔴/🟢, pas-cu-pas ce face userul la
-roșu (unde dă clic, ce se deschide, ce buton apasă); (b) Homebrew (Mac,
-dacă aplicabil) — pași la nivel de acțiune: copiază comanda din aplicație,
-deschide Terminal (Spotlight, `⌘+Space`), lipește (`⌘+V`), Enter, apoi
-explică parola de Mac cerută (invizibilă la tastare) + Enter din nou;
-(c) Fluxul de utilizare + acțiuni post-proces — cum se adaugă
-fișiere/date, ce face fiecare buton rezultat; (d) Licență & Donație — trial
-gratuit explicit (zile), suma exactă ca donație (niciodată "preț"/"vânzare");
-(e) Cum funcționează actualizarea automată — ce înseamnă pop-up-ul de
-versiune nouă, ce face butonul „Actualizează acum" vs „Mai târziu", și că
-instalarea noii versiuni rămâne un pas asistat (descărcare + reinstalare),
-nu un update silențios în fundal.
-
-**[NOTĂ pentru acest repo]**: (d) devine "Licență GPLv3 & Susținere
-opțională" — fără nicio mențiune de trial/zile, aplicația e completă din
-prima zi.
-
-**9. Checklist obligatoriu la FIECARE release** (păstrat identic cu
-"DIRECTIVĂ PERMANENTĂ SUPREMĂ" din jurnalul fiecărui proiect — punctele
-1-4 de acolo sunt subsumate integral de punctele 5-8 de mai sus). Site-ul
-public al fiecărei aplicații trebuie să pointeze mereu la
-`releases/latest/download/...` (HTTP 200 verificat, nu presupus), niciodată
-un tag fix.
-
-**10. Comunicare & jurnal.** Fiecare `CLAUDE.md` rămâne un jurnal
-append-only (regulile vechi nu se șterg, doar se marchează
-**[ÎNVECHIT]** cu motivul dacă sunt explicit invalidate). Răspunsurile
-Claude rămân ultra-concise: fără explicații de proces, direct codul/
-diff-ul/comenzile și statusul. La orice modificare de cod, comanda exactă
-de rebuild local se include la finalul răspunsului.
-
-**11. Sincronizare dinamică a Standardului Master (CONTINUOUS UPDATE,
-2026-08-26).** Orice adăugare/modificare/optimizare a unei reguli globale
-din ACEASTĂ Partea 1 — indiferent din ce proiect pornește — devine automat
-noul Standard Master și TREBUIE propagată manual, în ACELAȘI commit sau
-imediat următorul, în `CLAUDE.md`-ul tuturor celorlalte proiecte din
-`~/Developer/` (nu doar notată "pentru mai târziu"). Orice aplicație NOUĂ
-creată în `~/Developer/` primește Partea 1 (versiunea curentă, completă)
-încă din primul `CLAUDE.md` scris pentru ea — nu se pornește niciodată de
-la un fișier gol sau parțial. Regula 1 de mai sus ("Dacă modifici o regulă
-aici, propag-o manual...") descrie mecanismul; aceasta îl declară
-obligatoriu, nu opțional.
-
-**12. Profil Utilizator/HWID în Sidebar, Sistem de Revocare Licențe &
-Standard Design Web Mobile/Desktop "Shift" (2026-08-26).**
-- **Profil Utilizator opțional, vizibil în sidebar-ul UI** (Mac + Windows,
-  pe toate aplicațiile cu licențiere GDC): Nume (sau „Anonim" dacă nu e
-  completat), Email, și Machine ID (HWID) — afișate clar, nu ascunse
-  într-un submeniu. Portat din modulul Tracker existent (Mac,
-  `AnalyticsClient.registerDevice` → Supabase `devices`) — Windows trebuie
-  aliniat la aceeași infrastructură, nu una separată.
-- **Revocare/blacklist de licențe, prin Supabase** (ACEEAȘI bază de date
-  deja folosită de Tracker — niciun backend nou de construit). O licență
-  Ed25519 rămâne verificată local (offline-first, nicio schimbare la
-  activarea inițială), dar clientul verifică periodic + la lansare (dacă
-  există conexiune) un tabel de revocări după `machineID`/serial. **Fail
-  OPEN, nu fail closed**: fără conexiune la internet, o licență deja
-  activată local CONTINUĂ să funcționeze (nu bricuim un user legitim offline)
-  — revocarea se aplică abia la următoarea verificare online reușită.
-  Furnizor capătă unelte de revocare instant + editare a perioadei de
-  valabilitate a unei licențe existente deja generate.
-- **Generare flexibilă de licențe** (Furnizor): selector explicit al
-  duratei — Zile / Luni / Ani / Forever (Lifetime) / Valabil până la
-  versiunea X — nu doar trial fix + activare permanentă binară.
-- **Standard Design Web "Shift"** — orice pagină de prezentare/descărcare
-  GDC (`gordas.dev` și paginile dedicate per-aplicație) adoptă design-ul
-  dark, minimalist, accent amber/cupru consacrat de CG Convertor
-  (`gordas.dev/cg-convertor`) — niciun accent verde vechi sau stil
-  nealiniat. Toate paginile trebuie optimizate explicit pentru mobil
-  (iOS Safari + Android Chrome), verificat vizual la lățimi de telefon,
-  nu doar "responsive by CSS framework".
-
-**[NOTĂ pentru acest repo]**: primele două puncte (Profil/HWID, Revocare)
-NU se aplică — nu există licențiere pe acest produs (vezi excepția de la
-Regula 3). Pagina web (`gordas.dev/DisplayCAL-CG/`) urmează totuși
-Standardul Design Web "Shift", ca restul suitei.
-
-**13. Update Checker — specificație UX obligatorie (2026-08-26).** La
-lansare, aplicația verifică `update.json`/GitHub Releases; dacă versiunea
-locală e mai veche, arată un pop-up/modal Shift (nu doar bannerul discret
-din Regula 7) cu: numărul noii versiuni, un rezumat scurt al noutăților
-(Release Notes, dacă `update.json` le are — câmp opțional, degradează
-elegant dacă lipsește), și DOUĂ butoane explicite — **„Actualizează acum"**
-(deschide direct link-ul de descărcare a installer-ului/pachetului nou,
-`releases/latest/download/...`, și arată userului că trebuie să
-instaleze peste versiunea curentă + repornească aplicația — NU e un
-self-update silențios, niciun helper nu înlocuiește bundle-ul/exe-ul în
-fundal, vezi WARNING-ul deja existent din `UpdateChecker.swift`/`.cs`) și
-**„Mai târziu"** (închide fereastra, aceeași stare de dismissal ca
-bannerul). Popup-ul apare o singură dată per versiune nouă, cu excepția
-`mandatory: true` (reapare la fiecare lansare). Ghidul PDF (Regula 8(e))
-trebuie să explice acest flux exact.
-
-**[NOTĂ pentru acest repo]**: DisplayCAL are deja `update_check.py`
-propriu (upstream, matur) — vezi `DisplayCAL/meta.py`
-(`GITHUB_API_URL`/`DEVELOPMENT_HOME_PAGE`, redirecționate spre
-`gordasgdc/displaycal-py3`, 2026-09-05). Se extinde/verifică acel flux, nu
-se înlocuiește cu un checker GDC nou.
-
-**14. Versionare semantică obligatorie la FIECARE schimbare (2026-08-26).**
-Orice modificare de cod livrată clientului — oricât de mică — incrementează
-numărul de versiune, sincron în TOATE punctele care îl țin (Info.plist Mac,
-`.csproj`/`installer.iss` Windows, `docs/update.json`, orice altă constantă
-de versiune din acel repo). Format `MAJOR.MINOR.PATCH` (ex. `2.3.1`):
-- **PATCH** (ultima cifră, `2.3.0`→`2.3.1`) — orice fix, ajustare, adăugare
-  mică sau schimbare care nu rupe compatibilitatea. Cazul implicit, cel mai
-  frecvent.
-- **MINOR** (cifra din mijloc, `2.3.x`→`2.4.0`) — funcționalitate nouă
-  vizibilă (ex. o fază/etapă întreagă ca Panoul de Dependențe sau Profilul
-  HWID), fără schimbări radicale de arhitectură.
-- **MAJOR** (prima cifră, `2.x.x`→`3.0.0`) — schimbare radicală: rebranding,
-  redesign complet de UI, schimbare de arhitectură (ex. sistem nou de
-  licențiere), sau orice prag pe care Cristi îl declară explicit "versiune
-  majoră".
-
-**[NOTĂ pentru acest repo]**: versiunea urmărește UPSTREAM-ul
-(`DisplayCAL/VERSION`, ex. `3.10.0.dev82`), NU un contor GDC separat —
-distincția noastră se marchează cu un sufix de build separat (ex.
-`+cg.1`, `+cg.2` per resincronizare/rebuild), nu prin schimbarea
-numărului de bază, ca update checker-ul upstream (bazat pe compararea
-directă a numărului din `VERSION`) să rămână corect.
-
-**17. Orice fișier descărcabil TREBUIE să poarte numărul versiunii în NUMELE
-fișierului (2026-08-26).** Nu doar în interiorul aplicației (Regula 14) —
-în numele fizic al pachetului: `DataMover-2.5.5.pkg`, nu `DataMover.pkg`;
-`GDCPluginManagerSetup-1.2.8.exe`, nu `GDCPluginManagerSetup.exe`. Motiv
-direct de la Cristi: probele/build-urile de test se acumulează local (în
-`~/Downloads`, `/tmp`, trimise pentru testare) și devin de nerecunoscut
-fără versiune în nume — "am o grămadă de descărcări și nu știu ce versiune
-sunt, care, ce și cum sunt".
-- **Excepție, NU o contrazicere**: mecanismul `releases/latest/download/
-  <nume-stabil>` (site-ul, self-updater-ul) are nevoie STRUCTURAL de un
-  nume care nu se schimbă niciodată între release-uri — vezi Regula
-  Domeniului & Download. Copia asta stabilă tot trebuie publicată, DAR
-  ALĂTURI de copia versionată, niciodată singură.
-- **Orice fișier construit/descărcat/trimis lui Cristi în afara acestui
-  mecanism** (build local de test, artefact de CI descărcat manual,
-  fișier trimis prin `SendUserFile`, copie pusă în `/tmp` pentru
-  verificare) TREBUIE redenumit explicit cu versiunea înainte de a fi
-  oferit — niciodată livrat cu numele generic/stabil, care are sens doar
-  ca țintă a unui link fix, nu ca fișier de sine stătător pe disc.
-
-**18-31.** (Standard UX aplicații noi, Regulă Legală/Consent Gate,
-Self-Updater, Memory & I/O, PlatformTarget, gardă `dist/` root-owned,
-Mărime Text, CHANGELOG+DiagnosticLog, Terminal Live, Pricing dinamic,
-audit licență, zero informație internă publică, cod complet/paritate
-Mac-Win) — **valabile ca text, dar Regulile 12/18(licență)/20/27/28
-(self-updater bazat pe licențiere, pricing, audit licență) NU se aplică
-efectiv aici** din motivul explicat la excepția Regulii 3: acest produs nu
-are licențiere/trial/preț de auditat. Consent Gate-ul de instalare (Regula
-19) RĂMÂNE obligatoriu, dar conținutul lui e licența GPLv3 + creditele
-originale, nu Termenii GDC. Vezi textul complet al acestor reguli în
-`CLAUDE.md` al oricărui alt repo GDC (ex. `CGConvertor`) — nu duplicat aici
-ca să nu divergă la sincronizări viitoare ale Părții 1.
-
-**32. Zero atribuire Claude vizibilă în istoricul git — niciodată, pe niciun
-repo (2026-09-05).** Cerut explicit de Cristi. Regulă obligatorie,
-permanentă, pentru toate repo-urile GDC — inclusiv acest fork. **Notă
-specifică acestui repo**: istoricul UPSTREAM (mii de commit-uri de la
-zeci de contribuitori externi, sincronizat prin fast-forward de la
-`eoyilmaz/displaycal-py3`) NU se rescrie niciodată — Regula 32 privește
-DOAR ce adaugă Claude de-acum înainte în acest fork (niciun commit nou al
-lui Claude nu conține `Co-Authored-By: Claude`), nu istoria unui proiect
-open-source terț cu mulți autori legitimi.
-
-**33. Iconițe SVG monocrome, tip contur — niciodată emoji, pe nicio pagină
-web GDC (2026-09-05).** Cerut explicit de Cristi, după ce a comparat
-`gordas.dev/DisplayCAL-CG/` (emoji colorate ca iconițe de feature) cu
-`gordas.dev/mac-master-control-pro/` (sprite SVG monocrom, `currentColor`,
-stil contur) — a doua variantă e standardul, prima nu mai e acceptabilă.
-Regulă obligatorie pentru orice pagină de prezentare/descărcare GDC nouă
-sau atinsă de-acum înainte:
-- Un singur `<svg style="display:none">` cu `<symbol>`-uri, inserat o
-  singură dată în `<body>`, referit prin `<svg><use href="#icon-x"/></svg>`
-  oriunde e nevoie (brand mark din header, badge mare din hero, iconițe de
-  feature, iconițe din butoane) — niciodată emoji Unicode (⬇ 🎯 🖥️ 📊 etc.)
-  ca iconiță funcțională sau decorativă principală.
-- Stil vizual: `fill="none" stroke="currentColor" stroke-width="1.6-1.8"
-  stroke-linecap="round"` (contur simplu, 24×24 viewBox) — culoarea vine
-  din CSS (`color:var(--accent)` pe containerul părinte), nu hardcodată în
-  SVG. Vezi sprite-ul complet de referință din `mac-master-control-pro/`
-  (`gear`, `zap`, `piechart`, `globe`, `cloud`, `trash`, `wrench`, `shield`,
-  `cpu`, `box`, `harddrive`, `download`, etc.) — reutilizează un icon
-  existent din acel sprite dacă se potrivește semantic, înainte de a
-  desena unul nou.
-- **Atenție la `data-i18n`/`textContent` pe elemente care conțin și un
-  `<svg>`** (ex. un buton cu iconiță + text) — `el.textContent = ...` la
-  schimbarea de limbă ȘTERGE orice copil SVG din acel element. Textul
-  tradus trebuie să stea într-un `<span data-i18n="...">` COPIL, separat
-  de `<svg>`, niciodată direct pe elementul care conține iconița.
-- **Nu retroactiv, la fiecare pagină deodată** — orice aplicație/pagină
-  care încă folosește emoji ca iconițe de feature se aliniază la acest
-  model DOAR la următoarea ei atingere/actualizare reală, nu într-o
-  sesiune dedicată exclusiv migrării tuturor paginilor existente.
-- **Bonus, găsit în aceeași sesiune**: bulina de status colorată
-  (`.dot`/`.signed-note .dot`, un `<span>` cu `background` CSS) NU intră
-  sub această regulă — e un indicator de stare semantic (verde =
-  verificat), nu o iconiță de conținut, poate rămâne CSS pur.
-
-**34. Semnare Windows (Code Signing) obligatorie la build — Self-Signed
-ca implicit pentru testare internă, real (comercial) la lansare publică
-(2026-09-06).** Cerut explicit de Cristi, după clarificarea (verificată
-tehnic, nu presupusă) că un certificat self-signed NU elimină avertismentul
-SmartScreen/"Unknown Publisher" pentru publicul larg — doar un certificat
-real de la o CA publică (cu reputație acumulată) sau un certificat EV fac
-asta; din iunie 2023, CA/Browser Forum obligă orice certificat OV/EV nou
-să fie stocat pe token hardware/HSM cloud (Azure Trusted Signing, DigiCert
-KeyLocker, SSL.com eSigner), NU ca `.pfx` exportabil. Decizie explicită
-Cristi: self-signed ACUM (testare internă + cerc restrâns, cu `.cer`
-importat manual de colaboratori în Trusted Root), evaluare Azure Trusted
-Signing/EV la lansarea comercială publică — regula de mai jos NU
-presupune că self-signed rezolvă SmartScreen pentru clienți finali, e
-DOAR pentru etapa de testare.
-- **Certificatul (privat, cu cheie) NU trece NICIODATĂ prin conversația cu
-  Claude** — generarea (`New-SelfSignedCertificate`, doar posibilă pe
-  Windows real, Claude nu poate rula asta de pe Mac) și încărcarea ca
-  secret CI (`gh secret set`, valoare base64 a `.pfx` + parola) se fac
-  DIRECT de Cristi, pe mașina lui Windows — identic cu regula deja
-  existentă pentru parole/chei (Claude nu vede/manipulează credențiale).
-- **CI-ul de build Windows verifică ÎNTÂI existența secretelor** (ex.
-  `WIN_SELFSIGN_PFX_BASE64`/`WIN_SELFSIGN_PFX_PASSWORD`) — dacă lipsesc,
-  build-ul continuă NESEMNAT (exact ca varianta Mac, `APPLE_SIGN_IDENTITY_APP`
-  nesetat → semnare ad-hoc, niciodată o eroare de build). Dacă sunt
-  prezente: decodează `.pfx`-ul temporar, semnează cu `signtool.exe`
-  (localizat dinamic din Windows Kits, NU hardcodat o versiune) atât
-  executabilul PyInstaller cât și installer-ul final Inno Setup, cu
-  timestamp (`/tr .../td sha256`) ca semnătura să rămână validă și după
-  expirarea certificatului, apoi ȘTERGE fișierul `.pfx` temporar de pe
-  disc imediat după folosire.
-- **Verificare post-semnare obligatorie în CI**: `Get-AuthenticodeSignature`
-  (confirmă DOAR că fișierul are efectiv o semnătură atașată — nu
-  `signtool verify /pa`, care validează lanțul de încredere complet și
-  eșuează mereu pe un runner CI proaspăt, unde certificatul self-signed
-  nu e importat în Trusted Root; asta e normal pentru testare internă,
-  nu un eșec real) pe fiecare executabil semnat, ÎNAINTE ca pasul de
-  build să fie considerat trecut — o semnare care "reușește" silențios
-  dar produce un binar nesemnat/corupt nu trebuie să treacă drept succes.
-  **[CORECȚIE 2026-09-06]**: prima implementare folosea `signtool verify
-  /pa`, care a picat CI-ul chiar și după o semnare reușită — descoperit
-  la primul test real, corectat imediat.
-- **Exportul `.cer` (public, fără cheie privată)** se publică alături de
-  installer (asset de release sau folder `dist/`) — colaboratorii îl
-  importă o SINGURĂ dată în Trusted Root, apoi orice build viitor semnat
-  cu ACELAȘI certificat (persistent via secret CI, NU regenerat la
-  fiecare build — un cert nou la fiecare release ar rupe încrederea deja
-  acordată) e automat de încredere pe mașinile lor.
-- **Aplicare**: la fiecare build de release/actualizare Windows, pe orice
-  aplicație din `~/Developer/` care produce un `.exe`/installer Windows —
-  aplicată incremental, la următoarea atingere reală a fiecărui repo
-  (Regula 11), nu retroactiv peste tot dintr-o sesiune dedicată.
-- **Implementare de referință**: CGConvertor (`build-windows.spec` +
-  `.github/workflows/build-windows.yml`, 2026-09-06) — vezi
-  `codesigning/README-windows.md` din acel repo pentru pașii exacți pe
-  care Cristi trebuie să-i ruleze o singură dată (generare cert + upload
-  secret CI).
-
-**35. Fluxul de actualizare se VERIFICĂ pe client real, nu se presupune —
-obligatoriu la FIECARE release (2026-09-11).** Cerut explicit de Cristi după
-un caz real: un client a trimis o captură în care GDC Plugin Manager v1.27.0
-arăta „Sunteți pe cea mai nouă versiune", deși live era 1.30.0. Auditul a
-găsit **trei defecte independente**, toate invizibile din repo — codul era
-corect, `update.json` din repo era corect, dar clientul instalat tot nu primea
-nimic:
-
-1. **Schimbarea formatului `update.json` rupe clienții deja instalați.** Pe
-   2026-09-03 fișierul a trecut de la un câmp `version` la rădăcină la secțiuni
-   separate `mac`/`windows`. Clienții ≤1.27 decodează `version` și
-   `download_url` ca fiind OBLIGATORII de la rădăcină → `JSONDecoder` aruncă →
-   verificarea eșuează **TĂCUT** și cade pe „ești la zi". Nu apare nicio
-   eroare, nicăieri. Erau blocați permanent, fără nicio cale de ieșire în
-   afară de reinstalare manuală — pe care n-aveau de unde s-o bănuiască.
-2. **Oglinda servită public rămâne în urma sursei din repo.** `gordas.dev` e
-   servit din `gdc-plugin-manager-catalog-vendor/docs/`, unde fiecare aplicație
-   are o COPIE a lui `update.json`. Un bump în repo-ul aplicației NU actualizează
-   oglinda. Găsite în urmă cu până la 3 versiuni (datamover 2.11.0 vs 2.14.0,
-   gdc-production-manager 2.0.2 vs 2.0.4, media-flow-monitor 1.9.1 vs 1.9.3).
-3. **`releases/latest` nu pointează unde crezi.** Un release nou care n-are
-   asset pentru o platformă lasă linkul stabil al acelei platforme mort (404),
-   sau „latest" rămâne pe un release mai vechi și clientul descarcă o versiune
-   anterioară celei anunțate.
-
-**Regula, obligatorie înainte de a declara ORICE release ca fiind gata:**
-
-- **Rulează verificatorul**, nu bifa din memorie:
-  `~/Developer/_gdc-tools/verify-update-flow.sh <update_url> <versiune> [link_stabil...]`
-  Verifică live: fișierul e accesibil, e JSON valid, versiunea SERVITĂ e chiar
-  cea publicată, câmpurile de compatibilitate pentru clienții vechi există, și
-  fiecare link stabil răspunde 200 real (urmărind redirectările GitHub).
-- **Formatul `update.json` nu se schimbă niciodată eliminând câmpuri.** Orice
-  câmp pe care o versiune publicată îl decodează ca obligatoriu rămâne în fișier
-  PENTRU TOTDEAUNA, chiar dacă versiunile noi nu-l mai folosesc. Un câmp nou se
-  adaugă pe lângă, niciodată în locul celui vechi. Costul e câțiva octeți;
-  alternativa e o categorie întreagă de clienți blocată definitiv, în tăcere.
-- **Când un singur câmp de versiune deservește ambele platforme**, valoarea e
-  MINIMUL dintre ele — niciodată maximul. Altfel o platformă e trimisă spre o
-  versiune care nu există pentru ea.
-- **Oglinda de pe `gordas.dev` se sincronizează în același commit** cu bump-ul
-  din repo-ul aplicației. Un `update.json` corect în repo, dar vechi pe server,
-  e exact la fel de rupt ca unul greșit.
-- **După publicare, verifică pe release-ul REAL** că `releases/latest`
-  pointează la tag-ul nou ȘI că are asset pentru FIECARE platformă pe care
-  `update.json` o anunță. Un release doar-Windows face 404 linkul Mac, deși
-  nimic din repo nu arată asta.
-- **Un update checker nu trebuie să eșueze tăcut.** La orice atingere a
-  codului de verificare, o eroare de rețea/decodare se loghează explicit
-  (`DiagnosticLog`, Regula 25) — „n-am putut verifica" și „ești la zi" sunt
-  două stări diferite și nu trebuie să arate identic utilizatorului.
-
-**36. Verificările se automatizează, nu se țin minte — `~/Developer/_gdc-tools/`
-(2026-09-11).** Cerut explicit de Cristi, după ce trei defecte de release au
-trecut neobservate deși toate regulile existau scrise: *"să nu depinzi de
-memorie, să-ți creezi tot timpul acea structură automatizată"*.
-
-Motivul e concret: o regulă scrisă într-un jurnal de 1000 de linii e bifată
-din memorie, iar memoria ratează exact cazurile rare — cele care produc
-bug-uri. O verificare rulată produce un rezultat, nu o impresie.
-
-**Uneltele existente** (comune tuturor repo-urilor, nu duplicate per proiect):
-- **`preflight-release.sh`** — rulat în rădăcina oricărui repo GDC înainte de
-  a declara un release gata. Verifică automat Regulile 32 (zero atribuire
-  Claude), 14 (versiuni sincronizate în toate fișierele care le țin), 25
-  (CHANGELOG actualizat), 29 (zero informație internă în notele publice) și
-  23 (`dist/` deținut de root).
-  `cd ~/Developer/<Repo> && ~/Developer/_gdc-tools/preflight-release.sh [versiune]`
-- **`verify-update-flow.sh`** — Regula 35, verificare live a fluxului de
-  actualizare (fișier accesibil, versiune servită, compatibilitate cu clienții
-  vechi, linkuri stabile 200 real).
-- **`clean-claude-attribution.sh`** — curățarea istoricului (Regula 32).
-
-**Regula de lucru:**
-- Înainte de a raporta un release ca fiind gata, rulează preflight-ul ȘI
-  verificatorul de update. Un „am verificat" fără ieșirea comenzii nu e o
-  verificare.
-- **Orice bug de proces descoperit devine o verificare în unealtă**, în aceeași
-  sesiune — nu doar un paragraf nou de jurnal. Dacă un defect a putut trece o
-  dată, va trece din nou; singura apărare care ține este una executabilă.
-- Uneltele trăiesc într-un singur loc (`~/Developer/_gdc-tools/`), niciodată
-  copiate per repo — o copie divergentă e mai rea decât lipsa ei.
-- Ieșirea lor e în română, explicită, și spune ce anume să faci la eșec, nu
-  doar că ceva e greșit.
-- **Versionate pe GitHub** (`gordasgdc/gdc-tools`, repo PRIVAT — conțin detalii
-  interne de proces, Regula 29). Pe o mașină nouă:
-  `git clone git@github.com:gordasgdc/gdc-tools.git ~/Developer/_gdc-tools`.
-  Orice verificare nouă se comite acolo, nu rămâne doar local — o unealtă care
-  trăiește pe un singur disc e la o defecțiune distanță de a nu mai exista.
-- **`audit-ecosystem.sh`** (a treia unealtă) — compară, pentru toate
-  aplicațiile deodată, versiunea din COD cu cea PUBLICATĂ. Diferența dintre
-  ele e exact ce vede (sau nu vede) clientul.
-- **Un fals pozitiv se repară imediat**, nu se tolerează: ascunde golurile
-  adevărate în zgomot. (Prima rulare a `audit-ecosystem.sh` raporta „?" la
-  cinci aplicații doar fiindcă nu știa unde își țin versiunea — reparat în
-  aceeași sesiune.)
-
-**37. Tematizare și contrast — zero culori hardcodate în interfață
-(2026-09-14).** Cerut explicit de Cristi după un defect real în DataMover pe
-Windows: în Dark Mode apărea text negru pe fundal închis, iar fereastra de
-progres a actualizării rămânea albă imaculată cu carduri închise la culoare.
-Cauzele, ambele găsite în cod, nu presupuse: (a) 22 de culori literale scrise
-direct pe controale (`Foreground="Gray"`, `Background="#161616"`), care nu se
-schimbă niciodată la comutarea temei; (b) o fereastră declarată ca `<Window>`
-simplu, nu `ui:FluentWindow` — WPF îi desenează implicit fundalul ALB,
-ignorând complet tema aplicației.
-
-**Interzis, pe orice control de interfață (XAML/WPF sau SwiftUI):** valori
-literale de culoare pentru `Foreground`, `Background`, `BorderBrush` — nici
-nume (`Black`, `White`, `Gray`, `Orange`), nici hex (`#000000`, `#FFFFFF`).
-
-**Obligatoriu:**
-- **WPF**: toate culorile trec prin `{DynamicResource ...}` către un dicționar
-  de temă unic al aplicației, iar acesta își ia culorile din tema activă
-  (WPF-UI: `ApplicationBackgroundColor`, `TextFillColorPrimary`,
-  `CardBackgroundFillColorDefault`, `CardStrokeColorDefault`). Aliasurile se
-  definesc ca `<SolidColorBrush Color="{DynamicResource <cheie temă>}"/>` —
-  NICIODATĂ ca două seturi de culori fixe, câte unul per temă, fiindcă acelea
-  trebuie ținute sincronizate manual, adică exact problema pe care regula o
-  interzice, mutată un nivel mai sus.
-- **SwiftUI**: culori semantice (`.primary`, `.secondary`, `Color(nsColor:)`)
-  sau Asset Catalog cu variantă Light/Dark. `.black`/`.white` doar în grafică
-  (desene, măști), niciodată ca text sau fundal de container.
-- **Stiluri implicite**: fiecare aplicație definește stiluri fără `x:Key`
-  pentru `TextBlock` și `TextBox`, ca orice control adăugat ulterior să
-  pornească deja tematizat. Asta e partea care face regula să se respecte
-  singură, fără ca cineva să-și amintească.
-- **Fiecare fereastră, dialog și pop-up** își setează explicit fundalul și
-  textul din resurse de temă. Un `<Window>` fără `Background` tematizat e
-  alb, indiferent de tema aplicației.
-- **Starea dezactivată** se tratează cu o culoare explicită vizibilă
-  (`#8E8E93`) și `Opacity="1"`, nu cu estomparea implicită a WPF: pe fundal
-  închis, un text deja gri devenit 40% transparent ajunge invizibil.
-- **Culorile semantice** (succes/avertisment/eroare) sunt intenționat
-  identice în ambele teme, dar se definesc O SINGURĂ DATĂ ca resurse cu nume,
-  niciodată scrise literal pe un control.
-
-**Verificare obligatorie înainte de orice release**, în toate cele trei moduri
-(Sistem, Light, Dark), plus auditul automat (Regula 36):
-
-    ~/Developer/_gdc-tools/audit-theme-colors.sh
-
-Auditul pică build-ul dacă găsește culori literale pe controale sau ferestre
-fără fundal tematizat. Rularea lui NU înlocuiește privitul cu ochii în ambele
-teme — el prinde cauza, nu simptomul.
+> Din 2026-09-18, regulile globale stau într-un singur fișier,
+> `~/Developer/CLAUDE.md`, citit automat de Claude Code în orice proiect din
+> `~/Developer/`. Nu se mai copiază aici. Ce era specific acestui repo în fosta
+> Partea 1 (statusuri, excepții) e la finalul fișierului.
 
 ## [PARTEA 2: SPECIFICAȚII TEHNICE PROIECT — DisplayCAL-CG]
 
@@ -1299,3 +749,82 @@ existentă (`cg.1`/`cg.2`) va fi anunțată AUTOMAT de acest update nou
 (`cg.3`) — prima confirmare reală a fix-ului din Etapa (8), în afara
 testului standalone. Eroarea de la pornire (Etapa (7)) e reparată în
 același build.
+
+### Completări specifice acestui repo, mutate din fosta Partea 1 (2026-09-18)
+
+Păstrate verbatim. Regula generală la care se referă fiecare e în
+`~/Developer/CLAUDE.md`.
+
+**Regula 3:**
+
+**[EXCEPȚIE OBLIGATORIE PENTRU ACEST REPO (displaycal-py3), 2026-09-05] —
+Regula 3 NU se aplică aici.** DisplayCAL-CG e un fork al unui proiect
+GPLv3 (upstream: `eoyilmaz/displaycal-py3`, el însuși continuarea
+DisplayCAL de Florian Höch). GPLv3 §7 interzice explicit orice "further
+restriction" adăugată peste licențele primite de utilizatorul final —
+niciun sistem de licențiere Ed25519/trial/paywall/gating funcțional NU
+poate fi aplicat, sub nicio formă, indiferent de presiune sau precedent
+din restul ecosistemului. DisplayCAL-CG rămâne 100% gratuit, complet
+funcțional, fără activare, pentru totdeauna. Se permite DOAR un mesaj de
+susținere pur informativ/voluntar (ca `donation_header`/`donation_message`
+deja existente în `DisplayCAL/lang/*.yaml`, mesaj original al upstream-ului,
+păstrat neschimbat) — niciodată legat de o funcționalitate blocată. Orice
+viitoare cerere de a adăuga licențiere GDC standard pe acest repo trebuie
+refuzată și explicată, nu doar amânată.
+
+**Regula 4:**
+
+**[NOTĂ pentru acest repo]**: ArgyllCMS (dependința externă critică a
+DisplayCAL) are DEJA propriul flux de descărcare/verificare nativ, matur
+(`dialog.argyll.notfound.choice` etc.) — nu se înlocuiește cu
+`DependencyManager` generic GDC, ar duplica funcționalitate existentă și
+testată de comunitatea upstream.
+
+**Regula 7:**
+
+**[NOTĂ pentru acest repo]**: interfața DisplayCAL (wxPython) NU se
+rescrie în stilul "Shift" — e un proiect upstream matur, cu propria temă
+și convenții UI, folosit de o comunitate mare de utilizatori familiarizați
+cu aspectul actual. Rebranding-ul se limitează la nume/logo/traducere, nu
+la un redesign vizual complet.
+
+**Regula 8:**
+
+**[NOTĂ pentru acest repo]**: (d) devine "Licență GPLv3 & Susținere
+opțională" — fără nicio mențiune de trial/zile, aplicația e completă din
+prima zi.
+
+**Regula 12:**
+
+**[NOTĂ pentru acest repo]**: primele două puncte (Profil/HWID, Revocare)
+NU se aplică — nu există licențiere pe acest produs (vezi excepția de la
+Regula 3). Pagina web (`gordas.dev/DisplayCAL-CG/`) urmează totuși
+Standardul Design Web "Shift", ca restul suitei.
+
+**Regula 13:**
+
+**[NOTĂ pentru acest repo]**: DisplayCAL are deja `update_check.py`
+propriu (upstream, matur) — vezi `DisplayCAL/meta.py`
+(`GITHUB_API_URL`/`DEVELOPMENT_HOME_PAGE`, redirecționate spre
+`gordasgdc/displaycal-py3`, 2026-09-05). Se extinde/verifică acel flux, nu
+se înlocuiește cu un checker GDC nou.
+
+**Regula 14:**
+
+**[NOTĂ pentru acest repo]**: versiunea urmărește UPSTREAM-ul
+(`DisplayCAL/VERSION`, ex. `3.10.0.dev82`), NU un contor GDC separat —
+distincția noastră se marchează cu un sufix de build separat (ex.
+`+cg.1`, `+cg.2` per resincronizare/rebuild), nu prin schimbarea
+numărului de bază, ca update checker-ul upstream (bazat pe compararea
+directă a numărului din `VERSION`) să rămână corect.
+
+**Regula 32:**
+
+repo (2026-09-05).** Cerut explicit de Cristi. Regulă obligatorie,
+permanentă, pentru toate repo-urile GDC — inclusiv acest fork. **Notă
+specifică acestui repo**: istoricul UPSTREAM (mii de commit-uri de la
+zeci de contribuitori externi, sincronizat prin fast-forward de la
+`eoyilmaz/displaycal-py3`) NU se rescrie niciodată — Regula 32 privește
+DOAR ce adaugă Claude de-acum înainte în acest fork (niciun commit nou al
+lui Claude nu conține `Co-Authored-By: Claude`), nu istoria unui proiect
+open-source terț cu mulți autori legitimi.
