@@ -828,3 +828,10 @@ zeci de contribuitori externi, sincronizat prin fast-forward de la
 DOAR ce adaugă Claude de-acum înainte în acest fork (niciun commit nou al
 lui Claude nu conține `Co-Authored-By: Claude`), nu istoria unui proiect
 open-source terț cu mulți autori legitimi.
+
+## Etapa 2026-09-20 — Distribuție DMG notarizat (Regula 45/K)
+- `build_pkg.sh` produce acum și `dist/DisplayCAL-CG-<v>.dmg` (+ copia stabilă `DisplayCAL-CG.dmg`): DMG cu `.pkg`-ul notarizat + ghidurile PDF, semnat Developer ID, notarizat (Accepted), stapled; `spctl -t open` → accepted. Verificat pe v3.10.0.dev82.
+- `self_updater.py`: instalează și din `.dmg` (hdiutil attach → installer -pkg → detach → relansare). `.pkg`-ul rămâne publicat ca canal pentru clienții vechi (`display_cal.py`/`update_check.py` caută încă `DisplayCAL-CG.pkg`).
+- `docs/index.html`: butonul Mac → `DisplayCAL-CG.dmg` (nume stabil; TODO Regula 41: link versionat).
+- Zero `.zip`/`.command` urmărite în repo.
+- NEVERIFICAT: montarea DMG-ului + instalarea prin Self-Updater pe un Mac curat, `stapler validate` post-montare, testele pytest (pytest lipsește din venv), stabilitatea colorimetrică, GitHub Release nepublicat.

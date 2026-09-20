@@ -469,5 +469,39 @@ else
 fi
 
 cp "$FINAL_PKG" "$DIST_DIR/DisplayCAL-CG.pkg"
+
+# [2026-09-20] Regula 45/K: distributia catre client e un DMG semnat Developer
+# ID, notarizat, cu bilet atasat — NU zip, NU .command. DMG-ul contine pkg-ul
+# deja notarizat (instalare directa in /Applications, Regula 5); pkg-ul singur
+# ramane doar canal pentru Self-Updater-ul vechi (nu monta DMG).
+if [ -n "${APPLE_SIGN_IDENTITY_APP:-}" ]; then
+    FINAL_DMG="$DIST_DIR/DisplayCAL-CG-$VERSION.dmg"
+    DMG_STAGE=$(mktemp -d)
+    cp "$FINAL_PKG" "$DMG_STAGE/DisplayCAL-CG-$VERSION.pkg"
+    for g in DisplayCAL-CG_Ghid_RO.pdf DisplayCAL-CG_Guide_EN.pdf DisplayCAL-CG_Guia_ES.pdf; do
+        [ -f "$g" ] && cp "$g" "$DMG_STAGE/"
+    done
+    rm -f "$FINAL_DMG"
+    hdiutil create -volname "DisplayCAL-CG $VERSION" -srcfolder "$DMG_STAGE" -fs HFS+ -format UDZO -ov "$FINAL_DMG"
+    rm -rf "$DMG_STAGE"
+    codesign --sign "$APPLE_SIGN_IDENTITY_APP" --timestamp "$FINAL_DMG"
+    echo "==> [codesigning] Notarizez DMG-ul…"
+    if [ -n "${APPLE_NOTARY_KEY_ID:-}" ]; then
+        key_p8_path="/tmp/notary-key-$$.p8"
+        printf '%s' "$APPLE_NOTARY_KEY_P8" > "$key_p8_path"
+        xcrun notarytool submit "$FINAL_DMG" --key "$key_p8_path" --key-id "$APPLE_NOTARY_KEY_ID" --issuer "$APPLE_NOTARY_ISSUER_ID" --wait
+        rm -f "$key_p8_path"
+    elif [ -n "${APPLE_NOTARY_APPLE_ID:-}" ]; then
+        xcrun notarytool submit "$FINAL_DMG" --apple-id "$APPLE_NOTARY_APPLE_ID" --team-id "$APPLE_NOTARY_TEAM_ID" --password "$APPLE_NOTARY_PASSWORD" --wait
+    else
+        xcrun notarytool submit "$FINAL_DMG" --keychain-profile "gdc-notary" --wait
+    fi
+    xcrun stapler staple "$FINAL_DMG"
+    xcrun stapler validate "$FINAL_DMG"
+    spctl -a -vv -t open --context context:primary-signature "$FINAL_DMG"
+    cp "$FINAL_DMG" "$DIST_DIR/DisplayCAL-CG.dmg"
+    echo "==> DMG: $FINAL_DMG (+ $DIST_DIR/DisplayCAL-CG.dmg)"
+else
+    echo "==> APPLE_SIGN_IDENTITY_APP nesetată — DMG nu se construiește (fără semnătură nu e livrabil)."
+fi
 echo "==> Gata: $FINAL_PKG"
-echo "==> Also: $DIST_DIR/DisplayCAL-CG.pkg"

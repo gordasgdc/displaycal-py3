@@ -49,23 +49,40 @@ def download_installer(url: str, timeout: int = 60) -> tuple[str | None, str | N
 
 
 def install_and_relaunch_mac(pkg_path: str) -> tuple[bool, str | None]:
-    """Install the downloaded .pkg via the native macOS admin-password
-    prompt (osascript "with administrator privileges" — never a raw
-    `sudo` without a TTY, never a visible Terminal window), then relaunch
-    the app. Runs a detached shell script so the CURRENT process (about to
-    be replaced on disk) doesn't need to stay alive for the install."""
+    """Install the downloaded .pkg or .dmg (the DMG holds the notarized .pkg)
+    via the native macOS admin-password prompt (osascript "with administrator
+    privileges" — never a raw `sudo` without a TTY, never a visible Terminal
+    window), then relaunch the app. Runs a detached shell script so the
+    CURRENT process (about to be replaced on disk) doesn't need to stay
+    alive for the install."""
     if not pkg_path or not os.path.isfile(pkg_path):
-        return False, "Fișierul .pkg descărcat nu a fost găsit."
+        return False, "Fișierul descărcat nu a fost găsit."
     temp_dir = os.path.dirname(pkg_path)
     script_path = os.path.join(temp_dir, "displaycal_cg_update.sh")
     log_path = os.path.join(temp_dir, "displaycal_cg_update.log")
+    is_dmg = pkg_path.lower().endswith(".dmg")
+    mount_point = os.path.join(temp_dir, "mnt")
+    if is_dmg:
+        prepare = f"""mkdir -p "{mount_point}"
+hdiutil attach "{pkg_path}" -nobrowse -readonly -mountpoint "{mount_point}" || exit 1
+PKG=$(ls "{mount_point}"/*.pkg 2>/dev/null | head -1)
+if [ -z "$PKG" ]; then
+    echo "Nu există .pkg în DMG."
+    hdiutil detach "{mount_point}" -force
+    exit 1
+fi
+"""
+        cleanup = f'hdiutil detach "{mount_point}" -force\n'
+    else:
+        prepare = f'PKG="{pkg_path}"\n'
+        cleanup = ""
     script_content = f"""#!/bin/bash
 exec > "{log_path}" 2>&1
 sleep 2
 echo "Instalez actualizarea DisplayCAL-CG..."
-installer -pkg "{pkg_path}" -target /
+{prepare}installer -pkg "$PKG" -target /
 status=$?
-if [ $status -ne 0 ]; then
+{cleanup}if [ $status -ne 0 ]; then
     echo "Instalarea a eșuat (cod $status)."
     exit $status
 fi
