@@ -835,3 +835,10 @@ open-source terț cu mulți autori legitimi.
 - `docs/index.html`: butonul Mac → `DisplayCAL-CG.dmg` (nume stabil; TODO Regula 41: link versionat).
 - Zero `.zip`/`.command` urmărite în repo.
 - NEVERIFICAT: montarea DMG-ului + instalarea prin Self-Updater pe un Mac curat, `stapler validate` post-montare, testele pytest (pytest lipsește din venv), stabilitatea colorimetrică, GitHub Release nepublicat.
+
+### Handoff — fișierul de stare (Regula 50, `~/Developer/CLAUDE.md`)
+
+- Fișierul de stare al acestui proiect: `PROJECT_STATE.md` (rădăcina repo-ului). La orice sesiune nouă se citește
+  ÎNTÂI el, apoi doar fragmentele strict necesare; se actualizează la milestone-uri și obligatoriu la final.
+  Dacă lipsește, se creează la prima sesiune care atinge proiectul. Repo PUBLIC: fișierul e intern, listat în `.gitignore` (doar local, Regula 29).
+- Restructurarea/ștergerea lui și orice modificare a acestui `CLAUDE.md`: doar cu diff-ul arătat și acordul lui Cristi.
