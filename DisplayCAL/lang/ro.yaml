@@ -2945,3 +2945,27 @@
   Nu s-a putut stabili suma de control așteptată pentru %s, deci nu a fost instalat. Verifică conexiunea și încearcă din nou; fișierul nu este folosit niciodată fără verificare.
 "download.hash.conflict": |-
   Suma de control publicată pentru %s nu coincide cu cea fixată în această aplicație. Fișierul NU a fost instalat.
+"guide.s1.details": |-
+  Detalii și opțiuni
+"guide.s1.action_ready": |-
+  Totul este pregătit. Continuă și alege obiectivul.
+"guide.s1.action_fix": |-
+  Rezolvă punctul de mai sus, apoi rescanează.
+"guide.s1.summary": |-
+  Măsurare: %s  ·  Corecție: %s
+"guide.s1.model_unconfirmed_hint": |-
+  Modelul exact nu este confirmat. Alege-l în detalii.
+"guide.s1.unknown_short": |-
+  Absent din catalogul ghidului; nu se presupune niciun model.
+"guide.s1.correction_not_needed": |-
+  nu e necesară (spectrofotometru)
+"guide.s1.correction_none_short": |-
+  nicio corecție selectată
+"guide.place.kind.colorimeter": |-
+  Ilustrație generică: un colorimetru așezat pe ecran.
+"guide.place.kind.spectro_puck": |-
+  Ilustrație generică: un spectrofotometru tip disc așezat pe ecran.
+"guide.place.kind.spectro_pen": |-
+  Ilustrație generică: un spectrofotometru tip stilou cu suport de display.
+"guide.place.kind.other": |-
+  Fără imagine de model: instrumentul nu este în catalogul ghidului.

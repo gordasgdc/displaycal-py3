@@ -2933,3 +2933,27 @@
   No se pudo establecer la suma de verificación esperada de %s, por lo que no se instaló. Comprueba la conexión e inténtalo de nuevo; el archivo nunca se usa sin verificación.
 "download.hash.conflict": |-
   La suma de verificación publicada para %s no coincide con la fijada en esta aplicación. El archivo NO se instaló.
+"guide.s1.details": |-
+  Detalles y opciones
+"guide.s1.action_ready": |-
+  Todo está listo. Continúa y elige tu objetivo.
+"guide.s1.action_fix": |-
+  Resuelve el punto anterior y vuelve a buscar.
+"guide.s1.summary": |-
+  Medición: %s  ·  Corrección: %s
+"guide.s1.model_unconfirmed_hint": |-
+  Modelo exacto sin confirmar. Elígelo en los detalles.
+"guide.s1.unknown_short": |-
+  No está en el catálogo de la guía; no se supone ningún modelo.
+"guide.s1.correction_not_needed": |-
+  no necesaria (espectrofotómetro)
+"guide.s1.correction_none_short": |-
+  ninguna seleccionada
+"guide.place.kind.colorimeter": |-
+  Ilustración genérica: un colorímetro apoyado en la pantalla.
+"guide.place.kind.spectro_puck": |-
+  Ilustración genérica: un espectrofotómetro tipo disco sobre la pantalla.
+"guide.place.kind.spectro_pen": |-
+  Ilustración genérica: un espectrofotómetro tipo bolígrafo con soporte de pantalla.
+"guide.place.kind.other": |-
+  Sin imagen del modelo: el instrumento no está en el catálogo de la guía.

@@ -95,3 +95,27 @@ def test_all_guide_keys_exist_in_english_and_in_ro_es():
         keys |= set(r.action_keys)
     missing = {c: sorted(k for k in keys if k not in langs[c]) for c in langs}
     assert not any(missing.values()), missing
+
+
+def test_every_guide_key_used_by_the_panel_exists_in_ro_en_es():
+    import re
+
+    import yaml
+
+    here = os.path.dirname(os.path.dirname(__file__))
+    src = open(os.path.join(here, "DisplayCAL", "ui", "guide_panel.py"), encoding="utf-8").read()
+    keys = set(re.findall(r'_tr\(\s*"(guide\.[a-z0-9_.]+)"', src))
+    keys |= {f"guide.step.{i}" for i in range(1, 6)}
+    keys |= {f"guide.s4.stage.{k}" for k in ("adjust", "calibrate", "profile", "build")}
+    keys |= {f"guide.place.kind.{k}" for k in ("colorimeter", "spectro_puck", "spectro_pen", "other")}
+    from DisplayCAL import instrument_catalog as ic
+
+    for fam in ic.FAMILIES:
+        keys |= {f"guide.acc.{a}" for a in fam.accessories}
+        keys |= set(ic.placement_steps(fam.kind, needs_reference_tile=fam.needs_reference_tile))
+    keys.add("guide.place.generic")
+    for code in ("en", "ro", "es"):
+        with open(os.path.join(here, "DisplayCAL", "lang", f"{code}.yaml"), encoding="utf-8") as f:
+            d = yaml.safe_load(f)
+        missing = sorted(k for k in keys if k not in d)
+        assert not missing, (code, missing)

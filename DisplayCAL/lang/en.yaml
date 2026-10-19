@@ -2945,3 +2945,27 @@
   Could not establish the expected checksum for %s, so it was not installed. Check your connection and try again; the file is never used without verification.
 "download.hash.conflict": |-
   The checksum published for %s does not match the one pinned in this application. The file was NOT installed.
+"guide.s1.details": |-
+  Details and options
+"guide.s1.action_ready": |-
+  Everything is ready. Continue to choose your goal.
+"guide.s1.action_fix": |-
+  Fix the point above, then rescan.
+"guide.s1.summary": |-
+  Measurement: %s  ·  Correction: %s
+"guide.s1.model_unconfirmed_hint": |-
+  Exact model not confirmed. Choose it in the details.
+"guide.s1.unknown_short": |-
+  Not in the guide catalogue; no model is assumed.
+"guide.s1.correction_not_needed": |-
+  not needed (spectrophotometer)
+"guide.s1.correction_none_short": |-
+  none selected
+"guide.place.kind.colorimeter": |-
+  Generic illustration: a colorimeter resting on the screen.
+"guide.place.kind.spectro_puck": |-
+  Generic illustration: a puck-style spectrophotometer on the screen.
+"guide.place.kind.spectro_pen": |-
+  Generic illustration: a pen-style spectrophotometer with a display holder.
+"guide.place.kind.other": |-
+  No model picture: the instrument is not in the guide catalogue.

@@ -34,6 +34,7 @@ from qtpy.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QStackedWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -187,7 +188,7 @@ class _Rail(QWidget):
 
 
 class _Card(QFrame):
-    """A quiet bordered plate."""
+    """A soft tinted plate (no outline): grouping by tone, not by frame."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -198,9 +199,55 @@ class _Card(QFrame):
     def restyle(self) -> None:
         t = _tokens()
         self.setStyleSheet(
-            f"QFrame#guideCard{{background:{_css(t['plate'])};"
-            f"border:1px solid {_css(t['line'])};border-radius:12px;}}"
+            f"QFrame#guideCard{{background:{_css(t['plate'])};border:none;"
+            "border-radius:12px;}"
         )
+
+
+class _Disclosure(QWidget):
+    """A "Details" toggle that reveals secondary content (collapsed by default)."""
+
+    def __init__(self, title: str, content: QWidget) -> None:
+        super().__init__()
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(8)
+        self.button = QToolButton()
+        self.button.setText(_m(title))
+        self.button.setCheckable(True)
+        self.button.setArrowType(Qt.RightArrow)
+        self.button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.button.setAutoRaise(True)
+        self.button.setCursor(Qt.PointingHandCursor)
+        f = self.button.font()
+        f.setPointSizeF(f.pointSizeF() * 1.05)
+        self.button.setFont(f)
+        self.content = content
+        self.content.setVisible(False)
+        self.button.toggled.connect(self._toggled)
+        lay.addWidget(self.button, 0, Qt.AlignLeft)
+        lay.addWidget(self.content)
+
+    def _toggled(self, on: bool) -> None:
+        self.button.setArrowType(Qt.DownArrow if on else Qt.RightArrow)
+        self.content.setVisible(on)
+
+
+def _control_css() -> str:
+    """Indicator styling that stays visible in light and dark themes."""
+    t = _tokens()
+    ring = _css(QColor(t["text"].red(), t["text"].green(), t["text"].blue(), 190))
+    acc = _css(t["accent"])
+    return (
+        "QRadioButton::indicator{width:16px;height:16px;border-radius:9px;"
+        f"border:2px solid {ring};background:transparent;}}"
+        f"QRadioButton::indicator:checked{{border:2px solid {acc};"
+        f"background:qradialgradient(cx:.5,cy:.5,radius:.5,fx:.5,fy:.5,"
+        f"stop:0 {acc},stop:.55 {acc},stop:.6 transparent,stop:1 transparent);}}"
+        "QCheckBox::indicator{width:16px;height:16px;border-radius:4px;"
+        f"border:2px solid {ring};background:transparent;}}"
+        f"QCheckBox::indicator:checked{{border:2px solid {acc};background:{acc};}}"
+    )
 
 
 def _label(
@@ -258,6 +305,7 @@ class GuidePanel(QWidget):
         self._goal: str | None = None
         self._model: dict[str, str] = {}
         self._syncing = False
+        self.setStyleSheet(_control_css())
         self._build()
         self.refresh()
 
@@ -282,7 +330,6 @@ class GuidePanel(QWidget):
         )
         head.addWidget(self.advanced_btn, 0, Qt.AlignTop)
         root.addLayout(head)
-        root.addWidget(_SpectrumLine())
 
         body = QHBoxLayout()
         body.setSpacing(18)
@@ -328,80 +375,92 @@ class GuidePanel(QWidget):
 
     # page 1 ----------------------------------------------------------------
     def _build_page_devices(self, lay: QVBoxLayout) -> None:
-        lay.addWidget(_label(_tr("guide.s1.title"), size=1.3, bold=True))
-        self.ready_card = _Card()
-        rl = QVBoxLayout(self.ready_card)
-        rl.setContentsMargins(14, 10, 14, 10)
-        self.ready_label = _label("", bold=True)
-        self.ready_actions = _label("")
+        lay.addWidget(_label(_tr("guide.s1.title"), size=1.6, bold=True))
+        status = QHBoxLayout()
+        self.ready_label = _label("", size=1.15, bold=True)
         self.rescan_btn = QPushButton(_m(_tr("guide.s1.rescan")))
+        self.rescan_btn.setFlat(True)
+        self.rescan_btn.setCursor(Qt.PointingHandCursor)
         self.rescan_btn.clicked.connect(
             self.window_ref.detect_displays_and_ports_btn_handler
         )
-        rl.addWidget(self.ready_label)
-        rl.addWidget(self.ready_actions)
-        rl.addWidget(self.rescan_btn, 0, Qt.AlignLeft)
-        lay.addWidget(self.ready_card)
+        status.addWidget(self.ready_label, 1)
+        status.addWidget(self.rescan_btn, 0, Qt.AlignRight)
+        lay.addLayout(status)
+        self.ready_actions = _label("", size=1.05)
+        lay.addWidget(self.ready_actions)
 
-        controls = _Card()
-        cl = QVBoxLayout(controls)
-        cl.setContentsMargins(14, 12, 14, 12)
-        cl.setSpacing(6)
+        # Main stage: what to choose (left), where it goes (right).
+        left = QWidget()
+        ll = QVBoxLayout(left)
+        ll.setContentsMargins(0, 0, 0, 0)
+        ll.setSpacing(4)
         self.monitor_combo = QComboBox()
         self.instrument_combo = QComboBox()
         self.mode_combo = QComboBox()
-        for caption, combo in (
-            (_tr("guide.s1.monitor"), self.monitor_combo),
-            (_tr("guide.s1.instrument"), self.instrument_combo),
-            (_tr("guide.s1.mode"), self.mode_combo),
-        ):
-            cl.addWidget(_label(caption, muted=True))
-            cl.addWidget(combo)
+        for combo in (self.monitor_combo, self.instrument_combo, self.mode_combo):
+            f = combo.font()
+            f.setPointSizeF(f.pointSizeF() * 1.15)
+            combo.setFont(f)
+            combo.setMinimumHeight(34)
+        ll.addWidget(_label(_tr("guide.s1.monitor"), size=1.05, muted=True))
+        ll.addWidget(self.monitor_combo)
+        ll.addSpacing(10)
+        ll.addWidget(_label(_tr("guide.s1.instrument"), size=1.05, muted=True))
+        ll.addWidget(self.instrument_combo)
+        self.model_hint = _label("", muted=True)
+        ll.addWidget(self.model_hint)
+        ll.addSpacing(10)
+        # Measurement summary stays visible; the options live in the details.
+        self.summary_label = _label("", size=1.05)
+        ll.addWidget(self.summary_label)
+        self.action_label = _label("", size=1.1, bold=True)
+        ll.addSpacing(6)
+        ll.addWidget(self.action_label)
+        ll.addStretch(1)
         self.monitor_combo.currentIndexChanged.connect(self._monitor_changed)
         self.instrument_combo.currentIndexChanged.connect(self._instrument_changed)
         self.mode_combo.currentIndexChanged.connect(self._mode_changed)
-        self.correction_label = _label("", muted=True)
-        cl.addWidget(self.correction_label)
 
-        self.ident_card = _Card()
-        il = QVBoxLayout(self.ident_card)
-        il.setContentsMargins(14, 12, 14, 12)
-        il.setSpacing(6)
+        hero = QWidget()
+        hl = QVBoxLayout(hero)
+        hl.setContentsMargins(0, 0, 0, 0)
+        hl.setSpacing(4)
+        self.illustration = QLabel()
+        self.illustration.setAlignment(Qt.AlignCenter)
+        hl.addWidget(self.illustration)
+        self.illustration_caption = _label("", size=0.9, muted=True)
+        self.illustration_caption.setAlignment(Qt.AlignCenter)
+        hl.addWidget(self.illustration_caption)
+        lay.addWidget(_AdaptiveRow(left, hero, threshold=720))
+
+        lay.addWidget(_Disclosure(_tr("guide.s1.details"), self._make_details()))
+
+    def _make_details(self) -> QWidget:
+        box = QWidget()
+        dl = QVBoxLayout(box)
+        dl.setContentsMargins(22, 4, 0, 0)
+        dl.setSpacing(6)
+        dl.addWidget(_label(_tr("guide.s1.mode"), size=1.0, muted=True))
+        dl.addWidget(self.mode_combo)
+        self.correction_label = _label("", muted=True)
+        dl.addWidget(self.correction_label)
+        dl.addSpacing(8)
         self.ident_title = _label("", bold=True)
         self.ident_info = _label("", muted=True)
         self.candidates_box = QVBoxLayout()
         self.candidates_group = QButtonGroup(self)
-        il.addWidget(self.ident_title)
-        il.addWidget(self.ident_info)
-        il.addLayout(self.candidates_box)
-        left = QWidget()
-        ll = QVBoxLayout(left)
-        ll.setContentsMargins(0, 0, 0, 0)
-        ll.setSpacing(12)
-        ll.addWidget(controls)
-        ll.addWidget(self.ident_card)
-
-        self.place_card = self._make_place_card()
-        lay.addWidget(_AdaptiveRow(left, self.place_card))
-
-    def _make_place_card(self) -> QWidget:
-        card = _Card()
-        pl = QVBoxLayout(card)
-        pl.setContentsMargins(14, 12, 14, 12)
-        pl.setSpacing(6)
-        pl.addWidget(_label(_tr("guide.place.title"), bold=True))
-        self.illustration = QLabel()
-        self.illustration.setAlignment(Qt.AlignCenter)
-        pl.addWidget(self.illustration)
-        pl.addWidget(_label(_tr("guide.illustration_note"), size=0.85, muted=True))
+        dl.addWidget(self.ident_title)
+        dl.addWidget(self.ident_info)
+        dl.addLayout(self.candidates_box)
+        dl.addSpacing(8)
+        dl.addWidget(_label(_tr("guide.place.title"), bold=True))
         self.accessories_label = _label("", muted=True)
-        pl.addWidget(self.accessories_label)
+        dl.addWidget(self.accessories_label)
         self.place_steps = _label("")
-        pl.addWidget(self.place_steps)
-        pl.addStretch(1)
-        return card
+        dl.addWidget(self.place_steps)
+        return box
 
-    # page 2 ----------------------------------------------------------------
     def _build_page_goal(self, lay: QVBoxLayout) -> None:
         lay.addWidget(_label(_tr("guide.s2.title"), size=1.3, bold=True))
         lay.addWidget(_label(_tr("guide.s2.hint"), muted=True))
@@ -655,11 +714,14 @@ class GuidePanel(QWidget):
     def _paint_readiness(self, r: gm.Readiness) -> None:
         t = _tokens()
         color = {gm.READY: t["ok"], gm.BUSY: t["warn"]}.get(r.status, t["bad"])
-        self.ready_label.setText(_tr(r.message_key))
+        self.ready_label.setText("●  " + _tr(r.message_key))
         self.ready_label.setStyleSheet(f"color:{_css(color)};")
         self.ready_actions.setText("\n".join("• " + _tr(k) for k in r.action_keys))
         self.ready_actions.setVisible(bool(r.action_keys))
-        self.rescan_btn.setVisible(not r.ok)
+        self.rescan_btn.setVisible(True)
+        self.action_label.setText(
+            _tr("guide.s1.action_ready") if r.ok else _tr("guide.s1.action_fix")
+        )
 
     def _selected_instrument_name(self) -> str | None:
         w = self.window_ref
@@ -671,17 +733,19 @@ class GuidePanel(QWidget):
     def _paint_identification(self) -> None:
         name = self._selected_instrument_name()
         ident = ic.identify(name)
-        # reset candidate radios
         for b in list(self.candidates_group.buttons()):
             self.candidates_group.removeButton(b)
             b.setParent(None)
             b.deleteLater()
         w = self.window_ref
+        mode = self.mode_combo.currentText()
         if ident is None:
             self.ident_title.setText(_tr("guide.s1.none"))
             self.ident_info.setText("")
-            self._paint_illustration(None)
+            self.model_hint.setText("")
             self.correction_label.setText("")
+            self.summary_label.setText("")
+            self._paint_illustration(None)
             return
         self.ident_title.setText(_tr("guide.s1.detected_as", ident.detected_name))
         info: list[str] = []
@@ -693,20 +757,27 @@ class GuidePanel(QWidget):
         elif not ident.certain:
             info.append(_tr("guide.s1.confirm_model"))
         self.ident_info.setText("\n".join(info))
+        chosen = self._model.get(ident.detected_name)
         if ident.family is not None and not ident.certain:
-            chosen = self._model.get(ident.detected_name)
             for cand in ident.candidates:
                 rb = QRadioButton(_m(cand))
                 rb.setChecked(cand == chosen)
                 rb.toggled.connect(
                     lambda on, c=cand, n=ident.detected_name: (
-                        on and self._model.__setitem__(n, c)
+                        on and self._on_model_chosen(n, c)
                     )
                 )
                 self.candidates_group.addButton(rb)
                 self.candidates_box.addWidget(rb)
-        # correction status
+            self.model_hint.setText(
+                chosen if chosen else _tr("guide.s1.model_unconfirmed_hint")
+            )
+        elif ident.family is None:
+            self.model_hint.setText(_tr("guide.s1.unknown_short"))
+        else:
+            self.model_hint.setText("")
         if ident.family is not None and ident.family.spectral:
+            corr_short = _tr("guide.s1.correction_not_needed")
             self.correction_label.setText(_tr("guide.s1.spectro_note"))
         else:
             ccmx = w.colorimeter_correction_matrix_ctrl
@@ -715,12 +786,18 @@ class GuidePanel(QWidget):
                 if ccmx.isEnabled() and ccmx.currentIndex() > 0
                 else ""
             )
+            corr_short = text or _tr("guide.s1.correction_none_short")
             self.correction_label.setText(
                 _tr("guide.s1.correction_set", text)
                 if text
                 else _tr("guide.s1.correction_none")
             )
+        self.summary_label.setText(_tr("guide.s1.summary", mode or "—", corr_short))
         self._paint_illustration(ident)
+
+    def _on_model_chosen(self, name: str, candidate: str) -> None:
+        self._model[name] = candidate
+        self.model_hint.setText(candidate)
 
     def _paint_illustration(self, ident: ic.Identification | None) -> None:
         kind = ident.family.kind if ident and ident.family else ic.KIND_OTHER
@@ -732,7 +809,7 @@ class GuidePanel(QWidget):
             renderer = QSvgRenderer(path)
             dpr = self.devicePixelRatioF()
             img = QImage(
-                int(300 * dpr), int(206 * dpr), QImage.Format_ARGB32_Premultiplied
+                int(340 * dpr), int(234 * dpr), QImage.Format_ARGB32_Premultiplied
             )
             img.fill(Qt.transparent)
             painter = QPainter(img)
@@ -741,6 +818,7 @@ class GuidePanel(QWidget):
             pix = QPixmap.fromImage(img)
             pix.setDevicePixelRatio(dpr)
             self.illustration.setPixmap(pix)
+        self.illustration_caption.setText(_tr(f"guide.place.kind.{kind}"))
         fam = ident.family if ident else None
         acc = fam.accessories if fam else ()
         self.accessories_label.setText(
