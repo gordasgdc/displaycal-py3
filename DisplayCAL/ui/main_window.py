@@ -189,6 +189,7 @@ from DisplayCAL.argyll_names import OPTIONAL as ARGYLL_OPTIONAL
 from DisplayCAL.cgats import CGATS, CGATSError
 from DisplayCAL.colorimeter_correction import ColorimeterCorrectionCatalog
 from DisplayCAL.config import (
+    DATA_HOME,
     DEFAULTS,
     EXE_EXT,
     PROFILE_EXT,
@@ -1288,6 +1289,10 @@ class MainWindow(BaseWindow):
     #: public so other layers (and tests) can observe committed runs.
     measurement_requested = Signal(object)
 
+    #: Emitted from the worker thread when a measurement session ends
+    #: (outcome, reason); handled on the GUI thread by :meth:`_on_session_ended`.
+    session_ended = Signal(str, str)
+
     #: Delay before a staged measurement driver runs, letting the display settle
     #: (the wx ``call_pending_function`` 100 ms ``CallLater``).
     _pending_delay_ms = 100
@@ -1309,6 +1314,10 @@ class MainWindow(BaseWindow):
         )
         adopted_worker = worker is not None
         self.worker = worker if worker is not None else Worker()
+        self.session_ended.connect(self._on_session_ended)
+        self.worker.on_session_end = lambda outcome, reason: self.session_ended.emit(
+            outcome, reason or ""
+        )
         self.flow = MeasurementFlow()
         #: Guards config-writing handlers while controls are repopulated.
         self._updating = False
@@ -3199,10 +3208,37 @@ class MainWindow(BaseWindow):
         called by this module's own standalone ``main()`` so that manually
         exercising the window during development doesn't nag about updates.
         """
+        self.offer_session_recovery()
         if getcfg("update_check"):
             self._run_update_check(silent=True)
         else:
             self._run_instrument_setup_and_donation_check()
+
+    def offer_session_recovery(self) -> bool:
+        """Offer to review measurement sessions that never recorded an end.
+
+        Returns:
+            bool: Whether the dialog was shown.
+        """
+        from DisplayCAL import session_journal
+        from DisplayCAL.ui.recovery_dialog import RecoveryDialog
+
+        root = os.path.join(DATA_HOME, "sessions")
+        try:
+            pending = session_journal.scan_incomplete(root)
+        except Exception:  # noqa: BLE001 - recovery must never block start-up
+            return False
+        if not pending:
+            return False
+        RecoveryDialog(pending, self.worker, self).exec()
+        return True
+
+    def _on_session_ended(self, outcome: str, reason: str) -> None:
+        """Tell the user, locally, that a long session has finished."""
+        from DisplayCAL.ui.notifier import notify, session_message
+
+        title, text = session_message(outcome, reason or None)
+        notify(self, title, text)
 
     def _run_instrument_setup_and_donation_check(self) -> None:
         """Qt port of ``MainFrame.check_instrument_setup``'s dispatch."""

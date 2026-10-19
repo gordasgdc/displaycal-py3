@@ -16,6 +16,7 @@ process is stopped with a clear message instead of being logged without limit.
 
 from __future__ import annotations
 
+import glob
 import os
 import re
 import shutil
@@ -23,6 +24,7 @@ import tempfile
 import time
 
 from DisplayCAL import config, keep_awake, measurement_blocks, session_journal
+from DisplayCAL import localization as lang
 from DisplayCAL.config import getcfg
 from DisplayCAL.support import redact
 from DisplayCAL.worker_base import Error
@@ -48,6 +50,8 @@ class SessionMixin:
     _ckpt_mtimes: dict | None = None
     #: ``(patches done before this block, total patches)`` while measuring blocks.
     _block_ctx: tuple[int, int] | None = None
+    #: Directory of an earlier, unfinished session whose finished blocks are reused.
+    resume_from: str | None = None
 
     # -- durable work directory -------------------------------------------
     def create_tempdir(self):  # noqa: D102 - same contract as WorkerBase
@@ -303,6 +307,12 @@ class SessionMixin:
         ok, _why = self.blocks_supported()
         if size <= 0 or not ok or not os.path.isfile(ti1):
             return self.exec_cmd(cmd, args2)
+        reused: dict[int, str] = {}
+        if self.resume_from:
+            outcome = self._resume_prepare(ti1, size)
+            if isinstance(outcome, Exception):
+                return outcome
+            reused = outcome
         try:
             table = measurement_blocks.read_table(ti1)
             n_blocks = measurement_blocks.plan_blocks(len(table.rows), size)
@@ -322,8 +332,12 @@ class SessionMixin:
                     "patches": total,
                     "block_size": size,
                     "fingerprint": self.session_fingerprint(),
+                    "chart_digest": session_journal.file_digest(ti1),
                 }
             )
+            j.checkpoint(ti1, "chart.full.ti1")
+            for name in self._session_extra_files():
+                j.checkpoint(name)
         self.log(f"Measuring {total} patches in {len(blocks)} blocks of about {size}.")
         parts: list[str] = []
         done_before = 0
@@ -332,8 +346,19 @@ class SessionMixin:
                 self, "thread_abort", False
             ):
                 return None  # cancelled by the user: finished blocks stay stored
+            if blk.number in reused:  # finished earlier: reuse, do not measure again
+                ti3 = f"{blk.base}.ti3"
+                shutil.copyfile(reused[blk.number], ti3)
+                if measurement_blocks.block_ti3_valid(ti3, len(blk.row_indices)):
+                    parts.append(ti3)
+                    done_before += len(blk.row_indices)
+                    if j is not None:
+                        j.checkpoint(ti3)
+                        j.block_done(blk.number, len(blocks))
+                    continue
+                os.unlink(ti3)  # damaged copy: measure this block again
             blk_args = list(args2[:-1])
-            if blk.number > 1:
+            if blk.number > 1 or reused:
                 blk_args += [
                     "-N",
                     "-Yp",
@@ -366,3 +391,45 @@ class SessionMixin:
                 except OSError:
                     pass
         return True
+
+    def _session_extra_files(self) -> list[str]:
+        """Calibration/settings files in the work directory worth keeping."""
+        d = self.tempdir
+        if not d or not os.path.isdir(d):
+            return []
+        return [
+            os.path.join(d, n)
+            for n in os.listdir(d)
+            if n.lower().endswith((".cal", ".ccmx", ".ccss"))
+        ]
+
+    def _resume_prepare(self, ti1: str, size: int):
+        """Check an earlier session may be continued; return ``{block: ti3 path}``.
+
+        Refuses (returns an ``Error``) unless the monitor, instrument, mode,
+        correction, engine version and profile type are the same as in the
+        session, and its stored chart and plan are intact: blocks measured under
+        different conditions must never be combined silently.
+        """
+        sd = self.resume_from
+        state = session_journal.load_state(sd) if sd else None
+        plan = (state or {}).get("plan") or {}
+        if not plan.get("blocks"):
+            return Error(lang.getstr("recover.no_blocks"))
+        if plan.get("fingerprint") != self.session_fingerprint():
+            return Error(lang.getstr("recover.conditions_changed"))
+        if plan.get("block_size") != size:
+            return Error(lang.getstr("recover.conditions_changed"))
+        saved = os.path.join(sd, "files", "chart.full.ti1")
+        if session_journal.file_digest(saved) != plan.get("chart_digest"):
+            return Error(lang.getstr("recover.no_blocks"))
+        shutil.copyfile(saved, ti1)  # the very chart the blocks were planned on
+        reused = {}
+        for n in state.get("blocks_done", []):
+            hits = glob.glob(os.path.join(glob.escape(sd), "files", f"*.blk{n:04d}.ti3"))
+            if hits:
+                reused[n] = hits[0]
+        self.log(f"Continuing an earlier session: {len(reused)} finished blocks are reused.")
+        session_journal.mark_reviewed(sd, "resumed")
+        self.resume_from = None
+        return reused

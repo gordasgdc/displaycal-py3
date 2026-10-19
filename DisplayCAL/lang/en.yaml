@@ -3187,3 +3187,157 @@
   Do not show this again
 "support.menu.about_section": |-
   Support and feedback
+"plan.title": |-
+  Measurement plan
+"plan.cal.title": |-
+  1. Calibration: the monitor’s curves
+"plan.cal.text": |-
+  Brings the monitor to the target (white point, brightness, tone curve) using its controls and the graphics-card curves. It produces calibration curves, not a profile.
+"plan.prof.title": |-
+  2. Profiling: measuring how the monitor shows colour
+"plan.prof.text": |-
+  Shows a chart of colour patches and measures each one. The more patches, the longer it takes; the result is a data file that the profile is computed from.
+"plan.icc.title": |-
+  3. ICC profile type
+"plan.chart.title": |-
+  4. Test chart and verification
+"plan.chart.text": |-
+  More patches can increase the potential accuracy of the profile, but they are not a guarantee: a longer run also drifts more, and the result is only known to be good after it is verified (Verification tab).
+"plan.chart.value": |-
+  Chart: %s patches · estimated time: %s
+"plan.chart.unknown_time": |-
+  not estimated for this instrument
+"plan.type.value": |-
+  Profile type: %s
+"plan.type.change": |-
+  Change in the Profiling tab (advanced options).
+"plan.type.g.use": |-
+  Three primaries and a simple curve per channel. Very small file and the widest compatibility; colorimetric transforms only.
+"plan.type.g.cost": |-
+  A small chart is enough: few values are fitted, so extra patches add time without a matching gain.
+"plan.type.G.use": |-
+  As above with one shared gamma for all channels: the simplest and most robust matrix profile, the least able to follow an unusual tone response.
+"plan.type.G.cost": |-
+  A small chart is enough.
+"plan.type.s.use": |-
+  Matrix with an individual curve per channel, so it follows tone response that is not a plain gamma. Small file, good compatibility; colorimetric only. The application’s macOS default avoids it because of reported problems with individual-curve matrix profiles there.
+"plan.type.s.cost": |-
+  A moderate chart is enough; a very large one mostly adds time.
+"plan.type.S.use": |-
+  Matrix with one shared curve: it effectively balances grey and is the most predictable matrix choice. This is the application’s macOS default (inherited from the original project because of reported problems with cLUT profiles and individual-curve matrix profiles on macOS); it is a preset choice, not a limit of macOS itself.
+"plan.type.S.cost": |-
+  A small to moderate chart is enough.
+"plan.type.x.use": |-
+  A lookup table (LUT) that can describe a monitor that does not follow a matrix model. Larger file; applications without LUT support may not use it properly.
+"plan.type.x.cost": |-
+  Benefits from a larger chart, with diminishing returns; a long run adds drift and time.
+"plan.type.X.use": |-
+  A LUT plus a matrix: the matrix serves applications that ignore the LUT. The application’s default outside macOS. Larger file than a matrix profile.
+"plan.type.X.cost": |-
+  Benefits from a larger chart, with diminishing returns; the largest charts take many hours.
+"plan.type.l.use": |-
+  A LUT in Lab encoding. Rarely the better choice for a monitor; large file.
+"plan.type.l.cost": |-
+  Needs a large chart; long runs.
+"plan.long.title": |-
+  Long run
+"plan.long.warn": |-
+  This run is estimated at about %s. Long runs are exposed to drift and to interruptions.
+"plan.blocks.title": |-
+  Safe long run (blocks)
+"plan.blocks.text": |-
+  The chart is measured as consecutive blocks; every finished block is stored on disk. If something stops the run, you lose at most the current block and can continue with the rest. Compromises: one extra white patch per block, the instrument starts again between blocks, and each block is normalised to its own white (a small drift correction).
+"plan.blocks.size": |-
+  Block size
+"plan.blocks.off": |-
+  Off (one run)
+"plan.blocks.n": |-
+  %s patches
+"plan.blocks.recommend": |-
+  Recommended for a run of this length.
+"plan.blocks.too_small": |-
+  The chart is small enough to run as one block.
+"blocks.needs_calibration": |-
+  This instrument must be calibrated on its reference (tile or cap) between runs, so blocks are not available for it; the run stays in one piece.
+"blocks.unknown_instrument": |-
+  Blocks are not available: the instrument is not in the list the application knows.
+"blocks.no_instrument": |-
+  Blocks are not available without a selected instrument.
+"awake.title": |-
+  While the run lasts
+"awake.on": |-
+  The application keeps the computer and the display from going to sleep, only during the run, and releases this when it ends.
+"awake.off": |-
+  Sleep prevention is switched off. Keep the computer and the display awake yourself.
+"awake.cannot": |-
+  It cannot prevent: closing the lid, choosing Sleep, the power button, a low battery, locking the screen or switching user. If the display path is interrupted the measurement may not continue. Keep the computer on power and the session unlocked.
+"awake.keep": |-
+  Keep sleep prevention on during runs
+"awake.not.lid": |-
+  closing the lid
+"awake.not.manual_sleep": |-
+  choosing Sleep
+"awake.not.lock": |-
+  locking the screen
+"awake.not.battery": |-
+  a low battery
+"recover.title": |-
+  An earlier measurement did not finish
+"recover.intro": |-
+  The application found %s that never recorded an end. This is what is known; it is not a diagnosis of the cause.
+"recover.sessions": |-
+  unfinished sessions
+"recover.fact.last_seen": |-
+  Last sign of activity: %s
+"recover.fact.progress": |-
+  Progress when last recorded: %s of %s
+"recover.fact.stage": |-
+  Stage: %s
+"recover.fact.child_exit": |-
+  The measurement engine process ended with code %s
+"recover.fact.child_no_exit": |-
+  The measurement engine was running and no end of it was recorded.
+"recover.fact.slept": |-
+  The computer was suspended for about %s during this session.
+"recover.fact.memory": |-
+  Application memory: first %s, last %s, highest %s
+"recover.fact.disk": |-
+  Free disk space at the last record: %s
+"recover.fact.no_clean_exit": |-
+  The application did not record a normal shutdown.
+"recover.fact.unknown": |-
+  Almost nothing was recorded.
+"recover.blocks_done": |-
+  Finished and stored blocks: %s of %s
+"recover.no_blocks": |-
+  This session was not measured in blocks; ArgyllCMS cannot continue a run from the middle, so the measurement has to be repeated. Anything the session stored is still available for export.
+"recover.conditions_changed": |-
+  The monitor, the instrument, the measurement mode, the correction or the engine version is not the same as in the session, so its blocks must not be combined with new measurements.
+"recover.can_continue": |-
+  Continue: measure the remaining blocks (%s). The block that was interrupted is measured again from its start.
+"recover.conditions_note": |-
+  Before continuing: keep the monitor in the same settings and warm, and the instrument on the same screen.
+"recover.export": |-
+  Export recoverable data…
+"recover.open_folder": |-
+  Show the session folder
+"recover.dismiss": |-
+  Not now
+"recover.discard": |-
+  I have seen this; do not show it again
+"recover.exported": |-
+  Copied to %s
+"notify.done": |-
+  Measurement finished
+"notify.failed": |-
+  Measurement stopped with an error
+"notify.cancelled": |-
+  Measurement cancelled
+"notify.flood": |-
+  The measurement engine was stopped because it kept repeating the same output. Your stored data is intact.
+"guide.s4.choices_title": |-
+  What each choice means
+"recover.continue_btn": |-
+  Continue with the remaining blocks
+"recover.continue_how": |-
+  Next: start the profiling run again with the same settings. The finished blocks are reused and only the remaining ones are measured.

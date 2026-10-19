@@ -3179,3 +3179,157 @@
   No volver a mostrar
 "support.menu.about_section": |-
   Apoyo y comentarios
+"plan.title": |-
+  Plan de medición
+"plan.cal.title": |-
+  1. Calibración: las curvas del monitor
+"plan.cal.text": |-
+  Lleva el monitor al objetivo (punto blanco, brillo, curva de tonos) mediante sus controles y las curvas de la tarjeta gráfica. Produce curvas de calibración, no un perfil.
+"plan.prof.title": |-
+  2. Perfilado: medir cómo muestra el color el monitor
+"plan.prof.text": |-
+  Muestra una carta de parches de color y mide cada uno. Cuantos más parches, más tarda; el resultado es un archivo de datos del que se calcula el perfil.
+"plan.icc.title": |-
+  3. Tipo de perfil ICC
+"plan.chart.title": |-
+  4. Carta de prueba y verificación
+"plan.chart.text": |-
+  Más parches pueden aumentar la precisión potencial del perfil, pero no la garantizan: una ejecución más larga también deriva más, y el resultado solo se sabe bueno tras verificarlo (pestaña Verificación).
+"plan.chart.value": |-
+  Carta: %s parches · tiempo estimado: %s
+"plan.chart.unknown_time": |-
+  sin estimar para este instrumento
+"plan.type.value": |-
+  Tipo de perfil: %s
+"plan.type.change": |-
+  Cámbialo en la pestaña Perfilado (opciones avanzadas).
+"plan.type.g.use": |-
+  Tres primarios y una curva simple por canal. Archivo muy pequeño y la mayor compatibilidad; solo transformaciones colorimétricas.
+"plan.type.g.cost": |-
+  Basta una carta pequeña: se ajustan pocos valores, así que más parches añaden tiempo sin una mejora proporcional.
+"plan.type.G.use": |-
+  Como el anterior con una sola gamma para todos los canales: el perfil matricial más simple y robusto, el que menos sigue una respuesta tonal inusual.
+"plan.type.G.cost": |-
+  Basta una carta pequeña.
+"plan.type.s.use": |-
+  Matriz con una curva individual por canal, por lo que sigue una respuesta tonal que no es una simple gamma. Archivo pequeño, buena compatibilidad; solo colorimétrico. El preajuste de la aplicación para macOS lo evita por problemas notificados con perfiles matriciales de curvas individuales.
+"plan.type.s.cost": |-
+  Basta una carta moderada; una muy grande añade sobre todo tiempo.
+"plan.type.S.use": |-
+  Matriz con una curva compartida: equilibra de hecho los grises y es la opción matricial más predecible. Es el preajuste de la aplicación para macOS (heredado del proyecto original por problemas notificados con perfiles cLUT y matriciales de curvas individuales en macOS); es una elección de preajuste, no un límite de macOS.
+"plan.type.S.cost": |-
+  Basta una carta pequeña o moderada.
+"plan.type.x.use": |-
+  Una tabla de consulta (LUT) que puede describir un monitor que no sigue un modelo matricial. Archivo mayor; las aplicaciones sin soporte LUT pueden no usarlo bien.
+"plan.type.x.cost": |-
+  Se beneficia de una carta mayor, con rendimientos decrecientes; una ejecución larga añade deriva y tiempo.
+"plan.type.X.use": |-
+  Una LUT más una matriz: la matriz sirve a las aplicaciones que ignoran la LUT. Preajuste de la aplicación fuera de macOS. Archivo mayor que un perfil matricial.
+"plan.type.X.cost": |-
+  Se beneficia de una carta mayor, con rendimientos decrecientes; las cartas mayores tardan muchas horas.
+"plan.type.l.use": |-
+  Una LUT en codificación Lab. Rara vez la mejor opción para un monitor; archivo grande.
+"plan.type.l.cost": |-
+  Requiere una carta grande; ejecuciones largas.
+"plan.long.title": |-
+  Ejecución larga
+"plan.long.warn": |-
+  Se estima que esta ejecución dure unos %s. Las ejecuciones largas están expuestas a la deriva y a las interrupciones.
+"plan.blocks.title": |-
+  Ejecución larga segura (bloques)
+"plan.blocks.text": |-
+  La carta se mide en bloques consecutivos; cada bloque terminado se guarda en disco. Si algo detiene la ejecución, pierdes como máximo el bloque actual y puedes continuar con el resto. Contrapartidas: un parche blanco extra por bloque, el instrumento arranca de nuevo entre bloques y cada bloque se normaliza a su propio blanco (una pequeña corrección de deriva).
+"plan.blocks.size": |-
+  Tamaño del bloque
+"plan.blocks.off": |-
+  Desactivado (una sola ejecución)
+"plan.blocks.n": |-
+  %s parches
+"plan.blocks.recommend": |-
+  Recomendado para una ejecución de esta duración.
+"plan.blocks.too_small": |-
+  La carta es lo bastante pequeña para ejecutarse como un solo bloque.
+"blocks.needs_calibration": |-
+  Este instrumento debe calibrarse en su referencia (baldosa o tapa) entre ejecuciones, por lo que los bloques no están disponibles; la ejecución queda en una pieza.
+"blocks.unknown_instrument": |-
+  Los bloques no están disponibles: el instrumento no está en la lista que conoce la aplicación.
+"blocks.no_instrument": |-
+  Los bloques no están disponibles sin un instrumento seleccionado.
+"awake.title": |-
+  Mientras dura la ejecución
+"awake.on": |-
+  La aplicación evita que el ordenador y la pantalla entren en suspensión, solo durante la ejecución, y lo libera al terminar.
+"awake.off": |-
+  La prevención de la suspensión está desactivada. Mantén tú el ordenador y la pantalla activos.
+"awake.cannot": |-
+  No puede evitar: cerrar la tapa, elegir Suspender, el botón de encendido, una batería baja, bloquear la pantalla o cambiar de usuario. Si se interrumpe la ruta de visualización, la medición puede no continuar. Mantén el ordenador enchufado y la sesión desbloqueada.
+"awake.keep": |-
+  Mantener la prevención de suspensión durante las ejecuciones
+"awake.not.lid": |-
+  cerrar la tapa
+"awake.not.manual_sleep": |-
+  elegir Suspender
+"awake.not.lock": |-
+  bloquear la pantalla
+"awake.not.battery": |-
+  una batería baja
+"recover.title": |-
+  Una medición anterior no terminó
+"recover.intro": |-
+  La aplicación encontró %s que nunca registró un final. Esto es lo que se sabe; no es un diagnóstico de la causa.
+"recover.sessions": |-
+  sesiones sin terminar
+"recover.fact.last_seen": |-
+  Última señal de actividad: %s
+"recover.fact.progress": |-
+  Progreso en el último registro: %s de %s
+"recover.fact.stage": |-
+  Etapa: %s
+"recover.fact.child_exit": |-
+  El proceso del motor de medición terminó con el código %s
+"recover.fact.child_no_exit": |-
+  El motor de medición estaba en marcha y no se registró su final.
+"recover.fact.slept": |-
+  El ordenador estuvo suspendido unos %s durante esta sesión.
+"recover.fact.memory": |-
+  Memoria de la aplicación: primera %s, última %s, máxima %s
+"recover.fact.disk": |-
+  Espacio libre en disco en el último registro: %s
+"recover.fact.no_clean_exit": |-
+  La aplicación no registró un cierre normal.
+"recover.fact.unknown": |-
+  Casi no se registró nada.
+"recover.blocks_done": |-
+  Bloques terminados y guardados: %s de %s
+"recover.no_blocks": |-
+  Esta sesión no se midió en bloques; ArgyllCMS no puede continuar una ejecución desde la mitad, así que hay que repetir la medición. Todo lo que guardó la sesión sigue disponible para exportar.
+"recover.conditions_changed": |-
+  El monitor, el instrumento, el modo de medición, la corrección o la versión del motor no son los de la sesión, por lo que sus bloques no deben combinarse con mediciones nuevas.
+"recover.can_continue": |-
+  Continuar: medir los bloques restantes (%s). El bloque interrumpido se mide de nuevo desde el principio.
+"recover.conditions_note": |-
+  Antes de continuar: mantén el monitor con los mismos ajustes y caliente, y el instrumento en la misma pantalla.
+"recover.export": |-
+  Exportar datos recuperables…
+"recover.open_folder": |-
+  Mostrar la carpeta de la sesión
+"recover.dismiss": |-
+  Ahora no
+"recover.discard": |-
+  Ya lo he visto; no volver a mostrar
+"recover.exported": |-
+  Copiado en %s
+"notify.done": |-
+  Medición terminada
+"notify.failed": |-
+  La medición se detuvo con un error
+"notify.cancelled": |-
+  Medición cancelada
+"notify.flood": |-
+  Se detuvo el motor de medición porque repetía sin fin la misma salida. Tus datos guardados están intactos.
+"guide.s4.choices_title": |-
+  Qué significa cada elección
+"recover.continue_btn": |-
+  Continuar con los bloques restantes
+"recover.continue_how": |-
+  Siguiente: inicia de nuevo el perfilado con los mismos ajustes. Los bloques terminados se reutilizan y solo se miden los restantes.

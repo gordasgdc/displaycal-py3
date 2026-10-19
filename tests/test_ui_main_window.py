@@ -7162,6 +7162,9 @@ def test_help_menu_matches_wx_xrc_order(window):
         "help_support",
         "bug_report",
         "",  # separator
+        "support.star.button",  # voluntary support, never a condition
+        "support.feedback.button",
+        "",  # separator
         "update_check.onstartup",
         "update_check",
         "",  # separator

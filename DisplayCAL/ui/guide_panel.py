@@ -24,6 +24,7 @@ from qtpy.QtCore import QRectF, QSize, Qt, Signal
 from qtpy.QtGui import QColor, QFont, QLinearGradient, QPainter, QPen, QPixmap
 from qtpy.QtWidgets import (
     QButtonGroup,
+    QCheckBox,
     QComboBox,
     QFrame,
     QHBoxLayout,
@@ -41,7 +42,10 @@ from DisplayCAL import config, support
 from DisplayCAL import guide_model as gm
 from DisplayCAL import instrument_catalog as ic
 from DisplayCAL import localization as lang
+from DisplayCAL import measurement_plan as mp
+from DisplayCAL import profile_name as profile_name_mod
 from DisplayCAL.argyll import check_argyll_bin
+from DisplayCAL.config import getcfg, setcfg
 from DisplayCAL.ui.guide_prepare import PreparePage
 from DisplayCAL.ui.guide_widgets import (
     AdaptiveRow as _AdaptiveRow,
@@ -76,6 +80,17 @@ if TYPE_CHECKING:
 _SPECTRUM = ("#ff5a4d", "#ffb347", "#ffe14d", "#59f07a", "#4dc9ff", "#5a7bff")
 
 STEPS = 5
+
+#: ``profile.type`` letter -> suffix of the existing ``profile.type.*`` label key.
+_TYPE_KEYS = {
+    "g": "gamma_matrix",
+    "G": "single_gamma_matrix",
+    "s": "shaper_matrix",
+    "S": "single_shaper_matrix",
+    "x": "lut.xyz",
+    "X": "lut_matrix.xyz",
+    "l": "lut.lab",
+}
 
 
 def _tr(key: str, *args: object) -> str:
@@ -439,6 +454,7 @@ class GuidePanel(QWidget):
         self.summary_lay.setContentsMargins(0, 0, 0, 0)
         self.summary_lay.setSpacing(2)
         lay.addWidget(self.summary_box)
+        self._build_plan(lay)
         self.start_blocked = _label("", size=1.05)
         lay.addWidget(self.start_blocked)
         self.start_btn = QPushButton(_m(_tr("guide.s4.start")))
@@ -467,6 +483,59 @@ class GuidePanel(QWidget):
         )
 
     # page 5 ----------------------------------------------------------------
+    def _build_plan(self, lay: QVBoxLayout) -> None:
+        """The measurement plan: what will be measured, how long, how safely."""
+        lay.addSpacing(6)
+        lay.addWidget(_label(_tr("plan.title"), size=1.1, bold=True))
+        self.plan_type = _label("", size=1.05)
+        self.plan_type_use = _label("", muted=True)
+        self.plan_chart = _label("", size=1.05)
+        self.plan_long = _label("", size=1.05)
+        for w in (self.plan_type, self.plan_type_use, self.plan_chart, self.plan_long):
+            lay.addWidget(w)
+        # Safe long run (blocks): explicit, visible, never silently combined.
+        row = QHBoxLayout()
+        row.addWidget(_label(_tr("plan.blocks.title"), bold=True, wrap=False))
+        self.block_combo = QComboBox()
+        for n in mp.BLOCK_CHOICES:
+            self.block_combo.addItem(
+                _tr("plan.blocks.off") if n == 0 else _tr("plan.blocks.n", n), n
+            )
+        self.block_combo.currentIndexChanged.connect(self._block_changed)
+        row.addWidget(self.block_combo)
+        row.addStretch(1)
+        lay.addLayout(row)
+        self.block_note = _label("", muted=True)
+        lay.addWidget(self.block_note)
+        # Unattended running: say what is held and what is not.
+        self.awake_cb = QCheckBox(_m(_tr("awake.keep")))
+        self.awake_cb.setChecked(bool(getcfg("session.keep_awake")))
+        self.awake_cb.toggled.connect(lambda on: setcfg("session.keep_awake", int(on)))
+        lay.addWidget(self.awake_cb)
+        self.awake_note = _label("", muted=True)
+        lay.addWidget(self.awake_note)
+        # What each choice means: the four separate topics, expandable.
+        body = QWidget()
+        bl = QVBoxLayout(body)
+        bl.setContentsMargins(22, 4, 0, 0)
+        bl.setSpacing(6)
+        for key in ("cal", "prof", "icc", "chart"):
+            bl.addWidget(_label(_tr(f"plan.{key}.title"), bold=True))
+            if key != "icc":
+                bl.addWidget(_label(_tr(f"plan.{key}.text"), muted=True))
+        for letter in mp.PROFILE_TYPES:
+            use, cost = mp.type_keys(letter)
+            name = _tr(f"profile.type.{_TYPE_KEYS[letter]}")
+            bl.addWidget(_label(f"• {name}: {_tr(use)} {_tr(cost)}", muted=True))
+        bl.addWidget(_label(_tr("plan.blocks.title"), bold=True))
+        bl.addWidget(_label(_tr("plan.blocks.text"), muted=True))
+        lay.addWidget(_Disclosure(_tr("guide.s4.choices_title"), body))
+
+    def _block_changed(self, index: int) -> None:
+        if not self._syncing and index >= 0:
+            setcfg("measurement.block_size", int(self.block_combo.itemData(index) or 0))
+            self.refresh()
+
     def _build_page_finish(self, lay: QVBoxLayout) -> None:
         lay.addWidget(_label(_tr("guide.s5.title"), size=1.3, bold=True))
         lay.addWidget(_label(_tr("guide.s5.intro"), muted=True))
@@ -820,6 +889,7 @@ class GuidePanel(QWidget):
             row.setTextFormat(Qt.RichText)
             row.setWordWrap(True)
             self.summary_lay.addWidget(row)
+        self._paint_plan()
         ok = r.ok and self._prep.complete and self._goal is not None
         self.start_btn.setEnabled(ok)
         if ok:
@@ -828,6 +898,72 @@ class GuidePanel(QWidget):
             self.start_blocked.setText(_tr("guide.s4.blocked_prep"))
         else:
             self.start_blocked.setText(_tr("guide.s4.blocked"))
+
+    def _paint_plan(self) -> None:
+        w = self.window_ref
+        letter = str(getcfg("profile.type"))
+        name = _tr(f"profile.type.{_TYPE_KEYS.get(letter, 'shaper_matrix')}")
+        use, cost = mp.type_keys(letter if letter in mp.PROFILE_TYPES else "S")
+        self.plan_type.setText(
+            _tr("plan.type.value", name) + "  " + _tr("plan.type.change")
+        )
+        self.plan_type_use.setText(f"{_tr(use)} {_tr(cost)}")
+        try:
+            patches = int(w.testchart_patches_amount.text() or 0)
+            est = profile_name_mod.estimate_measurement_time(w.worker, patches)
+            hours = est.hours
+        except Exception:  # noqa: BLE001 - the estimate is advice, never a blocker
+            patches, hours = 0, None
+        t = _tokens()
+        long_color = (
+            t["bad"]
+            if hours and hours > 7
+            else t["warn"]
+            if hours and hours > 3
+            else t["text"]
+        )
+        self.plan_chart.setText(
+            _tr(
+                "plan.chart.value",
+                patches,
+                mp.hours_text(hours) or _tr("plan.chart.unknown_time"),
+            )
+        )
+        self.plan_chart.setStyleSheet(f"color:{_css(long_color)};")
+        self.plan_long.setText(
+            _tr("plan.long.warn", mp.hours_text(hours)) if hours and hours >= 1 else ""
+        )
+        self.plan_long.setVisible(bool(hours and hours >= 1))
+        supported, why = (
+            w.worker.blocks_supported()
+            if hasattr(w.worker, "blocks_supported")
+            else (False, "blocks.no_instrument")
+        )
+        current = int(getcfg("measurement.block_size") or 0)
+        self._syncing = True
+        try:
+            self.block_combo.setEnabled(supported)
+            idx = self.block_combo.findData(current)
+            self.block_combo.setCurrentIndex(max(idx, 0))
+        finally:
+            self._syncing = False
+        if not supported:
+            self.block_note.setText(_tr(why))
+        else:
+            rec = mp.recommend_block_size(patches, hours, True, current)
+            if rec:
+                self.block_note.setText(
+                    f"{_tr('plan.blocks.recommend')} ({_tr('plan.blocks.n', rec)})"
+                )
+            elif patches and patches <= 600:
+                self.block_note.setText(_tr("plan.blocks.too_small"))
+            else:
+                self.block_note.setText("")
+        self.awake_note.setText(
+            _tr("awake.on" if getcfg("session.keep_awake") else "awake.off")
+            + " "
+            + _tr("awake.cannot")
+        )
 
     def _paint_finish_page(self) -> None:
         check = getattr(self.window_ref, "last_profile_check", None)

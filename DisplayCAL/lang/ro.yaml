@@ -3187,3 +3187,157 @@
   Nu mai afișa
 "support.menu.about_section": |-
   Susținere și feedback
+"plan.title": |-
+  Planul de măsurare
+"plan.cal.title": |-
+  1. Calibrarea: curbele monitorului
+"plan.cal.text": |-
+  Aduce monitorul la țintă (punct alb, luminozitate, curbă de tonuri) prin controalele lui și prin curbele plăcii video. Produce curbe de calibrare, nu un profil.
+"plan.prof.title": |-
+  2. Profilarea: măsurarea felului în care monitorul arată culorile
+"plan.prof.text": |-
+  Afișează o diagramă de patch-uri de culoare și măsoară fiecare patch. Cu cât sunt mai multe, cu atât durează mai mult; rezultatul este un fișier de date din care se calculează profilul.
+"plan.icc.title": |-
+  3. Tipul profilului ICC
+"plan.chart.title": |-
+  4. Diagrama de test și verificarea
+"plan.chart.text": |-
+  Mai multe patch-uri pot crește acuratețea potențială a profilului, dar nu sunt o garanție: o rulare mai lungă derivă mai mult, iar rezultatul se știe bun abia după verificare (fila Verificare).
+"plan.chart.value": |-
+  Diagramă: %s patch-uri · timp estimat: %s
+"plan.chart.unknown_time": |-
+  neestimat pentru acest instrument
+"plan.type.value": |-
+  Tip de profil: %s
+"plan.type.change": |-
+  Schimbă în fila Profilare (opțiuni avansate).
+"plan.type.g.use": |-
+  Trei culori primare și o curbă simplă pe canal. Fișier foarte mic și cea mai largă compatibilitate; doar transformări colorimetrice.
+"plan.type.g.cost": |-
+  Ajunge o diagramă mică: se potrivesc puține valori, deci patch-urile în plus adaugă timp fără un câștig pe măsură.
+"plan.type.G.use": |-
+  Ca mai sus, cu o singură gamma pentru toate canalele: cel mai simplu și mai robust profil matricial, cel mai puțin capabil să urmeze un răspuns neobișnuit.
+"plan.type.G.cost": |-
+  Ajunge o diagramă mică.
+"plan.type.s.use": |-
+  Matrice cu o curbă individuală pe canal, deci urmează un răspuns de tonuri care nu e o simplă gamma. Fișier mic, compatibilitate bună; doar colorimetric. Presetarea aplicației pentru macOS îl evită din cauza unor probleme raportate acolo cu profilurile matriciale cu curbe individuale.
+"plan.type.s.cost": |-
+  Ajunge o diagramă moderată; una foarte mare adaugă mai ales timp.
+"plan.type.S.use": |-
+  Matrice cu o singură curbă comună: echilibrează practic griul și este alegerea matricială cea mai previzibilă. Este presetarea aplicației pentru macOS (moștenită de la proiectul original din cauza unor probleme raportate cu profilurile cLUT și cu cele matriciale cu curbe individuale pe macOS); este o alegere de presetare, nu o limită a macOS.
+"plan.type.S.cost": |-
+  Ajunge o diagramă mică sau moderată.
+"plan.type.x.use": |-
+  Un tabel de căutare (LUT) care poate descrie un monitor ce nu urmează un model matricial. Fișier mai mare; aplicațiile fără suport LUT pot să nu-l folosească corect.
+"plan.type.x.cost": |-
+  Beneficiază de o diagramă mai mare, cu câștiguri tot mai mici; o rulare lungă adaugă derivă și timp.
+"plan.type.X.use": |-
+  Un LUT plus o matrice: matricea servește aplicațiile care ignoră LUT-ul. Presetarea aplicației în afara macOS. Fișier mai mare decât un profil matricial.
+"plan.type.X.cost": |-
+  Beneficiază de o diagramă mai mare, cu câștiguri tot mai mici; cele mai mari diagrame durează multe ore.
+"plan.type.l.use": |-
+  Un LUT în codificare Lab. Rareori alegerea mai bună pentru un monitor; fișier mare.
+"plan.type.l.cost": |-
+  Cere o diagramă mare; rulări lungi.
+"plan.long.title": |-
+  Rulare lungă
+"plan.long.warn": |-
+  Această rulare este estimată la aproximativ %s. Rulările lungi sunt expuse la derivă și la întreruperi.
+"plan.blocks.title": |-
+  Rulare lungă sigură (blocuri)
+"plan.blocks.text": |-
+  Diagrama se măsoară în blocuri consecutive; fiecare bloc terminat este salvat pe disc. Dacă ceva oprește rularea, pierzi cel mult blocul curent și poți continua cu restul. Compromisuri: un patch alb în plus pe bloc, instrumentul pornește din nou între blocuri, iar fiecare bloc este normalizat la propriul alb (o mică corecție de derivă).
+"plan.blocks.size": |-
+  Mărimea blocului
+"plan.blocks.off": |-
+  Oprit (o singură rulare)
+"plan.blocks.n": |-
+  %s patch-uri
+"plan.blocks.recommend": |-
+  Recomandat pentru o rulare de această lungime.
+"plan.blocks.too_small": |-
+  Diagrama este suficient de mică pentru a rula ca un singur bloc.
+"blocks.needs_calibration": |-
+  Acest instrument trebuie calibrat pe referința lui (placă sau capac) între rulări, deci blocurile nu sunt disponibile pentru el; rularea rămâne întreagă.
+"blocks.unknown_instrument": |-
+  Blocurile nu sunt disponibile: instrumentul nu este în lista cunoscută de aplicație.
+"blocks.no_instrument": |-
+  Blocurile nu sunt disponibile fără un instrument selectat.
+"awake.title": |-
+  Cât timp durează rularea
+"awake.on": |-
+  Aplicația împiedică intrarea în repaus a computerului și a ecranului, doar pe durata rulării, și eliberează acest lucru la final.
+"awake.off": |-
+  Prevenirea repausului este oprită. Menține tu computerul și ecranul active.
+"awake.cannot": |-
+  Nu poate împiedica: închiderea capacului, alegerea Repaus, butonul de pornire, o baterie descărcată, blocarea ecranului sau schimbarea utilizatorului. Dacă traseul de afișare este întrerupt, măsurarea poate să nu continue. Ține computerul la alimentare și sesiunea deblocată.
+"awake.keep": |-
+  Menține prevenirea repausului pe durata rulărilor
+"awake.not.lid": |-
+  închiderea capacului
+"awake.not.manual_sleep": |-
+  alegerea Repaus
+"awake.not.lock": |-
+  blocarea ecranului
+"awake.not.battery": |-
+  o baterie descărcată
+"recover.title": |-
+  O măsurare anterioară nu s-a încheiat
+"recover.intro": |-
+  Aplicația a găsit %s care nu a înregistrat niciodată un final. Acestea sunt faptele cunoscute; nu este un diagnostic al cauzei.
+"recover.sessions": |-
+  sesiuni neterminate
+"recover.fact.last_seen": |-
+  Ultimul semn de activitate: %s
+"recover.fact.progress": |-
+  Progres la ultima înregistrare: %s din %s
+"recover.fact.stage": |-
+  Etapă: %s
+"recover.fact.child_exit": |-
+  Procesul motorului de măsurare s-a încheiat cu codul %s
+"recover.fact.child_no_exit": |-
+  Motorul de măsurare rula și nu s-a înregistrat încheierea lui.
+"recover.fact.slept": |-
+  Computerul a fost în repaus aproximativ %s în această sesiune.
+"recover.fact.memory": |-
+  Memoria aplicației: prima %s, ultima %s, maxima %s
+"recover.fact.disk": |-
+  Spațiu liber pe disc la ultima înregistrare: %s
+"recover.fact.no_clean_exit": |-
+  Aplicația nu a înregistrat o închidere normală.
+"recover.fact.unknown": |-
+  Aproape nimic nu a fost înregistrat.
+"recover.blocks_done": |-
+  Blocuri terminate și salvate: %s din %s
+"recover.no_blocks": |-
+  Această sesiune nu a fost măsurată în blocuri; ArgyllCMS nu poate continua o rulare din mijloc, deci măsurarea trebuie repetată. Tot ce a salvat sesiunea rămâne disponibil pentru export.
+"recover.conditions_changed": |-
+  Monitorul, instrumentul, modul de măsurare, corecția sau versiunea motorului nu sunt aceleași ca în sesiune, deci blocurile ei nu trebuie combinate cu măsurători noi.
+"recover.can_continue": |-
+  Continuă: măsoară blocurile rămase (%s). Blocul întrerupt se măsoară din nou de la început.
+"recover.conditions_note": |-
+  Înainte de a continua: ține monitorul în aceleași setări și încălzit, iar instrumentul pe același ecran.
+"recover.export": |-
+  Exportă datele recuperabile…
+"recover.open_folder": |-
+  Arată folderul sesiunii
+"recover.dismiss": |-
+  Nu acum
+"recover.discard": |-
+  Am văzut; nu mai afișa
+"recover.exported": |-
+  Copiat în %s
+"notify.done": |-
+  Măsurare încheiată
+"notify.failed": |-
+  Măsurarea s-a oprit cu o eroare
+"notify.cancelled": |-
+  Măsurare anulată
+"notify.flood": |-
+  Motorul de măsurare a fost oprit pentru că repeta la nesfârșit aceeași ieșire. Datele salvate sunt intacte.
+"guide.s4.choices_title": |-
+  Ce înseamnă fiecare alegere
+"recover.continue_btn": |-
+  Continuă cu blocurile rămase
+"recover.continue_how": |-
+  Următorul pas: pornește din nou profilarea cu aceleași setări. Blocurile terminate sunt refolosite și se măsoară doar cele rămase.

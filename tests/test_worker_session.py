@@ -154,3 +154,41 @@ def test_progress_is_tracked_across_blocks(worker):
     assert worker.session_journal.state["progress"]["done"] == 207
     assert worker.session_journal.state["progress"]["total"] == 1000
     worker._block_ctx = None
+
+
+def _interrupted(worker, tmp_path):
+    result, base, calls = run_chart(worker, tmp_path, fail_at=3)
+    assert result is False
+    sd = worker.session_journal.dir
+    st = sj.load_state(sd)
+    st["app_pid"] = 2**30
+    sj._atomic_json(os.path.join(sd, "session.json"), st)
+    worker.session_journal.stop_heartbeat()
+    worker.session_journal = None  # the application is gone
+    return sd
+
+
+def test_resume_measures_only_the_remaining_blocks(worker, tmp_path):
+    sd = _interrupted(worker, tmp_path)
+    worker.tempdir = None
+    worker.resume_from = sd
+    result, base, calls = run_chart(worker, tmp_path)  # a fresh run with the same settings
+    assert result is True
+    assert len(calls) == 2  # blocks 3 and 4 only
+    assert len(mb.read_table(base + ".ti3").rows) == 401
+    assert sj.load_state(sd)["outcome"] == "reviewed:resumed"
+    assert worker.resume_from is None
+
+
+def test_resume_refuses_when_conditions_changed(worker, tmp_path):
+    sd = _interrupted(worker, tmp_path)
+    worker.tempdir = None
+    worker.resume_from = sd
+    setcfg("measurement_mode", "r")  # the monitor/instrument mode is not the same
+    try:
+        result, base, calls = run_chart(worker, tmp_path)
+    finally:
+        setcfg("measurement_mode", "l")
+    assert isinstance(result, Exception)
+    assert calls == []  # nothing was measured, nothing combined
+    assert not os.path.exists(base + ".ti3")
