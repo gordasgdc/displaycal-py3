@@ -18,6 +18,13 @@ Subsequent modules should ``import`` Qt symbols from ``qtpy`` (e.g.
 from __future__ import annotations
 
 import os
+import warnings
+
+# Frozen builds log a long stream of PySide6 type-signature RuntimeWarnings that
+# say nothing about the application (they would flood the diagnostic log).
+warnings.filterwarnings(
+    "ignore", category=RuntimeWarning, module=r"shibokensupport(\.|$)"
+)
 
 # Pin the binding before qtpy is imported anywhere in the process. Respect an
 # explicit override (e.g. for experimenting with another binding) if present.
