@@ -176,6 +176,16 @@ class UpdateCheckController(QObject):
 
     def _on_fetched(self, results: tuple) -> None:
         app_result, argyll_result = results
+        from DisplayCAL import diagnostics
+
+        diagnostics.event(
+            "info",
+            "update",
+            "update.check",
+            app_update=app_result is not None,
+            argyll_update=argyll_result is not None,
+            silent=self._silent,
+        )
         found = False
         if app_result is not None:
             found = True

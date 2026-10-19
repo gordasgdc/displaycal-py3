@@ -128,6 +128,9 @@ class Application(QApplication):
         try:
             import logging
 
+            from DisplayCAL import diagnostics
+
+            diagnostics.mark_clean_exit()
             logging.shutdown()
             for stream in (sys.stdout, sys.stderr):
                 if stream is not None:

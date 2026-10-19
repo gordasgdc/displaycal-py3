@@ -3333,3 +3333,85 @@
   Continuar con los bloques restantes
 "recover.continue_how": |-
   Siguiente: inicia de nuevo el perfilado con los mismos ajustes. Los bloques terminados se reutilizan y solo se miden los restantes.
+"diag.menu": |-
+  Diagnóstico y soporte…
+"diag.title": |-
+  Diagnóstico y soporte
+"diag.intro": |-
+  Si algo sale mal, la aplicación conserva un registro local que ayuda a averiguar por qué. La aplicación no envía nada a ningún sitio: puedes ver el registro, crear un paquete y decidir tú si lo envías.
+"diag.versions": |-
+  Versiones de la aplicación, del sistema y de los componentes
+"diag.copy_versions": |-
+  Copiar versiones
+"diag.copy_id": |-
+  Copiar ID de sesión (%s)
+"diag.logs_where": |-
+  Carpeta de registros: %s. Los registros antiguos se rotan y el tamaño total está limitado, así que no pueden llenar el disco.
+"diag.open_logs": |-
+  Abrir la carpeta de registros
+"diag.export_btn": |-
+  Exportar paquete de diagnóstico…
+"diag.debug": |-
+  Registro detallado (solo en esta ejecución; se desactiva solo tras %s minutos)
+"diag.send_title": |-
+  Cómo enviar el paquete al soporte
+"diag.send_how": |-
+  1) Crea el paquete (botón de arriba) y guárdalo donde quieras. 2) Puedes abrir el ZIP con cualquier programa y leer lo que contiene. 3) Si decides enviarlo: abre la página de soporte, describe el problema y adjunta el ZIP al informe. La aplicación no lo envía por ti y no pide cuenta.
+"diag.open_issue": |-
+  Abrir la página de soporte
+"diag.show_folder": |-
+  Mostrar en la carpeta
+"diag.export.title": |-
+  Exportar paquete de diagnóstico
+"diag.export.intro": |-
+  Elige qué entra en el paquete. Se guarda como archivo ZIP en el lugar que elijas; no se sube nada.
+"diag.export.included": |-
+  Incluido
+"diag.export.optional": |-
+  Solo si tú lo eliges
+"diag.export.optional_note": |-
+  Pueden contener datos personales o voluminosos. Están desactivadas por defecto y solo se añaden si las marcas.
+"diag.export.redact": |-
+  Eliminar datos personales del texto (nombre de usuario, carpetas personales, correo, tokens, identificadores de red y hardware) — recomendado
+"diag.export.redact_off": |-
+  Sin esto, las rutas con tu nombre de usuario y otros identificadores quedan en el paquete. ¿Continuar sin eliminarlos?
+"diag.export.never": |-
+  Nunca se incluye: volcados de memoria, tus archivos personales, contraseñas, tokens o claves.
+"diag.export.save": |-
+  Guardar paquete…
+"diag.export.done": |-
+  Paquete guardado: %s
+"diag.export.failed": |-
+  No se pudo guardar el paquete: %s
+"diag.cat.none": |-
+  nada disponible
+"diag.cat.versions": |-
+  Versiones y sistema
+"diag.cat.versions.desc": |-
+  Aplicación, sistema operativo, ArgyllCMS y otros componentes, número de pantallas y nombres de instrumentos.
+"diag.cat.logs": |-
+  Registro de la aplicación
+"diag.cat.logs.desc": |-
+  Inicio, detección del instrumento, dependencias, comprobaciones de actualización y errores, con las líneas de salida de ArgyllCMS. Cada línea tiene hora, nivel e ID de la ejecución.
+"diag.cat.sessions": |-
+  Sesiones de medición (últimas 3)
+"diag.cat.sessions.desc": |-
+  Estado y etapas de las ejecuciones, cuándo empezó cada proceso de ArgyllCMS y cómo terminó, progreso, memoria y espacio libre en disco. Sin lecturas.
+"diag.cat.crashes": |-
+  Trazas de fallo de la aplicación
+"diag.cat.crashes.desc": |-
+  Escritas por la propia aplicación cuando se detiene de forma anormal. No son los informes de fallo del sistema.
+"diag.cat.measurements": |-
+  Archivos de medición de esas sesiones
+"diag.cat.measurements.desc": |-
+  Las listas de parches y las lecturas (.ti1/.ti3). Describen tu pantalla e instrumento; añádelas solo si el soporte las pide.
+"diag.cat.profile": |-
+  El perfil ICC actual de la pantalla
+"diag.cat.profile.desc": |-
+  El archivo del perfil, sin cambios. Añádelo solo si el problema es del perfil.
+"diag.cat.system_reports": |-
+  Informes de fallo del sistema (macOS)
+"diag.cat.system_reports.desc": |-
+  Copias de los últimos informes que macOS escribió sobre la aplicación. Los archivos del sistema no se modifican. Pueden contener rutas de archivos.
+"diag.package_readme": |-
+  Paquete de diagnóstico de DisplayCAL-CG. Se creó en tu ordenador y se guardó donde elegiste; no se subió nada. Ábrelo con cualquier programa ZIP. manifest.json indica qué contiene y qué se dejó fuera; environment.txt tiene las versiones; logs/ el registro de la aplicación; sessions/ los diarios de las sesiones de medición.

@@ -3341,3 +3341,85 @@
   Continuă cu blocurile rămase
 "recover.continue_how": |-
   Următorul pas: pornește din nou profilarea cu aceleași setări. Blocurile terminate sunt refolosite și se măsoară doar cele rămase.
+"diag.menu": |-
+  Diagnostic și suport…
+"diag.title": |-
+  Diagnostic și suport
+"diag.intro": |-
+  Dacă ceva nu merge, aplicația păstrează local o evidență care ajută să afli de ce. Aplicația nu trimite nimic nicăieri: poți privi evidența, poți crea un pachet și decizi tu dacă îl trimiți.
+"diag.versions": |-
+  Versiunile aplicației, ale sistemului și ale componentelor
+"diag.copy_versions": |-
+  Copiază versiunile
+"diag.copy_id": |-
+  Copiază ID-ul sesiunii (%s)
+"diag.logs_where": |-
+  Folderul de loguri: %s. Logurile vechi sunt rotite, iar dimensiunea totală este limitată, deci nu pot umple discul.
+"diag.open_logs": |-
+  Deschide folderul de loguri
+"diag.export_btn": |-
+  Exportă pachet de diagnostic…
+"diag.debug": |-
+  Jurnal detaliat (doar pentru această rulare; se oprește singur după %s de minute)
+"diag.send_title": |-
+  Cum trimiți pachetul către suport
+"diag.send_how": |-
+  1) Creează pachetul (butonul de mai sus) și salvează-l unde vrei. 2) Poți deschide ZIP-ul cu orice program și citi ce conține. 3) Dacă hotărăști să îl trimiți: deschide pagina de suport, descrie problema și atașează ZIP-ul la raport. Aplicația nu îl trimite în locul tău și nu cere cont.
+"diag.open_issue": |-
+  Deschide pagina de suport
+"diag.show_folder": |-
+  Arată în folder
+"diag.export.title": |-
+  Exportă pachetul de diagnostic
+"diag.export.intro": |-
+  Alege ce intră în pachet. Se salvează ca fișier ZIP în locul ales de tine; nu se încarcă nimic.
+"diag.export.included": |-
+  Inclus
+"diag.export.optional": |-
+  Numai dacă alegi tu
+"diag.export.optional_note": |-
+  Acestea pot conține date personale sau voluminoase. Sunt oprite implicit și se adaugă numai dacă le bifezi.
+"diag.export.redact": |-
+  Elimină datele personale din text (nume de utilizator, foldere personale, e-mail, tokenuri, identificatori de rețea și hardware) — recomandat
+"diag.export.redact_off": |-
+  Fără aceasta, căile cu numele tău de utilizator și alți identificatori rămân în pachet. Continui fără să le elimini?
+"diag.export.never": |-
+  Nu se include niciodată: dump-uri de memorie, fișierele tale personale, parole, tokenuri sau chei.
+"diag.export.save": |-
+  Salvează pachetul…
+"diag.export.done": |-
+  Pachet salvat: %s
+"diag.export.failed": |-
+  Pachetul nu a putut fi salvat: %s
+"diag.cat.none": |-
+  nimic disponibil
+"diag.cat.versions": |-
+  Versiuni și sistem
+"diag.cat.versions.desc": |-
+  Aplicația, sistemul de operare, ArgyllCMS și alte componente, numărul de monitoare și numele instrumentelor.
+"diag.cat.logs": |-
+  Jurnalul aplicației
+"diag.cat.logs.desc": |-
+  Pornire, detectarea instrumentului, dependențe, verificări de actualizare și erori, cu liniile de ieșire ArgyllCMS. Fiecare linie are ora, nivelul și ID-ul rulării.
+"diag.cat.sessions": |-
+  Sesiuni de măsurare (ultimele 3)
+"diag.cat.sessions.desc": |-
+  Starea și etapele rulărilor, când a pornit fiecare proces ArgyllCMS și cum s-a încheiat, progresul, memoria și spațiul liber pe disc. Fără citiri.
+"diag.cat.crashes": |-
+  Urme de blocare ale aplicației
+"diag.cat.crashes.desc": |-
+  Scrise de aplicație când se oprește anormal. Nu sunt rapoartele de blocare ale sistemului.
+"diag.cat.measurements": |-
+  Fișierele de măsurare ale acelor sesiuni
+"diag.cat.measurements.desc": |-
+  Listele de patch-uri și citirile (.ti1/.ti3). Descriu monitorul și instrumentul tău; adaugă-le doar dacă suportul le cere.
+"diag.cat.profile": |-
+  Profilul ICC curent al monitorului
+"diag.cat.profile.desc": |-
+  Fișierul profilului, nemodificat. Adaugă-l doar dacă problema ține de profil.
+"diag.cat.system_reports": |-
+  Rapoarte de blocare ale sistemului (macOS)
+"diag.cat.system_reports.desc": |-
+  Copii ale ultimelor rapoarte scrise de macOS despre aplicație. Fișierele sistemului nu sunt modificate. Pot conține căi de fișiere.
+"diag.package_readme": |-
+  Pachet de diagnostic DisplayCAL-CG. A fost creat pe computerul tău și salvat unde ai ales; nu s-a încărcat nimic. Deschide-l cu orice program ZIP. manifest.json arată ce conține și ce a fost lăsat deoparte; environment.txt are versiunile; logs/ jurnalul aplicației; sessions/ jurnalele sesiunilor de măsurare.

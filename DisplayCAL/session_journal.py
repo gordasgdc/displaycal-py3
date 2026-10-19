@@ -111,6 +111,9 @@ class SessionJournal:
         self._last_wall = 0.0
         self._last_mono = 0.0
         self.write_errors = 0
+        #: Optional ``callable(kind, data)``: mirrors every event elsewhere (the
+        #: application log), correlated by this journal's session ID.
+        self.sink: Callable[[str, dict], None] | None = None
 
     # -- lifecycle --------------------------------------------------------
     def begin(self, info: dict) -> str:
@@ -227,6 +230,11 @@ class SessionJournal:
                 f.flush()
         except OSError:
             self.write_errors += 1
+        if self.sink is not None:
+            try:
+                self.sink(kind, data)
+            except Exception:  # noqa: BLE001 - mirroring must never break a session
+                self.sink = None
 
     # -- durable copies ---------------------------------------------------
     def checkpoint(self, path: str, name: str | None = None) -> bool:

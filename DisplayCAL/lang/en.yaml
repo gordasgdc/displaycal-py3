@@ -3341,3 +3341,85 @@
   Continue with the remaining blocks
 "recover.continue_how": |-
   Next: start the profiling run again with the same settings. The finished blocks are reused and only the remaining ones are measured.
+"diag.menu": |-
+  Diagnostic and support…
+"diag.title": |-
+  Diagnostic and support
+"diag.intro": |-
+  If something goes wrong, the application keeps a local record that helps to find out why. Nothing is sent anywhere by the application: you can look at the records, create a package and decide yourself whether to send it.
+"diag.versions": |-
+  Versions of the application, the system and the components
+"diag.copy_versions": |-
+  Copy versions
+"diag.copy_id": |-
+  Copy session ID (%s)
+"diag.logs_where": |-
+  Log folder: %s. Old logs are rotated and the total size is limited, so they cannot fill the disk.
+"diag.open_logs": |-
+  Open the log folder
+"diag.export_btn": |-
+  Export diagnostic package…
+"diag.debug": |-
+  Detailed logging (only for this run; it switches itself off after %s minutes)
+"diag.send_title": |-
+  How to send the package to support
+"diag.send_how": |-
+  1) Create the package (button above) and save it where you want. 2) You can open the ZIP with any tool and read what is inside. 3) If you decide to send it: open the support page, describe the problem and attach the ZIP to the report. The application does not send it for you and asks for no account.
+"diag.open_issue": |-
+  Open the support page
+"diag.show_folder": |-
+  Show in folder
+"diag.export.title": |-
+  Export diagnostic package
+"diag.export.intro": |-
+  Choose what goes into the package. It is saved as a ZIP file in the place you choose; nothing is uploaded.
+"diag.export.included": |-
+  Included
+"diag.export.optional": |-
+  Only if you choose
+"diag.export.optional_note": |-
+  These can contain personal or large data. They are off by default and are added only when you tick them.
+"diag.export.redact": |-
+  Remove personal data from the text (user name, home folders, e-mail, tokens, network and hardware identifiers) — recommended
+"diag.export.redact_off": |-
+  Without this, paths with your user name and other identifiers stay in the package. Continue without removing them?
+"diag.export.never": |-
+  Never included: memory dumps, your personal files, passwords, tokens or keys.
+"diag.export.save": |-
+  Save package…
+"diag.export.done": |-
+  Package saved: %s
+"diag.export.failed": |-
+  The package could not be saved: %s
+"diag.cat.none": |-
+  nothing available
+"diag.cat.versions": |-
+  Versions and system
+"diag.cat.versions.desc": |-
+  Application, operating system, ArgyllCMS and other components, number of displays and instrument names.
+"diag.cat.logs": |-
+  Application log
+"diag.cat.logs.desc": |-
+  Start-up, instrument detection, dependencies, update checks and errors, with the ArgyllCMS output lines. Each line has time, level and the run ID.
+"diag.cat.sessions": |-
+  Measurement sessions (last 3)
+"diag.cat.sessions.desc": |-
+  State and stages of the runs, when each ArgyllCMS process started and how it ended, progress, memory and free disk space. No readings.
+"diag.cat.crashes": |-
+  Crash traces of the application
+"diag.cat.crashes.desc": |-
+  Written by the application itself when it stops abnormally. They are not system crash reports.
+"diag.cat.measurements": |-
+  Measurement files of those sessions
+"diag.cat.measurements.desc": |-
+  The patch lists and readings (.ti1/.ti3). They describe your screen and instrument; add them only if support asks for them.
+"diag.cat.profile": |-
+  The current display ICC profile
+"diag.cat.profile.desc": |-
+  The profile file itself, unchanged. Add it only if the problem is about the profile.
+"diag.cat.system_reports": |-
+  System crash reports (macOS)
+"diag.cat.system_reports.desc": |-
+  Copies of the last reports macOS wrote about the application. The system files are not changed. They can contain file paths.
+"diag.package_readme": |-
+  DisplayCAL-CG diagnostic package. It was created on your computer and saved where you chose; nothing was uploaded. Open it with any ZIP tool. manifest.json lists what is inside and what was left out; environment.txt has the versions; logs/ the application log; sessions/ the measurement session journals.

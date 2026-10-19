@@ -65,7 +65,12 @@ if find "$DIST_DIR" -maxdepth 3 -user root -print -quit 2>/dev/null | grep -q .;
     echo "    sudo rm -rf $(pwd)/$DIST_DIR" >&2
     exit 1
 fi
-rm -rf "$DIST_DIR"/py2app.macosx* "$DIST_DIR"/*.pkg "$DIST_DIR"/payload "$DIST_DIR"/Distribution.xml "$DIST_DIR"/LICENSE.txt
+# `rm -rf` pe un arbore mare poate esua tranzitoriu cu "Directory not empty"
+# (indexare Spotlight/mdworker); se reincearca, nu se opreste build-ul.
+for _try in 1 2 3 4 5; do
+    rm -rf "$DIST_DIR"/py2app.macosx* "$DIST_DIR"/*.pkg "$DIST_DIR"/payload "$DIST_DIR"/Distribution.xml "$DIST_DIR"/LICENSE.txt && break
+    sleep 2
+done
 
 echo "==> pip install -e . (verifică integritatea pachetului Python, regenerează dist/copyright)…"
 "$VENV/bin/pip" install -e . -q

@@ -511,6 +511,10 @@ def main() -> int:
     config.initcfg()
     lang.init()
     lang.update_defaults()
+    from DisplayCAL import diagnostics
+
+    diagnostics.install_crash_hooks()
+    diagnostics.event("info", "startup", "app.start", "application starting")
 
     from DisplayCAL.ui.application import Application
     from DisplayCAL.ui.main_window import MainWindow
@@ -519,6 +523,8 @@ def main() -> int:
 
     def _on_ready(worker: Worker) -> None:
         window = MainWindow(worker=worker)
+        diagnostics.log_environment(worker)
+        diagnostics.event("info", "startup", "app.ready", "main window shown")
         app.top_window = window
         window.show()
         window.listen()

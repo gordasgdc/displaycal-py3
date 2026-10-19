@@ -52,34 +52,7 @@ def platform_line() -> str:
     return f"{name}, {platform.machine()}"
 
 
-_EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
-_IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
-_LONG_HEX = re.compile(r"\b[0-9a-fA-F]{24,}\b")
-_SERIAL = re.compile(r"(?i)\b(serial(?: number)?|s/n)\b\s*[:=]\s*\S+")
-_BEARER = re.compile(r"(?i)\b(token|password|passwd|secret|api[_-]?key)\b\s*[:=]\s*\S+")
-
-
-def redact(text: str) -> str:
-    """Remove what identifies the user or the machine from diagnostic text.
-
-    Home directories and the user name, e-mail addresses, IPv4 addresses, long
-    hexadecimal identifiers (hardware IDs, hashes of secrets), instrument serial
-    numbers and anything that looks like a token or password. This is
-    best-effort: the user is shown the redacted text before anything is shared.
-    """
-    home = os.path.expanduser("~")
-    if home and home not in ("~", os.sep):
-        text = text.replace(home, "~")
-        text = text.replace(home.replace("\\", "/"), "~")
-    text = _EMAIL.sub("<email>", text)
-    text = _SERIAL.sub(lambda m: f"{m.group(1)}: <redacted>", text)
-    text = _BEARER.sub(lambda m: f"{m.group(1)}: <redacted>", text)
-    text = _IPV4.sub("<ip>", text)
-    text = _LONG_HEX.sub("<id>", text)
-    user = os.environ.get("USER") or os.environ.get("USERNAME") or ""
-    if len(user) >= 3:
-        text = re.sub(re.escape(user), "<user>", text, flags=re.IGNORECASE)
-    return text
+from DisplayCAL.redaction import redact  # noqa: E402,F401  (single implementation)
 
 
 def tail_lines(path: str, count: int = 150) -> list[str]:

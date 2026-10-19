@@ -188,6 +188,7 @@ from DisplayCAL.icc_profile import (
 )
 from DisplayCAL.log import LOG, DummyLogger, LogFile, get_file_logger
 from DisplayCAL.argyll_integrity import HashConflictError, resolve_expected_hash
+from DisplayCAL import diagnostics
 from DisplayCAL.worker_session import SessionMixin
 from DisplayCAL.meta import UPSTREAM_RESOURCES_DOMAIN, VERSION_STRING
 from DisplayCAL.meta import NAME as APPNAME
@@ -6438,6 +6439,13 @@ END_DATA
                         instruments.append(iname)
             if VERBOSE >= 1:
                 print(lang.getstr("success"))
+            diagnostics.event(
+                "info",
+                "instrument",
+                "instrument.scan",
+                count=len(instruments),
+                names=", ".join(instruments) or "none",
+            )
             if instruments != self.instruments:
                 self.instruments = instruments
                 setcfg("instruments", instruments)
@@ -6620,6 +6628,9 @@ END_DATA
                 self.display_generic_names.append("Untethered")
                 # -
                 self.displays = displays
+                diagnostics.event(
+                    "info", "instrument", "display.scan", count=len(displays)
+                )
                 setcfg("displays", displays)
                 if (
                     current_display_name != config.get_display_name()

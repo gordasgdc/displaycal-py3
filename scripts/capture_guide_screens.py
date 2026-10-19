@@ -85,7 +85,7 @@ def main() -> int:
             g._model["i1 DisplayPro, ColorMunki Display"] = MODEL
             g._reached = 4
             g.prepare.stop_motion()
-            for step in range(4):
+            for step in range(5):
                 if step == 1:
                     g.go(1)
                     g.goal_buttons["photo"].setChecked(True)
@@ -99,6 +99,21 @@ def main() -> int:
                     g.go(3)
                 if step == 0:
                     g.go(0)
+                if step == 4:
+                    # Simulated read-back result: demonstration only (the band says so).
+                    from DisplayCAL.profile_verify import MATCH, ProfileCheck
+
+                    # Coherent simulated state: a profile is installed for this
+                    # display AND the read-back confirms it is the active one.
+                    class _DemoProfile:
+                        fileName = "demo-profile.icc"
+
+                        def getDescription(self):
+                            return "Demo profile (simulated)"
+
+                    config.get_display_profile = lambda *a, **k: _DemoProfile()
+                    win.last_profile_check = ProfileCheck(MATCH, "Demo profile (simulated)")
+                    g.on_profile_built()
                 g.prepare.stop_motion()
                 for _ in range(3):  # deferred relayouts settle over a few passes
                     app.processEvents()

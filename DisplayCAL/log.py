@@ -9,6 +9,7 @@ import logging.handlers
 import os
 import re
 import sys
+import uuid
 import warnings
 from codecs import EncodedFile
 from hashlib import md5
@@ -18,6 +19,7 @@ from typing import TYPE_CHECKING, Callable, TextIO
 
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.meta import script2pywname
+from DisplayCAL.redaction import redact_secrets
 from DisplayCAL.multiprocess import mp
 from DisplayCAL.options import DEBUG
 from DisplayCAL.safe_print import SafePrinter
@@ -36,6 +38,120 @@ LOGLEVEL = logging.DEBUG if DEBUG else logging.INFO
 
 LOGGER = None
 _LOGDIR = None
+
+#: Identifies this run of the application in every log line, so lines of
+#: different runs (and the session journals they refer to) can be told apart.
+APP_SESSION_ID = uuid.uuid4().hex[:8]
+
+#: One active log file may not grow beyond this; it is rotated to a numbered
+#: backup. Together with the backup count and the total budget this bounds the
+#: disk space the logs can ever take.
+LOG_MAX_BYTES = 5 * 1024 * 1024
+LOG_TOTAL_BUDGET = 40 * 1024 * 1024
+_BACKUP_SUFFIX = re.compile(r"^\d{4}-\d{2}-\d{2}(\.\d+)?$")
+
+
+class DiagFormatter(logging.Formatter):
+    """File format: ISO-8601 time with UTC offset, level and run session ID."""
+
+    def formatTime(  # noqa: N802
+        self, record: logging.LogRecord, datefmt: str | None = None
+    ) -> str:
+        """Return ``2026-10-19T17:20:11.123+0300`` for the record."""
+        t = record.created
+        return strftime("%Y-%m-%dT%H:%M:%S", localtime(t)) + (
+            f".{int((t % 1) * 1000):03d}" + strftime("%z", localtime(t))
+        )
+
+    def format(self, record: logging.LogRecord) -> str:  # noqa: D102
+        record.message = redact_secrets(record.getMessage())
+        level = record.levelname
+        return f"{self.formatTime(record)} {level:<7} [{APP_SESSION_ID}] {record.message}"
+
+
+def prune_log_backups(
+    logdir: str,
+    base_name: str,
+    backup_count: int,
+    total_budget: int = LOG_TOTAL_BUDGET,
+) -> None:
+    """Keep at most ``backup_count`` dated backups and ``total_budget`` bytes.
+
+    Oldest backups go first; the active file is never removed. Never raises.
+    """
+    prefix = base_name + "."
+    try:
+        names = [
+            n
+            for n in os.listdir(logdir)
+            if n.startswith(prefix) and _BACKUP_SUFFIX.match(n[len(prefix) :])
+        ]
+    except OSError:
+        return
+    paths = sorted(os.path.join(logdir, n) for n in names)
+    for path in paths[: max(0, len(paths) - backup_count)]:
+        with contextlib.suppress(OSError):
+            os.remove(path)
+    paths = paths[max(0, len(paths) - backup_count) :]
+
+    def size(p: str) -> int:
+        try:
+            return os.path.getsize(p)
+        except OSError:
+            return 0
+
+    total = sum(size(p) for p in paths)
+    while paths and total > total_budget:
+        oldest = paths.pop(0)
+        total -= size(oldest)
+        with contextlib.suppress(OSError):
+            os.remove(oldest)
+
+
+class BoundedTimedRotatingFileHandler(logging.handlers.TimedRotatingFileHandler):
+    """Rotates at midnight (as before) and also when the file gets too big."""
+
+    def __init__(self, *args, max_bytes: int = LOG_MAX_BYTES, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.max_bytes = max_bytes
+
+    def shouldRollover(self, record: logging.LogRecord) -> bool:  # noqa: N802
+        """Time is up, or the active file reached its size limit."""
+        if super().shouldRollover(record):
+            return True
+        try:
+            return self.max_bytes > 0 and os.path.getsize(self.baseFilename) >= self.max_bytes
+        except OSError:
+            return False
+
+    def doRollover(self) -> None:  # noqa: N802
+        """Rotate by time (standard) or by size (numbered backup of today)."""
+        try:
+            if int(time()) >= self.rolloverAt:
+                super().doRollover()
+            else:
+                if self.stream:
+                    self.stream.close()
+                    self.stream = None
+                day = strftime("%Y-%m-%d", localtime())
+                n = 1
+                while os.path.exists(f"{self.baseFilename}.{day}.{n}"):
+                    n += 1
+                os.replace(self.baseFilename, f"{self.baseFilename}.{day}.{n}")
+                if not self.delay:
+                    self.stream = self._open()
+        except Exception:  # noqa: BLE001 - logging must never break the program
+            if self.stream is None:
+                with contextlib.suppress(Exception):
+                    self.stream = self._open()
+        prune_log_backups(
+            os.path.dirname(self.baseFilename),
+            os.path.basename(self.baseFilename),
+            self.backupCount,
+        )
+
+    def handleError(self, record: logging.LogRecord) -> None:  # noqa: N802
+        """A failing log write is dropped silently; the operation goes on."""
 
 
 def showwarning(
@@ -377,13 +493,17 @@ def get_file_logger(
     if os.path.exists(logdir):
         try:
             if when != "never":
-                filehandler = logging.handlers.TimedRotatingFileHandler(
+                filehandler = BoundedTimedRotatingFileHandler(
                     logfile, when=when, backupCount=backup_count
                 )
             else:
-                filehandler = logging.FileHandler(logfile, mode)
-            fileformatter = logging.Formatter("%(asctime)s %(message)s")
-            filehandler.setFormatter(fileformatter)
+                filehandler = logging.handlers.RotatingFileHandler(
+                    logfile,
+                    mode,
+                    maxBytes=LOG_MAX_BYTES,
+                    backupCount=max(backup_count, 1),
+                )
+            filehandler.setFormatter(DiagFormatter())
             LOGGER.addHandler(filehandler)
         except Exception as exception:
             print(f"Warning - logging to file '{logfile}' not possible: {exception}")
@@ -523,7 +643,7 @@ def rotate_log_files(backup_count: int, logdir: str, logfile: str) -> None:
     # do rollover
     logbackup = logfile + strftime(".%Y-%m-%d", mtime)
     validate_and_rename_logfile(logfile, logbackup)
-    ext_match = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    ext_match = _BACKUP_SUFFIX
     base_name = os.path.basename(logfile)
     try:
         file_names = os.listdir(logdir)

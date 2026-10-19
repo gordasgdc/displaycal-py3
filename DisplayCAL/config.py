@@ -140,7 +140,11 @@ if sys.platform == "win32":
     SCALE_ADJUSTMENT_FACTOR = 1.0
     CONFIG_SYS = os.path.join(COMMONAPPDATA[0], APPBASENAME)
     CONFIG_HOME = os.path.join(APPDATA, APPBASENAME)
-    LOGDIR = os.path.join(DATA_HOME, "logs")
+    # Logs are machine-local diagnostic data: %LOCALAPPDATA%, not the roaming
+    # profile (GDC observability standard).
+    LOGDIR = os.path.join(
+        os.environ.get("LOCALAPPDATA") or APPDATA, APPBASENAME, "Logs"
+    )
     if APPBASENAME != APPNAME:
         DATA_DIRS.extend(os.path.join(dir_, APPNAME) for dir_ in COMMONAPPDATA)
         DATA_DIRS.append(os.path.join(COMMON_PROGRAM_FILES, APPNAME))

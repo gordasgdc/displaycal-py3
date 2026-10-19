@@ -3147,6 +3147,9 @@ class MainWindow(BaseWindow):
         feedback_action.triggered.connect(
             lambda: FeedbackDialog(self).exec()
         )
+        diag_action = help_menu.addAction(lang.getstr("diag.menu"))
+        diag_action.setMenuRole(QAction.NoRole)
+        diag_action.triggered.connect(self.show_diagnostics)
 
         help_menu.addSeparator()
         self.update_check_onstartup_action = help_menu.addAction(
@@ -3213,6 +3216,12 @@ class MainWindow(BaseWindow):
             self._run_update_check(silent=True)
         else:
             self._run_instrument_setup_and_donation_check()
+
+    def show_diagnostics(self) -> None:
+        """Help -> Diagnostic and support."""
+        from DisplayCAL.ui.diagnostic_dialog import DiagnosticDialog
+
+        DiagnosticDialog(self.worker, self).exec()
 
     def offer_session_recovery(self) -> bool:
         """Offer to review measurement sessions that never recorded an end.

@@ -26,6 +26,7 @@ import time
 from DisplayCAL import config, keep_awake, measurement_blocks, session_journal
 from DisplayCAL import localization as lang
 from DisplayCAL.config import getcfg
+from DisplayCAL import diagnostics
 from DisplayCAL.support import redact
 from DisplayCAL.worker_base import Error
 
@@ -118,6 +119,7 @@ class SessionMixin:
             return
         try:
             j = session_journal.SessionJournal(self._session_root())
+            j.sink = diagnostics.journal_sink_for(j)
             j.begin(self._session_info())
         except OSError:
             return  # a journal problem must never stop a measurement

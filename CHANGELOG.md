@@ -13,4 +13,6 @@
 - Voluntary support: star the project on GitHub or send feedback (opens a pre-filled issue in your browser; nothing is sent by the app).
 - Qt is now the default interface; the previous interface remains available.
 - Guides (Romanian, English, Spanish) rewritten for the guided flow.
+- Diagnostic and support (Help menu): open the log folder, see versions, copy the session ID, optional detailed logging for the current run, and export a diagnostic package you can read and send yourself (nothing is uploaded). Logs rotate and are size-limited; personal data is removed from text by default; measurements, ICC profiles and system crash reports are added only if you choose them.
+- Log lines now carry an ISO time with offset, a level and a run ID; an unexpected stop is noted at the next start.
 - TODO parity: Windows build verification of the new flow pending.

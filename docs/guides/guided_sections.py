@@ -134,6 +134,58 @@ _T = {
                           "long runs should use blocks.")),
             ],
         },
+        "diag": {
+            "h": "Diagnostic and support",
+            "blocks": [
+                ("p", "<b>Help → Diagnostic and support</b> gathers what you need "
+                      "when something goes wrong, on macOS and Windows. "
+                      "Everything stays on your computer; the application "
+                      "uploads nothing and asks for no account."),
+                ("ul", [
+                    "<b>Log folder</b> — a button opens it. On macOS it is "
+                    "<i>~/Library/Logs/DisplayCAL</i>; on Windows "
+                    "<i>%LOCALAPPDATA%\\DisplayCAL\\Logs</i>. The logs rotate "
+                    "daily and when a file reaches 5 MB, and the total is "
+                    "capped, so they cannot fill the disk.",
+                    "<b>Versions</b> — application, system, Qt, ArgyllCMS and "
+                    "other components, in a box you can copy.",
+                    "<b>Session ID</b> — each run of the application has a short "
+                    "ID that appears on every log line; a measurement session "
+                    "also appears under its own ID. Copy it into your report.",
+                    "<b>Detailed logging</b> — can be switched on for the "
+                    "current run only; it switches itself off after 60 minutes "
+                    "and is never kept for the next start.",
+                ]),
+                ("steps", [
+                    "Press <b>Export diagnostic package…</b>.",
+                    "A window shows what will be included, with sizes. Always "
+                    "included: versions, the application log, the journals of "
+                    "the last three measurement sessions (stages, how each "
+                    "ArgyllCMS process started and ended, progress, memory, free "
+                    "disk space) and crash traces written by the application. "
+                    "<b>Only if you tick them</b>: measurement files, the "
+                    "display's ICC profile and, on macOS, the system's crash "
+                    "reports about the application. Memory dumps and your "
+                    "personal files are never included.",
+                    "Personal data is removed from the text by default (user "
+                    "name, home folders, e-mail, tokens, network and hardware "
+                    "identifiers). Unticking this asks for confirmation.",
+                    "Choose where to save the ZIP. You can open it with any "
+                    "tool and read it; <i>manifest.json</i> says what is inside "
+                    "and what was left out.",
+                ]),
+                ("info", ("Sending it to support is your decision",
+                          "The application never sends the package. If you want "
+                          "help: open the support page (button in the same "
+                          "window), describe the problem and attach the ZIP to "
+                          "the report. If you prefer, look inside first and "
+                          "send only part of it.")),
+                ("p", "After an unexpected stop, the next start notes in the "
+                      "log that the previous run did not shut down normally, "
+                      "and the recovery window (previous chapter) lists the "
+                      "unfinished sessions; both are covered by the package."),
+            ],
+        },
         "support": {
             "h": "Support, feedback and credits",
             "blocks": [
@@ -288,6 +340,60 @@ _T = {
                           "citirile doar în motorul de măsurare până se "
                           "termină; dacă este întreruptă, ele se pierd. "
                           "De aceea rulările lungi trebuie făcute pe blocuri.")),
+            ],
+        },
+        "diag": {
+            "h": "Diagnostic și suport",
+            "blocks": [
+                ("p", "<b>Ajutor → Diagnostic și suport</b> reunește ce îți "
+                      "trebuie când ceva nu merge, pe macOS și pe Windows. "
+                      "Totul rămâne pe computerul tău; aplicația nu încarcă "
+                      "nimic și nu cere cont."),
+                ("ul", [
+                    "<b>Folderul de loguri</b> — un buton îl deschide. Pe macOS "
+                    "este <i>~/Library/Logs/DisplayCAL</i>; pe Windows "
+                    "<i>%LOCALAPPDATA%\\DisplayCAL\\Logs</i>. Logurile se "
+                    "rotesc zilnic și când un fișier ajunge la 5 MB, iar "
+                    "totalul este limitat, deci nu pot umple discul.",
+                    "<b>Versiuni</b> — aplicația, sistemul, Qt, ArgyllCMS și "
+                    "alte componente, într-o casetă pe care o poți copia.",
+                    "<b>ID-ul sesiunii</b> — fiecare rulare a aplicației are "
+                    "un ID scurt care apare pe fiecare linie de log; o sesiune "
+                    "de măsurare apare și sub propriul ID. Copiază-l în raport.",
+                    "<b>Jurnal detaliat</b> — poate fi pornit doar pentru "
+                    "rularea curentă; se oprește singur după 60 de minute și "
+                    "nu se păstrează pentru pornirea următoare.",
+                ]),
+                ("steps", [
+                    "Apasă <b>Exportă pachet de diagnostic…</b>.",
+                    "O fereastră arată ce va fi inclus, cu dimensiuni. Mereu "
+                    "incluse: versiunile, jurnalul aplicației, jurnalele "
+                    "ultimelor trei sesiuni de măsurare (etape, cum a pornit și "
+                    "cum s-a încheiat fiecare proces ArgyllCMS, progres, "
+                    "memorie, spațiu liber pe disc) și urmele de blocare "
+                    "scrise de aplicație. <b>Numai dacă le bifezi</b>: "
+                    "fișierele de măsurare, profilul ICC al monitorului și, pe "
+                    "macOS, rapoartele de blocare ale sistemului despre "
+                    "aplicație. Dump-urile de memorie și fișierele tale "
+                    "personale nu se includ niciodată.",
+                    "Datele personale sunt eliminate implicit din text (nume de "
+                    "utilizator, foldere personale, e-mail, tokenuri, "
+                    "identificatori de rețea și hardware). Debifarea cere "
+                    "confirmare.",
+                    "Alege unde se salvează ZIP-ul. Îl poți deschide cu orice "
+                    "program și citi; <i>manifest.json</i> spune ce conține și "
+                    "ce a fost lăsat deoparte.",
+                ]),
+                ("info", ("Trimiterea către suport e decizia ta",
+                          "Aplicația nu trimite niciodată pachetul. Dacă vrei "
+                          "ajutor: deschide pagina de suport (buton în aceeași "
+                          "fereastră), descrie problema și atașează ZIP-ul la "
+                          "raport. Dacă preferi, uită-te mai întâi înăuntru și "
+                          "trimite doar o parte.")),
+                ("p", "După o oprire neașteptată, la pornirea următoare logul "
+                      "notează că rularea anterioară nu s-a închis normal, iar "
+                      "fereastra de recuperare (capitolul anterior) listează "
+                      "sesiunile neterminate; ambele intră în pachet."),
             ],
         },
         "support": {
@@ -446,6 +552,62 @@ _T = {
                           "Por eso las ejecuciones largas deben usar bloques.")),
             ],
         },
+        "diag": {
+            "h": "Diagnóstico y soporte",
+            "blocks": [
+                ("p", "<b>Ayuda → Diagnóstico y soporte</b> reúne lo que "
+                      "necesitas cuando algo sale mal, en macOS y Windows. "
+                      "Todo queda en tu ordenador; la aplicación no sube nada "
+                      "y no pide cuenta."),
+                ("ul", [
+                    "<b>Carpeta de registros</b> — un botón la abre. En macOS "
+                    "es <i>~/Library/Logs/DisplayCAL</i>; en Windows "
+                    "<i>%LOCALAPPDATA%\\DisplayCAL\\Logs</i>. Los registros "
+                    "rotan a diario y cuando un archivo llega a 5 MB, y el "
+                    "total está limitado, así que no pueden llenar el disco.",
+                    "<b>Versiones</b> — aplicación, sistema, Qt, ArgyllCMS y "
+                    "otros componentes, en un cuadro que puedes copiar.",
+                    "<b>ID de sesión</b> — cada ejecución de la aplicación "
+                    "tiene un ID corto que aparece en cada línea del registro; "
+                    "una sesión de medición aparece además con su propio ID. "
+                    "Cópialo en tu informe.",
+                    "<b>Registro detallado</b> — puede activarse solo para la "
+                    "ejecución actual; se desactiva solo tras 60 minutos y no "
+                    "se conserva para el siguiente inicio.",
+                ]),
+                ("steps", [
+                    "Pulsa <b>Exportar paquete de diagnóstico…</b>.",
+                    "Una ventana muestra qué se incluirá, con tamaños. Siempre "
+                    "incluidos: versiones, el registro de la aplicación, los "
+                    "diarios de las tres últimas sesiones de medición "
+                    "(etapas, cómo empezó y terminó cada proceso de ArgyllCMS, "
+                    "progreso, memoria, espacio libre en disco) y las trazas de "
+                    "fallo escritas por la aplicación. <b>Solo si las "
+                    "marcas</b>: archivos de medición, el perfil ICC de la "
+                    "pantalla y, en macOS, los informes de fallo del sistema "
+                    "sobre la aplicación. Los volcados de memoria y tus "
+                    "archivos personales nunca se incluyen.",
+                    "Por defecto se eliminan del texto los datos personales "
+                    "(nombre de usuario, carpetas personales, correo, tokens, "
+                    "identificadores de red y hardware). Desmarcarlo pide "
+                    "confirmación.",
+                    "Elige dónde guardar el ZIP. Puedes abrirlo con cualquier "
+                    "programa y leerlo; <i>manifest.json</i> indica qué "
+                    "contiene y qué se dejó fuera.",
+                ]),
+                ("info", ("Enviarlo al soporte es decisión tuya",
+                          "La aplicación nunca envía el paquete. Si quieres "
+                          "ayuda: abre la página de soporte (botón en la misma "
+                          "ventana), describe el problema y adjunta el ZIP al "
+                          "informe. Si prefieres, mira primero dentro y envía "
+                          "solo una parte.")),
+                ("p", "Tras una parada inesperada, en el siguiente inicio el "
+                      "registro anota que la ejecución anterior no terminó "
+                      "con normalidad, y la ventana de recuperación (capítulo "
+                      "anterior) lista las sesiones sin terminar; ambas cosas "
+                      "entran en el paquete."),
+            ],
+        },
         "support": {
             "h": "Apoyo, comentarios y créditos",
             "blocks": [
@@ -473,7 +635,7 @@ _T = {
 def sections(lang: str) -> list[dict]:
     """Chapters for one language, in reading order."""
     t = _T[lang]
-    return [t[k] for k in ("guided", "prep", "plan", "recovery")]
+    return [t[k] for k in ("guided", "prep", "plan", "recovery", "diag")]
 
 
 def support_section(lang: str) -> dict:
