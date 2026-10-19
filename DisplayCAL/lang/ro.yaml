@@ -3501,3 +3501,465 @@
   Tratează-le drept setările mele actuale
 "guide.goal.modified_suffix": |-
   schimbat în setările avansate
+"help.sections.expand": |-
+  Ce schimbă fiecare setare de aici
+"help.label.when": |-
+  Se potrivește când:
+"help.label.needs": |-
+  Dependențe și atenționări:
+"help.label.unit": |-
+  Unitate:
+"help.label.default": |-
+  Valoarea implicită a aplicației:
+"help.label.unavailable": |-
+  Indisponibil acum:
+"help.kind.required": |-
+  Necesar pentru rulare
+"help.kind.context": |-
+  Depinde de situația ta
+"help.kind.optional": |-
+  Opțional
+"help.val.on": |-
+  activat
+"help.val.off": |-
+  dezactivat
+"help.val.quality.v": |-
+  foarte scăzută
+"help.val.quality.l": |-
+  scăzută
+"help.val.quality.m": |-
+  medie
+"help.val.quality.h": |-
+  ridicată
+"help.val.quality.u": |-
+  ultra
+"help.val.testchart.auto": |-
+  auto-optimizat
+"help.val.range.full": |-
+  interval complet 0–255
+"help.val.range.video": |-
+  interval video 16–235
+"help.reason.generic": |-
+  Setările actuale nu o permit; vezi „Depinde de” mai sus.
+"help.reason.hidden": |-
+  Apare doar când sunt folosite setările de care ține (unele rânduri apar doar cu „Arată opțiunile avansate”).
+"help.reason.correction_instrument": |-
+  Instrumentul selectat nu poate folosi o corecție: spectrometrele măsoară direct lumina, iar unele instrumente au propriile moduri.
+"help.reason.correction_mode": |-
+  Ascuns cât timp modul de măsurare este „automat” sau diagrama este una folosită pentru crearea corecțiilor.
+"help.reason.observer": |-
+  Un fișier de corecție fixează observatorul, deci alegerea e blocată cât timp acesta este folosit.
+"help.reason.lut3d_apply_cal": |-
+  Disponibilă când se creează acum un LUT 3D sau când profilul curent conține curbe de calibrare (vcgt).
+"help.reason.lut3d_gamut_mapping": |-
+  Modul „PCS-către-dispozitiv” cere un profil de tip LUT cu tabel B2A de rezoluție mare: setează tipul de profil la unul LUT și activează opțiunea de rezoluție mare, sau folosește un profil care îl are deja.
+"help.reason.verify_simulate_white": |-
+  Disponibilă când e selectat un profil de simulare sau când diagrama conține valori XYZ/Lab cu un patch alb.
+"help.reason.verify_simulation_profile": |-
+  Cere un profil de simulare al cărui spațiu de culoare corespunde diagramei.
+"help.reason.profile_type": |-
+  Butonul de mapare a gamutului se aplică doar profilurilor de tip LUT.
+"sec.display_instrument.devices": |-
+  Ce ecran și cu ce instrument
+"sec.display_instrument.devices.purpose": |-
+  Ce se măsoară și dispozitivul care măsoară. Ambele sunt necesare înainte de orice măsurare.
+"sec.display_instrument.correction": |-
+  Corecție pentru colorimetre
+"sec.display_instrument.correction.purpose": |-
+  Doar pentru colorimetre: ajustează citirile lor la tipul de ecran măsurat. Spectrometrele nu au nevoie de ea. Ce spune un site de specificații despre un monitor nu alege o corecție în locul tău.
+"sec.display_instrument.behavior": |-
+  Cum se comportă măsurarea
+"sec.display_instrument.behavior.purpose": |-
+  Setări de timp, derivă și interval de semnal. Valorile implicite se potrivesc multor ecrane; schimbă una când o problemă concretă o indică.
+"sec.calibration.process": |-
+  Cum se ajustează ecranul
+"sec.calibration.process.purpose": |-
+  Dacă ajustezi controalele proprii ale monitorului în timpul rulării și dacă o calibrare existentă este doar reîmprospătată.
+"sec.calibration.target": |-
+  Cum trebuie să arate ecranul (țintă)
+"sec.calibration.target.purpose": |-
+  Albul, negrul și curba de tonuri spre care țintește calibrarea. „Ca măsurat” lasă o valoare așa cum o are monitorul.
+"sec.calibration.room": |-
+  Lumina camerei și punctul negru
+"sec.calibration.room.purpose": |-
+  Corecții pentru mediul de vizualizare și pentru neutralitatea tonurilor închise.
+"sec.calibration.precision": |-
+  Viteză față de precizie
+"sec.calibration.precision.purpose": |-
+  O calibrare mai atentă măsoară mai mult și durează mai mult; estimarea arată cât.
+"sec.profiling.type": |-
+  Tipul de profil
+"sec.profiling.type.purpose": |-
+  Tipul de profil ICC care se scrie. Decide cât din comportamentul ecranului este descris și câte patch-uri sunt utile.
+"sec.profiling.chart": |-
+  Diagrama de măsurare (patch-uri)
+"sec.profiling.chart.purpose": |-
+  Culorile care se măsoară. Mai multe patch-uri costă timp și ajută doar unde tipul de profil le poate folosi.
+"sec.profiling.name": |-
+  Nume și locație
+"sec.profiling.name.purpose": |-
+  Cum se numește profilul și unde se salvează. Substituenții completează automat data, monitorul și setările.
+"sec.lut3d.create": |-
+  Creează un LUT 3D
+"sec.lut3d.create.purpose": |-
+  Un LUT 3D este un tabel de conversie a culorilor pentru playere video și unelte care nu folosesc profiluri ICC.
+"sec.lut3d.source": |-
+  Din ce convertește LUT-ul 3D
+"sec.lut3d.source.purpose": |-
+  Spațiul de culoare sursă și curba de tonuri ale conținutului pe care îl vei afișa.
+"sec.lut3d.mapping": |-
+  Cum se mapează culorile
+"sec.lut3d.mapping.purpose": |-
+  Cum sunt tratate culorile din afara a ceea ce poate arăta ecranul și dacă se includ curbele de calibrare.
+"sec.lut3d.file": |-
+  Format de fișier și precizie
+"sec.lut3d.file.purpose": |-
+  Fișierul în care se salvează LUT-ul 3D, dimensiunea și codarea lui. Potrivește ce așteaptă playerul sau unealta care îl va încărca.
+"sec.verification.what": |-
+  Ce se măsoară
+"sec.verification.what.purpose": |-
+  Diagrama sau referința ale căror culori se măsoară pentru a verifica un profil sau un LUT 3D.
+"sec.verification.simulate": |-
+  Simulează alt dispozitiv
+"sec.verification.simulate.purpose": |-
+  Verifică cum ar reproduce acest ecran punctul alb sau profilul altui dispozitiv.
+"help.display.name": |-
+  Monitor
+"help.display.what": |-
+  Alege ecranul care va fi măsurat. Lista arată ecranele raportate de sistem, plus ținte virtuale (o pagină web, madVR, Prisma, Resolve) folosite în configurații video.
+"help.display.when": |-
+  Întotdeauna. Cu mai multe monitoare, alege-l pe cel pe care va sta instrumentul: profilul creat aparține acelui monitor.
+"help.display.needs": |-
+  Necesar: nicio măsurare nu poate începe fără un ecran. După ce conectezi sau muți un ecran, folosește butonul de reîmprospătare.
+"help.lut_access.name": |-
+  Acces la tabelul gamma al plăcii video
+"help.lut_access.what": |-
+  Alege al cui tabel gamma al plăcii video (curbele de calibrare) este încărcat și schimbat în timpul măsurării. De obicei chiar ecranul măsurat; se folosește altă ieșire când dispozitivul măsurat nu poate primi curbe, dar altul poate.
+"help.lut_access.when": |-
+  Lasă-l pe ecranul măsurat, dacă instalarea ta nu are o ieșire separată pentru curbe (unele lanțuri video).
+"help.lut_access.needs": |-
+  O alegere separată există doar dacă e activată în Opțiuni → Avansat. Butonul de legare ține ambele alegeri identice.
+"help.instrument.name": |-
+  Instrument
+"help.instrument.what": |-
+  Dispozitivul de măsurare. Un spectrometru citește tot spectrul luminii; un colorimetru citește prin filtre de culoare și are nevoie de un mod de măsurare sau de o corecție potrivite ecranului.
+"help.instrument.when": |-
+  Întotdeauna pentru măsurare. Nu e necesar pentru a edita setări sau a crea un LUT 3D dintr-un profil existent.
+"help.instrument.needs": |-
+  Necesar pentru măsurare. Instrumentele detectate sunt listate; după conectare, folosește butonul de reîmprospătare. Unele instrumente au aceeași identitate USB: modul ghidat îți cere să confirmi modelul exact.
+"help.mode.name": |-
+  Mod de măsurare
+"help.mode.what": |-
+  Cum măsoară instrumentul acest tip de ecran (de exemplu tip cu sau fără reîmprospătare, sau un mod încorporat în instrument). Este o setare a instrumentului, nu o proprietate a monitorului.
+"help.mode.when": |-
+  Alege cel care se potrivește tipului de ecran. Cu un colorimetru fie alegi un mod, fie folosești o corecție.
+"help.mode.needs": |-
+  O corecție poate seta singură modul; lista o urmează atunci.
+"help.correction.name": |-
+  Corecție pentru colorimetre
+"help.correction.what": |-
+  Ajustează citirile unui colorimetru pentru tipul de ecran. O corecție spectrală descrie spectrul luminii unui fel de ecran; o corecție matriceală se face pentru un colorimetru și un ecran cu un instrument de referință. „Automat” folosește un fișier de corecție al cărui câmp Display corespunde numelui acestui monitor; „Niciuna” nu aplică nimic.
+"help.correction.when": |-
+  Un colorimetru pe ecrane LED, cu gamut larg sau OLED, unde filtrele lui singure pot citi greșit culorile.
+"help.correction.needs": |-
+  Doar colorimetre. Un nume comercial, o cifră de gamut sau cuvântul „LED” nu dovedește că o corecție se potrivește: tu o alegi și o confirmi. Uneltele de import, verificare pe web și creare sunt lângă listă; căutarea modelului ajută la recunoașterea monitorului.
+"help.whitelevel_drift.name": |-
+  Compensarea derivei nivelului alb
+"help.whitelevel_drift.what": |-
+  Măsoară din când în când un patch alb în timpul rulării și corectează citirile pentru schimbările de luminozitate ale ecranului.
+"help.whitelevel_drift.when": |-
+  Ecrane a căror luminozitate se schimbă cât se încălzesc sau în funcție de imagine (de exemplu OLED și plasmă).
+"help.whitelevel_drift.needs": |-
+  Adaugă măsurători, deci rularea durează mai mult.
+"help.blacklevel_drift.name": |-
+  Compensarea derivei nivelului negru
+"help.blacklevel_drift.what": |-
+  Măsoară din când în când un patch negru pentru a corecta deriva proprie a negrului instrumentului cât se încălzește.
+"help.blacklevel_drift.when": |-
+  Spectrometre în mod contact pe ecrane cu nivel de negru stabil. Multe colorimetre corectează singure acest lucru.
+"help.blacklevel_drift.needs": |-
+  Adaugă măsurători, deci rularea durează mai mult. Oferită doar instrumentelor care o suportă.
+"help.update_delay.name": |-
+  Întârziere minimă de actualizare a ecranului
+"help.update_delay.what": |-
+  Timpul minim, în milisecunde, dintre afișarea unui patch și măsurarea lui.
+"help.update_delay.when": |-
+  Mărește-l când citirile încă arată patch-ul anterior (televizoare lente, ecrane cu procesare grea). Nu poate coborî sub valoarea implicită.
+"help.update_delay.needs": |-
+  Dezactivată implicit (se folosește valoarea implicită). O valoare mai mare face rularea mai lungă.
+"help.settle_mult.name": |-
+  Multiplicator pentru timpul de stabilizare al ecranului
+"help.settle_mult.what": |-
+  Înmulțește timpul acordat ecranului să se stabilizeze după schimbarea unui patch.
+"help.settle_mult.when": |-
+  Peste 1 pentru ecrane cu răspuns lent. Sub 1 doar pentru a câștiga timp pe ecrane despre care se știe că se stabilizează repede.
+"help.settle_mult.needs": |-
+  O valoare prea mică lasă patch-ul anterior să se infiltreze în citirea următoare.
+"help.ffp.name": |-
+  Inserarea unui model pe tot câmpul
+"help.ffp.what": |-
+  Afișează un model luminos pe tot câmpul un anumit timp, la intervale stabilite în timpul rulării, ca limitarea luminozității ecranului să nu deriveze.
+"help.ffp.when": |-
+  Ecrane care se întunecă singure la patch-uri închise sau mici și revin la conținut luminos (de exemplu unele OLED și plasmă).
+"help.ffp.needs": |-
+  Adaugă timp. Intervalul și durata sunt în secunde; nivelul este luminozitatea modelului inserat, în procente.
+"help.output_levels.name": |-
+  Niveluri de ieșire
+"help.output_levels.what": |-
+  Spune măsurării ce interval de semnal așteaptă ecranul: automat, interval complet 0–255 sau interval TV (video) 16–235.
+"help.output_levels.when": |-
+  Interval complet pentru monitoare de calculator; interval video pentru televizoare și lanțuri video care îl așteaptă. Automat lasă alegerea sistemului.
+"help.output_levels.needs": |-
+  Intervalul video pe un monitor obișnuit ar afișa greșit negrul și albul; un interval greșit le taie în măsurători.
+"help.interactive.name": |-
+  Ajustare interactivă a monitorului
+"help.interactive.what": |-
+  Te lasă să schimbi controalele proprii ale monitorului (luminozitate, contrast, câștiguri de culoare) cât timp se arată citiri în direct, până când punctul alb și nivelul alb corespund țintei.
+"help.interactive.when": |-
+  Monitoare cu controale hardware. Laptopurile și ecranele fără astfel de controale beneficiază doar de curbe.
+"help.interactive.needs": |-
+  Necesită un instrument. Nu se folosește cât timp „Actualizează calibrarea” este activată.
+"help.update_cal.name": |-
+  Actualizează calibrarea
+"help.update_cal.what": |-
+  Rafinează o calibrare existentă ținând cont de derivă, păstrându-i țintele, în loc să înceapă de la zero.
+"help.update_cal.when": |-
+  O reîmprospătare rapidă a unui monitor deja calibrat cu aceleași setări.
+"help.update_cal.needs": |-
+  Cere o calibrare anterioară de la care să pornească; țintele provin atunci din ea, iar ajustarea interactivă este omisă.
+"help.observer.name": |-
+  Observator
+"help.observer.what": |-
+  Observatorul colorimetric standard folosit pentru a transforma spectrele în culori (de exemplu CIE 1931 2° sau CIE 1964 10°).
+"help.observer.when": |-
+  Lasă-l pe CIE 1931 2° dacă fluxul tău de lucru sau o corecție nu cere altul.
+"help.observer.needs": |-
+  Un fișier de corecție poate fixa observatorul; atunci alegerea este blocată.
+"help.whitepoint.name": |-
+  Punct alb
+"help.whitepoint.what": |-
+  Culoarea albului spre care țintește calibrarea: albul nativ al monitorului, o temperatură de culoare în kelvin (lumină de zi sau corp negru) sau coordonate x,y. Butonul țintă măsoară lumina de vizualizare; editorul o reglează vizual.
+"help.whitepoint.when": |-
+  Lucrul comparat cu printuri urmează de obicei lumina de vizualizare (adesea D50, 5000 K); gradarea video își urmează standardul (D65, 6500 K); „nativ” păstrează albul propriu al monitorului și e cel mai rapid.
+"help.whitepoint.needs": |-
+  Orice țintă diferită de nativ cere controale sau curbe care o pot atinge, în limitele monitorului.
+"help.white_level.name": |-
+  Nivel alb
+"help.white_level.what": |-
+  Cât de luminos trebuie să fie albul. „Ca măsurat” păstrează luminozitatea proprie a monitorului.
+"help.white_level.when": |-
+  Setează-l potrivit luminii camerei și comparației pe care o faci (de exemplu o cabină de vizionare a printurilor față de o cameră de gradare întunecată).
+"help.white_level.needs": |-
+  Monitorul nu poate depăși luminozitatea maximă; cu ajustarea interactivă îi setezi controlul de luminozitate pentru a atinge valoarea.
+"help.black_level.name": |-
+  Nivel negru
+"help.black_level.what": |-
+  Cât de luminos trebuie să fie negrul. „Ca măsurat” păstrează negrul monitorului; o valoare ridică negrul spre ea.
+"help.black_level.when": |-
+  Rar necesar: pentru a se potrivi cu un dispozitiv cu negru mai ridicat sau pentru a reduce o nepotrivire de contrast.
+"help.black_level.needs": |-
+  Un ecran nu poate coborî sub negrul lui nativ.
+"help.tone_curve.name": |-
+  Curbă de tonuri
+"help.tone_curve.what": |-
+  Cum se mapează semnalul pe luminozitate: o curbă putere (gamma, relativă la negrul măsurat sau absolută de la zero) sau o curbă standard precum sRGB, Rec. 709, Rec. 1886, L* sau SMPTE 240M. „Ca măsurat” nu face nicio calibrare de curbă.
+"help.tone_curve.when": |-
+  Standardele se potrivesc utilizării lor: sRGB pentru web și birou, Rec. 1886 pentru video în camere întunecate, L* în unele fluxuri de print. „Ca măsurat” e necesar dacă vrei doar corecția profilului, fără curbe 1D.
+"help.tone_curve.needs": |-
+  Relativă păstrează forma curbei de la negrul real în sus; absolută măsoară față de zero, ceea ce se potrivește curbei ideale doar când negrul este zero.
+"help.black_offset.name": |-
+  Offset de ieșire pentru negru
+"help.black_offset.what": |-
+  Cum se amestecă nivelul negru în curba de tonuri: 100 % aplică offsetul la ieșire (ca un ecran real), 0 % la intrare, dând o curbă putere pură de la negru (stilul Rec. 1886).
+"help.black_offset.when": |-
+  Contează doar când negrul e peste zero; valorile intermediare schimbă forma umbrelor.
+"help.black_offset.needs": |-
+  Fără efect vizibil pe un ecran cu negru perfect.
+"help.ambient.name": |-
+  Ajustare după lumina ambientală
+"help.ambient.what": |-
+  Ajustează curba țintă pentru lumina ambientală a camerei (o ajustare a condițiilor de vizualizare) folosind o valoare în lux pe care o scrii sau o măsori.
+"help.ambient.when": |-
+  Când lumina camerei face parte din țintă și o cunoști. Omite-o într-o cameră întunecată controlată.
+"help.ambient.needs": |-
+  Cere o valoare în lux; butonul de măsurare cere un instrument care poate măsura lumina ambientală.
+"help.black_point.name": |-
+  Corecția punctului negru
+"help.black_point.what": |-
+  Împinge negrul spre culoarea punctului alb ca tonurile închise să pară neutre. 0 % lasă negrul cum e; 100 % corectează complet; „Auto” lasă programul să aleagă. Rata stabilește cât de repede se estompează corecția odată cu luminozitatea.
+"help.black_point.when": |-
+  Ecrane al căror negru are dominantă de culoare (frecvent la LCD). Omite-o când vrei negrul nativ al monitorului.
+"help.black_point.needs": |-
+  Nu poate face negrul unui ecran mai închis. Controlul ratei apare doar cu „Arată opțiunile avansate”.
+"help.cal_quality.name": |-
+  Calitatea calibrării
+"help.cal_quality.what": |-
+  Schimbă timp pe precizie: calitățile mai mici măsoară mai puțin și acceptă rezultate mai relaxate; cele mai mari măsoară mai mult.
+"help.cal_quality.when": |-
+  O calitate mai mică pentru o verificare rapidă; una mai mare pentru calibrarea finală.
+"help.cal_quality.needs": |-
+  Estimarea de dedesubt arată timpul; „ultra” poate dura mult.
+"help.profile_type.name": |-
+  Tip de profil
+"help.profile_type.what": |-
+  Tipul de profil ICC. Tipurile matriciale (o curbă comună sau curbe pe canal, plus o matrice) sunt mici și netede; tipurile LUT (XYZ sau Lab) descriu mai mult din comportamentul ecranului, dar cer mai multe patch-uri. Pe macOS presetarea folosește matricea cu o singură curbă, moștenită de la proiectul original.
+"help.profile_type.when": |-
+  Profiluri matriciale pentru ecrane cu comportament simplu și compatibilitate largă; profiluri LUT când comportamentul ecranului e complex și accepți timpul.
+"help.profile_type.needs": |-
+  Butonul de mapare a gamutului se aplică doar tipurilor LUT. Nu orice aplicație tratează orice tip.
+"help.bpc.name": |-
+  Compensarea punctului negru
+"help.bpc.what": |-
+  Face ca profilul să trateze negrul monitorului drept cel mai întunecat negru când este aplicat (pentru profiluri matriciale).
+"help.bpc.when": |-
+  Când vrei umbre păstrate la conversia către alte dispozitive. Aplicațiile pot aplica și propria compensare.
+"help.bpc.needs": |-
+  Efectul depinde de tipul de profil.
+"help.profile_quality.name": |-
+  Calitatea profilului
+"help.profile_quality.what": |-
+  Cât efort pune calculul profilului în netezime și acuratețe (de la scăzută la ultra).
+"help.profile_quality.when": |-
+  Mai ridicată pentru profilurile finale; mai scăzută pentru teste rapide.
+"help.profile_quality.needs": |-
+  Calitatea mai ridicată durează mai mult la calcul, nu la măsurare.
+"help.testchart.name": |-
+  Diagramă de test
+"help.testchart.what": |-
+  Setul de patch-uri (culori) care se măsoară. „Auto-optimizat” construiește o diagramă din răspunsul real al monitorului; poți și încărca un fișier, crea sau edita o diagramă.
+"help.testchart.when": |-
+  Auto-optimizat, dacă nu e cerută o diagramă standard sau un set anume de culori.
+"help.testchart.needs": |-
+  O diagramă fixă înlocuiește cursorul numărului de patch-uri; tipul de profil decide câte patch-uri ajută.
+"help.patches.name": |-
+  Numărul de patch-uri
+"help.patches.what": |-
+  Câte patch-uri conține o diagramă auto-optimizată. Mai multe patch-uri înseamnă o măsurare mai lungă.
+"help.patches.when": |-
+  Profilurile matriciale câștigă puțin din diagrame foarte mari; cele LUT folosesc mai multe.
+"help.patches.needs": |-
+  Doar pentru diagrama auto-optimizată; estimarea arată timpul.
+"help.sequence.name": |-
+  Secvența patch-urilor
+"help.sequence.what": |-
+  Ordinea în care sunt afișate patch-urile. Unele ordini reduc întârzierea de răspuns a ecranului între patch-uri; altele grupează după luminozitate sau culoare.
+"help.sequence.when": |-
+  Schimb-o doar când răspunsul ecranului sau deriva de temperatură afectează rezultatele.
+"help.sequence.needs": |-
+  Apare doar cu „Arată opțiunile avansate”.
+"help.profile_name.name": |-
+  Numele și locația profilului
+"help.profile_name.what": |-
+  Numele fișierului de profil și descrierea lui. Substituenții (vezi butonul de informații) completează automat data, monitorul, instrumentul și setările; butonul folder stabilește unde se salvează.
+"help.profile_name.when": |-
+  Păstrează substituenții pentru nume ușor de urmărit sau scrie un nume fix.
+"help.lut3d_create.name": |-
+  Creează un LUT 3D după profilare
+"help.lut3d_create.what": |-
+  Creează un LUT 3D după profilare, cu setările de mai jos.
+"help.lut3d_create.when": |-
+  Când un player video sau o unealtă (madVR, o aplicație de gradare, un televizor) are nevoie de un LUT în loc de un profil ICC.
+"help.lut3d_create.needs": |-
+  Cere un profil terminat. Formatul și codarea de mai jos trebuie să corespundă cu ce așteaptă playerul.
+"help.lut3d_source.name": |-
+  Spațiu de culoare sursă
+"help.lut3d_source.what": |-
+  Spațiul de culoare al conținutului din care convertește LUT-ul (de exemplu Rec. 709, sRGB, DCI-P3, Rec. 2020, ACES) sau spațiul unui profil ales.
+"help.lut3d_source.when": |-
+  Alege spațiul în care a fost masterizat conținutul tău.
+"help.lut3d_source.needs": |-
+  Spațiile largi trebuie să încapă în gamutul ecranului sau să fie mapate (vezi „Cum se mapează culorile”).
+"help.lut3d_trc.name": |-
+  Curba de tonuri sursă
+"help.lut3d_trc.what": |-
+  Curba de tonuri a conținutului sursă: gamma 2,2, Rec. 1886, curbe HDR (PQ, HLG) sau o curbă personalizată cu gamma ei.
+"help.lut3d_trc.when": |-
+  Videoul masterizat pentru camere întunecate folosește adesea Rec. 1886; grafica pe calculator de obicei gamma 2,2 sau sRGB.
+"help.lut3d_trc.needs": |-
+  Curbele HDR aduc controalele de luminanță maximă și de mapare.
+"help.lut3d_hdr.name": |-
+  Maparea tonurilor și culorilor HDR
+"help.lut3d_hdr.what": |-
+  Controale pentru conversia conținutului HDR (PQ sau HLG) la ce poate arăta acest ecran: luminanța lui maximă, cum se păstrează luminanța, saturația sau nuanța și limitele de masterizare ale conținutului.
+"help.lut3d_hdr.when": |-
+  Doar când creezi un LUT 3D pentru conținut HDR.
+"help.lut3d_hdr.needs": |-
+  Apare doar pentru curbe sursă HDR.
+"help.lut3d_black_offset.name": |-
+  Offset de ieșire pentru negru (LUT 3D)
+"help.lut3d_black_offset.what": |-
+  Același offset de ieșire pentru negru ca la calibrare, aplicat curbei sursă a LUT-ului.
+"help.lut3d_black_offset.when": |-
+  Contează doar când curba sursă este o curbă putere și negrul e peste zero.
+"help.lut3d_apply_cal.name": |-
+  Aplică calibrarea (curbele plăcii video)
+"help.lut3d_apply_cal.what": |-
+  Include în LUT-ul 3D curbele de calibrare (vcgt) ale profilului.
+"help.lut3d_apply_cal.when": |-
+  Când curbele nu vor fi încărcate separat în placa video.
+"help.lut3d_apply_cal.needs": |-
+  Disponibilă doar când se creează acum un LUT 3D sau când profilul curent conține curbe de calibrare.
+"help.lut3d_gamut_mapping.name": |-
+  Mod de mapare a gamutului
+"help.lut3d_gamut_mapping.what": |-
+  Cum sunt tratate culorile sursă din afara gamutului: „dispozitiv-către-PCS invers” inversează răspunsul măsurat al profilului; „PCS-către-dispozitiv” folosește tabelul propriu al profilului.
+"help.lut3d_gamut_mapping.when": |-
+  Păstrează modul invers dacă profilul nu are un tabel B2A bun, de rezoluție mare, a cărui mapare o vrei.
+"help.lut3d_gamut_mapping.needs": |-
+  „PCS-către-dispozitiv” cere un profil de tip LUT cu tabel B2A de rezoluție mare.
+"help.lut3d_intent.name": |-
+  Intenție de randare
+"help.lut3d_intent.what": |-
+  Cum sunt plasate culorile pe care ecranul nu le poate arăta: colorimetric absolut păstrează culorile exacte și scalează punctul alb; colorimetric relativ păstrează punctul alb și deplasează restul; perceptual și saturație comprimă sau extind spațiul sursă.
+"help.lut3d_intent.when": |-
+  Relativ când ai calibrat la un punct alb diferit de al spațiului sursă; absolut (cu scalarea punctului alb) când gamutul ecranului depășește sursa.
+"help.lut3d_intent.needs": |-
+  Intențiile necolorimetrice schimbă culorile; nerecomandate când e nevoie de acuratețe colorimetrică.
+"help.lut3d_format.name": |-
+  Formatul fișierului LUT 3D
+"help.lut3d_format.what": |-
+  Formatul de fișier al LUT-ului (de exemplu IRIDAS .cube, madVR .3dlut, DaVinci Resolve .cube și altele oferite de versiunea ta de ArgyllCMS).
+"help.lut3d_format.when": |-
+  Folosește formatul pe care îl așteaptă playerul sau unealta care îl încarcă.
+"help.lut3d_format.needs": |-
+  Unele formate limitează dimensiunea, adâncimea de biți sau codarea.
+"help.lut3d_encoding.name": |-
+  Codarea intrării și ieșirii
+"help.lut3d_encoding.what": |-
+  Intervalul de semnal al intrării și ieșirii LUT-ului: interval complet 0–255 sau interval video (TV) 16–235 și alte codări video.
+"help.lut3d_encoding.when": |-
+  Potrivește lanțul: playerele video și televizoarele așteaptă de obicei interval video; ieșirile de calculator, interval complet.
+"help.lut3d_encoding.needs": |-
+  O nepotrivire strivește sau ridică negrul și albul.
+"help.lut3d_size.name": |-
+  Dimensiune și adâncime de biți
+"help.lut3d_size.what": |-
+  Numărul de puncte pe axă (de exemplu 65×65×65) și adâncimea de biți a valorilor de intrare și ieșire.
+"help.lut3d_size.when": |-
+  Dimensiunile mari dau conversii mai netede și fișiere mai mari; folosește ce suportă ținta.
+"help.lut3d_size.needs": |-
+  Playerele și dispozitivele limitează dimensiunea și adâncimea de biți.
+"help.verify_chart.name": |-
+  Diagramă de test sau referință
+"help.verify_chart.what": |-
+  Diagrama (sau fișierul de referință) ale cărei patch-uri se măsoară și se compară cu ce prezice profilul sau LUT-ul.
+"help.verify_chart.when": |-
+  O diagramă extinsă mică pentru o verificare rapidă, una mai mare pentru un raport amănunțit.
+"help.verify_chart.needs": |-
+  Se acceptă diagrame RGB și fișiere de referință XYZ/Lab; lista câmpurilor de culoare arată care se aplică.
+"help.verify_simulate_white.name": |-
+  Simulează punctul alb
+"help.verify_simulate_white.what": |-
+  Compară cu un punct alb simulat în loc de cel propriu al ecranului, opțional relativ la punctul alb al profilului.
+"help.verify_simulate_white.when": |-
+  Verifici cât de bine poate înlocui un ecran albul altui dispozitiv.
+"help.verify_simulate_white.needs": |-
+  Disponibilă când e selectat un profil de simulare sau când diagrama conține valori XYZ/Lab cu un patch alb.
+"help.verify_simulation_profile.name": |-
+  Profil de simulare
+"help.verify_simulation_profile.what": |-
+  Folosește alt profil ca țintă de simulat (de exemplu un standard de print sau video) și verifică cât de bine îl reproduce acest ecran.
+"help.verify_simulation_profile.when": |-
+  Verificări de soft-proofing sau de standarde.
+"help.verify_simulation_profile.needs": |-
+  Cere un profil de simulare al cărui spațiu de culoare corespunde diagramei.

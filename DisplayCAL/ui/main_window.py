@@ -1319,6 +1319,7 @@ class MainWindow(BaseWindow):
             outcome, reason or ""
         )
         self.flow = MeasurementFlow()
+        self._section_headers: list = []
         #: Guards config-writing handlers while controls are repopulated.
         self._updating = False
         #: A background rescan of displays/instruments is running.
@@ -3337,6 +3338,7 @@ class MainWindow(BaseWindow):
             return
         setcfg("show_advanced_options", int(checked))
         self._update_advanced_options_visibility()
+        self.refresh_sections()
 
     def _update_advanced_options_visibility(self) -> None:
         """Show or hide every control gated behind ``show_advanced_options``.
@@ -3823,6 +3825,7 @@ class MainWindow(BaseWindow):
         outer.setContentsMargins(16, 16, 16, 16)
         outer.setSpacing(12)
 
+        outer.addWidget(self._section(panel, "display_instrument", "devices"))
         columns = QHBoxLayout()
 
         display_box = QGroupBox(lang.getstr("display"))
@@ -3887,7 +3890,6 @@ class MainWindow(BaseWindow):
         self._add_check(
             self.whitelevel_drift_compensation_cb, "drift_compensation.whitelevel"
         )
-        display_outer.addWidget(self.whitelevel_drift_compensation_cb)
         columns.addWidget(display_box, 1)
 
         instrument_box = QGroupBox(lang.getstr("instrument"))
@@ -3921,10 +3923,82 @@ class MainWindow(BaseWindow):
         self._add_check(
             self.blacklevel_drift_compensation_cb, "drift_compensation.blacklevel"
         )
-        instrument_outer.addWidget(self.blacklevel_drift_compensation_cb)
         columns.addWidget(instrument_box, 1)
 
         outer.addLayout(columns)
+
+        outer.addWidget(self._section(panel, "display_instrument", "correction"))
+        # Colorimeter-correction-matrix (CCMX/CCSS) row.
+        ccmx_row = QHBoxLayout()
+        self.colorimeter_correction_matrix_label = QLabel(
+            lang.getstr("colorimeter_correction_matrix_file")
+        )
+        ccmx_row.addWidget(self.colorimeter_correction_matrix_label)
+        self.colorimeter_correction_matrix_ctrl = QComboBox()
+        self.colorimeter_correction_matrix_ctrl.currentIndexChanged.connect(
+            self.colorimeter_correction_matrix_ctrl_handler
+        )
+        ccmx_row.addWidget(self.colorimeter_correction_matrix_ctrl, 1)
+        self.colorimeter_correction_info_btn = QToolButton()
+        self.colorimeter_correction_info_btn.setAutoRaise(True)
+        self.colorimeter_correction_info_btn.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
+        self.colorimeter_correction_info_btn.setToolTip(
+            lang.getstr("colorimeter_correction.info")
+        )
+        self._themed_icon(self.colorimeter_correction_info_btn, 16, "info")
+        self.colorimeter_correction_info_btn.clicked.connect(
+            self.colorimeter_correction_info_btn_handler
+        )
+        ccmx_row.addWidget(self.colorimeter_correction_info_btn)
+        self.colorimeter_correction_matrix_btn = QToolButton()
+        self.colorimeter_correction_matrix_btn.setAutoRaise(True)
+        self.colorimeter_correction_matrix_btn.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
+        self.colorimeter_correction_matrix_btn.setToolTip(
+            lang.getstr("colorimeter_correction_matrix_file.choose")
+        )
+        self._themed_icon(self.colorimeter_correction_matrix_btn, 16, "document-open")
+        self.colorimeter_correction_matrix_btn.clicked.connect(
+            self.colorimeter_correction_matrix_btn_handler
+        )
+        ccmx_row.addWidget(self.colorimeter_correction_matrix_btn)
+        self.colorimeter_correction_web_btn = QToolButton()
+        self.colorimeter_correction_web_btn.setAutoRaise(True)
+        self.colorimeter_correction_web_btn.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
+        self.colorimeter_correction_web_btn.setToolTip(
+            lang.getstr("colorimeter_correction.web_check")
+        )
+        self._themed_icon(self.colorimeter_correction_web_btn, 16, "web")
+        self.colorimeter_correction_web_btn.clicked.connect(
+            self.colorimeter_correction_web_btn_handler
+        )
+        ccmx_row.addWidget(self.colorimeter_correction_web_btn)
+        self.colorimeter_correction_create_btn = QToolButton()
+        self.colorimeter_correction_create_btn.setAutoRaise(True)
+        self.colorimeter_correction_create_btn.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
+        self.colorimeter_correction_create_btn.setToolTip(
+            lang.getstr("colorimeter_correction.create")
+        )
+        self._themed_icon(self.colorimeter_correction_create_btn, 16, "list-add")
+        self.colorimeter_correction_create_btn.clicked.connect(
+            self.colorimeter_correction_create_btn_handler
+        )
+        ccmx_row.addWidget(self.colorimeter_correction_create_btn)
+        outer.addLayout(ccmx_row)
+        # "Don't know the monitor's technology? Search the model" -- next to the
+        # technology / correction choice.
+        from DisplayCAL.ui.display_lookup_dialog import lookup_button
+
+        self.display_lookup_btn = lookup_button(
+            self, on_goto_correction=self._focus_correction_choice
+        )
+        outer.addWidget(self.display_lookup_btn, 0, Qt.AlignLeft)
+
+        outer.addWidget(self._section(panel, "display_instrument", "behavior"))
+        drift_row = QHBoxLayout()
+        drift_row.addWidget(self.whitelevel_drift_compensation_cb)
+        drift_row.addWidget(self.blacklevel_drift_compensation_cb)
+        drift_row.addStretch(1)
+        outer.addLayout(drift_row)
 
         # Display update delay / settle time overrides.
         delay_form = QFormLayout()
@@ -4038,70 +4112,6 @@ class MainWindow(BaseWindow):
         self._output_levels_row_widget = self._wrap(output_levels_row)
         outer.addWidget(self._output_levels_row_widget)
 
-        # Colorimeter-correction-matrix (CCMX/CCSS) row.
-        ccmx_row = QHBoxLayout()
-        self.colorimeter_correction_matrix_label = QLabel(
-            lang.getstr("colorimeter_correction_matrix_file")
-        )
-        ccmx_row.addWidget(self.colorimeter_correction_matrix_label)
-        self.colorimeter_correction_matrix_ctrl = QComboBox()
-        self.colorimeter_correction_matrix_ctrl.currentIndexChanged.connect(
-            self.colorimeter_correction_matrix_ctrl_handler
-        )
-        ccmx_row.addWidget(self.colorimeter_correction_matrix_ctrl, 1)
-        self.colorimeter_correction_info_btn = QToolButton()
-        self.colorimeter_correction_info_btn.setAutoRaise(True)
-        self.colorimeter_correction_info_btn.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
-        self.colorimeter_correction_info_btn.setToolTip(
-            lang.getstr("colorimeter_correction.info")
-        )
-        self._themed_icon(self.colorimeter_correction_info_btn, 16, "info")
-        self.colorimeter_correction_info_btn.clicked.connect(
-            self.colorimeter_correction_info_btn_handler
-        )
-        ccmx_row.addWidget(self.colorimeter_correction_info_btn)
-        self.colorimeter_correction_matrix_btn = QToolButton()
-        self.colorimeter_correction_matrix_btn.setAutoRaise(True)
-        self.colorimeter_correction_matrix_btn.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
-        self.colorimeter_correction_matrix_btn.setToolTip(
-            lang.getstr("colorimeter_correction_matrix_file.choose")
-        )
-        self._themed_icon(self.colorimeter_correction_matrix_btn, 16, "document-open")
-        self.colorimeter_correction_matrix_btn.clicked.connect(
-            self.colorimeter_correction_matrix_btn_handler
-        )
-        ccmx_row.addWidget(self.colorimeter_correction_matrix_btn)
-        self.colorimeter_correction_web_btn = QToolButton()
-        self.colorimeter_correction_web_btn.setAutoRaise(True)
-        self.colorimeter_correction_web_btn.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
-        self.colorimeter_correction_web_btn.setToolTip(
-            lang.getstr("colorimeter_correction.web_check")
-        )
-        self._themed_icon(self.colorimeter_correction_web_btn, 16, "web")
-        self.colorimeter_correction_web_btn.clicked.connect(
-            self.colorimeter_correction_web_btn_handler
-        )
-        ccmx_row.addWidget(self.colorimeter_correction_web_btn)
-        self.colorimeter_correction_create_btn = QToolButton()
-        self.colorimeter_correction_create_btn.setAutoRaise(True)
-        self.colorimeter_correction_create_btn.setStyleSheet(self._FLAT_TOOL_BUTTON_STYLE)
-        self.colorimeter_correction_create_btn.setToolTip(
-            lang.getstr("colorimeter_correction.create")
-        )
-        self._themed_icon(self.colorimeter_correction_create_btn, 16, "list-add")
-        self.colorimeter_correction_create_btn.clicked.connect(
-            self.colorimeter_correction_create_btn_handler
-        )
-        ccmx_row.addWidget(self.colorimeter_correction_create_btn)
-        outer.addLayout(ccmx_row)
-        # "Don't know the monitor's technology? Search the model" -- next to the
-        # technology / correction choice.
-        from DisplayCAL.ui.display_lookup_dialog import lookup_button
-
-        self.display_lookup_btn = lookup_button(
-            self, on_goto_correction=self._focus_correction_choice
-        )
-        outer.addWidget(self.display_lookup_btn, 0, Qt.AlignLeft)
 
         self.display_tech_info_show_btn = QToolButton()
         self.display_tech_info_show_btn.setAutoRaise(True)
@@ -4122,6 +4132,22 @@ class MainWindow(BaseWindow):
             1,
         )
         return panel
+
+    def _section(self, panel: QWidget, tab: str, section: str):
+        """A decision header (purpose + 'what each setting changes') for a tab."""
+        from DisplayCAL.ui.settings_sections import SectionHeader
+
+        header = SectionHeader(tab, section, self, panel)
+        self._section_headers.append(header)
+        return header
+
+    def refresh_sections(self) -> None:
+        """Re-evaluate every section header (visibility, 'unavailable because')."""
+        for header in self._section_headers:
+            header.refresh()
+        panel = getattr(self, "_report_panel", None)
+        for header in getattr(panel, "_section_headers", []):
+            header.refresh()
 
     def _focus_correction_choice(self) -> None:
         """Bring the user to the correction list (advanced Display tab)."""
@@ -4160,6 +4186,7 @@ class MainWindow(BaseWindow):
         outer.setContentsMargins(16, 16, 16, 16)
         outer.setSpacing(12)
         outer.addWidget(self._build_settings_header("calibration.settings"))
+        outer.addWidget(self._section(panel, "calibration", "process"))
 
         toggles = QHBoxLayout()
         self.interactive_adjustment_cb = QCheckBox(
@@ -4190,6 +4217,7 @@ class MainWindow(BaseWindow):
         # after the two toggles, not on the Display & Instrument tab).
         self.observer_ctrl = QComboBox()
         self.observer_ctrl.currentIndexChanged.connect(self.observer_ctrl_handler)
+        form.addRow(self._section(panel, "calibration", "target"))
         form.addRow(lang.getstr("observer"), self.observer_ctrl)
 
         # Whitepoint: mode + colortemp / x,y fields.
@@ -4354,6 +4382,7 @@ class MainWindow(BaseWindow):
             self._black_output_offset_row_widget,
         )
 
+        form.addRow(self._section(panel, "calibration", "room"))
         # Ambient light level adjustment.
         self.ambient_adjust_cb = QCheckBox(
             lang.getstr("calibration.ambient_viewcond_adjust")
@@ -4439,6 +4468,7 @@ class MainWindow(BaseWindow):
             self._black_point_correction_row_widget,
         )
 
+        form.addRow(self._section(panel, "calibration", "precision"))
         # Calibration quality / speed.
         self.calibration_quality_ctrl = QSlider(Qt.Horizontal)
         self.calibration_quality_ctrl.setRange(1, len(CALIBRATION_QUALITY_LEVELS))
@@ -4507,6 +4537,7 @@ class MainWindow(BaseWindow):
         type_row.addWidget(self.gamap_btn)
         type_row.addWidget(self.black_point_compensation_cb)
         self._profile_type_row_widget = self._wrap(type_row)
+        form.addRow(self._section(panel, "profiling", "type"))
         form.addRow(lang.getstr("profile.type"), self._profile_type_row_widget)
 
         self.profile_quality_ctrl = QSlider(Qt.Horizontal)
@@ -4521,6 +4552,7 @@ class MainWindow(BaseWindow):
         quality_row.addWidget(self.profile_quality_info)
         form.addRow(lang.getstr("profile.quality"), self._wrap(quality_row))
 
+        form.addRow(self._section(panel, "profiling", "chart"))
         # Testchart chooser.
         self.testchart_ctrl = QComboBox()
         self.testchart_ctrl.currentIndexChanged.connect(self._testchart_ctrl_changed)
@@ -4588,6 +4620,7 @@ class MainWindow(BaseWindow):
         profile_name_row.addWidget(self.profile_name_textctrl, 1)
         profile_name_row.addWidget(self.profile_name_info_btn)
         profile_name_row.addWidget(self.profile_save_path_btn)
+        form.addRow(self._section(panel, "profiling", "name"))
         form.addRow(lang.getstr("profile.name"), self._wrap(profile_name_row))
 
         self.profile_name_label = QLabel("?")
@@ -4621,11 +4654,13 @@ class MainWindow(BaseWindow):
 
         self.lut3d_create_cb = QCheckBox(lang.getstr("3dlut.create_after_profiling"))
         self._add_check(self.lut3d_create_cb, "3dlut.create")
+        outer.addWidget(self._section(panel, "lut3d", "create"))
         outer.addWidget(self.lut3d_create_cb)
 
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self._lut3d_form = form
+        form.addRow(self._section(panel, "lut3d", "source"))
 
         # Input colorspace.
         self.lut3d_input_profile_ctrl = QComboBox()
@@ -4839,6 +4874,7 @@ class MainWindow(BaseWindow):
             self._lut3d_black_output_offset_row_widget,
         )
 
+        form.addRow(self._section(panel, "lut3d", "mapping"))
         # Apply calibration (only meaningful with show_advanced_options, like
         # the gamut-mapping-mode row below).
         self.lut3d_apply_cal_cb = QCheckBox(lang.getstr("apply_cal"))
@@ -4872,6 +4908,7 @@ class MainWindow(BaseWindow):
         )
         form.addRow(lang.getstr("rendering_intent"), self.lut3d_rendering_intent_ctrl)
 
+        form.addRow(self._section(panel, "lut3d", "file"))
         # Format + (madVR-only) HDR display sub-mode.
         self.lut3d_format_ctrl = QComboBox()
         format_items = lut3d_format_items(getcfg("argyll.version"))
@@ -8955,6 +8992,7 @@ class MainWindow(BaseWindow):
         button = self._tab_buttons[key]
         if not button.isChecked():
             button.setChecked(True)
+        self.refresh_sections()
         self._update_action_buttons()
 
     def _pin_stack_size_to_current_tab(self) -> None:

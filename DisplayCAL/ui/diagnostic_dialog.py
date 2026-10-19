@@ -42,7 +42,9 @@ def _wrap(text: str, muted: bool = False) -> QLabel:
     lab.setWordWrap(True)
     lab.setTextInteractionFlags(Qt.TextSelectableByMouse)
     if muted:
-        lab.setEnabled(False)
+        from DisplayCAL.ui.settings_sections import muted_css
+
+        lab.setStyleSheet(f"color: {muted_css()};")
     return lab
 
 

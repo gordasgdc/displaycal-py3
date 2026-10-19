@@ -48,7 +48,9 @@ def _wrap(text: str, rich: bool = False, muted: bool = False) -> QLabel:
     lab.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.LinksAccessibleByMouse)
     lab.setOpenExternalLinks(False)
     if muted:
-        lab.setEnabled(False)
+        from DisplayCAL.ui.settings_sections import muted_css
+
+        lab.setStyleSheet(f"color: {muted_css()};")
     return lab
 
 

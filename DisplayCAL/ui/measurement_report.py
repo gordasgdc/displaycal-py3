@@ -406,9 +406,12 @@ class ReportPanel(QWidget):
         self._grid.setColumnStretch(1, 1)
         self._row = 0
 
+        self._section_headers: list = []
+        self._add_section("what")
         self._build_chart_row()
         self.chart_meas_time = QLabel("")
         self._add_row(None, self.chart_meas_time)
+        self._add_section("simulate")
         self._build_whitepoint_row()
         self._build_simulation_rows()
         self._build_trc_row()
@@ -441,6 +444,15 @@ class ReportPanel(QWidget):
         """
         self_check_report = bool(QApplication.keyboardModifiers() & Qt.AltModifier)
         self.measure_requested.emit(self_check_report)
+
+    def _add_section(self, section: str) -> None:
+        """A decision header (purpose, 'what each setting changes') spanning the grid."""
+        from DisplayCAL.ui.settings_sections import SectionHeader
+
+        header = SectionHeader("verification", section, self, self)
+        self._section_headers.append(header)
+        self._grid.addWidget(header, self._row, 0, 1, 2)
+        self._row += 1
 
     def _add_row(self, left: QWidget | None, right: QWidget) -> None:
         """Add a label/control pair to the settings grid.

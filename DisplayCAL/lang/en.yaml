@@ -3501,3 +3501,465 @@
   Treat them as my current settings
 "guide.goal.modified_suffix": |-
   changed in the advanced settings
+"help.sections.expand": |-
+  What each setting here changes
+"help.label.when": |-
+  Fits when:
+"help.label.needs": |-
+  Dependencies and cautions:
+"help.label.unit": |-
+  Unit:
+"help.label.default": |-
+  Application default:
+"help.label.unavailable": |-
+  Unavailable now:
+"help.kind.required": |-
+  Required to run
+"help.kind.context": |-
+  Depends on your case
+"help.kind.optional": |-
+  Optional
+"help.val.on": |-
+  on
+"help.val.off": |-
+  off
+"help.val.quality.v": |-
+  very low
+"help.val.quality.l": |-
+  low
+"help.val.quality.m": |-
+  medium
+"help.val.quality.h": |-
+  high
+"help.val.quality.u": |-
+  ultra
+"help.val.testchart.auto": |-
+  auto-optimized
+"help.val.range.full": |-
+  full range 0–255
+"help.val.range.video": |-
+  video range 16–235
+"help.reason.generic": |-
+  The current settings do not allow it; see "Depends on" above.
+"help.reason.hidden": |-
+  Shown only when the settings it belongs to are in use (some rows appear only with "Show advanced options").
+"help.reason.correction_instrument": |-
+  The selected instrument cannot use a correction: spectrometers measure the light directly, and some instruments have their own modes instead.
+"help.reason.correction_mode": |-
+  Hidden while the measurement mode is "automatic" or the chart is one used to create corrections.
+"help.reason.observer": |-
+  A correction file fixes the observer, so the choice is locked while it is used.
+"help.reason.lut3d_apply_cal": |-
+  Available when a 3D LUT is being created now, or when the current profile contains calibration curves (vcgt).
+"help.reason.lut3d_gamut_mapping": |-
+  The "PCS-to-device" mode needs a LUT-type profile with a high-resolution B2A table: set the profile type to a LUT type and enable its high-resolution option, or use a profile that already has one.
+"help.reason.verify_simulate_white": |-
+  Available when a simulation profile is selected, or when the chart holds XYZ/Lab values with a white patch.
+"help.reason.verify_simulation_profile": |-
+  Needs a simulation profile whose colour space matches the chart.
+"help.reason.profile_type": |-
+  The gamut-mapping button applies to LUT-type profiles only.
+"sec.display_instrument.devices": |-
+  Which screen, with which instrument
+"sec.display_instrument.devices.purpose": |-
+  What is measured and the device that measures it. Both are needed before any measurement.
+"sec.display_instrument.correction": |-
+  Correction for colorimeters
+"sec.display_instrument.correction.purpose": |-
+  Only for colorimeters: adjusts their readings to the kind of screen being measured. Spectrometers do not need it. What a specification site says about a monitor does not select a correction for you.
+"sec.display_instrument.behavior": |-
+  How the measurement behaves
+"sec.display_instrument.behavior.purpose": |-
+  Timing, drift and signal-range settings. The defaults suit many screens; change one when a specific problem points to it.
+"sec.calibration.process": |-
+  How the screen is adjusted
+"sec.calibration.process.purpose": |-
+  Whether you adjust the monitor's own controls during the run, and whether an existing calibration is only refreshed.
+"sec.calibration.target": |-
+  What the screen should look like (target)
+"sec.calibration.target.purpose": |-
+  The white, the black and the tone curve the calibration aims for. "As measured" leaves a value as the monitor has it.
+"sec.calibration.room": |-
+  Room light and black point
+"sec.calibration.room.purpose": |-
+  Corrections for the viewing environment and for the neutrality of dark tones.
+"sec.calibration.precision": |-
+  Speed against precision
+"sec.calibration.precision.purpose": |-
+  A more careful calibration measures more and takes longer; the estimate shows how long.
+"sec.profiling.type": |-
+  Type of profile
+"sec.profiling.type.purpose": |-
+  The kind of ICC profile that is written. It decides how much of the screen's behaviour is described and how many patches are useful.
+"sec.profiling.chart": |-
+  Measurement chart (patches)
+"sec.profiling.chart.purpose": |-
+  The colours that are measured. More patches cost time and help only where the profile type can use them.
+"sec.profiling.name": |-
+  Name and location
+"sec.profiling.name.purpose": |-
+  How the profile is named and where it is saved. Placeholders fill in the date, display and settings automatically.
+"sec.lut3d.create": |-
+  Create a 3D LUT
+"sec.lut3d.create.purpose": |-
+  A 3D LUT is a colour conversion table for video players and tools that do not use ICC profiles.
+"sec.lut3d.source": |-
+  What the 3D LUT converts from
+"sec.lut3d.source.purpose": |-
+  The source colour space and tone curve of the content you will show.
+"sec.lut3d.mapping": |-
+  How colours are mapped
+"sec.lut3d.mapping.purpose": |-
+  How colours outside what the screen can show are handled, and whether the calibration curves are included.
+"sec.lut3d.file": |-
+  File format and precision
+"sec.lut3d.file.purpose": |-
+  The file the 3D LUT is saved as, its size and encoding. Match what the player or tool that will load it expects.
+"sec.verification.what": |-
+  What to measure
+"sec.verification.what.purpose": |-
+  The chart or reference whose colours are measured to verify a profile or a 3D LUT.
+"sec.verification.simulate": |-
+  Simulate another device
+"sec.verification.simulate.purpose": |-
+  Check how this screen would reproduce another device's white point or profile.
+"help.display.name": |-
+  Monitor
+"help.display.what": |-
+  Chooses the screen that will be measured. The list shows the screens the system reports, plus virtual targets (a web page, madVR, Prisma, Resolve) used for video setups.
+"help.display.when": |-
+  Always. With several monitors pick the one the instrument will sit on: the profile you make belongs to that monitor.
+"help.display.needs": |-
+  Required: no measurement can start without a screen. After connecting or moving a screen, use the refresh button.
+"help.lut_access.name": |-
+  Video card gamma table access
+"help.lut_access.what": |-
+  Chooses whose video-card gamma table (the calibration curves) is loaded and changed while measuring. Normally the measured screen itself; another output is used when the measured device cannot take curves but another one can.
+"help.lut_access.when": |-
+  Leave it on the measured screen unless your setup has a separate output for the curves (some video chains).
+"help.lut_access.needs": |-
+  A separate choice exists only if switched on in Options → Advanced. The link button keeps both choices the same.
+"help.instrument.name": |-
+  Instrument
+"help.instrument.what": |-
+  The measuring device. A spectrometer reads the whole light spectrum; a colorimeter reads through colour filters and needs a measurement mode or a correction suited to the screen.
+"help.instrument.when": |-
+  Always for measuring. Not needed to edit settings or to create a 3D LUT from an existing profile.
+"help.instrument.needs": |-
+  Required to measure. Detected instruments are listed; after connecting one, use the refresh button. Some instruments share one USB identity: the guided mode asks you to confirm the exact model.
+"help.mode.name": |-
+  Measurement mode
+"help.mode.what": |-
+  How the instrument measures this kind of screen (for example a refresh or non-refresh type, or a mode built into the instrument). It is a setting of the instrument, not a property of the monitor.
+"help.mode.when": |-
+  Choose the one that fits the screen type. With a colorimeter you either pick a mode or use a correction.
+"help.mode.needs": |-
+  A correction can set the mode itself; the list then follows it.
+"help.correction.name": |-
+  Correction for colorimeters
+"help.correction.what": |-
+  Adjusts a colorimeter's readings for the type of screen. A spectral correction describes the light spectrum of a kind of screen; a matrix correction is made for one colorimeter and one screen with a reference instrument. 'Automatic' uses a correction file whose Display field matches this monitor's name; 'None' applies none.
+"help.correction.when": |-
+  A colorimeter on LED, wide-gamut or OLED screens, where its filters alone can misread colours.
+"help.correction.needs": |-
+  Colorimeters only. A product name, a gamut figure or the word 'LED' does not prove a correction fits: you choose and confirm it. Import, web check and create tools are next to the list; the model search helps to recognise the monitor.
+"help.whitelevel_drift.name": |-
+  White level drift compensation
+"help.whitelevel_drift.what": |-
+  Measures a white patch from time to time during the run and corrects the readings for brightness changes of the screen.
+"help.whitelevel_drift.when": |-
+  Screens whose brightness changes while they warm up or with picture content (for example OLED and plasma).
+"help.whitelevel_drift.needs": |-
+  Adds measurements, so the run takes longer.
+"help.blacklevel_drift.name": |-
+  Black level drift compensation
+"help.blacklevel_drift.what": |-
+  Measures a black patch from time to time to correct the instrument's own black drift while it warms up.
+"help.blacklevel_drift.when": |-
+  Spectrometers in contact mode on screens with a stable black level. Many colorimeters correct this themselves.
+"help.blacklevel_drift.needs": |-
+  Adds measurements, so the run takes longer. Only offered for instruments that support it.
+"help.update_delay.name": |-
+  Minimum display update delay
+"help.update_delay.what": |-
+  The least time, in milliseconds, between showing a patch and measuring it.
+"help.update_delay.when": |-
+  Raise it when readings still show the previous patch (slow televisions, screens with heavy processing). It cannot go below the application default.
+"help.update_delay.needs": |-
+  Off by default (the default is used). A higher value makes the run longer.
+"help.settle_mult.name": |-
+  Display settle time multiplier
+"help.settle_mult.what": |-
+  Multiplies the time the screen is given to settle after a patch changes.
+"help.settle_mult.when": |-
+  Above 1 for slowly responding screens. Below 1 only to save time on screens known to settle quickly.
+"help.settle_mult.needs": |-
+  Too low a value lets the previous patch leak into the next reading.
+"help.ffp.name": |-
+  Full field pattern insertion
+"help.ffp.what": |-
+  Shows a bright full-field pattern for a set time at set intervals during the run, to keep the screen's brightness limiting from drifting.
+"help.ffp.when": |-
+  Screens that dim themselves on dark or small patches and recover with bright content (for example some OLED and plasma).
+"help.ffp.needs": |-
+  Adds time. Interval and duration are in seconds; level is the brightness of the inserted pattern in percent.
+"help.output_levels.name": |-
+  Output levels
+"help.output_levels.what": |-
+  Tells the measurement which signal range the screen expects: automatic, full range 0–255 or TV (video) range 16–235.
+"help.output_levels.when": |-
+  Full range for computer monitors; video range for TVs and video chains that expect it. Automatic leaves the choice to the system.
+"help.output_levels.needs": |-
+  Video range on a normal computer monitor would show blacks and whites wrongly; a wrong range clips them in the measurements.
+"help.interactive.name": |-
+  Interactive display adjustment
+"help.interactive.what": |-
+  Lets you change the monitor's own controls (brightness, contrast, colour gains) while live readings are shown, until white point and white level match the target.
+"help.interactive.when": |-
+  Monitors with hardware controls. Laptops and screens without such controls profit from the curves only.
+"help.interactive.needs": |-
+  Needs an instrument. Not used while 'Update calibration' is on.
+"help.update_cal.name": |-
+  Update calibration
+"help.update_cal.what": |-
+  Refines an existing calibration to account for drift, keeping its targets, instead of starting from the beginning.
+"help.update_cal.when": |-
+  A quick refresh of a monitor already calibrated with the same settings.
+"help.update_cal.needs": |-
+  Needs a previous calibration to start from; the targets then come from it and the interactive adjustment is skipped.
+"help.observer.name": |-
+  Observer
+"help.observer.what": |-
+  The standard colorimetric observer used to turn spectra into colours (for example CIE 1931 2° or CIE 1964 10°).
+"help.observer.when": |-
+  Leave it on CIE 1931 2° unless your workflow or a correction calls for another.
+"help.observer.needs": |-
+  A correction file can fix the observer; then the choice is locked.
+"help.whitepoint.name": |-
+  White point
+"help.whitepoint.what": |-
+  The colour of white the calibration aims for: the monitor's native white, a colour temperature in kelvin (daylight or black-body), or x,y coordinates. The target button measures your viewing light; the editor tunes it visually.
+"help.whitepoint.when": |-
+  Work compared with prints usually follows the viewing light (often D50, 5000 K); video grading follows its standard (D65, 6500 K); 'native' keeps the monitor's own white and is the quickest.
+"help.whitepoint.needs": |-
+  Any target other than native needs controls or curves able to reach it, within what the monitor can do.
+"help.white_level.name": |-
+  White level
+"help.white_level.what": |-
+  How bright white should be. 'As measured' keeps the monitor's own brightness.
+"help.white_level.when": |-
+  Set it to suit the room light and the comparison you make (for example a print viewing booth versus a dark grading room).
+"help.white_level.needs": |-
+  The monitor cannot exceed its maximum brightness; with interactive adjustment you set its brightness control to reach the value.
+"help.black_level.name": |-
+  Black level
+"help.black_level.what": |-
+  How bright black should be. 'As measured' keeps the monitor's black; a value raises black toward it.
+"help.black_level.when": |-
+  Rarely needed: to match a device with a higher black, or to reduce a contrast mismatch.
+"help.black_level.needs": |-
+  A screen cannot go darker than its native black.
+"help.tone_curve.name": |-
+  Tone curve
+"help.tone_curve.what": |-
+  How signal maps to brightness: a power curve (gamma, relative to the measured black or absolute from zero) or a standard curve such as sRGB, Rec. 709, Rec. 1886, L* or SMPTE 240M. 'As measured' makes no curve calibration.
+"help.tone_curve.when": |-
+  Standards fit their use: sRGB for web and office, Rec. 1886 for video in dim rooms, L* in some print workflows. 'As measured' is needed if you want only the profile to correct and no 1D curves.
+"help.tone_curve.needs": |-
+  Relative keeps the curve shape from the real black upward; absolute measures against zero, which matches the ideal curve only when black is zero.
+"help.black_offset.name": |-
+  Black output offset
+"help.black_offset.what": |-
+  How the black level is blended into the tone curve: 100 % applies the offset at the output (like a real screen), 0 % at the input, giving a pure power curve from black (the Rec. 1886 style).
+"help.black_offset.when": |-
+  Only matters when black is above zero; values in between trade the shape of the shadows.
+"help.black_offset.needs": |-
+  No visible effect on a screen with a perfect black.
+"help.ambient.name": |-
+  Ambient light adjustment
+"help.ambient.what": |-
+  Adjusts the target curve for the room's ambient light (a viewing-condition adjustment) using a lux value you type or measure.
+"help.ambient.when": |-
+  When room light is part of your target and you know it. Skip it in a controlled dark room.
+"help.ambient.needs": |-
+  Needs a lux value; the measuring button needs an instrument that can measure ambient light.
+"help.black_point.name": |-
+  Black point correction
+"help.black_point.what": |-
+  Nudges the black toward the colour of the white point so dark tones look neutral. 0 % leaves black as it is; 100 % corrects fully; 'Auto' lets the program choose. The rate sets how fast the correction fades with brightness.
+"help.black_point.when": |-
+  Screens whose black is tinted (common on LCDs). Skip it when you want the monitor's native black.
+"help.black_point.needs": |-
+  Cannot make a screen's black darker. The rate control appears only with 'Show advanced options'.
+"help.cal_quality.name": |-
+  Calibration quality
+"help.cal_quality.what": |-
+  Trades time for precision: lower qualities measure less and accept looser results; higher ones measure more.
+"help.cal_quality.when": |-
+  A lower quality for a quick check; a higher one for the final calibration.
+"help.cal_quality.needs": |-
+  The estimate below shows the time; 'ultra' can take a long time.
+"help.profile_type.name": |-
+  Profile type
+"help.profile_type.what": |-
+  The kind of ICC profile. Matrix types (one shared curve, or curves per channel, plus a matrix) are small and smooth; LUT types (XYZ or Lab) describe more of the screen's behaviour but need more patches. On macOS the preset uses the single-curve matrix, inherited from the original project.
+"help.profile_type.when": |-
+  Matrix profiles for well-behaved screens and wide compatibility; LUT profiles when the screen's behaviour is complex and you accept the time.
+"help.profile_type.needs": |-
+  The gamut-mapping button applies to LUT types only. Not every application handles every type.
+"help.bpc.name": |-
+  Black point compensation
+"help.bpc.what": |-
+  Makes the profile treat the monitor's black as the darkest black when it is applied (for matrix profiles).
+"help.bpc.when": |-
+  When you want shadows preserved in conversions to other devices. Applications may also apply their own compensation.
+"help.bpc.needs": |-
+  The effect depends on the profile type.
+"help.profile_quality.name": |-
+  Profile quality
+"help.profile_quality.what": |-
+  How much effort the profile calculation spends on smoothness and accuracy (low to ultra).
+"help.profile_quality.when": |-
+  Higher for final profiles; lower for quick tests.
+"help.profile_quality.needs": |-
+  Higher quality takes longer to compute, not to measure.
+"help.testchart.name": |-
+  Test chart
+"help.testchart.what": |-
+  The set of patches (colours) that is measured. 'Auto-optimized' builds a chart from the monitor's actual response; you can also load a chart file, create one or edit it.
+"help.testchart.when": |-
+  Auto-optimized unless a standard chart or a specific set of colours is required.
+"help.testchart.needs": |-
+  A fixed chart replaces the patch-count slider; the profile type decides how many patches help.
+"help.patches.name": |-
+  Number of patches
+"help.patches.what": |-
+  How many patches an auto-optimized chart contains. More patches mean a longer measurement.
+"help.patches.when": |-
+  Matrix profiles gain little from very large charts; LUT profiles use more.
+"help.patches.needs": |-
+  Only for the auto-optimized chart; the estimate shows the time.
+"help.sequence.name": |-
+  Patch sequence
+"help.sequence.what": |-
+  The order in which patches are shown. Some orders reduce the screen response lag between patches; others group by brightness or colour.
+"help.sequence.when": |-
+  Change it only when the display's response or temperature drift affects the results.
+"help.sequence.needs": |-
+  Shown only with 'Show advanced options'.
+"help.profile_name.name": |-
+  Profile name and location
+"help.profile_name.what": |-
+  The name of the profile file and its description. Placeholders (see the info button) fill in date, display, instrument and settings automatically; the folder button sets where it is saved.
+"help.profile_name.when": |-
+  Keep placeholders for traceable names, or type a fixed name.
+"help.lut3d_create.name": |-
+  Create a 3D LUT after profiling
+"help.lut3d_create.what": |-
+  Creates a 3D LUT after profiling, using the settings below.
+"help.lut3d_create.when": |-
+  When a video player or tool (madVR, a grading application, a TV) needs a LUT instead of an ICC profile.
+"help.lut3d_create.needs": |-
+  Needs a finished profile. Format and encoding below must match what the player expects.
+"help.lut3d_source.name": |-
+  Source colour space
+"help.lut3d_source.what": |-
+  The colour space of the content the LUT converts from (for example Rec. 709, sRGB, DCI-P3, Rec. 2020, ACES) or the space of a chosen profile.
+"help.lut3d_source.when": |-
+  Pick the space your content was mastered in.
+"help.lut3d_source.needs": |-
+  Wide spaces must fit the screen's gamut or be mapped (see 'How colours are mapped').
+"help.lut3d_trc.name": |-
+  Source tone curve
+"help.lut3d_trc.what": |-
+  The tone curve of the source content: gamma 2.2, Rec. 1886, HDR curves (PQ, HLG) or a custom curve with its gamma.
+"help.lut3d_trc.when": |-
+  Video mastered for dim rooms often uses Rec. 1886; computer graphics usually gamma 2.2 or sRGB.
+"help.lut3d_trc.needs": |-
+  HDR curves bring the peak-luminance and mapping controls.
+"help.lut3d_hdr.name": |-
+  HDR tone and colour mapping
+"help.lut3d_hdr.what": |-
+  Controls for converting HDR content (PQ or HLG) to what this screen can show: its peak luminance, how luminance, saturation or hue are preserved, and the content's mastering limits.
+"help.lut3d_hdr.when": |-
+  Only when making a 3D LUT for HDR content.
+"help.lut3d_hdr.needs": |-
+  Shown only for HDR source curves.
+"help.lut3d_black_offset.name": |-
+  Black output offset (3D LUT)
+"help.lut3d_black_offset.what": |-
+  The same black output offset as in calibration, applied to the source curve of the LUT.
+"help.lut3d_black_offset.when": |-
+  Only matters when the source curve is a power curve and black is above zero.
+"help.lut3d_apply_cal.name": |-
+  Apply calibration (video card curves)
+"help.lut3d_apply_cal.what": |-
+  Includes the calibration curves (vcgt) of the profile in the 3D LUT.
+"help.lut3d_apply_cal.when": |-
+  When the curves will not be loaded into the video card separately.
+"help.lut3d_apply_cal.needs": |-
+  Available only when creating a 3D LUT now, or when the current profile contains calibration curves.
+"help.lut3d_gamut_mapping.name": |-
+  Gamut mapping mode
+"help.lut3d_gamut_mapping.what": |-
+  How out-of-gamut source colours are handled: 'inverse device-to-PCS' inverts the profile's measured response; 'PCS-to-device' uses the profile's own table.
+"help.lut3d_gamut_mapping.when": |-
+  Keep the inverse mode unless the profile has a good high-resolution B2A table and you want its mapping.
+"help.lut3d_gamut_mapping.needs": |-
+  'PCS-to-device' needs a LUT-type profile with a high-resolution B2A table.
+"help.lut3d_intent.name": |-
+  Rendering intent
+"help.lut3d_intent.what": |-
+  How colours the screen cannot show are placed: absolute colorimetric keeps colours exact and scales the white point; relative colorimetric keeps the white point and shifts the others; perceptual and saturation compress or expand the source space.
+"help.lut3d_intent.when": |-
+  Relative when you calibrated to a white point different from the source space's; absolute (with white point scaling) when the screen's gamut exceeds the source.
+"help.lut3d_intent.needs": |-
+  Non-colorimetric intents change colours; not advised when colorimetric accuracy is needed.
+"help.lut3d_format.name": |-
+  3D LUT file format
+"help.lut3d_format.what": |-
+  The file format of the LUT (for example IRIDAS .cube, madVR .3dlut, DaVinci Resolve .cube and others offered by your ArgyllCMS version).
+"help.lut3d_format.when": |-
+  Use the format the player or tool that loads it expects.
+"help.lut3d_format.needs": |-
+  Some formats limit size, bit depth or encoding.
+"help.lut3d_encoding.name": |-
+  Input and output encoding
+"help.lut3d_encoding.what": |-
+  The signal range of the LUT input and output: full range 0–255, or video (TV) range 16–235 and other video encodings.
+"help.lut3d_encoding.when": |-
+  Match the chain: video players and TVs usually expect video range; computer outputs full range.
+"help.lut3d_encoding.needs": |-
+  A mismatch crushes or lifts blacks and whites.
+"help.lut3d_size.name": |-
+  Size and bit depth
+"help.lut3d_size.what": |-
+  The number of points per axis (for example 65×65×65) and the bit depth of input and output values.
+"help.lut3d_size.when": |-
+  Larger sizes give smoother conversions and bigger files; use what the target supports.
+"help.lut3d_size.needs": |-
+  Players and devices limit size and bit depth.
+"help.verify_chart.name": |-
+  Test chart or reference
+"help.verify_chart.what": |-
+  The chart (or reference file) whose patches are measured and compared with what the profile or LUT predicts.
+"help.verify_chart.when": |-
+  A small extended chart for a quick check, a larger one for a thorough report.
+"help.verify_chart.needs": |-
+  RGB charts and XYZ/Lab reference files are supported; the colour field list shows which one applies.
+"help.verify_simulate_white.name": |-
+  Simulate the white point
+"help.verify_simulate_white.what": |-
+  Compares against a simulated white point instead of the screen's own, optionally relative to the profile's white point.
+"help.verify_simulate_white.when": |-
+  Checking how well a screen can stand in for another device's white.
+"help.verify_simulate_white.needs": |-
+  Available when a simulation profile is selected, or when the chart holds XYZ/Lab values with a white patch.
+"help.verify_simulation_profile.name": |-
+  Simulation profile
+"help.verify_simulation_profile.what": |-
+  Uses another profile as the target to simulate (for example a print or video standard) and checks how well this screen reproduces it.
+"help.verify_simulation_profile.when": |-
+  Soft-proofing or standards checks.
+"help.verify_simulation_profile.needs": |-
+  Needs a simulation profile whose colour space matches the chart.

@@ -152,7 +152,9 @@ class FeedbackDialog(QDialog):
         lab = QLabel(text)
         lab.setWordWrap(True)
         if muted:
-            lab.setEnabled(False)
+            from DisplayCAL.ui.settings_sections import muted_css
+
+            lab.setStyleSheet(f"color: {muted_css()};")
         return lab
 
     @staticmethod
