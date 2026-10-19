@@ -188,6 +188,7 @@ from DisplayCAL.icc_profile import (
 )
 from DisplayCAL.log import LOG, DummyLogger, LogFile, get_file_logger
 from DisplayCAL.argyll_integrity import HashConflictError, resolve_expected_hash
+from DisplayCAL.worker_session import SessionMixin
 from DisplayCAL.meta import UPSTREAM_RESOURCES_DOMAIN, VERSION_STRING
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.multiprocess import cpu_count, pool_slice
@@ -2596,7 +2597,7 @@ def reload_black_videoluts(
     return reloaded
 
 
-class Worker(WorkerBase):
+class Worker(SessionMixin, WorkerBase):
     """Worker class for ArgyllCMS.
 
     Args:
@@ -6739,7 +6740,7 @@ END_DATA
         elif silent or not check_argyll_bin():
             self.clear_argyll_info()
 
-    def exec_cmd(
+    def _exec_cmd_impl(
         self,
         cmd,
         args=None,
@@ -14159,7 +14160,7 @@ BEGIN_DATA
                     return result
             else:
                 args2 = args
-            result = self.exec_cmd(cmd, args2)
+            result = self.measure_main(cmd, args2, args)
             if not isinstance(result, Exception) and result:
                 self.update_display_name_manufacturer(args[-1] + ".ti3")
                 ti3 = args[-1] + ".ti3"
@@ -15505,6 +15506,10 @@ BEGIN_DATA
             except ValueError:
                 pass
             else:
+                if self._block_ctx:
+                    # measuring in blocks: progress of the whole chart
+                    start += self._block_ctx[0]
+                    end = float(self._block_ctx[1])
                 percentage = max(start - 1, 0) / end * 100
         elif re.match(r"Added \d+/\d+", lastmsg, re.I):
             # targen
@@ -18790,6 +18795,16 @@ BEGIN_DATA
         """
         if DEBUG:
             print(f"[D] wrapup(copy={copy}, remove={remove})")
+        if self.session_journal is not None:
+            if isinstance(copy, Exception):
+                cancelled = isinstance(
+                    copy, (UnloggedError, UnloggedInfo, UnloggedWarning)
+                )
+                self.session_end(
+                    "cancelled" if cancelled else "failed", safe_str(copy)[:300]
+                )
+            else:
+                self.session_end("completed")
         if not self.tempdir or not os.path.isdir(self.tempdir):
             return None  # nothing to do
         if (
@@ -19059,6 +19074,8 @@ BEGIN_DATA
     def _write(self, txt):
         if isinstance(txt, bytes):
             txt = txt.decode()
+        if self._session_output(txt):
+            return  # runaway output: dropped (and the engine stopped), see worker_session
 
         if wx.GetApp() is not None:
             wx.CallAfter(self.audio_visual_feedback, txt)

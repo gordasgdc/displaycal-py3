@@ -1989,6 +1989,11 @@ DEFAULTS = {
     # flow only: 0 = never show it again; the dismissed version silences it
     # until the next release.
     "support.invite": 1,
+    # Long sessions: measure large charts in blocks of this many patches (0 = one
+    # run). Each finished block is stored; an interruption loses one block.
+    "measurement.block_size": 0,
+    # Prevent idle system/display sleep only while a measurement session runs.
+    "session.keep_awake": 1,
     "support.dismissed_version": "",
     "ui.toolkit": "qt",
     "uniformity.cols": 5,
