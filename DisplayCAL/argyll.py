@@ -377,6 +377,37 @@ def check_set_argyll_bin(paths: None | list[str] = None) -> bool:
     return set_argyll_bin()
 
 
+def get_bundled_argyll_dir() -> None | str:
+    """Return the ``bin`` directory of the ArgyllCMS shipped with the app.
+
+    The installers include a pinned, hash-verified ArgyllCMS next to the
+    application so a first run works offline. It is only a *fallback*: an
+    explicitly configured directory and Argyll executables on ``PATH`` win.
+
+    ``DISPLAYCAL_BUNDLED_ARGYLL`` overrides the location (used by tests and by
+    unfrozen development runs).
+
+    Returns:
+        None | str: The directory, or ``None`` when no bundled copy exists.
+    """
+    candidates: list[str] = []
+    if override := os.environ.get("DISPLAYCAL_BUNDLED_ARGYLL"):
+        candidates.append(override)
+    elif getattr(sys, "frozen", False):
+        exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+        if sys.platform == "darwin":
+            # <App>.app/Contents/MacOS/<exe> -> <App>.app/Contents/Resources
+            candidates.append(
+                os.path.join(os.path.dirname(exe_dir), "Resources", "ArgyllCMS", "bin")
+            )
+        else:
+            candidates.append(os.path.join(exe_dir, "ArgyllCMS", "bin"))
+    for path in candidates:
+        if os.path.isdir(path):
+            return path
+    return None
+
+
 def validate_search_paths(paths: None | list[str] = None) -> list[str]:
     """Validate the paths to look for Argyll utilities.
 
@@ -393,6 +424,9 @@ def validate_search_paths(paths: None | list[str] = None) -> list[str]:
             with contextlib.suppress(ValueError):
                 paths.remove(argyll_dir)
             paths = [argyll_dir, *paths]
+        bundled = get_bundled_argyll_dir()
+        if bundled and bundled not in paths:
+            paths = [*paths, bundled]
     return paths
 
 

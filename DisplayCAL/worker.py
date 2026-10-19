@@ -18122,7 +18122,16 @@ BEGIN_DATA
             error.retryable = retryable
             return error
 
-        is_main_dl = uri.startswith(f"https://{UPSTREAM_RESOURCES_DOMAIN}/download/")
+        # The Windows instrument-driver installer (``/Argyll/``) is executed with
+        # administrator rights, so it gets the same hash check as the main
+        # downloads (it was never actually verified before: only ``/download/``
+        # matched, although the comment below always claimed both).
+        is_main_dl = uri.startswith(
+            (
+                f"https://{UPSTREAM_RESOURCES_DOMAIN}/download/",
+                f"https://{UPSTREAM_RESOURCES_DOMAIN}/Argyll/",
+            )
+        )
         if is_main_dl:
             # Always force connection to server even if local file exists for
             # displaycal.net/downloads/* and displaycal.net/Argyll/*

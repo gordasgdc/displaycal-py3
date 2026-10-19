@@ -84,6 +84,18 @@ jobs:
       - name: Run freeze.py
         run: python DisplayCAL\freeze.py
 
+      # [2026-10-19] ArgyllCMS fixat si verificat (SHA-256, vezi
+      # DisplayCAL/argyll_integrity.py) livrat langa aplicatie, ca prima
+      # rulare sa mearga si offline; doar rezerva (DisplayCAL/argyll.py).
+      - name: Bundle pinned ArgyllCMS (SHA-256 verified)
+        shell: pwsh
+        run: |
+          python scripts/stage_argyll.py win64 "$env:RUNNER_TEMP\argyll-cache" "$env:RUNNER_TEMP\argyll-stage"
+          if ($LASTEXITCODE -ne 0) { throw "ArgyllCMS could not be staged and verified" }
+          $app = Get-ChildItem dist\py2exe.win-amd64-py3.11\DisplayCAL-* -Directory | Select-Object -First 1
+          Copy-Item -Recurse "$env:RUNNER_TEMP\argyll-stage\ArgyllCMS" $app.FullName
+          if (-not (Test-Path "$($app.FullName)\ArgyllCMS\bin\dispcal.exe")) { throw "bundled dispcal.exe missing" }
+
       - name: Create INNO script
         run: python native_build.py inno
 

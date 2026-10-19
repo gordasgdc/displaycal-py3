@@ -15,11 +15,33 @@
 # store-credentials gdc-notary`) sau variabilele APPLE_NOTARY_*.
 set -euo pipefail
 cd "$(dirname "$0")"
+REPO_DIR="$(pwd)"
+
+# [2026-10-19] Politica de stocare GDC: tot ce genereaza un build (venv,
+# py2app, payload, DMG, artefacte) sta pe volumul extern, nu pe SSD-ul intern.
+# Fara volum montat: oprire, niciun fallback intern.
+EXT_BASE="${DCAL_EXTERNAL_BASE:-/Volumes/CristiGordas/TESTE}"
+EXT_ROOT="${DCAL_EXTERNAL_ROOT:-$EXT_BASE/GDC_PROJECTS/DisplayCAL-CG}"
+if [ ! -d "$EXT_BASE" ] || ! touch "$EXT_BASE/.dcal-write-test" 2>/dev/null; then
+    echo "EXTERNAL TEST STORAGE NOT AVAILABLE ($EXT_BASE) — build oprit, fara fallback intern." >&2
+    exit 2
+fi
+rm -f "$EXT_BASE/.dcal-write-test"
+BUILD_ROOT="$EXT_ROOT/build"
+SRC_COPY="$BUILD_ROOT/src"
+mkdir -p "$SRC_COPY" "$BUILD_ROOT/tmp" "$EXT_ROOT/artifacts" "$EXT_ROOT/deps"
+export TMPDIR="$BUILD_ROOT/tmp"
+echo "==> Sincronizez sursele in $SRC_COPY (build-ul ruleaza acolo, nu in repo)…"
+rsync -a --delete \
+    --exclude '.git/' --exclude 'dist/' --exclude 'build/' --exclude '.build-venv/' \
+    --exclude '*.egg-info/' --exclude '__pycache__/' --exclude '.DS_Store' \
+    "$REPO_DIR/" "$SRC_COPY/"
+cd "$SRC_COPY"
 
 VERSION=$(cat DisplayCAL/VERSION)
 PKG_ID="dev.gordas.DisplayCAL-CG.installer"
 DIST_DIR="dist"
-VENV="${DCAL_BUILD_VENV:-.build-venv}"
+VENV="${DCAL_BUILD_VENV:-$BUILD_ROOT/venv-build}"
 ARCH=$(uname -m)  # arm64 sau x86_64
 
 echo "==> DisplayCAL-CG v$VERSION ($ARCH)"
@@ -200,6 +222,16 @@ rm -rf "$CLEAN_DYLIBS_DIR"
 # într-o distribuție finală).
 echo "==> Elimin resturile de build (.o) bundle-ate accidental de PySide6…"
 find "$APP_ROOT/DisplayCAL.app" -type f -name "*.o" -delete 2>/dev/null || true
+
+# [2026-10-19] ArgyllCMS fixat si verificat (SHA-256, vezi DisplayCAL/argyll_integrity.py)
+# livrat in pachet, ca prima rulare sa mearga si offline. E doar rezerva: directorul
+# configurat de utilizator si PATH au prioritate (DisplayCAL/argyll.py). Executabilele
+# din Resources sunt semnate Developer ID + hardened runtime de bucla de mai jos.
+echo "==> Includ ArgyllCMS fixat in DisplayCAL.app…"
+"$VENV/bin/python3" scripts/stage_argyll.py "mac-$ARCH" "$EXT_ROOT/deps/cache" "$EXT_ROOT/deps/stage-mac-$ARCH"
+mkdir -p "$APP_ROOT/DisplayCAL.app/Contents/Resources"
+rm -rf "$APP_ROOT/DisplayCAL.app/Contents/Resources/ArgyllCMS"
+cp -R "$EXT_ROOT/deps/stage-mac-$ARCH/ArgyllCMS" "$APP_ROOT/DisplayCAL.app/Contents/Resources/"
 
 sign_one_app() {
     local APP_PATH="$1"
@@ -504,4 +536,8 @@ if [ -n "${APPLE_SIGN_IDENTITY_APP:-}" ]; then
 else
     echo "==> APPLE_SIGN_IDENTITY_APP nesetată — DMG nu se construiește (fără semnătură nu e livrabil)."
 fi
+ART_DIR="$EXT_ROOT/artifacts/$VERSION-cg.$(cat DisplayCAL/CG_BUILD 2>/dev/null || echo 0)"
+mkdir -p "$ART_DIR"
+cp -f "$DIST_DIR"/DisplayCAL-CG*.pkg "$DIST_DIR"/DisplayCAL-CG*.dmg "$ART_DIR/" 2>/dev/null || true
+echo "==> Artefacte copiate in: $ART_DIR"
 echo "==> Gata: $FINAL_PKG"
