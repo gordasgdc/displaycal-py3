@@ -123,6 +123,9 @@ GOALS: tuple[Goal, ...] = (
     ),
     Goal("srgb", "sRGB", "guide.goal.srgb", "guide.goal.srgb.info"),
     Goal("softproof", "softproof", "guide.goal.softproof", "guide.goal.softproof.info"),
+    #: No preset at all: the guided flow runs on whatever the advanced settings
+    #: hold, so moving between the two modes never overwrites them.
+    Goal("current", "", "guide.goal.current", "guide.goal.current.info"),
 )
 
 _GOALS_BY_KEY = {g.key: g for g in GOALS}
@@ -159,12 +162,46 @@ def goal_by_key(key: str) -> Goal | None:
 def preset_path(goal_key: str, presets: list[str]) -> str | None:
     """Return the bundled preset path of a goal, or ``None`` when absent."""
     goal = goal_by_key(goal_key)
-    if goal is None:
+    if goal is None or not goal.preset:
         return None
     for path in presets:
         if os.path.splitext(os.path.basename(path))[0] == goal.preset:
             return path
     return None
+
+
+# --- one configuration for both modes --------------------------------------
+
+#: Settings that define *what the run does* (objective, target, profile type,
+#: patch chart, instrument correction). The guided flow remembers them when a
+#: preset is loaded so it can say, never silently, that they were changed.
+OBJECTIVE_PREFIXES = (
+    "calibration.",
+    "whitepoint",
+    "trc",
+    "testchart.",
+    "measurement_mode",
+    "observer",
+    "colorimeter_correction_matrix_file",
+    "profile.type",
+    "profile.quality",
+    "profile.black_point_compensation",
+    "gamap",
+)
+
+
+def objective_keys(all_keys) -> list[str]:
+    """The configuration keys that define the objective (no backups)."""
+    return sorted(
+        k
+        for k in all_keys
+        if k.startswith(OBJECTIVE_PREFIXES) and not k.endswith(".backup")
+    )
+
+
+def objective_changes(before: dict, after: dict) -> list[str]:
+    """Keys whose values differ between two snapshots."""
+    return [k for k in sorted(set(before) | set(after)) if before.get(k) != after.get(k)]
 
 
 # --- preparation ------------------------------------------------------------
@@ -209,7 +246,9 @@ def build_preparation(
     never pre-confirmed: every item starts unconfirmed and only the user can
     confirm it.
     """
-    goal = goal_key if goal_key in _GOALS_BY_KEY else "default"
+    goal = (
+        goal_key if goal_key in _GOALS_BY_KEY and goal_key != "current" else "default"
+    )
     warm_sources = ["argyll_dispcal", "displaycal"]
     if placement_variant in VENDOR_WARMUP:
         warm_sources.append(VENDOR_WARMUP[placement_variant][1])

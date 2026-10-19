@@ -46,7 +46,8 @@ def test_every_goal_resolves_to_a_bundled_preset():
     presets = glob.glob(os.path.join(here, "DisplayCAL", "presets", "*.icc"))
     assert presets
     for goal in gm.GOALS:
-        assert gm.preset_path(goal.key, presets), goal.key
+        if goal.preset:  # "current" deliberately loads no preset
+            assert gm.preset_path(goal.key, presets), goal.key
 
 
 def test_prep_required_items_gate_completion():
@@ -137,3 +138,16 @@ def test_every_guide_key_used_by_the_panel_exists_in_ro_en_es():
             d = yaml.safe_load(f)
         missing = sorted(k for k in keys if k not in d)
         assert not missing, (code, missing)
+
+
+def test_current_settings_goal_loads_no_preset():
+    assert gm.goal_by_key("current") is not None
+    assert gm.preset_path("current", ["/x/photo.icc", "/x/video.icc"]) is None
+
+
+def test_objective_changes_are_listed_never_hidden():
+    keys = gm.objective_keys(
+        ["trc", "trc.backup", "whitepoint.colortemp", "testchart.file", "lang", "position.x"]
+    )
+    assert keys == ["testchart.file", "trc", "whitepoint.colortemp"]
+    assert gm.objective_changes({"trc": 2.2, "a": 1}, {"trc": 2.4, "a": 1}) == ["trc"]

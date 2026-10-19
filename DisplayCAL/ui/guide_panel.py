@@ -440,6 +440,24 @@ class GuidePanel(QWidget):
             lay.addWidget(card)
         self.goal_status = _label("", muted=True)
         lay.addWidget(self.goal_status)
+        # Shown only when the advanced settings were changed after a preset was
+        # loaded: the objective is never changed -- or left looking unchanged --
+        # in silence.
+        self.goal_changed_box = _Card()
+        cb = QVBoxLayout(self.goal_changed_box)
+        self.goal_changed_label = _label("", size=1.0)
+        cb.addWidget(self.goal_changed_label)
+        crow = QHBoxLayout()
+        self.goal_reapply_btn = QPushButton(_m(_tr("guide.s2.reapply")))
+        self.goal_reapply_btn.clicked.connect(self._reapply_goal)
+        self.goal_keep_btn = QPushButton(_m(_tr("guide.s2.keep_current")))
+        self.goal_keep_btn.clicked.connect(self._keep_current)
+        crow.addWidget(self.goal_reapply_btn)
+        crow.addWidget(self.goal_keep_btn)
+        crow.addStretch(1)
+        cb.addLayout(crow)
+        self.goal_changed_box.hide()
+        lay.addWidget(self.goal_changed_box)
 
     # page 3 ----------------------------------------------------------------
     def _build_page_prepare(self, lay: QVBoxLayout) -> None:
@@ -710,14 +728,49 @@ class GuidePanel(QWidget):
             return
         self._goal = key
         w = self.window_ref
+        if key == "current":
+            # No preset: the advanced settings stay exactly as they are.
+            self._goal_snapshot = None
+            self.goal_status.setText(_tr("guide.s2.kept"))
+            self.refresh()
+            return
         path = gm.preset_path(key, list(w.presets))
         if path:
             w._load_calibration_file(path, silent=True)
             name = _tr(gm.goal_by_key(key).title_key)
             self.goal_status.setText(_tr("guide.s2.applied", name))
+            self._goal_snapshot = self._objective_snapshot()
         else:
+            self._goal_snapshot = None
             self.goal_status.setText(_tr("guide.s2.not_found"))
         self.refresh()
+
+    # one configuration for both modes ---------------------------------------
+    def _objective_snapshot(self) -> dict:
+        return {k: getcfg(k) for k in gm.objective_keys(config.DEFAULTS)}
+
+    def goal_changes(self) -> list[str]:
+        """Objective settings changed (e.g. in the advanced tabs) since the preset."""
+        snap = getattr(self, "_goal_snapshot", None)
+        if self._goal in (None, "current") or snap is None:
+            return []
+        return gm.objective_changes(snap, self._objective_snapshot())
+
+    def _reapply_goal(self) -> None:
+        if self._goal and self._goal != "current":
+            key = self._goal
+            self._goal = None
+            self._goal_chosen(key)
+
+    def _keep_current(self) -> None:
+        self.goal_buttons["current"].setChecked(True)
+
+    def _paint_goal_changes(self) -> None:
+        changed = self.goal_changes()
+        self.goal_changed_box.setVisible(bool(changed))
+        if changed:
+            name = _tr(gm.goal_by_key(self._goal).title_key)
+            self.goal_changed_label.setText(_tr("guide.s2.modified", name, len(changed)))
 
     def _start(self) -> None:
         w = self.window_ref
@@ -878,6 +931,7 @@ class GuidePanel(QWidget):
                 rb.setChecked(key == self._goal)
         finally:
             self._syncing = False
+        self._paint_goal_changes()
 
     def _paint_measure_page(
         self, r: gm.Readiness, ident: ic.Identification | None
@@ -890,6 +944,8 @@ class GuidePanel(QWidget):
         model = self._chosen_model(ident) or None
         needs_choice = bool(ident and ident.family is not None and not ident.certain)
         goal_title = _tr(gm.goal_by_key(self._goal).title_key) if self._goal else None
+        if goal_title and self.goal_changes():
+            goal_title += f" — {_tr('guide.goal.modified_suffix')}"
         lines = gm.start_summary(
             monitor=monitor,
             instrument=ident.detected_name if ident else None,

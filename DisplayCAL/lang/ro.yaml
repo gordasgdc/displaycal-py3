@@ -3487,3 +3487,17 @@
   Mergi la alegerea corecției
 "lookup.close": |-
   Închide
+"guide.goal.current": |-
+  Păstrează setările mele actuale
+"guide.goal.current.info": |-
+  Nu încarcă nicio presetare: ținta calibrării, tipul de profil, diagrama de patch-uri și corecția instrumentului rămân exact cum sunt în setările avansate.
+"guide.s2.kept": |-
+  Setările tale actuale sunt păstrate; nu s-a încărcat nicio presetare.
+"guide.s2.modified": |-
+  După ce ai ales „%s”, %s setare/setări au fost schimbate în setările avansate. Fluxul ghidat va folosi setările așa cum sunt acum, nu presetarea.
+"guide.s2.reapply": |-
+  Încarcă din nou presetarea
+"guide.s2.keep_current": |-
+  Tratează-le drept setările mele actuale
+"guide.goal.modified_suffix": |-
+  schimbat în setările avansate

@@ -3487,3 +3487,17 @@
   Go to the correction choice
 "lookup.close": |-
   Close
+"guide.goal.current": |-
+  Keep my current settings
+"guide.goal.current.info": |-
+  Loads no preset: the calibration target, the profile type, the patch chart and the instrument correction stay exactly as they are in the advanced settings.
+"guide.s2.kept": |-
+  Your current settings are kept; no preset was loaded.
+"guide.s2.modified": |-
+  After you chose "%s", %s setting(s) were changed in the advanced settings. The guided flow will use the settings as they are now, not the preset.
+"guide.s2.reapply": |-
+  Load the preset again
+"guide.s2.keep_current": |-
+  Treat them as my current settings
+"guide.goal.modified_suffix": |-
+  changed in the advanced settings

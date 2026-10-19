@@ -3479,3 +3479,17 @@
   Ir a la elección de la corrección
 "lookup.close": |-
   Cerrar
+"guide.goal.current": |-
+  Mantener mis ajustes actuales
+"guide.goal.current.info": |-
+  No carga ningún preajuste: el objetivo de calibración, el tipo de perfil, la carta de parches y la corrección del instrumento quedan exactamente como están en los ajustes avanzados.
+"guide.s2.kept": |-
+  Se mantienen tus ajustes actuales; no se cargó ningún preajuste.
+"guide.s2.modified": |-
+  Después de elegir «%s», se cambiaron %s ajuste(s) en los ajustes avanzados. El flujo guiado usará los ajustes tal como están ahora, no el preajuste.
+"guide.s2.reapply": |-
+  Cargar de nuevo el preajuste
+"guide.s2.keep_current": |-
+  Tratarlos como mis ajustes actuales
+"guide.goal.modified_suffix": |-
+  cambiado en los ajustes avanzados

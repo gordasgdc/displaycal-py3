@@ -304,3 +304,34 @@ def test_small_window_keeps_instructions_reachable(window):
 
     assert isinstance(guide.pages.currentWidget(), QScrollArea)
     assert guide.pages.currentWidget().widgetResizable()
+
+
+def test_switching_modes_never_changes_the_configuration(guide, window):
+    """Opening the advanced tabs and coming back changes nothing by itself."""
+    from DisplayCAL.config import getcfg
+
+    before = guide._objective_snapshot()
+    guide._goal_chosen("current")
+    window._select_tab("display_instrument")
+    window._select_tab("guide")
+    assert guide._objective_snapshot() == before and guide._goal == "current"
+    assert not guide.goal_changes()
+
+
+def test_changes_made_in_advanced_mode_after_a_preset_are_announced(guide, window, monkeypatch):
+    from DisplayCAL.config import getcfg, setcfg
+
+    monkeypatch.setattr(window, "_load_calibration_file", lambda path, silent=False: None)
+    monkeypatch.setattr(gm, "preset_path", lambda key, presets: "/x/photo.icc")
+    guide._goal_chosen("photo")
+    assert guide.goal_changes() == []
+    old = getcfg("trc.type")
+    setcfg("trc.type", "G" if old != "G" else "g")
+    try:
+        assert "trc.type" in guide.goal_changes()
+        guide._paint_goal_changes()
+        assert not guide.goal_changed_box.isHidden() or guide.goal_changed_box.isVisibleTo(guide)
+        guide._keep_current()
+        assert guide._goal == "current" and guide.goal_changes() == []
+    finally:
+        setcfg("trc.type", old)
