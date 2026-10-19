@@ -55,6 +55,18 @@ def _make_pl(monkeypatch):
     return pl
 
 
+def _fake_application(monkeypatch, fake_app):
+    """Make ``apply_profiles`` see ``fake_app`` from ``QApplication.instance()``.
+
+    Only the module's own name is replaced. Patching ``QApplication.instance``
+    on the real Qt class (what these tests did before) leaks into pytest-qt's
+    ``qapp`` fixture and every later test in the session, which then calls
+    ``processEvents`` on the fake.
+    """
+    stub = type("QApplication", (), {"instance": staticmethod(lambda: fake_app)})
+    monkeypatch.setattr("DisplayCAL.ui.tools.apply_profiles.QApplication", stub)
+
+
 class _FakeApp:
     def __init__(self):
         self.quit_calls = 0
@@ -118,10 +130,7 @@ def test_animate_busy_icon_without_a_tray_is_a_noop(qapp, monkeypatch):
 def test_request_forced_shutdown_quits_without_confirmation(qapp, monkeypatch):
     pl = _make_pl(monkeypatch)
     fake_app = _FakeApp()
-    monkeypatch.setattr(
-        "DisplayCAL.ui.tools.apply_profiles.QApplication.instance",
-        staticmethod(lambda: fake_app),
-    )
+    _fake_application(monkeypatch, fake_app)
     pl._request_forced_shutdown()
     assert fake_app.quit_calls == 1
 
@@ -134,10 +143,7 @@ def test_exit_with_no_event_skips_confirmation(qapp, monkeypatch):
         "DisplayCAL.ui.tools.apply_profiles.calibration_management_isenabled",
         lambda: False,
     )
-    monkeypatch.setattr(
-        "DisplayCAL.ui.tools.apply_profiles.QApplication.instance",
-        staticmethod(lambda: fake_app),
-    )
+    _fake_application(monkeypatch, fake_app)
     question = mock.Mock(side_effect=AssertionError("should not prompt"))
     monkeypatch.setattr(
         "DisplayCAL.ui.tools.apply_profiles.QMessageBox.question", question
@@ -158,10 +164,7 @@ def test_exit_from_tray_menu_confirms_and_quits_on_yes(qapp, monkeypatch):
         "DisplayCAL.ui.tools.apply_profiles.calibration_management_isenabled",
         lambda: False,
     )
-    monkeypatch.setattr(
-        "DisplayCAL.ui.tools.apply_profiles.QApplication.instance",
-        staticmethod(lambda: fake_app),
-    )
+    _fake_application(monkeypatch, fake_app)
     monkeypatch.setattr(
         "DisplayCAL.ui.tools.apply_profiles.QMessageBox.question",
         lambda *a, **k: QMessageBox.StandardButton.Yes,
@@ -182,10 +185,7 @@ def test_exit_from_tray_menu_cancelled_does_not_quit(qapp, monkeypatch):
         "DisplayCAL.ui.tools.apply_profiles.calibration_management_isenabled",
         lambda: False,
     )
-    monkeypatch.setattr(
-        "DisplayCAL.ui.tools.apply_profiles.QApplication.instance",
-        staticmethod(lambda: fake_app),
-    )
+    _fake_application(monkeypatch, fake_app)
     monkeypatch.setattr(
         "DisplayCAL.ui.tools.apply_profiles.QMessageBox.question",
         lambda *a, **k: QMessageBox.StandardButton.No,
