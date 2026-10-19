@@ -504,6 +504,8 @@ class GuidePanel(QWidget):
         lay.addWidget(_label(_tr("guide.s5.intro"), muted=True))
         self.profile_state = _label("", bold=True)
         lay.addWidget(self.profile_state)
+        self.verify_state = _label("")
+        lay.addWidget(self.verify_state)
         row = QHBoxLayout()
         verify = QPushButton(_tr("guide.s5.verify"))
         verify.clicked.connect(lambda: self.window_ref._select_tab("verification"))
@@ -564,6 +566,7 @@ class GuidePanel(QWidget):
             displays=list(w.worker.displays),
             instruments=list(w.worker.instruments),
             busy=bool(getattr(w, "_busy", False)),
+            scan_failed=getattr(w, "_rescan_error", None) is not None,
         )
 
     # mirrored controls --------------------------------------------------------
@@ -781,6 +784,9 @@ class GuidePanel(QWidget):
         self.start_blocked.setText("" if ok else _tr("guide.s4.blocked"))
 
     def _paint_finish_page(self) -> None:
+        check = getattr(self.window_ref, "last_profile_check", None)
+        self.verify_state.setText(_tr(check.message_key) if check else "")
+        self.verify_state.setVisible(check is not None)
         profile = config.get_display_profile()
         if profile is None:
             self.profile_state.setText(_tr("guide.s5.no_profile"))

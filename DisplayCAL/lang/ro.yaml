@@ -2931,3 +2931,13 @@
   HDR și SDR sunt moduri diferite: o calibrare făcută într-unul nu se aplică celuilalt, iar un sistem de operare în mod HDR poate ocoli curbele.
 "guide.limit.multi_display": |-
   Cu mai multe monitoare, fiecare are nevoie de propria rulare, iar profilul este legat de acel monitor și de acel instrument.
+"guide.verify.match": |-
+  Verificat: profilul activ pentru acest monitor este cel tocmai instalat.
+"guide.verify.mismatch": |-
+  Instalarea s-a încheiat, dar sistemul raportează un alt profil activ pentru acest monitor. Aplicarea nu este confirmată; verifică setările de culoare ale sistemului și încearcă din nou instalarea.
+"guide.verify.none_active": |-
+  Instalarea s-a încheiat, dar sistemul nu raportează niciun profil pentru acest monitor. Aplicarea nu este confirmată.
+"guide.verify.unreadable": |-
+  Profilul nu a putut fi citit înapoi din sistem, deci folosirea lui pentru acest monitor nu este confirmată.
+"guide.ready.scan_failed": |-
+  Detectarea monitorului și a instrumentului a eșuat.

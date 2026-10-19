@@ -23,6 +23,7 @@ NO_ARGYLL = "no_argyll"
 NO_DISPLAY = "no_display"
 NO_INSTRUMENT = "no_instrument"
 BUSY = "busy"
+SCAN_FAILED = "scan_failed"
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,7 @@ def compute_readiness(
     displays: list[str],
     instruments: list[str],
     busy: bool = False,
+    scan_failed: bool = False,
 ) -> Readiness:
     """Derive the readiness state from what the engine reports.
 
@@ -61,6 +63,16 @@ def compute_readiness(
             NO_ARGYLL,
             "guide.ready.no_argyll",
             ("guide.action.install_argyll", "guide.action.choose_argyll"),
+        )
+    if scan_failed:
+        return Readiness(
+            SCAN_FAILED,
+            "guide.ready.scan_failed",
+            (
+                "guide.action.rescan",
+                "guide.action.reconnect",
+                "guide.action.check_permission",
+            ),
         )
     if not displays:
         return Readiness(NO_DISPLAY, "guide.ready.no_display", ("guide.action.rescan",))

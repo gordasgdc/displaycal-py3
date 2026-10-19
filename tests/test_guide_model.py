@@ -78,6 +78,10 @@ def test_all_guide_keys_exist_in_english_and_in_ro_es():
     for a, b in gm.CONCEPTS:
         keys |= {a, b}
     keys |= set(gm.LIMITS)
+    from DisplayCAL import profile_verify as pv
+
+    keys |= {f"guide.verify.{x}" for x in (pv.MATCH, pv.MISMATCH, pv.NONE_ACTIVE, pv.UNREADABLE)}
+    keys.add("guide.ready.scan_failed")
     for r in (
         gm.compute_readiness(argyll_found=False, displays=[], instruments=[]),
         gm.compute_readiness(argyll_found=True, displays=[], instruments=[]),

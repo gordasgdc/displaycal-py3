@@ -213,6 +213,7 @@ from DisplayCAL.log import LOGBUFFER
 from DisplayCAL.meta import DEVELOPMENT_HOME_PAGE, DOMAIN, VERSION_STRING
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.options import TEST
+from DisplayCAL.profile_verify import verify_active_profile
 from DisplayCAL.ui import message_box
 from DisplayCAL.ui.about_window import AboutWindow
 from DisplayCAL.ui.application import Application
@@ -232,13 +233,13 @@ from DisplayCAL.ui.colorimeter_correction_io import (
 from DisplayCAL.ui.colorimeter_correction_window import CreateCorrectionWindow
 from DisplayCAL.ui.display_adjustment_window import DisplayAdjustmentWindow
 from DisplayCAL.ui.gamap_window import GamapWindow
+from DisplayCAL.ui.guide_panel import GuidePanel
 from DisplayCAL.ui.header_banner import (
     HEADER_BANNER_SIZE,
     HeaderBanner,
     header_banner_pixmap,
     header_continuation_pixmap,
 )
-from DisplayCAL.ui.guide_panel import GuidePanel
 from DisplayCAL.ui.measure_frame import (
     MeasureFrame,
     default_measureframe_size,
@@ -460,6 +461,8 @@ class _ProfileInstallThread(QThread):
     #: Emitted with the ``(argyll, colord, oyranos, loader)`` result tuple, or
     #: an ``Exception`` on failure.
     done = Signal(object)
+    #: Emitted (before ``done``) with the :class:`ProfileCheck` read-back.
+    checked = Signal(object)
 
     def __init__(
         self, worker: Worker, profile_path: str, parent: QWidget | None = None
@@ -475,6 +478,12 @@ class _ProfileInstallThread(QThread):
             )
         except Exception as exception:  # noqa: BLE001  (report on GUI thread)
             result = exception
+        else:
+            # A finished install is not a verified one: read back what the
+            # system now reports as active for this display.
+            self.checked.emit(
+                verify_active_profile(self._profile_path, getcfg("display.number") - 1)
+            )
         self.done.emit(result)
 
 
@@ -1306,6 +1315,8 @@ class MainWindow(BaseWindow):
         #: A background rescan of displays/instruments is running.
         self._busy = False
         self._rescan_error: Exception | None = None
+        #: Read-back of the last installed profile (None until one is installed).
+        self.last_profile_check: object | None = None
         #: Set right before an internal (non-user) ``profile_type_ctrl``
         #: change, so :meth:`_profile_type_ctrl_changed` can skip the
         #: CCXX-testchart-recommendation dialog for it -- mirrors wx passing
@@ -10149,8 +10160,15 @@ class MainWindow(BaseWindow):
         self._profile_install_thread = _ProfileInstallThread(
             self.worker, profile_path, parent=self
         )
+        self._profile_install_thread.checked.connect(self._on_profile_checked)
         self._profile_install_thread.done.connect(self._on_profile_install_direct_done)
         self._profile_install_thread.start()
+
+    def _on_profile_checked(self, check: object) -> None:
+        """Remember the read-back of the just-installed profile."""
+        self.last_profile_check = check
+        if hasattr(self, "_guide"):
+            self._guide.refresh()
 
     def _on_profile_install_direct_done(self, result: object) -> None:
         """Handle the background direct-install result on the GUI thread.
@@ -10167,6 +10185,9 @@ class MainWindow(BaseWindow):
             message_box.critical(self, APPNAME, str(result))
             return
         show_install_summary(self, APPNAME, result)
+        check = getattr(self, "last_profile_check", None)
+        if check is not None and not check.verified:
+            message_box.warning(self, APPNAME, lang.getstr(check.message_key))
 
     def _apply_lut3d_path(
         self, path: str | None = None, set_mr_sim_profile: bool = True

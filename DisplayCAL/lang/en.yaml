@@ -2931,3 +2931,13 @@
   HDR and SDR are different modes: a calibration made in one does not apply to the other, and an operating system in HDR mode may bypass the curves.
 "guide.limit.multi_display": |-
   With several monitors, each needs its own run, and the profile is tied to that monitor and that instrument.
+"guide.verify.match": |-
+  Verified: the profile active for this monitor is the one just installed.
+"guide.verify.mismatch": |-
+  The installation finished, but the system reports a different profile as active for this monitor. It is not confirmed as applied; check the system colour settings and try installing again.
+"guide.verify.none_active": |-
+  The installation finished, but the system reports no profile for this monitor. It is not confirmed as applied.
+"guide.verify.unreadable": |-
+  The profile could not be read back from the system, so its use for this monitor is not confirmed.
+"guide.ready.scan_failed": |-
+  Detecting the monitor and instrument failed.
