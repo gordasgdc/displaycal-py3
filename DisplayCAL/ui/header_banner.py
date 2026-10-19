@@ -9,8 +9,15 @@ instead of re-deriving it.
 
 from __future__ import annotations
 
-from qtpy.QtCore import Qt
-from qtpy.QtGui import QColor, QPainter, QPaintEvent, QPixmap
+from qtpy.QtCore import QRect, Qt
+from qtpy.QtGui import (
+    QColor,
+    QFont,
+    QLinearGradient,
+    QPainter,
+    QPaintEvent,
+    QPixmap,
+)
 from qtpy.QtWidgets import QWidget
 
 from DisplayCAL import config
@@ -72,38 +79,74 @@ def header_continuation_pixmap() -> QPixmap:
     return _crop_header_asset(HEADER_CONTINUATION_ORIGIN, HEADER_CONTINUATION_SIZE)
 
 
-class HeaderBanner(QWidget):
-    """The header banner: gradient background, wordmark bitmap and tagline.
+def brand_icon_pixmap(size: int = 128) -> QPixmap:
+    """Return the application icon (the approved symbol) at ``size`` px."""
+    path = config.get_data_path(f"theme/icons/{size}x{size}/displaycal.png")
+    return QPixmap(path) if path else QPixmap()
 
-    wx's ``BitmapBackgroundPanelText`` draws its bitmap and label directly in
-    one ``paintEvent``. A Qt equivalent built from overlapping sibling widgets
-    (an image ``QLabel`` plus a text ``QLabel`` stacked via ``QStackedLayout``)
-    turned out to be unreliable -- sibling stacking order in Qt is not simply
-    "first added wins" across widget kinds, so painting both explicitly here
-    is the direct, dependable option.
+
+#: Spectrum of the symbol's beam, used as a quiet hairline under the header.
+BRAND_SPECTRUM = ("#ff5a4d", "#ffb347", "#ffe14d", "#59f07a", "#4dc9ff", "#5a7bff")
+
+
+class HeaderBanner(QWidget):
+    """The brand header: the symbol, the wordmark and the tagline.
+
+    A neutral dark plate with the application symbol, "DisplayCAL" with the
+    "-CG" edition mark in the accent colour and a hairline carrying the beam
+    spectrum of the symbol. It deliberately has no photographic artwork, so it
+    reads cleanly in both light and dark system themes and never competes with
+    the settings below it. ``pixmap`` (the legacy wx wordmark bitmap) is kept in
+    the signature for compatibility and is no longer drawn.
     """
 
     def __init__(
         self, pixmap: QPixmap, tagline: str, inset: int, parent: QWidget | None = None
     ) -> None:
         super().__init__(parent)
-        self._pixmap = pixmap
         self._tagline = tagline
         self._inset = inset
-        # Qt only auto-enables style-sheet backgrounds for the literal
-        # QWidget class; a subclass with its own paintEvent needs this set
-        # explicitly or its "background: qlineargradient(...)" stylesheet
-        # never paints.
+        self._icon = brand_icon_pixmap(128)
         self.setAttribute(Qt.WA_StyledBackground, True)
 
-    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: D102 (Qt override)
-        super().paintEvent(event)
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: D102, N802
         painter = QPainter(self)
-        if not self._pixmap.isNull():
-            painter.drawPixmap(0, 0, self._pixmap)
-        painter.setPen(QColor("white"))
-        rect = self.rect().adjusted(self._inset, 0, -12, -10)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        rect = self.rect()
+        grad = QLinearGradient(0, 0, 0, rect.height())
+        grad.setColorAt(0, QColor("#1d1e22"))
+        grad.setColorAt(1, QColor("#121316"))
+        painter.fillRect(rect, grad)
+        # Symbol, vertically centred, left-aligned to the bar content below.
+        side = min(rect.height() - 8, 72)
+        if not self._icon.isNull():
+            icon_rect = QRect(14, (rect.height() - side) // 2, side, side)
+            painter.drawPixmap(icon_rect, self._icon)
+        text_x = max(self._inset, 14 + side + 12)
+        title = QFont(self.font())
+        title.setPointSizeF(title.pointSizeF() * 1.9)
+        title.setBold(True)
+        painter.setFont(title)
+        fm = painter.fontMetrics()
+        baseline = rect.height() // 2 - 2
+        painter.setPen(QColor("#f2f3f5"))
+        painter.drawText(text_x, baseline, "DisplayCAL")
+        painter.setPen(QColor("#ffb347"))
+        painter.drawText(text_x + fm.horizontalAdvance("DisplayCAL"), baseline, "-CG")
+        tag = QFont(self.font())
+        tag.setPointSizeF(tag.pointSizeF() * 0.95)
+        painter.setFont(tag)
+        painter.setPen(QColor(255, 255, 255, 165))
         painter.drawText(
-            rect, int(Qt.AlignLeft | Qt.AlignBottom | Qt.TextWordWrap), self._tagline
+            QRect(text_x, baseline + 6, rect.width() - text_x - 12, 20),
+            int(Qt.AlignLeft | Qt.AlignTop),
+            self._tagline,
         )
+        # Beam hairline.
+        line = QLinearGradient(0, 0, rect.width(), 0)
+        for i, hex_ in enumerate(BRAND_SPECTRUM):
+            line.setColorAt(i / (len(BRAND_SPECTRUM) - 1), QColor(hex_))
+        painter.setOpacity(0.9)
+        painter.fillRect(QRect(0, rect.height() - 2, rect.width(), 2), line)
         painter.end()

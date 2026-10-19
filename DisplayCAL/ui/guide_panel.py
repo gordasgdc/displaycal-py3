@@ -79,6 +79,11 @@ def _tokens() -> dict[str, QColor]:
     }
 
 
+def _m(text: str) -> str:
+    """Escape ``&`` so Qt buttons do not swallow it as a mnemonic marker."""
+    return text.replace("&", "&&")
+
+
 def _css(c: QColor) -> str:
     return f"rgba({c.red()},{c.green()},{c.blue()},{c.alpha() / 255:.2f})"
 
@@ -269,7 +274,7 @@ class GuidePanel(QWidget):
         title_box.addWidget(self.title)
         title_box.addWidget(self.subtitle)
         head.addLayout(title_box, 1)
-        self.advanced_btn = QPushButton(_tr("guide.advanced"))
+        self.advanced_btn = QPushButton(_m(_tr("guide.advanced")))
         self.advanced_btn.setFlat(True)
         self.advanced_btn.setCursor(Qt.PointingHandCursor)
         self.advanced_btn.clicked.connect(
@@ -329,7 +334,7 @@ class GuidePanel(QWidget):
         rl.setContentsMargins(14, 10, 14, 10)
         self.ready_label = _label("", bold=True)
         self.ready_actions = _label("")
-        self.rescan_btn = QPushButton(_tr("guide.s1.rescan"))
+        self.rescan_btn = QPushButton(_m(_tr("guide.s1.rescan")))
         self.rescan_btn.clicked.connect(
             self.window_ref.detect_displays_and_ports_btn_handler
         )
@@ -411,7 +416,7 @@ class GuidePanel(QWidget):
             gl.setContentsMargins(14, 10, 14, 10)
             gl.setSpacing(2)
             row = QHBoxLayout()
-            radio = QRadioButton(_tr(goal.title_key))
+            radio = QRadioButton(_m(_tr(goal.title_key)))
             f = radio.font()
             f.setBold(True)
             f.setPointSizeF(f.pointSizeF() * 1.1)
@@ -443,7 +448,7 @@ class GuidePanel(QWidget):
             pl = QVBoxLayout(card)
             pl.setContentsMargins(14, 10, 14, 10)
             pl.setSpacing(2)
-            cb = QCheckBox(_tr(item.title_key))
+            cb = QCheckBox(_m(_tr(item.title_key)))
             f = cb.font()
             f.setBold(True)
             cb.setFont(f)
@@ -487,7 +492,7 @@ class GuidePanel(QWidget):
         self.profile_name_label = _label("", muted=True)
         lay.addWidget(self.target_label)
         lay.addWidget(self.profile_name_label)
-        self.start_btn = QPushButton(_tr("guide.s4.start"))
+        self.start_btn = QPushButton(_m(_tr("guide.s4.start")))
         self.start_btn.setMinimumHeight(40)
         f = self.start_btn.font()
         f.setBold(True)
@@ -507,7 +512,7 @@ class GuidePanel(QWidget):
         self.verify_state = _label("")
         lay.addWidget(self.verify_state)
         row = QHBoxLayout()
-        verify = QPushButton(_tr("guide.s5.verify"))
+        verify = QPushButton(_m(_tr("guide.s5.verify")))
         verify.clicked.connect(lambda: self.window_ref._select_tab("verification"))
         row.addWidget(verify)
         row.addStretch(1)
@@ -642,7 +647,8 @@ class GuidePanel(QWidget):
         self._paint_measure_page(r)
         self._paint_finish_page()
         self.back_btn.setEnabled(self._step > 0)
-        self.next_btn.setVisible(self._step < STEPS - 1)
+        # Step 4 has its own primary action; there is nothing to "continue" to.
+        self.next_btn.setVisible(self._step < STEPS - 2)
         self.next_btn.setEnabled(self._can_advance())
         self.gate_label.setText(self._gate_message())
 
@@ -690,7 +696,7 @@ class GuidePanel(QWidget):
         if ident.family is not None and not ident.certain:
             chosen = self._model.get(ident.detected_name)
             for cand in ident.candidates:
-                rb = QRadioButton(cand)
+                rb = QRadioButton(_m(cand))
                 rb.setChecked(cand == chosen)
                 rb.toggled.connect(
                     lambda on, c=cand, n=ident.detected_name: (

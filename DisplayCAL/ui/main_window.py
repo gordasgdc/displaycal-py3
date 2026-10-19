@@ -1190,10 +1190,7 @@ class _HeaderPanelBar(QWidget):
 
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: D102 (Qt override)
         super().paintEvent(event)
-        if not self._continuation.isNull():
-            painter = QPainter(self)
-            painter.drawPixmap(0, 0, self._continuation)
-            painter.end()
+        # The legacy flare continuation is intentionally not painted any more.
 
 
 class _TabStack(QStackedWidget):
@@ -3372,11 +3369,6 @@ class MainWindow(BaseWindow):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        strip = QWidget()
-        strip.setFixedHeight(6)
-        strip.setStyleSheet("background-color: #66CC00;")
-        outer.addWidget(strip)
-
         # wx overlays the tagline directly on the banner bitmap (``get_header``,
         # white text near the bottom, starting at the same x as the "D" in the
         # wordmark); ``HeaderBanner`` paints both explicitly for the same
@@ -3386,14 +3378,10 @@ class MainWindow(BaseWindow):
             lang.getstr("header"),
             self._HEADER_LOGO_INSET,
         )
-        banner.setFixedHeight(HEADER_BANNER_SIZE[1])
+        banner.setFixedHeight(HEADER_BANNER_SIZE[1] + 12)
         # Matches the actual gradient sampled from ``theme/header@2x.png``: it
         # reaches its final blue by the vertical midpoint and stays flat below
         # that (a plain 2-stop linear gradient over-darkens the top half).
-        banner.setStyleSheet(
-            "background: qlineargradient(x1:0, y1:0, x2:0, y2:1,"
-            " stop:0 #093d75, stop:0.5 #0e59a9, stop:1 #0e59a9);"
-        )
         outer.addWidget(banner)
 
         bar = _HeaderPanelBar()
@@ -3403,7 +3391,7 @@ class MainWindow(BaseWindow):
         # widget forces Qt to draw its children (like the combo box below) via
         # the CSS style engine instead of the native one, losing the native
         # chevron / popup chrome the rest of the app's combo boxes keep.
-        bar.setStyleSheet("QWidget#headerpanel { background-color: #0e59a9; }")
+        bar.setStyleSheet("QWidget#headerpanel { background-color: #17181b; }")
         bar_row = QHBoxLayout(bar)
         bar_row.setContentsMargins(self._HEADER_LOGO_INSET, 8, 16, 8)
         bar_row.setSpacing(8)
