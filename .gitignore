@@ -26,3 +26,6 @@ main.py
 VERSION
 # Stare de lucru internă (Regula 50), doar local
 PROJECT_STATE.md
+
+# macOS folder-icon marker files ("Icon" + CR): invalid path names on Windows
+Icon?
