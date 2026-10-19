@@ -485,7 +485,15 @@ def test_detect_displays_and_ports_btn_refreshes_controls(window, monkeypatch):
         lambda *a, **k: calls.append(True),
     )
     window.detect_displays_and_ports_btn.click()
+    # The rescan runs on a background thread; wait for it to be applied.
+    deadline = time.time() + 5
+    while window._busy and time.time() < deadline:
+        from qtpy.QtWidgets import QApplication
+
+        QApplication.processEvents()
+        time.sleep(0.01)
     assert calls == [True]
+    assert not window._busy
 
 
 def test_measurement_mode_ctrl_populates_and_persists(window):
@@ -700,6 +708,7 @@ def test_colorimeter_correction_matrix_ctrl_hidden_when_ccxx_unsupported(window)
 def test_colorimeter_correction_matrix_ctrl_shown_when_ccxx_supported(window):
     window.worker.argyll_version = [1, 5, 0]
     window.update_colorimeter_correction_matrix_ctrl()
+    window._select_tab("display_instrument")  # the guide tab is shown first
     assert window.colorimeter_correction_matrix_ctrl.isVisibleTo(window) is True
 
 

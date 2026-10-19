@@ -150,3 +150,37 @@ def test_finish_page_without_profile_says_so(guide):
     guide.refresh()
     assert guide.profile_state.text()
     assert "guide." not in guide.profile_state.text()
+
+
+def test_rescan_is_asynchronous_and_single_flight(window, monkeypatch):
+    import threading
+    import time
+
+    started = []
+    gate = threading.Event()
+
+    def slow(self, *a, **k):
+        started.append(1)
+        gate.wait(5)
+        self.displays = ["D1"]
+        self.instruments = ["ColorHug2"]
+
+    monkeypatch.setattr(type(window.worker), "enumerate_displays_and_ports", slow)
+    window.detect_displays_and_ports_btn_handler()
+    assert window._busy
+    # A second request while one runs must not start another scan.
+    window.detect_displays_and_ports_btn_handler()
+    window.detect_displays_and_ports_btn_handler()
+    assert not window.detect_displays_and_ports_btn.isEnabled()
+    gate.set()
+    deadline = time.time() + 5
+    while window._busy and time.time() < deadline:
+        window.window().repaint()
+        from qtpy.QtWidgets import QApplication
+
+        QApplication.processEvents()
+        time.sleep(0.01)
+    assert not window._busy
+    assert started == [1]
+    assert window.display_ctrl.count() == 1
+    assert window.detect_displays_and_ports_btn.isEnabled()

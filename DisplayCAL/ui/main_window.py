@@ -424,6 +424,29 @@ class _MeasureframeSubprocessThread(QThread):
         self.process = process
 
 
+class _RescanThread(QThread):
+    """Run :meth:`Worker.enumerate_displays_and_ports` off the GUI thread.
+
+    Detection spawns Argyll processes and can take seconds (or hang on a bad
+    USB state); it must never freeze the window nor be started twice at once.
+    """
+
+    #: Emitted with ``None`` on success or the ``Exception`` raised.
+    done = Signal(object)
+
+    def __init__(self, worker: Worker, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._worker = worker
+
+    def run(self) -> None:  # noqa: D102 (QThread override)
+        try:
+            self._worker.enumerate_displays_and_ports(silent=True)
+        except Exception as exception:  # noqa: BLE001  (report on GUI thread)
+            self.done.emit(exception)
+            return
+        self.done.emit(None)
+
+
 class _ProfileInstallThread(QThread):
     """Run :meth:`Worker.install_profile` off the GUI thread.
 
@@ -1280,6 +1303,9 @@ class MainWindow(BaseWindow):
         self.flow = MeasurementFlow()
         #: Guards config-writing handlers while controls are repopulated.
         self._updating = False
+        #: A background rescan of displays/instruments is running.
+        self._busy = False
+        self._rescan_error: Exception | None = None
         #: Set right before an internal (non-user) ``profile_type_ctrl``
         #: change, so :meth:`_profile_type_ctrl_changed` can skip the
         #: CCXX-testchart-recommendation dialog for it -- mirrors wx passing
@@ -6105,14 +6131,28 @@ class MainWindow(BaseWindow):
             self.display_lut_link_ctrl.setIcon(pixmap)
 
     def detect_displays_and_ports_btn_handler(self) -> None:
-        """Re-enumerate displays/instruments and refresh every bound control.
+        """Re-enumerate displays/instruments without blocking the window.
 
-        A synchronous simplification of wx's ``check_update_controls`` (which
-        drives the same worker call through a progress dialog on a background
-        thread); the full worker-driven Argyll execution path is a later
-        slice (see the module docstring).
+        Single-flight: a second request while a scan runs is ignored, so
+        repeated clicks (or a guide refresh) never start repeated Argyll
+        processes. Controls refresh when the scan finishes.
         """
-        self.worker.enumerate_displays_and_ports(silent=True)
+        if self._busy:
+            return
+        self._busy = True
+        self._rescan_error: Exception | None = None
+        self.detect_displays_and_ports_btn.setEnabled(False)
+        self._rescan_thread = _RescanThread(self.worker, self)
+        self._rescan_thread.done.connect(self._on_rescan_done)
+        self._rescan_thread.start()
+        if hasattr(self, "_guide"):
+            self._guide.refresh()
+
+    def _on_rescan_done(self, result: object) -> None:
+        """Apply the result of a background rescan on the GUI thread."""
+        self._busy = False
+        self._rescan_error = result if isinstance(result, Exception) else None
+        self.detect_displays_and_ports_btn.setEnabled(True)
         self.update_controls()
 
     def get_measurement_mode(self) -> str | None:
