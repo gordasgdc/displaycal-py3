@@ -482,7 +482,9 @@ class _ProfileInstallThread(QThread):
             # A finished install is not a verified one: read back what the
             # system now reports as active for this display.
             self.checked.emit(
-                verify_active_profile(self._profile_path, getcfg("display.number") - 1)
+                verify_active_profile(
+                    self._profile_path, max(getcfg("display.number") - 1, 0)
+                )
             )
         self.done.emit(result)
 
