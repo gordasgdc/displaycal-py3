@@ -31,6 +31,7 @@ from qtpy.QtWidgets import (
 )
 
 from DisplayCAL import config
+from DisplayCAL.ui import text_scale
 from DisplayCAL import display_lookup as dl
 from DisplayCAL import localization as lang
 from DisplayCAL.ui.support_dialog import open_url
@@ -197,7 +198,7 @@ def lookup_button(
     entry_getter: Callable[[], str] | None = None,
 ) -> QPushButton:
     """The visible entry point: a flat button that opens the lookup dialog."""
-    btn = QPushButton(_tr("lookup.link"))
+    btn = text_scale.WrapPushButton(_tr("lookup.link"))
     btn.setFlat(True)
     btn.setCursor(Qt.PointingHandCursor)
     btn.setStyleSheet("QPushButton { text-align: left; text-decoration: underline; }")

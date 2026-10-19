@@ -304,7 +304,9 @@ class GuidePanel(QWidget):
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
             scroll.setFrameShape(QFrame.NoFrame)
-            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            # Reflow first; a bar only appears if a window is narrower than any
+            # wording can wrap into, so nothing is ever cut off.
+            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
             holder = QWidget()
             lay = QVBoxLayout(holder)
             lay.setContentsMargins(0, 0, 6, 0)
@@ -354,6 +356,9 @@ class GuidePanel(QWidget):
         self.instrument_combo = QComboBox()
         self.mode_combo = QComboBox()
         for combo in (self.monitor_combo, self.instrument_combo, self.mode_combo):
+            # Long monitor/instrument names are elided, not a reason to widen the page.
+            combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+            combo.setMinimumContentsLength(14)
             text_scale.set_scaled_font(combo, 1.15)
             text_scale.set_min_height(combo, 34)
         ll.addWidget(_label(_tr("guide.s1.monitor"), size=1.05, muted=True))
@@ -370,6 +375,8 @@ class GuidePanel(QWidget):
         mb.setSpacing(3)
         mb.addWidget(_label(_tr("guide.s1.model_pick"), size=1.0, muted=True))
         self.model_combo = QComboBox()
+        self.model_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.model_combo.setMinimumContentsLength(14)
         text_scale.set_min_height(self.model_combo, 30)
         self.model_combo.currentIndexChanged.connect(self._model_changed)
         mb.addWidget(self.model_combo)
@@ -394,6 +401,9 @@ class GuidePanel(QWidget):
         hl.setSpacing(4)
         self.illustration = QLabel()
         self.illustration.setAlignment(Qt.AlignCenter)
+        # Decorative: it may be cropped in a narrow window but must never be the
+        # reason the whole page needs sideways scrolling.
+        self.illustration.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         hl.addWidget(self.illustration)
         self.illustration_caption = _label("", size=0.9, muted=True)
         self.illustration_caption.setAlignment(Qt.AlignCenter)
@@ -540,10 +550,21 @@ class GuidePanel(QWidget):
         self.block_combo = self.plan_widget.block_combo
         lay.addWidget(self.plan_widget)
         # Unattended running: say what is held and what is not.
-        self.awake_cb = QCheckBox(_m(_tr("awake.keep")))
+        # The label wraps (a QCheckBox's own text cannot), so a long translation
+        # never forces the page wider; the label toggles the box like its own text.
+        self.awake_cb = QCheckBox()
+        self.awake_cb.setAccessibleName(_tr("awake.keep"))
         self.awake_cb.setChecked(bool(getcfg("session.keep_awake")))
         self.awake_cb.toggled.connect(lambda on: setcfg("session.keep_awake", int(on)))
-        lay.addWidget(self.awake_cb)
+        awake_row = QHBoxLayout()
+        awake_row.setContentsMargins(0, 0, 0, 0)
+        awake_row.addWidget(self.awake_cb, 0, Qt.AlignTop)
+        awake_label = _label(_tr("awake.keep"), size=1.0)
+        awake_label.setTextInteractionFlags(Qt.NoTextInteraction)
+        awake_label.mousePressEvent = lambda _e: self.awake_cb.toggle()
+        awake_label.setCursor(Qt.PointingHandCursor)
+        awake_row.addWidget(awake_label, 1)
+        lay.addLayout(awake_row)
         self.awake_note = _label("", muted=True)
         lay.addWidget(self.awake_note)
         # What each choice means: the four separate topics, expandable.
@@ -819,6 +840,7 @@ class GuidePanel(QWidget):
         self.next_btn.setVisible(self._step < STEPS - 2)
         self.next_btn.setEnabled(self._can_advance())
         self.gate_label.setText(self._gate_message())
+        self.relayout_page()
 
     def _paint_readiness(self, r: gm.Readiness) -> None:
         t = _tokens()
@@ -833,6 +855,12 @@ class GuidePanel(QWidget):
         )
 
     def _paint_identification(self, ident: ic.Identification | None) -> None:
+        self._paint_identification_now(ident)
+        # The model question appears/disappears and its text changes: have the
+        # page recompute wrapped heights so no line is covered by the next control.
+        self.relayout_page()
+
+    def _paint_identification_now(self, ident: ic.Identification | None) -> None:
         w = self.window_ref
         mode = self.mode_combo.currentText()
         self._syncing = True

@@ -20,7 +20,8 @@ from __future__ import annotations
 
 from qtpy.QtCore import QObject, Signal
 from qtpy.QtGui import QColor, QFont, QFontDatabase
-from qtpy.QtWidgets import QApplication, QWidget
+from qtpy.QtCore import QSize
+from qtpy.QtWidgets import QApplication, QLabel, QPushButton, QSizePolicy, QWidget
 
 from DisplayCAL import config
 
@@ -152,6 +153,80 @@ def chars_px(widget: QWidget, chars: int) -> int:
     if mult:
         font.setPointSizeF(font.pointSizeF() * float(mult))
     return QFontMetrics(font).averageCharWidth() * chars
+
+
+class WrapLabel(QLabel):
+    """A wrapping label whose height follows its REAL (width-limited) width.
+
+    A layout asks ``heightForWidth`` with the whole column width, but a label
+    limited to a comfortable reading width is then given less: with the plain
+    ``QLabel`` the extra lines are counted nowhere and the next control covers
+    them (seen on Windows). Clamping to the maximum width keeps both in step.
+    """
+
+    def heightForWidth(self, w: int) -> int:  # noqa: N802
+        return super().heightForWidth(min(w, self.maximumWidth()))
+
+
+class WrapPushButton(QPushButton):
+    """A flat text button that wraps onto several lines instead of widening the page."""
+
+    _PAD_X, _PAD_Y = 24, 14
+
+    def __init__(self, text: str = "") -> None:
+        super().__init__()
+        self._full = text
+        super().setText(text)
+        policy = self.sizePolicy()
+        policy.setHorizontalPolicy(QSizePolicy.Preferred)  # not "its text must fit"
+        policy.setHeightForWidth(True)
+        self.setSizePolicy(policy)
+
+    def text(self) -> str:
+        return self._full
+
+    def setText(self, text: str) -> None:  # noqa: N802
+        self._full = text
+        self._rewrap(self.width())
+
+    def _lines(self, width: int) -> list[str]:
+        fm = self.fontMetrics()
+        room = max(width - self._PAD_X, 40)
+        lines: list[str] = []
+        cur = ""
+        for word in self._full.split():
+            trial = f"{cur} {word}".strip()
+            if cur and fm.horizontalAdvance(trial) > room:
+                lines.append(cur)
+                cur = word
+            else:
+                cur = trial
+        lines.append(cur)
+        return lines
+
+    def _rewrap(self, width: int) -> None:
+        shown = "\n".join(self._lines(width)) if width > 0 else self._full
+        if shown != super().text():
+            super().setText(shown)
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802
+        return True
+
+    def heightForWidth(self, width: int) -> int:  # noqa: N802
+        return len(self._lines(width)) * self.fontMetrics().lineSpacing() + self._PAD_Y
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        fm = self.fontMetrics()
+        return QSize(fm.horizontalAdvance(self._full) + self._PAD_X, fm.lineSpacing() + self._PAD_Y)
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        fm = self.fontMetrics()
+        longest = max((fm.horizontalAdvance(w) for w in self._full.split()), default=0)
+        return QSize(longest + self._PAD_X, fm.lineSpacing() + self._PAD_Y)
+
+    def resizeEvent(self, event: object) -> None:  # noqa: N802
+        self._rewrap(self.width())
+        super().resizeEvent(event)
 
 
 def limit_reading_width(label: QWidget, chars: int = READING_CHARS) -> None:

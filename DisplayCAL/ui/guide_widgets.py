@@ -127,7 +127,7 @@ def label(
     wrap: bool = True,
 ) -> QLabel:
     """Return a word-wrapped plain-text label with optional size/weight/tone."""
-    lab = QLabel(text)
+    lab = text_scale.WrapLabel(text)
     lab.setWordWrap(wrap)
     text_scale.set_scaled_font(lab, size, bold)
     lab.setTextFormat(Qt.PlainText)

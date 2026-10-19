@@ -123,3 +123,88 @@ def test_guided_footer_stays_on_screen_in_a_modest_window(window, level):
     bottom = g.next_btn.mapTo(window, QPoint(0, g.next_btn.height())).y()
     assert bottom <= window.height(), (level, bottom, window.height())
     assert window._scroll_area.verticalScrollBar().maximum() == 0
+
+
+@pytest.mark.parametrize("level", ["normal", "xlarge"])
+def test_model_question_is_never_covered_by_the_selector_below(window, level):
+    """A wrapped label shown late keeps its full height (seen on Windows)."""
+    from qtpy.QtWidgets import QLabel
+
+    window.resize(766, 864)
+    window.show()
+    window._select_tab("guide")
+    ts.apply(level)
+    for _ in range(4):
+        QApplication.processEvents()
+    g = window._guide
+    g.refresh()
+    for _ in range(4):
+        QApplication.processEvents()
+    if not g.model_box.isVisible():
+        pytest.skip("this instrument does not ask for a model")
+    label = g.model_box.findChild(QLabel)
+    assert label.height() >= label.heightForWidth(label.width())
+    assert label.geometry().bottom() < g.model_combo.geometry().top()
+
+
+def test_limited_width_label_counts_the_lines_it_really_gets(qapp):
+    """The layout's height for a wide column must equal the height at the real width."""
+    text = "word " * 120
+    lab = ts.WrapLabel(text)
+    lab.setWordWrap(True)
+    lab.setMaximumWidth(300)
+    assert lab.heightForWidth(900) == lab.heightForWidth(300)
+    plain = QLabel(text)
+    plain.setWordWrap(True)
+    plain.setMaximumWidth(300)
+    assert plain.heightForWidth(900) < lab.heightForWidth(900)  # the old, too small answer
+
+
+@pytest.mark.parametrize("level", ["normal", "large", "xlarge"])
+def test_measurement_plan_fits_a_modest_window_at_any_text_size(window, level, monkeypatch):
+    """Nothing on the Măsurare page is cut off at the right edge (seen at XL on macOS)."""
+    from qtpy.QtCore import QPoint
+
+    monkeypatch.setattr(window.worker, "blocks_supported", lambda: (True, ""), raising=False)
+    window.resize(766, 864)
+    window.show()
+    window._select_tab("guide")
+    ts.apply(level)
+    window.testchart_patches_amount.setText("11140")
+    config.setcfg("measurement.block_size", 500)
+    g = window._guide
+    g._reached = 4
+    g.go(3)
+    g.refresh()
+    for _ in range(6):
+        QApplication.processEvents()
+    window._pin_stack_size_to_current_tab()
+    for _ in range(3):
+        QApplication.processEvents()
+    scroll = g.pages.currentWidget()
+    limit = scroll.viewport().width()
+    pw = g.plan_widget
+    for w in (pw.chart_menu_btn, pw.block_combo, pw.total_label, pw.summary, pw.time):
+        right = w.mapTo(scroll.viewport(), QPoint(w.width(), 0)).x()
+        assert right <= limit + 1, (level, w, right, limit)
+    config.setcfg("measurement.block_size", 0)
+
+
+@pytest.mark.parametrize("step", [0, 1, 2, 3, 4])
+def test_no_guided_page_needs_sideways_scrolling_at_the_largest_text(window, step, monkeypatch):
+    monkeypatch.setattr(window.worker, "blocks_supported", lambda: (True, ""), raising=False)
+    window.resize(766, 864)
+    window.show()
+    window._select_tab("guide")
+    ts.apply("xlarge")
+    g = window._guide
+    g._reached = 4
+    g.go(step)
+    g.refresh()
+    for _ in range(6):
+        QApplication.processEvents()
+    window._pin_stack_size_to_current_tab()
+    for _ in range(3):
+        QApplication.processEvents()
+    bar = g.pages.currentWidget().horizontalScrollBar()
+    assert bar.maximum() == 0, (step, bar.maximum())
