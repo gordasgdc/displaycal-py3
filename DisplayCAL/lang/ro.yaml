@@ -2686,3 +2686,248 @@
   Galben XYZ
 "yes": |-
   Da
+# --- guide.* (guided workflow, DisplayCAL-CG) ---
+"guide.tab": |-
+  Ghid
+"guide.title": |-
+  Calibrare ghidată
+"guide.subtitle": |-
+  De la un instrument conectat la un profil verificat, în cinci pași. Toate opțiunile avansate rămân disponibile în celelalte file.
+"guide.advanced": |-
+  Setări avansate
+"guide.back": |-
+  Înapoi
+"guide.next": |-
+  Continuă
+"guide.step.1": |-
+  Monitor și instrument
+"guide.step.2": |-
+  Obiectivul tău
+"guide.step.3": |-
+  Pregătire
+"guide.step.4": |-
+  Măsurare
+"guide.step.5": |-
+  Instalare și verificare
+"guide.s1.title": |-
+  Ce monitor, ce instrument
+"guide.s1.monitor": |-
+  Monitorul de calibrat
+"guide.s1.instrument": |-
+  Instrument
+"guide.s1.mode": |-
+  Mod de măsurare
+"guide.s1.correction": |-
+  Corecția instrumentului
+"guide.s1.rescan": |-
+  Rescanează
+"guide.s1.detected_as": |-
+  Detectat ca: %s
+"guide.s1.confirm_model": |-
+  Mai multe produse folosesc acest identificator, deci modelul exact nu poate fi citit de la instrument. Alege-l pe cel pe care îl ai (schimbă doar ajutorul afișat aici, nu măsurarea):
+"guide.s1.model_unconfirmed": |-
+  Model neconfirmat
+"guide.s1.unknown": |-
+  Instrument absent din catalogul ghidului. Este folosit sub numele raportat de motor; nu se afișează imagine de model și nu se presupune nimic despre el.
+"guide.s1.none": |-
+  Niciun instrument selectat
+"guide.s1.shared_usb": |-
+  Identificatorul USB al acestui instrument este folosit și de: %s.
+"guide.s1.spectro_note": |-
+  Spectrofotometrele măsoară direct spectrul ecranului și nu au nevoie de corecție de colorimetru.
+"guide.s1.correction_none": |-
+  Nicio corecție selectată. Un colorimetru este mai precis cu o corecție potrivită tipului de panou (vezi fila Display și instrument).
+"guide.s1.correction_set": |-
+  Folosită: %s
+"guide.s1.mode_current": |-
+  Mod: %s
+"guide.ready.ok": |-
+  Gata: monitor și instrument detectate.
+"guide.ready.busy": |-
+  O măsurare sau o scanare este în curs.
+"guide.ready.no_argyll": |-
+  Motorul de măsurare (ArgyllCMS) nu a fost găsit.
+"guide.ready.no_display": |-
+  Nu a fost detectat niciun monitor.
+"guide.ready.no_instrument": |-
+  Nu a fost detectat niciun instrument.
+"guide.action.install_argyll": |-
+  Descarcă ArgyllCMS (meniul Ajutor → Caută actualizări)
+"guide.action.choose_argyll": |-
+  Sau alege un folder ArgyllCMS existent în Opțiuni → Director executabile ArgyllCMS.
+"guide.action.rescan": |-
+  Apasă „Rescanează”.
+"guide.action.reconnect": |-
+  Scoate instrumentul, așteaptă câteva secunde și conectează-l din nou, direct la computer (nu printr-un hub).
+"guide.action.check_permission": |-
+  Închide alt software de culoare care poate ține instrumentul ocupat și verifică dacă accesul USB este permis acestei aplicații.
+"guide.place.title": |-
+  Poziționează instrumentul
+"guide.place.calibrate_first": |-
+  Când ți se cere, calibrează instrumentul pe placa de referință sau pe suportul lui, înainte să-l pui pe ecran.
+"guide.place.colorimeter.flat": |-
+  Pune senzorul plat pe ecran, cu fața spre ecran, cu cablul scos din calea lui.
+"guide.place.colorimeter.counterweight": |-
+  Folosește contragreutatea (sau ventuzele, dacă modelul le are) ca instrumentul să nu se încline.
+"guide.place.colorimeter.center": |-
+  Centrează-l pe pătratul arătat de fereastra de măsurare; nu-l muta pe durata rulării.
+"guide.place.spectro.display_position": |-
+  Pune instrumentul în poziția de display (emisie), conform instrucțiunilor de pe ecran.
+"guide.place.spectro_pen.emission": |-
+  Montează suportul sau adaptorul de display (emisie) și sprijină instrumentul plat pe ecran.
+"guide.place.spectro.center": |-
+  Centrează-l pe pătratul arătat de fereastra de măsurare și ține-l nemișcat.
+"guide.place.generic": |-
+  Urmează instrucțiunile de poziționare ale producătorului instrumentului.
+"guide.place.screensaver_off": |-
+  Asigură-te că ecranul nu se poate reduce în luminozitate, bloca sau porni un screen saver în timpul rulării.
+"guide.place.accessories": |-
+  Ține la îndemână: %s
+"guide.acc.counterweight": |-
+  contragreutate
+"guide.acc.ambient_diffuser": |-
+  difuzor ambiental încorporat
+"guide.acc.suction_cups": |-
+  ventuze
+"guide.acc.calibration_cover": |-
+  capac de calibrare
+"guide.acc.reference_tile": |-
+  suport de calibrare / placă de referință
+"guide.acc.ambient_head": |-
+  cap pentru lumină ambientală
+"guide.acc.emission_holder": |-
+  suport sau adaptor de display (emisie)
+"guide.acc.calibration_cap": |-
+  capac de calibrare (referință de întuneric)
+"guide.illustration_note": |-
+  Ilustrație, nu fotografia modelului tău.
+"guide.s2.title": |-
+  Pentru ce folosești acest monitor?
+"guide.s2.hint": |-
+  Nu există o țintă unică și cea mai bună. Alege folosința cea mai apropiată; fiecare valoare poate fi schimbată ulterior în fila Calibrare.
+"guide.s2.suggested": |-
+  Sugerat pentru acest monitor
+"guide.s2.applied": |-
+  Presetare încărcată: %s
+"guide.s2.not_found": |-
+  Presetarea pentru acest obiectiv nu a fost găsită; ajustează valorile în fila Calibrare.
+"guide.s2.builtin_note": |-
+  Pare un panou încorporat. Ecranele încorporate se calibrează de obicei pentru uz general; controalele hardware sunt adesea limitate.
+"guide.goal.photo": |-
+  Foto și grafică
+"guide.goal.photo.info": |-
+  Punct alb 5000 K, gamma 2.2, calitate medie de calibrare. Potrivit pentru potrivirea cu printuri privite în lumină controlată.
+"guide.goal.video": |-
+  Video și corecție de culoare
+"guide.goal.video.info": |-
+  Punct alb D65, gamma 2.4, calitate medie de calibrare. Punct de plecare pentru conținut Rec. 709 în mediu slab luminat.
+"guide.goal.office_web": |-
+  Birou și web
+"guide.goal.office_web.info": |-
+  Punct alb 6500 K, gamma 2.2, calibrare rapidă. Alegere generală bună pentru ecrane folosite pe web.
+"guide.goal.laptop": |-
+  Laptop / ecran încorporat
+"guide.goal.laptop.info": |-
+  Punct alb nativ, gamma 2.2, fără pasul de reglare manuală hardware. Pentru panouri cu puține controale sau fără.
+"guide.goal.srgb": |-
+  Conținut sRGB
+"guide.goal.srgb.info": |-
+  Punct alb D65 și curba sRGB, calibrare rapidă. Pentru lucru destinat standardului sRGB.
+"guide.goal.softproof": |-
+  Soft-proofing
+"guide.goal.softproof.info": |-
+  Punct alb 5800 K, 160 cd/m², curbă L*, calitate medie. Potrivește ecranul cu hârtia sub o cabină de vizualizare.
+"guide.s3.title": |-
+  Pregătește monitorul și camera
+"guide.s3.hint": |-
+  Elementele obligatorii influențează rezultatul; cele recomandate îmbunătățesc repetabilitatea. Bifează-le pe parcurs.
+"guide.s3.required": |-
+  Obligatoriu
+"guide.s3.recommended": |-
+  Recomandat
+"guide.s3.missing": |-
+  Bifează elementele obligatorii ca să continui.
+"guide.prep.warmup": |-
+  Lasă monitorul să se încălzească aproximativ 30 de minute
+"guide.prep.warmup.info": |-
+  Luminozitatea și culoarea derivă cât timp panoul se încălzește; o măsurare la rece include această derivă în profil.
+"guide.prep.reset": |-
+  Pune monitorul într-un mod de imagine neutru
+"guide.prep.reset.info": |-
+  Folosește modul standard/din fabrică sau „nativ”; dezactivează contrastul dinamic, claritatea și îmbunătățirile de culoare.
+"guide.prep.auto": |-
+  Oprește luminozitatea și temperatura de culoare automate
+"guide.prep.auto.info": |-
+  Senzorii de lumină ambientală, Night Shift, True Tone și instrumentele tip f.lux schimbă imaginea în timpul rulării.
+"guide.prep.ambient": |-
+  Reduce lumina parazită și evită reflexiile pe ecran
+"guide.prep.ambient.info": |-
+  O lumină stabilă și moderată în cameră dă rezultate care se potrivesc cu felul în care vei lucra de fapt.
+"guide.prep.screensaver": |-
+  Împiedică repausul, reducerea luminozității și screen saverul
+"guide.prep.screensaver.info": |-
+  Un ecran care se reduce în luminozitate sau se blochează în mijlocul rulării invalidează măsurătorile.
+"guide.prep.probe": |-
+  Ține instrumentul pregătit pentru a fi pus pe ecran
+"guide.prep.probe.info": |-
+  Vezi pașii de poziționare din dreapta. Fereastra următoare arată locul exact.
+"guide.s4.title": |-
+  Calibrează și măsoară
+"guide.s4.intro": |-
+  Rularea are aceste etape. Poți opri sau anula; nu se instalează nimic până la final.
+"guide.s4.stage.adjust": |-
+  Reglează interactiv controalele monitorului (dacă are)
+"guide.s4.stage.calibrate": |-
+  Calibrare: motorul măsoară și corectează echilibrul de gri și curba de tonuri
+"guide.s4.stage.profile": |-
+  Profilare: se măsoară un set de patch-uri de culoare pentru a descrie ecranul
+"guide.s4.stage.build": |-
+  Profilul ICC este calculat din măsurători
+"guide.s4.patches": |-
+  Cât timp sunt afișate patch-urile, ecranul rămâne neutru: nu se aplică efecte, transparență sau suprapuneri peste ele.
+"guide.s4.start": |-
+  Pornește calibrarea și profilarea
+"guide.s4.blocked": |-
+  Nu se poate porni încă
+"guide.s4.settings_summary": |-
+  Ținta curentă: %s
+"guide.s4.profile_name": |-
+  Numele profilului: %s
+"guide.s5.title": |-
+  Instalează și verifică
+"guide.s5.intro": |-
+  O rulare este reușită doar când profilul există, este instalat pentru acest monitor și trece verificarea. Simpla terminare a unui proces nu dovedește nimic din acestea.
+"guide.s5.current_profile": |-
+  Profilul activ acum pentru acest monitor: %s
+"guide.s5.no_profile": |-
+  Niciun profil nu este instalat încă pentru acest monitor.
+"guide.s5.verify": |-
+  Deschide setările de verificare
+"guide.s5.install": |-
+  Deschide instalarea profilului
+"guide.s5.what_is": |-
+  Ce este fiecare
+"guide.s5.limits": |-
+  Limite de reținut
+"guide.concept.calibration": |-
+  Calibrare
+"guide.concept.calibration.info": |-
+  Ajustează comportamentul monitorului în sine (luminozitate, punct alb, curbă de tonuri), prin controalele lui și prin curbele plăcii video.
+"guide.concept.profile": |-
+  Profil ICC
+"guide.concept.profile.info": |-
+  Descrie culorile pe care le afișează monitorul calibrat. Aplicațiile cu management de culoare îl folosesc; nu schimbă singur ecranul.
+"guide.concept.curves": |-
+  Încărcarea curbelor
+"guide.concept.curves.info": |-
+  Curbele de calibrare (vcgt) trebuie încărcate în placa video la autentificare pentru ca ele să se aplice în tot sistemul.
+"guide.concept.lut3d": |-
+  LUT 3D
+"guide.concept.lut3d.info": |-
+  O corecție opțională pentru playere video și instrumente de corecție de culoare care nu folosesc profiluri ICC. Se creează separat, dintr-un profil terminat.
+"guide.limit.color_management": |-
+  Aplicațiile fără management de culoare ignoră profilul ICC; ajung la ele doar curbele de calibrare.
+"guide.limit.hdr": |-
+  HDR și SDR sunt moduri diferite: o calibrare făcută într-unul nu se aplică celuilalt, iar un sistem de operare în mod HDR poate ocoli curbele.
+"guide.limit.multi_display": |-
+  Cu mai multe monitoare, fiecare are nevoie de propria rulare, iar profilul este legat de acel monitor și de acel instrument.

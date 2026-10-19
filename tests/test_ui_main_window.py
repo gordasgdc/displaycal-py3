@@ -333,6 +333,7 @@ def window(qapp, stub_worker):
 
 def test_tabs_present(window):
     assert list(window._tab_buttons) == [
+        "guide",
         "display_instrument",
         "calibration",
         "profiling",

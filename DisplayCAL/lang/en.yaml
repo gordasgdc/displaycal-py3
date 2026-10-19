@@ -2686,3 +2686,248 @@
   Yellow XYZ
 "yes": |-
   Yes
+# --- guide.* (guided workflow, DisplayCAL-CG) ---
+"guide.tab": |-
+  Guide
+"guide.title": |-
+  Guided calibration
+"guide.subtitle": |-
+  From a connected instrument to a verified profile in five steps. Every advanced option stays available in the other tabs.
+"guide.advanced": |-
+  Advanced settings
+"guide.back": |-
+  Back
+"guide.next": |-
+  Continue
+"guide.step.1": |-
+  Monitor & instrument
+"guide.step.2": |-
+  Your goal
+"guide.step.3": |-
+  Preparation
+"guide.step.4": |-
+  Measure
+"guide.step.5": |-
+  Install & verify
+"guide.s1.title": |-
+  Which monitor, which instrument
+"guide.s1.monitor": |-
+  Monitor to calibrate
+"guide.s1.instrument": |-
+  Instrument
+"guide.s1.mode": |-
+  Measurement mode
+"guide.s1.correction": |-
+  Instrument correction
+"guide.s1.rescan": |-
+  Rescan
+"guide.s1.detected_as": |-
+  Detected as: %s
+"guide.s1.confirm_model": |-
+  Several products share this identifier, so the exact model cannot be read from the instrument. Choose the one you own (this only changes the help shown here, not the measurement):
+"guide.s1.model_unconfirmed": |-
+  Model not confirmed
+"guide.s1.unknown": |-
+  Instrument not in the guide catalogue. It is used under the name reported by the engine; no model picture is shown and nothing is assumed about it.
+"guide.s1.none": |-
+  No instrument selected
+"guide.s1.shared_usb": |-
+  The USB identifier of this instrument is also used by: %s.
+"guide.s1.spectro_note": |-
+  Spectrophotometers measure the display spectrum directly and do not need a colorimeter correction.
+"guide.s1.correction_none": |-
+  No correction selected. A colorimeter is more accurate with a correction that matches your panel type (see the Display & Instrument tab).
+"guide.s1.correction_set": |-
+  Using: %s
+"guide.s1.mode_current": |-
+  Mode: %s
+"guide.ready.ok": |-
+  Ready: monitor and instrument detected.
+"guide.ready.busy": |-
+  A measurement or a scan is running.
+"guide.ready.no_argyll": |-
+  The measurement engine (ArgyllCMS) was not found.
+"guide.ready.no_display": |-
+  No monitor was detected.
+"guide.ready.no_instrument": |-
+  No instrument was detected.
+"guide.action.install_argyll": |-
+  Download ArgyllCMS (Help menu → Check for updates)
+"guide.action.choose_argyll": |-
+  Or choose an existing ArgyllCMS folder in Options → Set ArgyllCMS executable directory.
+"guide.action.rescan": |-
+  Press “Rescan”.
+"guide.action.reconnect": |-
+  Unplug the instrument, wait a few seconds and plug it in again, directly into the computer (not through a hub).
+"guide.action.check_permission": |-
+  Close other colour software that may hold the instrument and check that USB access is allowed for this application.
+"guide.place.title": |-
+  Place the instrument
+"guide.place.calibrate_first": |-
+  When asked, calibrate the instrument on its reference tile or base before placing it on the screen.
+"guide.place.colorimeter.flat": |-
+  Lay the sensor flat against the screen, facing it, with the cable out of the way.
+"guide.place.colorimeter.counterweight": |-
+  Use the counterweight (or suction cups, if your model has them) so the instrument does not tilt.
+"guide.place.colorimeter.center": |-
+  Centre it on the square shown by the measurement window; do not move it during the run.
+"guide.place.spectro.display_position": |-
+  Set the instrument to its display (emission) position as instructed on screen.
+"guide.place.spectro_pen.emission": |-
+  Fit the display (emission) holder or adapter and rest the instrument flat on the screen.
+"guide.place.spectro.center": |-
+  Centre it on the square shown by the measurement window and keep it still.
+"guide.place.generic": |-
+  Follow the placement instructions of your instrument manufacturer.
+"guide.place.screensaver_off": |-
+  Make sure the screen cannot dim, lock or start a screen saver during the run.
+"guide.place.accessories": |-
+  Have at hand: %s
+"guide.acc.counterweight": |-
+  counterweight
+"guide.acc.ambient_diffuser": |-
+  built-in ambient diffuser
+"guide.acc.suction_cups": |-
+  suction cups
+"guide.acc.calibration_cover": |-
+  calibration cover
+"guide.acc.reference_tile": |-
+  calibration base / reference tile
+"guide.acc.ambient_head": |-
+  ambient-light head
+"guide.acc.emission_holder": |-
+  display (emission) holder or adapter
+"guide.acc.calibration_cap": |-
+  calibration cap (dark reference)
+"guide.illustration_note": |-
+  Illustration, not a photograph of your model.
+"guide.s2.title": |-
+  What will you use this monitor for?
+"guide.s2.hint": |-
+  There is no single best target. Pick the closest use; every value can still be changed afterwards in the Calibration tab.
+"guide.s2.suggested": |-
+  Suggested for this monitor
+"guide.s2.applied": |-
+  Loaded preset: %s
+"guide.s2.not_found": |-
+  The preset for this goal was not found; adjust the values in the Calibration tab.
+"guide.s2.builtin_note": |-
+  This looks like a built-in panel. Built-in screens are usually calibrated for everyday use; hardware controls are often limited.
+"guide.goal.photo": |-
+  Photo & graphics
+"guide.goal.photo.info": |-
+  White point 5000 K, gamma 2.2, medium calibration quality. Suits matching prints viewed in a controlled light.
+"guide.goal.video": |-
+  Video & grading
+"guide.goal.video.info": |-
+  White point D65, gamma 2.4, medium calibration quality. A starting point for Rec. 709 content in dim surroundings.
+"guide.goal.office_web": |-
+  Office & web
+"guide.goal.office_web.info": |-
+  White point 6500 K, gamma 2.2, fast calibration. Good general-purpose choice for screens shared with the web.
+"guide.goal.laptop": |-
+  Laptop / built-in screen
+"guide.goal.laptop.info": |-
+  Native white point, gamma 2.2, no manual hardware adjustment step. For panels with few or no controls.
+"guide.goal.srgb": |-
+  sRGB content
+"guide.goal.srgb.info": |-
+  White point D65 and the sRGB curve, fast calibration. For work targeting the sRGB standard.
+"guide.goal.softproof": |-
+  Soft-proofing
+"guide.goal.softproof.info": |-
+  White point 5800 K, 160 cd/m², L* curve, medium quality. Matches the screen to paper under a viewing booth.
+"guide.s3.title": |-
+  Prepare the monitor and the room
+"guide.s3.hint": |-
+  Required items change the result; recommended ones improve repeatability. Tick them as you go.
+"guide.s3.required": |-
+  Required
+"guide.s3.recommended": |-
+  Recommended
+"guide.s3.missing": |-
+  Tick the required items to continue.
+"guide.prep.warmup": |-
+  Let the monitor warm up for about 30 minutes
+"guide.prep.warmup.info": |-
+  Brightness and colour drift while a panel warms up; measuring cold bakes that drift into the profile.
+"guide.prep.reset": |-
+  Set the monitor to a neutral picture mode
+"guide.prep.reset.info": |-
+  Use the factory/standard or “native” mode, switch off dynamic contrast, sharpening and colour enhancers.
+"guide.prep.auto": |-
+  Turn off automatic brightness and colour shifting
+"guide.prep.auto.info": |-
+  Ambient-light sensors, Night Shift, True Tone and f.lux-style tools change the picture during the run.
+"guide.prep.ambient": |-
+  Dim stray light and avoid reflections on the screen
+"guide.prep.ambient.info": |-
+  A steady, moderate room light gives results that match how you will actually work.
+"guide.prep.screensaver": |-
+  Prevent sleep, dimming and screen savers
+"guide.prep.screensaver.info": |-
+  A screen that dims or locks mid-run invalidates the measurements.
+"guide.prep.probe": |-
+  Have the instrument ready to place on the screen
+"guide.prep.probe.info": |-
+  See the placement steps on the right. The next window shows the exact spot.
+"guide.s4.title": |-
+  Calibrate and measure
+"guide.s4.intro": |-
+  The run has these stages. You can pause or cancel; nothing is installed until the end.
+"guide.s4.stage.adjust": |-
+  Adjust the monitor controls interactively (if your monitor has them)
+"guide.s4.stage.calibrate": |-
+  Calibration: the engine measures and corrects grey balance and tone curve
+"guide.s4.stage.profile": |-
+  Profiling: a set of colour patches is measured to describe the display
+"guide.s4.stage.build": |-
+  The ICC profile is computed from the measurements
+"guide.s4.patches": |-
+  While patches are shown the screen stays neutral: no effects, transparency or overlays are applied to them.
+"guide.s4.start": |-
+  Start calibration & profiling
+"guide.s4.blocked": |-
+  Cannot start yet
+"guide.s4.settings_summary": |-
+  Current target: %s
+"guide.s4.profile_name": |-
+  Profile name: %s
+"guide.s5.title": |-
+  Install and verify
+"guide.s5.intro": |-
+  A run is only a success when the profile exists, is installed for this monitor and passes verification. Finishing a process proves none of that.
+"guide.s5.current_profile": |-
+  Profile currently active for this monitor: %s
+"guide.s5.no_profile": |-
+  No profile is installed for this monitor yet.
+"guide.s5.verify": |-
+  Open verification settings
+"guide.s5.install": |-
+  Open profile installation
+"guide.s5.what_is": |-
+  What is what
+"guide.s5.limits": |-
+  Limits to keep in mind
+"guide.concept.calibration": |-
+  Calibration
+"guide.concept.calibration.info": |-
+  Adjusts how the monitor itself behaves (brightness, white point, tone curve), through its controls and the graphics-card curves.
+"guide.concept.profile": |-
+  ICC profile
+"guide.concept.profile.info": |-
+  Describes the colours the calibrated monitor shows. Colour-managed applications use it; it does not change the screen by itself.
+"guide.concept.curves": |-
+  Loading the curves
+"guide.concept.curves.info": |-
+  The calibration curves (vcgt) must be loaded into the graphics card at login for the calibration to apply system-wide.
+"guide.concept.lut3d": |-
+  3D LUT
+"guide.concept.lut3d.info": |-
+  An optional correction for video players and grading tools that cannot use ICC profiles. Created separately, from a finished profile.
+"guide.limit.color_management": |-
+  Applications without colour management ignore the ICC profile; only the calibration curves reach them.
+"guide.limit.hdr": |-
+  HDR and SDR are different modes: a calibration made in one does not apply to the other, and an operating system in HDR mode may bypass the curves.
+"guide.limit.multi_display": |-
+  With several monitors, each needs its own run, and the profile is tied to that monitor and that instrument.

@@ -94,6 +94,7 @@ include DisplayCAL/theme/icons/128x128/*.png
 include DisplayCAL/theme/icons/256x256/*.png
 include DisplayCAL/theme/icons/512x512/*.png
 include DisplayCAL/theme/icons/flags/*.png
+include DisplayCAL/theme/instruments/*.svg
 include DisplayCAL/theme/jet_anim/*.png
 include DisplayCAL/theme/patch_anim/*.png
 include DisplayCAL/theme/splash_anim/*.png

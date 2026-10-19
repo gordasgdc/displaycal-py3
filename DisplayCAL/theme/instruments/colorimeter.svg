@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 220" width="320" height="220">
+<title>Colorimeter on screen</title>
+<defs>
+<linearGradient id="scr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2c2e34"/><stop offset="1" stop-color="#17181b"/></linearGradient>
+<linearGradient id="beam" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ff5a4d"/><stop offset=".33" stop-color="#ffd84a"/><stop offset=".66" stop-color="#4dff7a"/><stop offset="1" stop-color="#4d8bff"/></linearGradient>
+<radialGradient id="metal" cx=".35" cy=".3" r=".9"><stop offset="0" stop-color="#8d9096"/><stop offset="1" stop-color="#3b3d42"/></radialGradient>
+</defs>
+<rect x="0" y="0" width="320" height="220" rx="16" fill="#101113"/>
+<rect x="46" y="22" width="228" height="140" rx="10" fill="#26282c" stroke="#4a4d54" stroke-width="2"/>
+<rect x="56" y="32" width="208" height="120" rx="4" fill="url(#scr)"/>
+<path d="M150 162 L170 162 L176 186 L144 186 Z" fill="#26282c" stroke="#4a4d54" stroke-width="2"/>
+<rect x="118" y="186" width="84" height="8" rx="4" fill="#26282c" stroke="#4a4d54" stroke-width="2"/>
+<path d="M64 140 h192" stroke="url(#beam)" stroke-width="1.5" opacity=".35"/>
+<path d="M160 100 C160 60 160 40 160 20" stroke="#6b6e75" stroke-width="3" fill="none"/>
+<rect x="148" y="6" width="24" height="16" rx="3" fill="url(#metal)" stroke="#2a2b2f"/>
+<circle cx="160" cy="100" r="22" fill="#1b1c1f" stroke="#8d9096" stroke-width="3"/>
+<circle cx="160" cy="100" r="12" fill="#0b0b0c" stroke="#5a5d64" stroke-width="2"/>
+<circle cx="160" cy="100" r="5" fill="#3b6cff" opacity=".8"/>
+</svg>

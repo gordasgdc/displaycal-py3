@@ -238,6 +238,7 @@ from DisplayCAL.ui.header_banner import (
     header_banner_pixmap,
     header_continuation_pixmap,
 )
+from DisplayCAL.ui.guide_panel import GuidePanel
 from DisplayCAL.ui.measure_frame import (
     MeasureFrame,
     default_measureframe_size,
@@ -302,6 +303,7 @@ if TYPE_CHECKING:
 
 #: The settings tabs, in order: ``(config-ish key, icon name, label key)``.
 _TABS = (
+    ("guide", "displaycal", "guide.tab"),
     ("display_instrument", "display-instrument", "display-instrument"),
     ("calibration", "calibration", "calibration"),
     ("profiling", "profiling", "profiling"),
@@ -1468,6 +1470,8 @@ class MainWindow(BaseWindow):
         self._panels["profiling"] = self._build_profiling_tab()
         self._panels["lut3d"] = self._build_lut3d_tab()
         self._panels["verification"] = self._build_verification_tab()
+        self._guide = GuidePanel(self)
+        self._panels["guide"] = self._guide
         for key, _icon, _label in _TABS:
             self.stack.addWidget(self._panels[key])
 
@@ -1489,7 +1493,7 @@ class MainWindow(BaseWindow):
         layout.addWidget(self._button_bar_widget)
 
         self.setCentralWidget(central)
-        self._select_tab("display_instrument")
+        self._select_tab("guide")
 
     #: Default startup size (px). Fitting every tab's ``sizeHint()`` without
     #: ever scrolling (the previous approach) sized the window to the single
@@ -5015,18 +5019,16 @@ class MainWindow(BaseWindow):
         finally:
             self._updating = False
         self._update_action_buttons()
+        if hasattr(self, "_guide"):
+            self._guide.refresh()
 
-    def _update_action_buttons(self) -> None:
-        """Show exactly one calibrate/profile/3D-LUT-create/report action button.
+    def _primary_action_flags(
+        self, lut3d_create_show: bool = False, mr_btn_show: bool = False
+    ) -> tuple[bool, bool, bool]:
+        """Return which of calibrate&profile / calibrate / profile applies.
 
-        Mirrors ``MainFrame.update_main_controls``: wx shows "Calibrate &
-        Profile" by default, falling back to "Calibrate only" or "Profile
-        only" depending on the interactive-adjustment / TRC / "update
-        existing calibration" state, never more than one at once, and hides
-        all three whenever the 3D LUT tab is active with manual creation
-        (``lut3d_create_btn`` shown instead) or the Verification tab is
-        active (``measurement_report_btn`` shown instead, matching wx's
-        ``mr_btn_show = self.mr_settings_panel.IsShown()``).
+        Same decision as the action-button row, factored out so the guided
+        panel can start the right workflow without duplicating the rules.
         """
         update_cal = self.calibration_update_cb.isChecked()
         update_profile = update_cal and config.is_profile()
@@ -5034,10 +5036,6 @@ class MainWindow(BaseWindow):
             self.interactive_adjustment_cb.isChecked()
             or self.trc_ctrl.currentIndex() > 0
         )
-        lut3d_create_show = self.stack.currentWidget() is self._panels.get(
-            "lut3d"
-        ) and not getcfg("3dlut.create")
-        mr_btn_show = self.stack.currentWidget() is self._panels.get("verification")
         calibrate_and_profile_show = (
             not lut3d_create_show
             and not mr_btn_show
@@ -5056,7 +5054,47 @@ class MainWindow(BaseWindow):
             and not calibrate_and_profile_show
             and not update_cal
         )
+        return calibrate_and_profile_show, calibrate_show, profile_show
 
+    def guided_primary_action(self) -> Callable[[], None] | None:
+        """Handler of the workflow the guided panel's start button should run."""
+        cap, cal, prof = self._primary_action_flags()
+        if cap:
+            return self.calibrate_and_profile_btn_handler
+        if cal:
+            return self.calibrate_btn_handler
+        if prof:
+            return self.profile_btn_handler
+        return None
+
+    def _update_action_buttons(self) -> None:
+        """Show exactly one calibrate/profile/3D-LUT-create/report action button.
+
+        Mirrors ``MainFrame.update_main_controls``: wx shows "Calibrate &
+        Profile" by default, falling back to "Calibrate only" or "Profile
+        only" depending on the interactive-adjustment / TRC / "update
+        existing calibration" state, never more than one at once, and hides
+        all three whenever the 3D LUT tab is active with manual creation
+        (``lut3d_create_btn`` shown instead) or the Verification tab is
+        active (``measurement_report_btn`` shown instead, matching wx's
+        ``mr_btn_show = self.mr_settings_panel.IsShown()``).
+        """
+        on_guide = self.stack.currentWidget() is self._panels.get("guide")
+        update_cal = self.calibration_update_cb.isChecked()
+        lut3d_create_show = not on_guide and (
+            self.stack.currentWidget() is self._panels.get("lut3d")
+            and not getcfg("3dlut.create")
+        )
+        mr_btn_show = not on_guide and (
+            self.stack.currentWidget() is self._panels.get("verification")
+        )
+        (
+            calibrate_and_profile_show,
+            calibrate_show,
+            profile_show,
+        ) = self._primary_action_flags(lut3d_create_show, mr_btn_show)
+        # The guided panel has its own start button; the bar stays hidden there.
+        self._button_bar_widget.setVisible(not on_guide)
         has_devices = bool(self.worker.displays) and bool(self.worker.instruments)
         not_ccxx = not config.is_ccxx_testchart()
 

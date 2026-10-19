@@ -2674,3 +2674,248 @@
   Amarillo XYZ
 "yes": |-
   Si
+# --- guide.* (guided workflow, DisplayCAL-CG) ---
+"guide.tab": |-
+  Guía
+"guide.title": |-
+  Calibración guiada
+"guide.subtitle": |-
+  De un instrumento conectado a un perfil verificado en cinco pasos. Todas las opciones avanzadas siguen disponibles en las demás pestañas.
+"guide.advanced": |-
+  Ajustes avanzados
+"guide.back": |-
+  Atrás
+"guide.next": |-
+  Continuar
+"guide.step.1": |-
+  Monitor e instrumento
+"guide.step.2": |-
+  Tu objetivo
+"guide.step.3": |-
+  Preparación
+"guide.step.4": |-
+  Medición
+"guide.step.5": |-
+  Instalar y verificar
+"guide.s1.title": |-
+  Qué monitor, qué instrumento
+"guide.s1.monitor": |-
+  Monitor a calibrar
+"guide.s1.instrument": |-
+  Instrumento
+"guide.s1.mode": |-
+  Modo de medición
+"guide.s1.correction": |-
+  Corrección del instrumento
+"guide.s1.rescan": |-
+  Volver a buscar
+"guide.s1.detected_as": |-
+  Detectado como: %s
+"guide.s1.confirm_model": |-
+  Varios productos comparten este identificador, por lo que el modelo exacto no se puede leer del instrumento. Elige el que tienes (solo cambia la ayuda mostrada aquí, no la medición):
+"guide.s1.model_unconfirmed": |-
+  Modelo sin confirmar
+"guide.s1.unknown": |-
+  Instrumento fuera del catálogo de la guía. Se usa con el nombre que informa el motor; no se muestra imagen del modelo y no se supone nada sobre él.
+"guide.s1.none": |-
+  Ningún instrumento seleccionado
+"guide.s1.shared_usb": |-
+  El identificador USB de este instrumento también lo usan: %s.
+"guide.s1.spectro_note": |-
+  Los espectrofotómetros miden directamente el espectro de la pantalla y no necesitan corrección de colorímetro.
+"guide.s1.correction_none": |-
+  Ninguna corrección seleccionada. Un colorímetro es más preciso con una corrección adecuada al tipo de panel (consulta la pestaña Pantalla e instrumento).
+"guide.s1.correction_set": |-
+  En uso: %s
+"guide.s1.mode_current": |-
+  Modo: %s
+"guide.ready.ok": |-
+  Listo: monitor e instrumento detectados.
+"guide.ready.busy": |-
+  Hay una medición o una búsqueda en curso.
+"guide.ready.no_argyll": |-
+  No se encontró el motor de medición (ArgyllCMS).
+"guide.ready.no_display": |-
+  No se detectó ningún monitor.
+"guide.ready.no_instrument": |-
+  No se detectó ningún instrumento.
+"guide.action.install_argyll": |-
+  Descargar ArgyllCMS (menú Ayuda → Buscar actualizaciones)
+"guide.action.choose_argyll": |-
+  O elige una carpeta ArgyllCMS existente en Opciones → Directorio de ejecutables de ArgyllCMS.
+"guide.action.rescan": |-
+  Pulsa «Volver a buscar».
+"guide.action.reconnect": |-
+  Desconecta el instrumento, espera unos segundos y vuelve a conectarlo directamente al ordenador (no mediante un hub).
+"guide.action.check_permission": |-
+  Cierra otro software de color que pueda tener el instrumento ocupado y comprueba que el acceso USB está permitido para esta aplicación.
+"guide.place.title": |-
+  Coloca el instrumento
+"guide.place.calibrate_first": |-
+  Cuando se te pida, calibra el instrumento en su baldosa de referencia o base antes de colocarlo en la pantalla.
+"guide.place.colorimeter.flat": |-
+  Apoya el sensor plano contra la pantalla, mirando hacia ella, con el cable fuera del camino.
+"guide.place.colorimeter.counterweight": |-
+  Usa el contrapeso (o las ventosas, si tu modelo las tiene) para que el instrumento no se incline.
+"guide.place.colorimeter.center": |-
+  Céntralo sobre el cuadrado que muestra la ventana de medición; no lo muevas durante la ejecución.
+"guide.place.spectro.display_position": |-
+  Pon el instrumento en su posición de pantalla (emisión) según las instrucciones en pantalla.
+"guide.place.spectro_pen.emission": |-
+  Coloca el soporte o adaptador de pantalla (emisión) y apoya el instrumento plano sobre la pantalla.
+"guide.place.spectro.center": |-
+  Céntralo sobre el cuadrado que muestra la ventana de medición y mantenlo quieto.
+"guide.place.generic": |-
+  Sigue las instrucciones de colocación del fabricante del instrumento.
+"guide.place.screensaver_off": |-
+  Asegúrate de que la pantalla no pueda atenuarse, bloquearse ni iniciar un salvapantallas durante la ejecución.
+"guide.place.accessories": |-
+  Ten a mano: %s
+"guide.acc.counterweight": |-
+  contrapeso
+"guide.acc.ambient_diffuser": |-
+  difusor ambiental integrado
+"guide.acc.suction_cups": |-
+  ventosas
+"guide.acc.calibration_cover": |-
+  tapa de calibración
+"guide.acc.reference_tile": |-
+  base de calibración / baldosa de referencia
+"guide.acc.ambient_head": |-
+  cabezal de luz ambiental
+"guide.acc.emission_holder": |-
+  soporte o adaptador de pantalla (emisión)
+"guide.acc.calibration_cap": |-
+  tapa de calibración (referencia oscura)
+"guide.illustration_note": |-
+  Ilustración, no una fotografía de tu modelo.
+"guide.s2.title": |-
+  ¿Para qué usarás este monitor?
+"guide.s2.hint": |-
+  No existe un único objetivo mejor. Elige el uso más cercano; cada valor se puede cambiar después en la pestaña Calibración.
+"guide.s2.suggested": |-
+  Sugerido para este monitor
+"guide.s2.applied": |-
+  Preajuste cargado: %s
+"guide.s2.not_found": |-
+  No se encontró el preajuste de este objetivo; ajusta los valores en la pestaña Calibración.
+"guide.s2.builtin_note": |-
+  Parece un panel integrado. Las pantallas integradas suelen calibrarse para uso general; los controles de hardware suelen ser limitados.
+"guide.goal.photo": |-
+  Foto y gráficos
+"guide.goal.photo.info": |-
+  Punto blanco 5000 K, gamma 2,2, calidad de calibración media. Adecuado para igualar impresiones vistas con luz controlada.
+"guide.goal.video": |-
+  Vídeo y etalonaje
+"guide.goal.video.info": |-
+  Punto blanco D65, gamma 2,4, calidad de calibración media. Punto de partida para contenido Rec. 709 en entornos poco iluminados.
+"guide.goal.office_web": |-
+  Oficina y web
+"guide.goal.office_web.info": |-
+  Punto blanco 6500 K, gamma 2,2, calibración rápida. Buena opción general para pantallas usadas en la web.
+"guide.goal.laptop": |-
+  Portátil / pantalla integrada
+"guide.goal.laptop.info": |-
+  Punto blanco nativo, gamma 2,2, sin paso de ajuste manual de hardware. Para paneles con pocos controles o ninguno.
+"guide.goal.srgb": |-
+  Contenido sRGB
+"guide.goal.srgb.info": |-
+  Punto blanco D65 y curva sRGB, calibración rápida. Para trabajo dirigido al estándar sRGB.
+"guide.goal.softproof": |-
+  Prueba en pantalla
+"guide.goal.softproof.info": |-
+  Punto blanco 5800 K, 160 cd/m², curva L*, calidad media. Iguala la pantalla con el papel bajo una cabina de visualización.
+"guide.s3.title": |-
+  Prepara el monitor y la sala
+"guide.s3.hint": |-
+  Los elementos obligatorios cambian el resultado; los recomendados mejoran la repetibilidad. Márcalos a medida que avances.
+"guide.s3.required": |-
+  Obligatorio
+"guide.s3.recommended": |-
+  Recomendado
+"guide.s3.missing": |-
+  Marca los elementos obligatorios para continuar.
+"guide.prep.warmup": |-
+  Deja que el monitor se caliente unos 30 minutos
+"guide.prep.warmup.info": |-
+  El brillo y el color varían mientras el panel se calienta; medir en frío incorpora esa variación al perfil.
+"guide.prep.reset": |-
+  Pon el monitor en un modo de imagen neutro
+"guide.prep.reset.info": |-
+  Usa el modo de fábrica/estándar o «nativo»; desactiva el contraste dinámico, el enfoque y los realces de color.
+"guide.prep.auto": |-
+  Desactiva el brillo y el desplazamiento de color automáticos
+"guide.prep.auto.info": |-
+  Los sensores de luz ambiental, Night Shift, True Tone y herramientas tipo f.lux cambian la imagen durante la ejecución.
+"guide.prep.ambient": |-
+  Reduce la luz parásita y evita reflejos en la pantalla
+"guide.prep.ambient.info": |-
+  Una luz estable y moderada en la sala da resultados acordes con cómo trabajarás realmente.
+"guide.prep.screensaver": |-
+  Evita la suspensión, la atenuación y los salvapantallas
+"guide.prep.screensaver.info": |-
+  Una pantalla que se atenúa o se bloquea durante la ejecución invalida las mediciones.
+"guide.prep.probe": |-
+  Ten el instrumento listo para colocarlo en la pantalla
+"guide.prep.probe.info": |-
+  Consulta los pasos de colocación a la derecha. La siguiente ventana muestra el punto exacto.
+"guide.s4.title": |-
+  Calibra y mide
+"guide.s4.intro": |-
+  La ejecución tiene estas etapas. Puedes pausar o cancelar; no se instala nada hasta el final.
+"guide.s4.stage.adjust": |-
+  Ajusta de forma interactiva los controles del monitor (si los tiene)
+"guide.s4.stage.calibrate": |-
+  Calibración: el motor mide y corrige el equilibrio de grises y la curva de tonos
+"guide.s4.stage.profile": |-
+  Perfilado: se mide un conjunto de parches de color para describir la pantalla
+"guide.s4.stage.build": |-
+  El perfil ICC se calcula a partir de las mediciones
+"guide.s4.patches": |-
+  Mientras se muestran los parches la pantalla permanece neutra: no se aplican efectos, transparencia ni superposiciones.
+"guide.s4.start": |-
+  Iniciar calibración y perfilado
+"guide.s4.blocked": |-
+  Todavía no se puede iniciar
+"guide.s4.settings_summary": |-
+  Objetivo actual: %s
+"guide.s4.profile_name": |-
+  Nombre del perfil: %s
+"guide.s5.title": |-
+  Instala y verifica
+"guide.s5.intro": |-
+  Una ejecución solo es correcta cuando el perfil existe, está instalado para este monitor y supera la verificación. Que termine un proceso no demuestra nada de eso.
+"guide.s5.current_profile": |-
+  Perfil activo ahora para este monitor: %s
+"guide.s5.no_profile": |-
+  Todavía no hay ningún perfil instalado para este monitor.
+"guide.s5.verify": |-
+  Abrir ajustes de verificación
+"guide.s5.install": |-
+  Abrir instalación del perfil
+"guide.s5.what_is": |-
+  Qué es cada cosa
+"guide.s5.limits": |-
+  Límites a tener en cuenta
+"guide.concept.calibration": |-
+  Calibración
+"guide.concept.calibration.info": |-
+  Ajusta el comportamiento del propio monitor (brillo, punto blanco, curva de tonos), mediante sus controles y las curvas de la tarjeta gráfica.
+"guide.concept.profile": |-
+  Perfil ICC
+"guide.concept.profile.info": |-
+  Describe los colores que muestra el monitor calibrado. Las aplicaciones con gestión de color lo usan; no cambia la pantalla por sí solo.
+"guide.concept.curves": |-
+  Carga de las curvas
+"guide.concept.curves.info": |-
+  Las curvas de calibración (vcgt) deben cargarse en la tarjeta gráfica al iniciar sesión para que se apliquen en todo el sistema.
+"guide.concept.lut3d": |-
+  LUT 3D
+"guide.concept.lut3d.info": |-
+  Una corrección opcional para reproductores de vídeo y herramientas de etalonaje que no usan perfiles ICC. Se crea aparte, a partir de un perfil terminado.
+"guide.limit.color_management": |-
+  Las aplicaciones sin gestión de color ignoran el perfil ICC; solo les llegan las curvas de calibración.
+"guide.limit.hdr": |-
+  HDR y SDR son modos distintos: una calibración hecha en uno no se aplica al otro, y un sistema operativo en modo HDR puede ignorar las curvas.
+"guide.limit.multi_display": |-
+  Con varios monitores, cada uno necesita su propia ejecución y el perfil queda ligado a ese monitor y a ese instrumento.
