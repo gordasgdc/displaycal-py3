@@ -172,12 +172,13 @@ def main() -> int:
         win._select_tab(key)
         settle()
 
-    from review_shots import dialogs, run_shots  # noqa: E402  (next to this script)
+    from review_shots import dialogs, finish_dialog, run_shots  # noqa: E402  (next to this script)
 
     import tempfile
 
     run_shots(win, g, app, save, tab, config, lang, settle, code)
     dialogs(win, g, app, save, config, lang, settle, code, tempfile.mkdtemp(dir=os.environ.get("TMPDIR")))
+    finish_dialog(win, save, lang)
     with open(os.path.join(out_dir, "index.json"), "w", encoding="utf-8") as f:
         json.dump(index, f, ensure_ascii=False, indent=1)
     print("done", len(index), out_dir)

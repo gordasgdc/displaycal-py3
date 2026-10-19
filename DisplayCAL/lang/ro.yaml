@@ -1050,11 +1050,11 @@
 "drift_compensation.blacklevel": |-
   Compensare drift nivel negru
 "drift_compensation.blacklevel.info": |-
-  Compensarea drift-ului de nivel negru încearcă să contracareze devierile de măsurare cauzate de drift-ul de calibrare a negrului unui instrument de măsurare aflat în încălzire. Pentru asta, un petic de test negru este măsurat periodic, ceea ce crește timpul total necesar măsurătorilor. Multe colorimetre au compensare de temperatură încorporată, caz în care compensarea drift-ului de nivel negru nu ar trebui să fie necesară, dar majoritatea spectrometrelor nu sunt compensate termic.
+  Compensarea drift-ului de nivel negru încearcă să contracareze devierile de măsurare cauzate de drift-ul de calibrare a negrului unui instrument de măsurare aflat în încălzire. Pentru asta, un patch de test negru este măsurat periodic, ceea ce crește timpul total necesar măsurătorilor. Multe colorimetre au compensare de temperatură încorporată, caz în care compensarea drift-ului de nivel negru nu ar trebui să fie necesară, dar majoritatea spectrometrelor nu sunt compensate termic.
 "drift_compensation.whitelevel": |-
   Compensare drift nivel alb
 "drift_compensation.whitelevel.info": |-
-  Compensarea drift-ului de nivel alb încearcă să contracareze devierile de măsurare cauzate de schimbările de luminanță ale unui monitor aflat în încălzire. Pentru asta, un petic de test alb este măsurat periodic, ceea ce crește timpul total necesar măsurătorilor.
+  Compensarea drift-ului de nivel alb încearcă să contracareze devierile de măsurare cauzate de schimbările de luminanță ale unui monitor aflat în încălzire. Pentru asta, un patch de test alb este măsurat periodic, ceea ce crește timpul total necesar măsurătorilor.
 "dry_run": |-
   Simulare (dry run)
 "dry_run.end": |-
@@ -1481,7 +1481,7 @@
 "info.display_tech.show": |-
   Arată informații despre tehnologiile comune de monitor
 "info.mr_settings": |-
-  Poți <font weight='bold'>verifica acuratețea</font> unui profil ICC sau LUT 3D printr-un raport de măsurare care conține statistici detaliate despre erorile de culoare ale peticilor măsurate.
+  Poți <font weight='bold'>verifica acuratețea</font> unui profil ICC sau LUT 3D printr-un raport de măsurare care conține statistici detaliate despre erorile de culoare ale patch-urilor măsurate.
 
   Când verifici un LUT 3D, asigură-te că folosești aceleași setări cu care a fost creat LUT-ul 3D.
 
@@ -1489,7 +1489,7 @@
 "info.profile_settings": |-
   <font weight='bold'>Profilarea</font> este procesul de <font weight='bold'>caracterizare</font> a monitorului și înregistrarea răspunsului lui într-un <font weight='bold'>profil de dispozitiv ICC</font>. Profilul de dispozitiv ICC poate fi folosit de aplicații care suportă managementul de culoare ICC pentru <font weight='bold'>corecție completă de culoare a monitorului</font>, și/sau poate fi folosit pentru a crea un <font weight='bold'>LUT 3D</font> (LUT = tabel de căutare), care servește același scop pentru aplicații care suportă LUT-uri 3D.
 
-  Numărul de petice măsurate influențează acuratețea atinsă de profilul rezultat. Pentru un profil de calitate rezonabilă bazat pe matrice 3x3 și curbe, câteva zeci de petice pot fi suficiente dacă monitorul are proprietăți bune de amestecare aditivă a culorilor și liniaritate. Unele monitoare profesionale se încadrează în această categorie. Dacă se dorește cea mai bună acuratețe posibilă, se recomandă un profil bazat pe LUT cu de la câteva sute până la câteva mii de petice. Setarea de testchart <font weight='bold'>„Auto-optimizat”</font> ține cont automat de neliniaritățile și răspunsul real al monitorului și ar trebui folosită pentru cele mai bune rezultate de calitate. Cu asta, poți ajusta un cursor pentru a alege un compromis între acuratețea profilului rezultat și timpul de măsurare și calcul.
+  Numărul de patch-uri măsurate influențează acuratețea atinsă de profilul rezultat. Pentru un profil de calitate rezonabilă bazat pe matrice 3x3 și curbe, câteva zeci de patch-uri pot fi suficiente dacă monitorul are proprietăți bune de amestecare aditivă a culorilor și liniaritate. Unele monitoare profesionale se încadrează în această categorie. Dacă se dorește cea mai bună acuratețe posibilă, se recomandă un profil bazat pe LUT cu de la câteva sute până la câteva mii de patch-uri. Setarea de testchart <font weight='bold'>„Auto-optimizat”</font> ține cont automat de neliniaritățile și răspunsul real al monitorului și ar trebui folosită pentru cele mai bune rezultate de calitate. Cu asta, poți ajusta un cursor pentru a alege un compromis între acuratețea profilului rezultat și timpul de măsurare și calcul.
 "infoframe.default_text": |-
 
 "infoframe.title": |-
@@ -1639,7 +1639,7 @@
 "measureframe.center.manual": |-
   Te rugăm așază această fereastră în centrul ecranului
 "measureframe.info": |-
-  Mută fereastra de măsurare în poziția dorită pe ecran și redimensioneaz-o dacă e necesar. Aproximativ toată suprafața ferestrei va fi folosită pentru afișarea peticilor de măsurare, cercul fiind doar un ghid care te ajută să poziționezi dispozitivul de măsurare.
+  Mută fereastra de măsurare în poziția dorită pe ecran și redimensioneaz-o dacă e necesar. Aproximativ toată suprafața ferestrei va fi folosită pentru afișarea patch-urilor de măsurare, cercul fiind doar un ghid care te ajută să poziționezi dispozitivul de măsurare.
 
   Așază dispozitivul de măsurare pe fereastră și apasă „Începe măsurătoarea”. Pentru a anula și a reveni la fereastra principală, închide fereastra de măsurare.
 "measureframe.measurebutton": |-
@@ -1853,9 +1853,9 @@
 "passive_matrix_display": |-
   Monitor cu matrice pasivă
 "patch.layout.select": |-
-  Selectează un aspect de petice:
+  Selectează un aspect de patch-uri:
 "patches": |-
-  Petice
+  Patch-uri
 "patterngenerator.prisma.specify_host": |-
   Te rugăm specifică hostname-ul procesorului tău video Prisma, de ex. prisma-0123 (Windows) sau prisma-0123.local (Linux/Mac OS X). Poți găsi hostname-ul pe o etichetă de pe partea de jos a Prisma-ei, dacă nu a fost schimbat prin interfața web administrativă a Prisma-ei. Alternativ, introdu adresa IP (dacă e cunoscută), de ex. 192.168.1.234
 "patterngenerator.sync_lost": |-
@@ -2283,13 +2283,13 @@
 "tc.angle": |-
   Unghi
 "tc.black": |-
-  Petice negre
+  Patch-uri negre
 "tc.dark_emphasis": |-
   Accent pe regiunea întunecată
 "tc.fullspread": |-
-  Petice iterative
+  Patch-uri iterative
 "tc.gray": |-
-  Petice neutre
+  Patch-uri neutre
 "tc.i": |-
   Grilă cubică centrată pe corp, spațiu dispozitiv
 "tc.limit.sphere": |-
@@ -2299,17 +2299,17 @@
 "tc.multidim": |-
   Multidimensional
 "tc.multidim.patches": |-
-  pași = %s petice (%s neutre)
+  pași = %s patch-uri (%s neutre)
 "tc.neutral_axis_emphasis": |-
   Accent pe axa neutră
 "tc.ofp": |-
   Eșantionare optimizată a punctului celui mai îndepărtat
 "tc.patch": |-
-  Petic
+  Patch
 "tc.patches.selected": |-
   selectate
 "tc.patches.total": |-
-  Total petice
+  Total patch-uri
 "tc.precond": |-
   Profil de precondiționare
 "tc.precond.notset": |-
@@ -2321,7 +2321,7 @@
 "tc.r": |-
   Spațiu dispozitiv aleatoriu
 "tc.single": |-
-  Petice pe canal unic
+  Patch-uri pe canal unic
 "tc.single.perchannel": |-
   per canal
 "tc.t": |-
@@ -2331,7 +2331,7 @@
 "tc.vrml.use_D50": |-
   Alb RGB neutru
 "tc.white": |-
-  Petice albe
+  Patch-uri albe
 "technology": |-
   Tehnologie
 "tempdir_should_still_contain_files": |-
@@ -2339,11 +2339,11 @@
 "testchart.add_saturation_sweeps": |-
   Adaugă tranziții de saturație
 "testchart.add_ti3_patches": |-
-  Adaugă petice de referință...
+  Adaugă patch-uri de referință...
 "testchart.auto_optimize.untethered.unsupported": |-
   Monitorul virtual fără fir nu suportă auto-optimizarea testchart-ului.
 "testchart.change_patch_order": |-
-  Schimbă ordinea peticelor
+  Schimbă ordinea patch-urilor
 "testchart.confirm_select": |-
   Fișier salvat. Vrei să selectezi acest testchart?
 "testchart.create": |-
@@ -2355,11 +2355,11 @@
 "testchart.edit": |-
   Editează testchart...
 "testchart.export.repeat_patch": |-
-  Repetă fiecare petic:
+  Repetă fiecare patch:
 "testchart.file": |-
   Testchart
 "testchart.info": |-
-  Numărul de petice din testchart-ul selectat
+  Numărul de patch-uri din testchart-ul selectat
 "testchart.interleave": |-
   Interleave
 "testchart.maximize_RGB_difference": |-
@@ -2371,9 +2371,9 @@
 "testchart.optimize_display_response_delay": |-
   Minimizează întârzierea de răspuns a monitorului
 "testchart.patch_sequence": |-
-  Secvență de petice
+  Secvență de patch-uri
 "testchart.patches_amount": |-
-  Numărul de petice
+  Numărul de patch-uri
 "testchart.read": |-
   Se citește testchart-ul...
 "testchart.save_or_discard": |-
@@ -2381,7 +2381,7 @@
 "testchart.select": |-
   Selectează
 "testchart.separate_fixed_points": |-
-  Alege peticele de adăugat într-un pas separat.
+  Alege patch-urile de adăugat într-un pas separat.
 "testchart.set": |-
   Alege fișierul testchart...
 "testchart.shift_interleave": |-
@@ -2615,18 +2615,18 @@
 
   A fost întrunit unul sau toate criteriile următoare:
 
-  • Petice consecutive cu numere RGB diferite, dar cu un ΔE*00 suspect de mic al măsurătorilor între ele.
-  • Gri RGB cu numere RGB crescătoare față de peticul anterior, dar luminozitate (L*) în scădere.
-  • Gri RGB cu numere RGB descrescătoare față de peticul anterior, dar luminozitate (L*) în creștere.
+  • Patch-uri consecutive cu numere RGB diferite, dar cu un ΔE*00 suspect de mic al măsurătorilor între ele.
+  • Gri RGB cu numere RGB crescătoare față de patch-ul anterior, dar luminozitate (L*) în scădere.
+  • Gri RGB cu numere RGB descrescătoare față de patch-ul anterior, dar luminozitate (L*) în creștere.
   • ΔE*00 și ΔL*00 sau ΔH*00 sau ΔC*00 neobișnuit de mari ale măsurătorilor față de echivalentul sRGB al numerelor RGB.
 
   Asta ar putea sugera erori de măsurare. Valorile considerate problematice (ceea ce nu trebuie să fie neapărat adevărat!) sunt evidențiate cu roșu. Verifică măsurătorile cu atenție și marchează-le pe cele pe care vrei să le accepți. Poți edita și valorile RGB și XYZ.
 "warning.suspicious_delta_e.info": |-
   Explicația coloanelor Δ:
 
-  ΔE*00 XYZ A/B: ΔE*00 al valorilor măsurate față de valorile măsurate ale peticului anterior. Dacă această valoare lipsește, nu a fost un factor în verificare. Dacă e prezentă, e considerată prea mică.
+  ΔE*00 XYZ A/B: ΔE*00 al valorilor măsurate față de valorile măsurate ale patch-ului anterior. Dacă această valoare lipsește, nu a fost un factor în verificare. Dacă e prezentă, e considerată prea mică.
 
-  0,5 ΔE*00 RGB A/B: ΔE*00 al echivalentului sRGB al numerelor RGB față de echivalentul sRGB al numerelor RGB ale peticului anterior (cu un factor de 0,5). Dacă această valoare e prezentă, reprezintă valoarea de comparație (minimă) în timpul verificării pentru un ΔE*00 XYZ A/B presupus prea mic. Servește ca orientare foarte aproximativă.
+  0,5 ΔE*00 RGB A/B: ΔE*00 al echivalentului sRGB al numerelor RGB față de echivalentul sRGB al numerelor RGB ale patch-ului anterior (cu un factor de 0,5). Dacă această valoare e prezentă, reprezintă valoarea de comparație (minimă) în timpul verificării pentru un ΔE*00 XYZ A/B presupus prea mic. Servește ca orientare foarte aproximativă.
 
   ΔE*00 RGB-XYZ: ΔE*00 al valorilor măsurate față de echivalentul sRGB al numerelor RGB.
   ΔL*00 RGB-XYZ: ΔL*00 al valorilor măsurate față de echivalentul sRGB al numerelor RGB.

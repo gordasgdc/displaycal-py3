@@ -48,19 +48,19 @@ code{font-size:12px;word-break:break-all}.clip{color:var(--warn);font-size:13px}
 </main></div>
 <div id="zbar"><button id="zin">+</button><button id="zout">−</button><button id="zfit">Potrivește</button></div><div id="zoom"><img id="zimg" alt=""></div>
 <script>
-const DATA=__DATA__, ROOT=__ROOT__, GROUPS=__GROUPS__;
+const DATA=__DATA__, ROOT=__ROOT__, GROUPS=__GROUPS__, EXTRAS=__EXTRAS__;
 const state={lang:'ro',theme:'light',name:null};
 const $=id=>document.getElementById(id);
 function cur(){return (DATA[state.lang]||{})[state.theme]||[]}
-function find(name,l=state.lang,t=state.theme){return ((DATA[l]||{})[t]||[]).find(e=>e.name===name)}
-function buildNav(){const nav=$('nav');nav.innerHTML='';const base=(DATA.ro&&DATA.ro.light)||cur();
+function find(name,l=state.lang,t=state.theme){return EXTRAS.find(e=>e.name===name)||((DATA[l]||{})[t]||[]).find(e=>e.name===name)}
+function buildNav(){const nav=$('nav');nav.innerHTML='';const base=[...EXTRAS,...((DATA.ro&&DATA.ro.light)||cur())];
  GROUPS.forEach(g=>{const items=base.filter(e=>g.match.some(m=>e.name.startsWith(m)));if(!items.length)return;
   const h=document.createElement('h2');h.textContent=g.title;nav.appendChild(h);
   items.forEach(e=>{const b=document.createElement('button');b.dataset.name=e.name;b.innerHTML=e.title.replace(/^[^—]*— /,'')+'<small>'+String(e.n).padStart(2,'0')+' · '+e.name+'</small>';b.onclick=()=>{state.name=e.name;render()};nav.appendChild(b)})})}
 function render(){
  const e=find(state.name)||cur()[0]; if(!e)return; state.name=e.name;
  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.name===state.name));
- const path=`${state.lang}/${state.theme}/${e.file}`;
+ const path=e.common?e.file:`${state.lang}/${state.theme}/${e.file}`;
  $('img').src=path;$('zimg').src=path;
  const clip=(e.clipped||[]).length?`<div class="clip">Posibile tăieturi (verificare automată): ${(e.clipped||[]).map(x=>x.replace(/</g,'&lt;')).join('; ')}</div>`:'<div class="ok">Verificare automată de tăieturi: nimic suspect.</div>';
  $('meta').innerHTML=`<h3>${e.n}. ${e.title.replace(/</g,'&lt;')}</h3><div>${e.shows}</div><div class="sim">Simulat/ilustrativ: ${e.simulated||'—'}</div>${clip}<div class="mut">Fișier: <code>${ROOT}/${path}</code> · ${e.size[0]}×${e.size[1]} px</div>`;
@@ -83,7 +83,26 @@ buildNav();buildCtl();render();
 </script></body></html>
 """
 
+EXTRAS = [
+    {"n": 0, "name": "decision_icon_B", "common": True, "file": "icon/icon_B_large.png",
+     "title": "Decizie deschisă — Iconul B (candidat, neaprobat)",
+     "shows": "Iconul B (finisaj lucios controlat) la 640 px: simbolul triunghiular, sferele RGB și fasciculul păstrate. Aplicat într-un singur commit revertabil.",
+     "simulated": "Candidat de design; aprobarea finală aparține lui Cristi.", "size": [1100, 700], "clipped": []},
+    {"n": 0, "name": "decision_icon_B_dark", "common": True, "file": "icon/icon_B_large_dark.png",
+     "title": "Decizie deschisă — Iconul B pe fundal întunecat",
+     "shows": "Același icon pe fundal întunecat; triunghiul închis are contrast mic pe antet închis (punct de decis).",
+     "simulated": "Candidat de design.", "size": [1100, 700], "clipped": []},
+    {"n": 0, "name": "decision_icon_B_sizes_light", "common": True, "file": "icon/icon_B_context_light.png",
+     "title": "Decizie deschisă — Iconul B la dimensiuni de utilizare (luminos)",
+     "shows": "180 / 128 / 96 / 64 / 48 / 32 / 16 px. La 16–32 px fasciculul devine foarte fin; sferele rămân lizibile.",
+     "simulated": "Candidat de design.", "size": [1100, 300], "clipped": []},
+    {"n": 0, "name": "decision_icon_B_sizes_dark", "common": True, "file": "icon/icon_B_context_dark.png",
+     "title": "Decizie deschisă — Iconul B la dimensiuni de utilizare (întunecat)",
+     "shows": "Aceleași dimensiuni pe fundal întunecat.", "simulated": "Candidat de design.", "size": [1100, 300], "clipped": []},
+]
+
 GROUPS = [
+    {"title": "Decizii deschise (icon)", "match": ["decision_"]},
     {"title": "Ghid", "match": ["guide_"]},
     {"title": "Avansat — file", "match": ["adv_"]},
     {"title": "Avansat — explicații pe decizii", "match": ["help_"]},
@@ -104,6 +123,7 @@ def main() -> int:
         TEMPLATE.replace("__DATA__", json.dumps(data, ensure_ascii=False))
         .replace("__ROOT__", json.dumps(root))
         .replace("__GROUPS__", json.dumps(GROUPS, ensure_ascii=False))
+        .replace("__EXTRAS__", json.dumps(EXTRAS, ensure_ascii=False))
         .replace("__GEN__", json.dumps(time.strftime("%Y-%m-%d %H:%M")))
     )
     out = os.path.join(root, "index.html")

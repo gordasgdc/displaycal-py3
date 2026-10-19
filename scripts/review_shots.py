@@ -150,3 +150,28 @@ def dialogs(win, g, app, save, config, lang, settle, code, tmp):
         w.close()
     except Exception as exc:  # noqa: BLE001
         print("testchart editor skipped:", exc)
+
+
+def finish_dialog(win, save, lang):
+    """The dialog offered when a profile has been built (demonstration text)."""
+    try:
+        from DisplayCAL.ui.profile_finish_dialog import ProfileFinishDialog
+
+        d = ProfileFinishDialog(
+            win,
+            message="Profilul a fost creat (demonstrație). Alege dacă îl instalezi acum; poți să nu îl instalezi.",
+            cinfo=["sRGB: 99 %", "Adobe RGB: 96 %", "DCI-P3: 98 %"],
+            vinfo=["sRGB: 118 %", "Adobe RGB: 104 %", "DCI-P3: 109 %"],
+            ok_label=lang.getstr("profile.install"),
+            cancel_label=lang.getstr("profile.do_not_install"),
+            installable=True,
+            preview_enabled=True,
+            show_profile_info_checked=False,
+            worker=win.worker,
+        )
+        d.resize(720, 520)
+        d.show()
+        save(d, "dlg_profile_finish", "Dialog — Profil creat: instalare și previzualizare", "Instalarea este opțională (scop: utilizator sau sistem), cu previzualizarea calibrării; «nu instala» e o alegere obișnuită.", "Profil și acoperiri de gamut demonstrative.")
+        d.close()
+    except Exception as exc:  # noqa: BLE001
+        print("profile finish dialog skipped:", exc)
