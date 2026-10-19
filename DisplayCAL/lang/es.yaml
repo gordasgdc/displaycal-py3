@@ -2929,3 +2929,7 @@
   No se pudo leer el perfil desde el sistema, por lo que no se confirma su uso para este monitor.
 "guide.ready.scan_failed": |-
   La detección del monitor y del instrumento falló.
+"download.hash.unavailable": |-
+  No se pudo establecer la suma de verificación esperada de %s, por lo que no se instaló. Comprueba la conexión e inténtalo de nuevo; el archivo nunca se usa sin verificación.
+"download.hash.conflict": |-
+  La suma de verificación publicada para %s no coincide con la fijada en esta aplicación. El archivo NO se instaló.

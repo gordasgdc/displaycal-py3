@@ -2941,3 +2941,7 @@
   Profilul nu a putut fi citit înapoi din sistem, deci folosirea lui pentru acest monitor nu este confirmată.
 "guide.ready.scan_failed": |-
   Detectarea monitorului și a instrumentului a eșuat.
+"download.hash.unavailable": |-
+  Nu s-a putut stabili suma de control așteptată pentru %s, deci nu a fost instalat. Verifică conexiunea și încearcă din nou; fișierul nu este folosit niciodată fără verificare.
+"download.hash.conflict": |-
+  Suma de control publicată pentru %s nu coincide cu cea fixată în această aplicație. Fișierul NU a fost instalat.

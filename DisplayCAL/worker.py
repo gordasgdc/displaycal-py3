@@ -187,6 +187,7 @@ from DisplayCAL.icc_profile import (
     set_display_profile,
 )
 from DisplayCAL.log import LOG, DummyLogger, LogFile, get_file_logger
+from DisplayCAL.argyll_integrity import HashConflictError, resolve_expected_hash
 from DisplayCAL.meta import UPSTREAM_RESOURCES_DOMAIN, VERSION_STRING
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.multiprocess import cpu_count, pool_slice
@@ -18236,6 +18237,25 @@ BEGIN_DATA
                                 break
                     except (urllib.error.URLError, OSError, KeyError, ValueError):
                         pass
+                    # Never install an unverified binary: fall back to the
+                    # pinned hash of known versions, and refuse the download
+                    # when no hash can be established at all.
+                    try:
+                        expectedhash_hex = resolve_expected_hash(
+                            version, asset_name, expectedhash_hex
+                        )
+                    except HashConflictError:
+                        response.close()
+                        return make_download_error(
+                            lang.getstr("download.hash.conflict", asset_name),
+                            retryable=False,
+                        )
+                    if not expectedhash_hex:
+                        response.close()
+                        return make_download_error(
+                            lang.getstr("download.hash.unavailable", asset_name),
+                            retryable=True,
+                        )
             if hashes:
                 # Read max. 64 KB hashes
                 hashesdata = hashes.read(1024 * 64)

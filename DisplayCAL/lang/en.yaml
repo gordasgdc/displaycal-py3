@@ -2941,3 +2941,7 @@
   The profile could not be read back from the system, so its use for this monitor is not confirmed.
 "guide.ready.scan_failed": |-
   Detecting the monitor and instrument failed.
+"download.hash.unavailable": |-
+  Could not establish the expected checksum for %s, so it was not installed. Check your connection and try again; the file is never used without verification.
+"download.hash.conflict": |-
+  The checksum published for %s does not match the one pinned in this application. The file was NOT installed.
