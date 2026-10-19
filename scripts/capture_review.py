@@ -98,6 +98,29 @@ def main() -> int:
     g = win._guide
     g._reached = 4
 
+    from qtpy.QtWidgets import QAbstractButton, QComboBox, QLabel
+
+    def clipped(root) -> list[str]:
+        """Visible widgets whose text is wider than the widget (cut off)."""
+        bad = []
+        for w in root.findChildren(QLabel) + root.findChildren(QAbstractButton) + root.findChildren(QComboBox):
+            if not w.isVisible() or w.width() < 8:
+                continue
+            fm = w.fontMetrics()
+            if isinstance(w, QLabel):
+                if w.wordWrap() or w.textFormat() == 3 or not w.text() or "<" in w.text() or w.pixmap() is not None:
+                    continue
+                need, have = fm.horizontalAdvance(w.text()), w.width() - w.contentsMargins().left() - w.contentsMargins().right()
+            elif isinstance(w, QComboBox):
+                need, have = fm.horizontalAdvance(w.currentText()), w.width() - 36
+            else:
+                need, have = fm.horizontalAdvance(w.text().replace("&", "")), w.width() - (24 if w.isCheckable() else 14)
+                if not w.text() or w.icon().isNull() is False and w.text() == "":
+                    continue
+            if need > have + 2:
+                bad.append(f"{type(w).__name__}: '{(w.text() if not isinstance(w, QComboBox) else w.currentText())[:60]}' needs {need}px has {have}px")
+        return bad
+
     out_dir = os.path.join(args.out, code, theme)
     os.makedirs(out_dir, exist_ok=True)
     index: list[dict] = []
@@ -133,6 +156,7 @@ def main() -> int:
         img.save(os.path.join(out_dir, fn))
         index.append(
             {
+                "clipped": clipped(widget),
                 "n": counter[0],
                 "name": name,
                 "file": fn,

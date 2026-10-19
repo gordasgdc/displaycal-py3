@@ -186,6 +186,73 @@ _T = {
                       "unfinished sessions; both are covered by the package."),
             ],
         },
+        "advanced": {
+            "h": "Advanced settings, grouped by decision",
+            "blocks": [
+                ("p", "The advanced tabs keep every professional control. Each tab "
+                      "is now divided into sections named after the decision you "
+                      "take (for example <b>What the screen should look like</b>, "
+                      "<b>Type of profile</b>, <b>File format and precision</b>). "
+                      "Under each section title, <b>What each setting here "
+                      "changes</b> opens a list that says, for every setting: what "
+                      "it changes, when it fits, its unit and the application's "
+                      "default, what it depends on, and whether it is "
+                      "<i>required to run</i>, <i>depends on your case</i> or "
+                      "<i>optional</i>."),
+                ("p", "When a control is unavailable or hidden, the same list "
+                      "says <b>why</b> (for example: a spectrometer does not use "
+                      "a correction; the 3D LUT tab is switched on in the Options "
+                      "menu; the PCS-to-device mode needs a LUT-type profile). The "
+                      "explanation is also in the control's tooltip."),
+                ("ul", [
+                    "The guided and the advanced mode work on the <b>same "
+                    "configuration</b>. Opening the advanced tabs and coming "
+                    "back changes nothing. In the guided flow the goal "
+                    "<i>Keep my current settings</i> loads no preset at all; if "
+                    "you changed settings after choosing a preset, the guided "
+                    "flow tells you how many settings differ and offers to load "
+                    "the preset again or to treat them as your own.",
+                    "Defaults are shown as <i>the application's default</i>, "
+                    "never as a universal recommendation: the text says in "
+                    "which case a choice fits.",
+                    "In the test chart editor every field has a tooltip, taken "
+                    "from the ArgyllCMS <i>targen</i> documentation.",
+                ]),
+            ],
+        },
+        "lookup": {
+            "h": "Finding your monitor's technology",
+            "blocks": [
+                ("p", "Next to the colorimeter correction (in the guided flow "
+                      "and in the advanced Display tab) the link <b>Don't know "
+                      "your monitor's technology? Search the model</b> opens a "
+                      "window with the detected model, which you can correct."),
+                ("ul", [
+                    "For the <b>built-in Apple screen</b> the Mac's model "
+                    "identifier (for example Mac14,9) is used and EveryMac's "
+                    "lookup page for that identifier opens; the list is shown as "
+                    "it is, because several configurations can share one "
+                    "identifier. An <b>external monitor connected to a Mac</b> is "
+                    "not treated as the built-in screen.",
+                    "For other monitors the model is copied and "
+                    "displayspecifications.com opens: that site's search cannot "
+                    "be filled from a link, so you paste the model into it.",
+                    "No serial number or personal identifier is sent; the "
+                    "application itself uses no internet here (your browser "
+                    "does), so without a connection the model simply stays on "
+                    "the clipboard.",
+                ]),
+                ("warn", ("A specification page is not a correction",
+                          "The window explains four different things: panel "
+                          "technology (IPS, VA…), light-emitting technology "
+                          "(white LED, phosphor, quantum dot, OLED…), measurement "
+                          "mode, and correction (spectral or matrix). What a site "
+                          "says about a monitor helps to recognise it; it is not "
+                          "a validated correction for the combination of your "
+                          "monitor and your instrument, and nothing is selected "
+                          "for you.")),
+            ],
+        },
         "support": {
             "h": "Support, feedback and credits",
             "blocks": [
@@ -394,6 +461,76 @@ _T = {
                       "notează că rularea anterioară nu s-a închis normal, iar "
                       "fereastra de recuperare (capitolul anterior) listează "
                       "sesiunile neterminate; ambele intră în pachet."),
+            ],
+        },
+        "advanced": {
+            "h": "Setări avansate, grupate pe decizii",
+            "blocks": [
+                ("p", "Filele avansate păstrează toate controalele profesionale. "
+                      "Fiecare filă este acum împărțită în secțiuni numite după "
+                      "decizia pe care o iei (de exemplu <b>Cum trebuie să arate "
+                      "ecranul</b>, <b>Tipul de profil</b>, <b>Format de fișier și "
+                      "precizie</b>). Sub titlul fiecărei secțiuni, <b>Ce schimbă "
+                      "fiecare setare de aici</b> deschide o listă care spune, "
+                      "pentru fiecare setare: ce schimbă, când se potrivește, "
+                      "unitatea și valoarea implicită a aplicației, de ce "
+                      "depinde și dacă este <i>necesară pentru rulare</i>, "
+                      "<i>depinde de situația ta</i> sau <i>opțională</i>."),
+                ("p", "Când un control este indisponibil sau ascuns, aceeași "
+                      "listă spune <b>de ce</b> (de exemplu: un spectrometru nu "
+                      "folosește o corecție; fila LUT 3D se activează din meniul "
+                      "Opțiuni; modul PCS-către-dispozitiv cere un profil de tip "
+                      "LUT). Explicația apare și în indiciul controlului."),
+                ("ul", [
+                    "Modul ghidat și cel avansat lucrează pe <b>aceeași "
+                    "configurație</b>. Deschiderea filelor avansate și "
+                    "întoarcerea nu schimbă nimic. În fluxul ghidat, obiectivul "
+                    "<i>Păstrează setările mele actuale</i> nu încarcă nicio "
+                    "presetare; dacă ai schimbat setări după alegerea unei "
+                    "presetări, fluxul ghidat îți spune câte setări diferă și "
+                    "îți oferă să încarci din nou presetarea sau să le tratezi "
+                    "drept ale tale.",
+                    "Valorile implicite sunt arătate ca <i>valoarea implicită a "
+                    "aplicației</i>, niciodată ca recomandare universală: textul "
+                    "spune în ce caz se potrivește o alegere.",
+                    "În editorul de diagrame fiecare câmp are un indiciu, luat "
+                    "din documentația ArgyllCMS <i>targen</i>.",
+                ]),
+            ],
+        },
+        "lookup": {
+            "h": "Cum afli tehnologia monitorului",
+            "blocks": [
+                ("p", "Lângă corecția colorimetrului (în fluxul ghidat și în "
+                      "fila avansată Monitor) linkul <b>Nu știi tehnologia "
+                      "monitorului? Caută modelul</b> deschide o fereastră cu "
+                      "modelul detectat, pe care îl poți corecta."),
+                ("ul", [
+                    "Pentru <b>ecranul integrat Apple</b> se folosește "
+                    "identificatorul modelului de Mac (de exemplu Mac14,9) și "
+                    "se deschide pagina de căutare EveryMac pentru acel "
+                    "identificator; lista e arătată ca atare, fiindcă mai multe "
+                    "configurații pot avea același identificator. Un <b>monitor "
+                    "extern conectat la un Mac</b> nu este tratat drept ecranul "
+                    "integrat.",
+                    "Pentru celelalte monitoare modelul se copiază și se "
+                    "deschide displayspecifications.com: căutarea acelui site "
+                    "nu poate fi completată dintr-un link, deci lipești tu "
+                    "modelul în ea.",
+                    "Nu se trimite niciun număr de serie sau identificator "
+                    "personal; aplicația nu folosește internetul aici (o face "
+                    "browserul tău), deci fără conexiune modelul rămâne în "
+                    "clipboard.",
+                ]),
+                ("warn", ("O pagină de specificații nu este o corecție",
+                          "Fereastra explică patru lucruri diferite: tehnologia "
+                          "panoului (IPS, VA…), tehnologia emisivă (LED alb, "
+                          "fosfor, quantum dot, OLED…), modul de măsurare și "
+                          "corecția (spectrală sau matriceală). Ce spune un site "
+                          "despre un monitor ajută la recunoașterea lui; nu este "
+                          "o corecție validată pentru combinația monitorului și "
+                          "instrumentului tău, iar nimic nu se alege în locul "
+                          "tău.")),
             ],
         },
         "support": {
@@ -608,6 +745,79 @@ _T = {
                       "entran en el paquete."),
             ],
         },
+        "advanced": {
+            "h": "Ajustes avanzados, agrupados por decisión",
+            "blocks": [
+                ("p", "Las pestañas avanzadas conservan todos los controles "
+                      "profesionales. Cada pestaña se divide ahora en secciones "
+                      "con el nombre de la decisión que tomas (por ejemplo "
+                      "<b>Cómo debe verse la pantalla</b>, <b>Tipo de perfil</b>, "
+                      "<b>Formato de archivo y precisión</b>). Bajo el título de "
+                      "cada sección, <b>Qué cambia cada ajuste de aquí</b> abre "
+                      "una lista que indica, para cada ajuste: qué cambia, "
+                      "cuándo encaja, su unidad y el valor predeterminado de la "
+                      "aplicación, de qué depende y si es <i>necesario para "
+                      "ejecutar</i>, <i>depende de tu caso</i> u "
+                      "<i>opcional</i>."),
+                ("p", "Cuando un control no está disponible u oculto, la misma "
+                      "lista dice <b>por qué</b> (por ejemplo: un espectrómetro "
+                      "no usa corrección; la pestaña LUT 3D se activa en el menú "
+                      "Opciones; el modo PCS a dispositivo requiere un perfil de "
+                      "tipo LUT). La explicación también está en la descripción "
+                      "emergente del control."),
+                ("ul", [
+                    "El modo guiado y el avanzado trabajan con la <b>misma "
+                    "configuración</b>. Abrir las pestañas avanzadas y volver "
+                    "no cambia nada. En el flujo guiado, el objetivo "
+                    "<i>Mantener mis ajustes actuales</i> no carga ningún "
+                    "preajuste; si cambiaste ajustes tras elegir un preajuste, "
+                    "el flujo guiado te dice cuántos difieren y te ofrece "
+                    "cargar de nuevo el preajuste o tratarlos como propios.",
+                    "Los valores predeterminados se muestran como <i>valor "
+                    "predeterminado de la aplicación</i>, nunca como "
+                    "recomendación universal: el texto dice en qué caso encaja "
+                    "una elección.",
+                    "En el editor de cartas cada campo tiene una descripción "
+                    "emergente, tomada de la documentación de ArgyllCMS "
+                    "<i>targen</i>.",
+                ]),
+            ],
+        },
+        "lookup": {
+            "h": "Cómo averiguar la tecnología de tu monitor",
+            "blocks": [
+                ("p", "Junto a la corrección del colorímetro (en el flujo "
+                      "guiado y en la pestaña avanzada Pantalla) el enlace "
+                      "<b>¿No conoces la tecnología de tu monitor? Busca el "
+                      "modelo</b> abre una ventana con el modelo detectado, que "
+                      "puedes corregir."),
+                ("ul", [
+                    "Para la <b>pantalla integrada de Apple</b> se usa el "
+                    "identificador del modelo de Mac (por ejemplo Mac14,9) y se "
+                    "abre la página de búsqueda de EveryMac para ese "
+                    "identificador; la lista se muestra tal cual, porque varias "
+                    "configuraciones pueden compartir un identificador. Un "
+                    "<b>monitor externo conectado a un Mac</b> no se trata como "
+                    "la pantalla integrada.",
+                    "Para otros monitores se copia el modelo y se abre "
+                    "displayspecifications.com: la búsqueda de ese sitio no se "
+                    "puede rellenar desde un enlace, así que pegas el modelo en "
+                    "ella.",
+                    "No se envía ningún número de serie ni identificador "
+                    "personal; la aplicación no usa internet aquí (lo hace tu "
+                    "navegador), así que sin conexión el modelo queda en el "
+                    "portapapeles.",
+                ]),
+                ("warn", ("Una página de especificaciones no es una corrección",
+                          "La ventana explica cuatro cosas distintas: tecnología "
+                          "del panel (IPS, VA…), tecnología emisiva (LED blanco, "
+                          "fósforo, punto cuántico, OLED…), modo de medición y "
+                          "corrección (espectral o matricial). Lo que diga un "
+                          "sitio sobre un monitor ayuda a reconocerlo; no es una "
+                          "corrección validada para la combinación de tu monitor "
+                          "y tu instrumento, y no se elige nada por ti.")),
+            ],
+        },
         "support": {
             "h": "Apoyo, comentarios y créditos",
             "blocks": [
@@ -635,7 +845,7 @@ _T = {
 def sections(lang: str) -> list[dict]:
     """Chapters for one language, in reading order."""
     t = _T[lang]
-    return [t[k] for k in ("guided", "prep", "plan", "recovery", "diag")]
+    return [t[k] for k in ("guided", "prep", "plan", "recovery", "diag", "advanced", "lookup")]
 
 
 def support_section(lang: str) -> dict:

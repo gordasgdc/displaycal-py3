@@ -95,7 +95,8 @@ def default_text(item: sh.Item) -> str:
     if i == "lut3d_encoding":
         return _tr("help.val.range.full") if get("3dlut.encoding.input") == "n" else _tr("help.val.range.video")
     if i == "observer":
-        return str(get("observer")).replace("_", " ")
+        names = {"1931_2": "CIE 1931 2°", "1964_10": "CIE 1964 10°"}
+        return names.get(str(get("observer")), str(get("observer")).replace("_", " "))
     return ""
 
 

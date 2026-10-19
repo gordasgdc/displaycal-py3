@@ -15,4 +15,6 @@
 - Guides (Romanian, English, Spanish) rewritten for the guided flow.
 - Diagnostic and support (Help menu): open the log folder, see versions, copy the session ID, optional detailed logging for the current run, and export a diagnostic package you can read and send yourself (nothing is uploaded). Logs rotate and are size-limited; personal data is removed from text by default; measurements, ICC profiles and system crash reports are added only if you choose them.
 - Log lines now carry an ISO time with offset, a level and a run ID; an unexpected stop is noted at the next start.
+- Advanced settings are now grouped by decision. Each section says what each setting changes, when it fits, its unit and default, what it depends on and why a control is unavailable; the guided and advanced modes share one configuration, and a new goal keeps your current settings. The test chart editor explains its fields.
+- New link beside the correction choice: "Don't know your monitor's technology? Search the model" (model identifier for built-in Apple screens, copy-and-open for other monitors; nothing is selected for you).
 - TODO parity: Windows build verification of the new flow pending.

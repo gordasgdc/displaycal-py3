@@ -46,7 +46,15 @@ def platform_line() -> str:
     if sys.platform == "darwin":
         name = f"macOS {platform.mac_ver()[0]}"
     elif sys.platform == "win32":
-        name = f"Windows {platform.release()} ({platform.version()})"
+        version = platform.version()
+        release = platform.release()
+        try:
+            # Windows 11 still reports release "10"; builds from 22000 are Windows 11.
+            if release == "10" and int(version.split(".")[-1]) >= 22000:
+                release = "11"
+        except ValueError:
+            pass
+        name = f"Windows {release} ({version})"
     else:
         name = platform.system() or sys.platform
     return f"{name}, {platform.machine()}"
