@@ -235,6 +235,7 @@ from DisplayCAL.ui.colorimeter_correction_window import CreateCorrectionWindow
 from DisplayCAL.ui.display_adjustment_window import DisplayAdjustmentWindow
 from DisplayCAL.ui.gamap_window import GamapWindow
 from DisplayCAL.ui.guide_panel import GuidePanel
+from DisplayCAL.ui.plan_widget import ChartPlanWidget
 from DisplayCAL.ui.support_dialog import FeedbackDialog, github_icon, star_clicked
 from DisplayCAL.ui.header_banner import (
     HEADER_BANNER_SIZE,
@@ -4631,6 +4632,13 @@ class MainWindow(BaseWindow):
         self._patches_row_widget = self._wrap(patches_row)
         form.addRow(lang.getstr("testchart.patches_amount"), self._patches_row_widget)
 
+        # What will actually run, in plain numbers: chart total, block size,
+        # number of blocks, estimated time (the guided view shows the same).
+        self.plan_widget = ChartPlanWidget(self)
+        self.plan_block_combo = self.plan_widget.block_combo
+        self.plan_chart_btn = self.plan_widget.chart_menu_btn
+        form.addRow("", self.plan_widget)
+
         # Patch sequence (gated by show_advanced_options, like wx).
         self.testchart_patch_sequence_ctrl = QComboBox()
         self._add_value_combo(
@@ -4645,7 +4653,10 @@ class MainWindow(BaseWindow):
             lang.getstr("testchart.patch_sequence"), self.testchart_patch_sequence_ctrl
         )
 
+        # The older one-line estimate stays computed (other code reads it) but
+        # the plan below shows the same facts, split into total / block / blocks.
         self.testchart_meas_time = QLabel()
+        self.testchart_meas_time.setVisible(False)
         form.addRow("", self.testchart_meas_time)
         # Context note (not a rule): what the ArgyllCMS documentation says about
         # patch counts for the chosen profile type.
@@ -8882,10 +8893,16 @@ class MainWindow(BaseWindow):
             self.testchart_patch_sequence_ctrl, bool(getcfg("show_advanced_options"))
         )
 
+    def refresh_plan_widgets(self) -> None:
+        """Repaint every view of the measurement plan (guided and advanced)."""
+        for widget in list(self.__dict__.get("_plan_widgets", [])):
+            widget.refresh()
+
     def _update_testchart_meas_time(self) -> None:
         """Refresh the estimated-measurement-time label, per wx's coloring rule."""
         patches = int(self.testchart_patches_amount.text() or 0)
         estimate = profile_name_mod.estimate_measurement_time(self.worker, patches)
+        self.refresh_plan_widgets()
         self.testchart_meas_time.setText(estimate.label())
         self.testchart_meas_time.setStyleSheet(
             "color: #FF3300;"

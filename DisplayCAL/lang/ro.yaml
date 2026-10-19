@@ -1590,6 +1590,9 @@
   Aplicațiile care folosesc propriul management de culoare nu sunt afectate (precum Adobe Creative Suite folosind Adobe ACE, sau aplicații grafice open-source folosind littleCMS precum GIMP sau Krita, sau aplicații ce folosesc LUT-uri 3D pentru managementul culorii).
 
   Vrei să setezi tipul profilului pe curbă unică + matrice și să activezi compensarea punctului negru?
+
+  Alege Nu ca să păstrezi tipul de profil ales. Alege Anulare ca să te oprești.
+
 "madhcnet.outdated": |-
   Versiunea instalată de %s găsită la %s este învechită. Actualizează la cea mai recentă versiune madVR (cel puțin %i.%i.%i.%i).
 "madtpg.launch.failure": |-
@@ -3220,11 +3223,11 @@
 "plan.type.G.cost": |-
   Ajunge o diagramă mică.
 "plan.type.s.use": |-
-  Matrice cu o curbă individuală pe canal, deci urmează un răspuns de tonuri care nu e o simplă gamma. Fișier mic, compatibilitate bună; doar colorimetric. Presetarea aplicației pentru macOS îl evită din cauza unor probleme raportate acolo cu profilurile matriciale cu curbe individuale.
+  Matrice cu o curbă separată pentru fiecare canal, deci urmărește un răspuns tonal care nu e un simplu gamma. Fișier mic, compatibilitate bună; doar colorimetric. Pe macOS, aplicațiile care folosesc modulul de culoare propriu al Apple pot arăta artefacte cu el, în afara tipului cu curbă unică și compensarea punctului negru; aplicațiile cu management propriu al culorii nu sunt afectate.
 "plan.type.s.cost": |-
   Ajunge o diagramă moderată; una foarte mare adaugă mai ales timp.
 "plan.type.S.use": |-
-  Matrice cu o singură curbă comună: echilibrează practic griul și este alegerea matricială cea mai previzibilă. Este presetarea aplicației pentru macOS (moștenită de la proiectul original din cauza unor probleme raportate cu profilurile cLUT și cu cele matriciale cu curbe individuale pe macOS); este o alegere de presetare, nu o limită a macOS.
+  Matrice cu o singură curbă comună („curbă unică + matrice”): cel mai simplu și mai previzibil profil matriceal, care echilibrează griurile. Cu compensarea punctului negru este combinația recomandată de proiectul original pentru aplicațiile care folosesc modulul de culoare propriu al Apple (macOS Preview, Quick Look și altele asemenea), care pot arăta negru strivit și posterizare cu alte tipuri de profil de monitor. Pe macOS este presetarea; celelalte tipuri rămân disponibile. Este o precauție pentru acele aplicații, nu o limită generală a macOS.
 "plan.type.S.cost": |-
   Ajunge o diagramă mică sau moderată.
 "plan.type.x.use": |-
@@ -3242,7 +3245,7 @@
 "plan.long.title": |-
   Rulare lungă
 "plan.long.warn": |-
-  Această rulare este estimată la aproximativ %s. Rulările lungi sunt expuse la derivă și la întreruperi.
+  Rulările lungi sunt expuse derivei ecranului și întreruperilor.
 "plan.blocks.title": |-
   Rulare lungă sigură (blocuri)
 "plan.blocks.text": |-
@@ -3250,9 +3253,9 @@
 "plan.blocks.size": |-
   Mărimea blocului
 "plan.blocks.off": |-
-  Oprit (o singură rulare)
+  Fără blocuri (o singură rulare)
 "plan.blocks.n": |-
-  %s patch-uri
+  blocuri de maximum %s patch-uri
 "plan.blocks.recommend": |-
   Recomandat pentru o rulare de această lungime.
 "plan.blocks.too_small": |-
@@ -3839,6 +3842,14 @@
   Profilurile matriciale câștigă puțin din diagrame foarte mari; cele LUT folosesc mai multe.
 "help.patches.needs": |-
   Doar pentru diagrama auto-optimizată; estimarea arată timpul.
+"help.blocks.name": |-
+  Blocuri (rulare lungă în siguranță)
+"help.blocks.what": |-
+  Taie măsurarea diagramei în blocuri consecutive de cel mult atâtea patch-uri; fiecare bloc terminat este salvat pe disc, deci o întrerupere pierde cel mult blocul curent. Mărimea blocului nu este numărul de patch-uri din diagramă.
+"help.blocks.when": |-
+  Pentru rulări lungi (cam o oră sau mai mult). Nu este necesar pentru o diagramă mică.
+"help.blocks.needs": |-
+  Necesită un instrument care nu trebuie calibrat pe referința lui între rulări. Fiecare bloc după primul repetă albul de referință.
 "help.sequence.name": |-
   Secvența patch-urilor
 "help.sequence.what": |-
@@ -4017,3 +4028,61 @@
   Revino la dimensiunea implicită
 "textsize.tip": |-
   Dimensiunea textului: mărește sau micșorează imediat tot textul aplicației. Nu schimbă fereastra de măsurare și nici măsurătorile.
+"plan.total": |-
+  Total: %s patch-uri
+"plan.chart_menu": |-
+  Alege sau creează diagrama
+"plan.chart_menu.choose": |-
+  Alege un fișier de diagramă…
+"plan.chart_menu.edit": |-
+  Creează sau editează diagrama…
+"plan.chart_menu.tab": |-
+  Setările diagramei (fila Profilare)
+"plan.blocks.other": |-
+  Altă mărime…
+"plan.blocks.other.prompt": |-
+  Numărul maxim de patch-uri dintr-un bloc (20 sau mai mult):
+"plan.nblocks.one": |-
+  un singur bloc
+"plan.nblocks.few": |-
+  %s blocuri
+"plan.nblocks.many": |-
+  %s de blocuri
+"plan.summary.single": |-
+  %s patch-uri în total · măsurate într-o singură rulare
+"plan.summary.split": |-
+  %s patch-uri în total · blocuri de maximum %s · aproximativ %s
+"plan.summary.white": |-
+  Fiecare bloc după primul repetă albul de referință: %s citiri suplimentare de alb, %s citiri în total (diagrama în sine nu se schimbă).
+"plan.summary.each": |-
+  Fiecare bloc are aproximativ %s patch-uri.
+"plan.time.observed": |-
+  Timp estimat: %s
+"plan.time.spec": |-
+  Timp estimat: aproximativ %s
+"plan.time.basis.observed": |-
+  Pe baza vitezei pe care a avut-o efectiv acest instrument în rulările anterioare de pe acest calculator (valoare tipică, cu intervalul observat). O estimare, nu o garanție.
+"plan.time.basis.spec": |-
+  Calculat din specificațiile instrumentului; nu există o rulare anterioară a acestui instrument pe acest calculator cu care să fie comparat. O estimare, nu o garanție.
+"plan.time.none": |-
+  Timpul nu poate fi estimat pentru acest instrument.
+"plan.blocks.not_split": |-
+  Cu blocuri de maximum %s această diagramă se măsoară tot dintr-o bucată: o diagramă se împarte doar dacă depășește mărimea blocului cu mai mult de 20 %%.
+"plan.chart.limit": |-
+  Aplicația nu impune o limită superioară pentru numărul de patch-uri: o diagramă de 11.000 de patch-uri sau mai mult poate fi creată, încărcată și măsurată în blocuri. Limitele reale sunt timpul de măsurare, cât derivă ecranul în timpul unei rulări lungi și câte patch-uri poate folosi tipul de profil ales. O mărime mai mare a blocului nu înseamnă o diagramă mai mare: mărimea blocului decide doar cum este tăiată aceeași diagramă în bucăți.
+"plan.three.title": |-
+  Trei lucruri diferite
+"plan.three.text": |-
+  • Curbele de calibrare reglează felul în care se comportă monitorul (sunt aplicate de placa video sau de monitor).
+  • Diagrama de măsurare este setul de patch-uri de culoare care se măsoară; mărimea ei este numărul de patch-uri.
+  • Tipul profilului ICC este felul în care comportamentul măsurat este descris aplicațiilor. Se alege separat: un tip LUT poate folosi mult mai multe patch-uri decât un tip matrice, dar diagrama nu decide tipul, iar tipul nu decide mărimea blocului.
+"plan.icc.text": |-
+  Un profil ICC descrie ecranul măsurat aplicațiilor cu management al culorii. Tipul este felul în care îl descrie.
+"plan.macos.title": |-
+  Avertismentul macOS despre tipul de profil
+"plan.macos.text": |-
+  Pe macOS 10.8 sau mai nou, înainte de calibrare sau profilare, aplicația întreabă o dată dacă tipul profilului este altul decât curbă unică + matrice cu compensarea punctului negru. Motivul, din proiectul original: aplicațiile care folosesc modulul de culoare propriu al Apple (de exemplu Preview și Quick Look) pot arăta negru strivit și posterizare cu alte tipuri de profil de monitor (mai ales profilurile LUT). Nu este o interdicție: Da trece la curbă unică + matrice cu compensarea punctului negru, Nu păstrează alegerea ta, Anulare oprește. Aplicațiile cu management propriu al culorii (Adobe, GIMP, Krita…) și fluxurile care folosesc un LUT 3D nu sunt afectate, deci un colorist care lucrează așa poate păstra un profil LUT.
+"plan.compare.title": |-
+  Profil ICC, LUT 3D sau compatibilitate cu aplicațiile
+"plan.compare.text": |-
+  Un profil ICC este folosit de fiecare aplicație cu management al culorii de pe calculator, deci compatibilitatea contează: un profil matriceal este alegerea cea mai sigură aici. Un LUT 3D este folosit doar de aplicația sau dispozitivul care îl încarcă (de exemplu un instrument de etalonare sau de redare), deci poate urmări ecranul mai îndeaproape fără să depindă de felul în care alte aplicații citesc profilurile ICC. Mai multe patch-uri pot ajuta un LUT; nu sunt o garanție, costă timp și lasă ecranul să derive, deci verifică rezultatul după profilare.

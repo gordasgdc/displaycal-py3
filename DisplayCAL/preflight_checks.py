@@ -65,8 +65,19 @@ def should_warn_calibration_bugs() -> bool:
 
 
 def should_warn_profile_bugs() -> bool:
-    """Whether the current profile settings hit the macOS BPC/S-curve bug."""
-    return getcfg("profile.type") == "S" and bool(
+    """Whether the chosen profile is one Apple's colour module handles poorly.
+
+    The warning exists because the Apple CMM (used by macOS Preview, QuickLook
+    and similar) is documented by the original project as not supporting display
+    profile types other than *single curve + matrix with black point
+    compensation*. It is therefore raised for every OTHER combination -- the
+    original wx condition was ``type != "S" or not black point compensation``;
+    the Qt port had inverted it, warning about the one compatible combination
+    (and being silent for all the others). Applications with their own colour
+    management and 3D LUT workflows are not affected, which is why this stays a
+    warning with a choice, never a ban.
+    """
+    return getcfg("profile.type") != "S" or not bool(
         getcfg("profile.black_point_compensation")
     )
 

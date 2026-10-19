@@ -81,20 +81,26 @@ class TestShouldWarnCalibrationBugs:
 
 
 class TestShouldWarnProfileBugs:
-    def test_non_s_type_no_warning(self):
+    def test_non_s_type_warns(self):
         setcfg("profile.type", "G")
         setcfg("profile.black_point_compensation", 1)
-        assert pfc.should_warn_profile_bugs() is False
+        assert pfc.should_warn_profile_bugs() is True
 
-    def test_s_type_without_bpc_no_warning(self):
-        setcfg("profile.type", "S")
-        setcfg("profile.black_point_compensation", 0)
-        assert pfc.should_warn_profile_bugs() is False
-
-    def test_s_type_with_bpc_warns(self):
-        setcfg("profile.type", "S")
+    def test_lut_type_warns(self):
+        setcfg("profile.type", "X")
         setcfg("profile.black_point_compensation", 1)
         assert pfc.should_warn_profile_bugs() is True
+
+    def test_s_type_without_bpc_warns(self):
+        setcfg("profile.type", "S")
+        setcfg("profile.black_point_compensation", 0)
+        assert pfc.should_warn_profile_bugs() is True
+
+    def test_the_compatible_combination_does_not_warn(self):
+        """Single curve + matrix with black point compensation: nothing to warn about."""
+        setcfg("profile.type", "S")
+        setcfg("profile.black_point_compensation", 1)
+        assert pfc.should_warn_profile_bugs() is False
 
 
 class TestResolveCalChoiceInfo:

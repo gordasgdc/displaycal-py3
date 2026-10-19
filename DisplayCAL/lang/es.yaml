@@ -1584,6 +1584,9 @@
   Las aplicaciones que usan su propia gestión de color no se ven afectadas (como Adobe Creative Suite con Adobe ACE, o aplicaciones gráficas de código abierto que usan littleCMS como GIMP o Krita, o aplicaciones que emplean LUT 3D para gestión de color).
 
   ¿Desea establecer el tipo de perfil en curva única + matriz y activar la compensación del punto negro?
+
+  Elija No para mantener el tipo de perfil seleccionado. Elija Cancelar para detenerse.
+
 "madhcnet.outdated": |-
   La versión instalada de %s encontrada en %s está desactualizada. Actualice a la última versión de madVR (al menos %i.%i.%i.%i).
 "madtpg.launch.failure": |-
@@ -3212,11 +3215,11 @@
 "plan.type.G.cost": |-
   Basta una carta pequeña.
 "plan.type.s.use": |-
-  Matriz con una curva individual por canal, por lo que sigue una respuesta tonal que no es una simple gamma. Archivo pequeño, buena compatibilidad; solo colorimétrico. El preajuste de la aplicación para macOS lo evita por problemas notificados con perfiles matriciales de curvas individuales.
+  Matriz con una curva individual por canal, de modo que sigue una respuesta tonal que no es un gamma simple. Archivo pequeño, buena compatibilidad; solo colorimétrico. En macOS, las aplicaciones que usan el módulo de color propio de Apple pueden mostrar artefactos con él salvo que sea el tipo de curva única con compensación del punto negro; las aplicaciones con gestión de color propia no se ven afectadas.
 "plan.type.s.cost": |-
   Basta una carta moderada; una muy grande añade sobre todo tiempo.
 "plan.type.S.use": |-
-  Matriz con una curva compartida: equilibra de hecho los grises y es la opción matricial más predecible. Es el preajuste de la aplicación para macOS (heredado del proyecto original por problemas notificados con perfiles cLUT y matriciales de curvas individuales en macOS); es una elección de preajuste, no un límite de macOS.
+  Matriz con una curva compartida («curva única + matriz»): el perfil de matriz más simple y predecible, que equilibra los grises. Con compensación del punto negro es la combinación que recomienda el proyecto original para las aplicaciones que usan el módulo de color propio de Apple (Vista Previa de macOS, Quick Look y similares), que pueden mostrar negros aplastados y posterización con otros tipos de perfil de pantalla. En macOS es el preajuste; los demás tipos siguen disponibles. Es una precaución sobre esas aplicaciones, no un límite general de macOS.
 "plan.type.S.cost": |-
   Basta una carta pequeña o moderada.
 "plan.type.x.use": |-
@@ -3234,7 +3237,7 @@
 "plan.long.title": |-
   Ejecución larga
 "plan.long.warn": |-
-  Se estima que esta ejecución dure unos %s. Las ejecuciones largas están expuestas a la deriva y a las interrupciones.
+  Las ejecuciones largas están expuestas a la deriva de la pantalla y a las interrupciones.
 "plan.blocks.title": |-
   Ejecución larga segura (bloques)
 "plan.blocks.text": |-
@@ -3242,9 +3245,9 @@
 "plan.blocks.size": |-
   Tamaño del bloque
 "plan.blocks.off": |-
-  Desactivado (una sola ejecución)
+  Sin bloques (una sola ejecución)
 "plan.blocks.n": |-
-  %s parches
+  bloques de como máximo %s parches
 "plan.blocks.recommend": |-
   Recomendado para una ejecución de esta duración.
 "plan.blocks.too_small": |-
@@ -3831,6 +3834,14 @@
   Los perfiles de matriz ganan poco con cartas muy grandes; los LUT usan más.
 "help.patches.needs": |-
   Solo para la carta autooptimizada; la estimación indica el tiempo.
+"help.blocks.name": |-
+  Bloques (ejecución larga segura)
+"help.blocks.what": |-
+  Corta la medición de la carta en bloques consecutivos de como máximo esta cantidad de parches; cada bloque terminado se guarda en disco, así que una interrupción pierde como mucho el bloque en curso. El tamaño del bloque no es el número de parches de la carta.
+"help.blocks.when": |-
+  Para ejecuciones largas (aproximadamente una hora o más). No hace falta con una carta pequeña.
+"help.blocks.needs": |-
+  Necesita un instrumento que no tenga que calibrarse sobre su referencia entre ejecuciones. Cada bloque después del primero repite el blanco de referencia.
 "help.sequence.name": |-
   Secuencia de parches
 "help.sequence.what": |-
@@ -4009,3 +4020,61 @@
   Volver al tamaño predeterminado
 "textsize.tip": |-
   Tamaño del texto: agranda o reduce al instante todo el texto de la aplicación. No cambia la ventana de medición ni las mediciones.
+"plan.total": |-
+  Total: %s parches
+"plan.chart_menu": |-
+  Elegir o crear la carta
+"plan.chart_menu.choose": |-
+  Elegir un archivo de carta…
+"plan.chart_menu.edit": |-
+  Crear o editar la carta…
+"plan.chart_menu.tab": |-
+  Ajustes de la carta (pestaña Perfilado)
+"plan.blocks.other": |-
+  Otro tamaño…
+"plan.blocks.other.prompt": |-
+  Número máximo de parches en un bloque (20 o más):
+"plan.nblocks.one": |-
+  un solo bloque
+"plan.nblocks.few": |-
+  %s bloques
+"plan.nblocks.many": |-
+  %s bloques
+"plan.summary.single": |-
+  %s parches en total · medidos en una sola ejecución
+"plan.summary.split": |-
+  %s parches en total · bloques de como máximo %s · aproximadamente %s
+"plan.summary.white": |-
+  Cada bloque después del primero repite el blanco de referencia: %s lecturas de blanco adicionales, %s lecturas en total (la carta en sí no cambia).
+"plan.summary.each": |-
+  Cada bloque tiene unos %s parches.
+"plan.time.observed": |-
+  Tiempo estimado: %s
+"plan.time.spec": |-
+  Tiempo estimado: unos %s
+"plan.time.basis.observed": |-
+  Basado en la velocidad que tuvo realmente este instrumento en ejecuciones anteriores en este ordenador (valor típico, con el intervalo observado). Una estimación, no una garantía.
+"plan.time.basis.spec": |-
+  Calculado a partir de la especificación del instrumento; no hay una ejecución anterior de este instrumento en este ordenador con la que compararlo. Una estimación, no una garantía.
+"plan.time.none": |-
+  No se puede estimar el tiempo para este instrumento.
+"plan.blocks.not_split": |-
+  Con bloques de como máximo %s esta carta se mide igualmente de una pieza: una carta solo se divide si supera el tamaño del bloque en más de un 20 %%.
+"plan.chart.limit": |-
+  La aplicación no fija un límite superior de parches: se puede crear, cargar y medir en bloques una carta de 11.000 parches o más. Los límites reales son el tiempo de medición, cuánto deriva la pantalla durante una ejecución larga y cuántos parches puede aprovechar el tipo de perfil elegido. Un bloque mayor no significa una carta mayor: el tamaño del bloque solo decide cómo se corta la misma carta en trozos.
+"plan.three.title": |-
+  Tres cosas distintas
+"plan.three.text": |-
+  • Las curvas de calibración ajustan cómo se comporta el monitor (las aplica la tarjeta gráfica o el monitor).
+  • La carta de medición es el conjunto de parches de color que se miden; su tamaño es el número de parches.
+  • El tipo de perfil ICC es cómo se describe a las aplicaciones el comportamiento medido. Se elige por separado: un tipo LUT puede aprovechar muchos más parches que uno de matriz, pero la carta no decide el tipo ni el tipo decide el tamaño del bloque.
+"plan.icc.text": |-
+  Un perfil ICC describe la pantalla medida a las aplicaciones con gestión de color. El tipo es la forma en que la describe.
+"plan.macos.title": |-
+  La advertencia de macOS sobre el tipo de perfil
+"plan.macos.text": |-
+  En macOS 10.8 o posterior, antes de calibrar o crear el perfil, la aplicación pregunta una vez si el tipo de perfil es distinto de curva única + matriz con compensación del punto negro. El motivo, según el proyecto original: las aplicaciones que usan el módulo de color propio de Apple (por ejemplo Vista Previa y Quick Look) pueden mostrar negros aplastados y posterización con otros tipos de perfil de pantalla (sobre todo los LUT). No es una prohibición: Sí cambia a curva única + matriz con compensación del punto negro, No mantiene tu elección, Cancelar detiene. Las aplicaciones con gestión de color propia (Adobe, GIMP, Krita…) y los flujos que usan una LUT 3D no se ven afectados, así que un colorista que trabaje así puede conservar un perfil LUT.
+"plan.compare.title": |-
+  Perfil ICC, LUT 3D o compatibilidad con aplicaciones
+"plan.compare.text": |-
+  Un perfil ICC lo usa cada aplicación con gestión de color del ordenador, así que la compatibilidad importa: un perfil de matriz es la opción más segura ahí. Una LUT 3D la usa solo la aplicación o el dispositivo que la carga (por ejemplo una herramienta de etalonaje o de reproducción), por lo que puede seguir la pantalla más de cerca sin depender de cómo otras aplicaciones leen los perfiles ICC. Más parches pueden ayudar a una LUT; no son una garantía, cuestan tiempo y dejan que la pantalla derive, así que verifica el resultado tras perfilar.

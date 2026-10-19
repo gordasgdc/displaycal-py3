@@ -1590,6 +1590,9 @@
   Applications that use their own color management are not affected (like Adobe Creative Suite using Adobe ACE, or open source graphics applications using littleCMS like GIMP or Krita, or applications employing 3D LUTs for color management).
 
   Do you want to set the profile type to single curve + matrix and enable black point compensation?
+
+  Choose No to keep the profile type you selected. Choose Cancel to stop.
+
 "madhcnet.outdated": |-
   The installed version of %s found at %s is outdated. Please update to the latest madVR version (at least %i.%i.%i.%i).
 "madtpg.launch.failure": |-
@@ -3220,11 +3223,11 @@
 "plan.type.G.cost": |-
   A small chart is enough.
 "plan.type.s.use": |-
-  Matrix with an individual curve per channel, so it follows tone response that is not a plain gamma. Small file, good compatibility; colorimetric only. The application’s macOS default avoids it because of reported problems with individual-curve matrix profiles there.
+  Matrix with an individual curve per channel, so it follows tone response that is not a plain gamma. Small file, good compatibility; colorimetric only. On macOS, applications that use Apple’s own colour module may show artifacts with it unless it is the single-curve type with black point compensation; applications with their own colour management are not affected.
 "plan.type.s.cost": |-
   A moderate chart is enough; a very large one mostly adds time.
 "plan.type.S.use": |-
-  Matrix with one shared curve: it effectively balances grey and is the most predictable matrix choice. This is the application’s macOS default (inherited from the original project because of reported problems with cLUT profiles and individual-curve matrix profiles on macOS); it is a preset choice, not a limit of macOS itself.
+  Matrix with one shared curve (“single curve + matrix”): the simplest and most predictable matrix profile, and it balances grey. With black point compensation it is the combination the original project recommends for applications that use Apple’s own colour module (macOS Preview, Quick Look and similar), which can show black crush and posterization with other display profile types. On macOS it is the preset; other types remain available. It is a precaution about those applications, not a general limit of macOS.
 "plan.type.S.cost": |-
   A small to moderate chart is enough.
 "plan.type.x.use": |-
@@ -3242,7 +3245,7 @@
 "plan.long.title": |-
   Long run
 "plan.long.warn": |-
-  This run is estimated at about %s. Long runs are exposed to drift and to interruptions.
+  Long runs are exposed to display drift and to interruptions.
 "plan.blocks.title": |-
   Safe long run (blocks)
 "plan.blocks.text": |-
@@ -3250,9 +3253,9 @@
 "plan.blocks.size": |-
   Block size
 "plan.blocks.off": |-
-  Off (one run)
+  No blocks (one single run)
 "plan.blocks.n": |-
-  %s patches
+  blocks of at most %s patches
 "plan.blocks.recommend": |-
   Recommended for a run of this length.
 "plan.blocks.too_small": |-
@@ -3839,6 +3842,14 @@
   Matrix profiles gain little from very large charts; LUT profiles use more.
 "help.patches.needs": |-
   Only for the auto-optimized chart; the estimate shows the time.
+"help.blocks.name": |-
+  Blocks (safe long run)
+"help.blocks.what": |-
+  Cuts the measurement of the chart into consecutive blocks of at most this many patches; every finished block is stored on disk, so an interruption loses at most the current block. The block size is not the number of patches in the chart.
+"help.blocks.when": |-
+  For long runs (about an hour or more). Not needed for a small chart.
+"help.blocks.needs": |-
+  Needs an instrument that does not have to be calibrated on its reference between runs. Every block after the first repeats the white reference.
 "help.sequence.name": |-
   Patch sequence
 "help.sequence.what": |-
@@ -4017,3 +4028,61 @@
   Reset to the default size
 "textsize.tip": |-
   Text size: makes all text in the application larger or smaller, at once. It does not change the measurement window or any measurement.
+"plan.total": |-
+  Total: %s patches
+"plan.chart_menu": |-
+  Choose or create a chart
+"plan.chart_menu.choose": |-
+  Choose a chart file…
+"plan.chart_menu.edit": |-
+  Create or edit the chart…
+"plan.chart_menu.tab": |-
+  Chart settings (Profiling tab)
+"plan.blocks.other": |-
+  Other size…
+"plan.blocks.other.prompt": |-
+  Largest number of patches in one block (20 or more):
+"plan.nblocks.one": |-
+  one block
+"plan.nblocks.few": |-
+  %s blocks
+"plan.nblocks.many": |-
+  %s blocks
+"plan.summary.single": |-
+  %s patches in total · measured in one run
+"plan.summary.split": |-
+  %s patches in total · blocks of at most %s · about %s
+"plan.summary.white": |-
+  Every block after the first repeats the white reference: %s extra white readings, %s readings in all (the chart itself is unchanged).
+"plan.summary.each": |-
+  Each block has about %s patches.
+"plan.time.observed": |-
+  Estimated time: %s
+"plan.time.spec": |-
+  Estimated time: about %s
+"plan.time.basis.observed": |-
+  Based on the speed this instrument really had in earlier runs on this computer (typical value, with the range seen). An estimate, not a guarantee.
+"plan.time.basis.spec": |-
+  Computed from the instrument’s specification; there is no earlier run of this instrument on this computer to compare with. An estimate, not a guarantee.
+"plan.time.none": |-
+  Time cannot be estimated for this instrument.
+"plan.blocks.not_split": |-
+  With blocks of at most %s this chart still runs as one piece: a chart is only split when it is more than 20 %% over the block size.
+"plan.chart.limit": |-
+  The application sets no upper limit on the number of patches: a chart of 11,000 patches or more can be created, loaded and measured in blocks. The real limits are measuring time, how much the display drifts during a long run, and how many patches the chosen profile type can use. A larger block size does not mean a larger chart: the block size only decides how the same chart is cut into pieces.
+"plan.three.title": |-
+  Three different things
+"plan.three.text": |-
+  • Calibration curves adjust how the monitor behaves (they are applied by the graphics card or the monitor).
+  • The measurement chart is the set of colour patches that is measured; its size is the number of patches.
+  • The ICC profile type is how the measured behaviour is described to applications. It is chosen separately: a LUT type can use many more patches than a matrix type, but the chart does not decide the type and the type does not decide the block size.
+"plan.icc.text": |-
+  An ICC profile describes the measured screen to colour-managed applications. The type is the way it is described.
+"plan.macos.title": |-
+  The macOS warning about the profile type
+"plan.macos.text": |-
+  On macOS 10.8 or newer, before calibrating or profiling, the application asks once if the profile type is anything other than single curve + matrix with black point compensation. The reason, from the original project: applications that use Apple’s own colour module (for example Preview and Quick Look) may show black crush and posterization with other display profile types (LUT profiles above all). It is not a ban: Yes switches to single curve + matrix with black point compensation, No keeps your choice, Cancel stops. Applications with their own colour management (Adobe, GIMP, Krita…) and workflows that use a 3D LUT are not affected, so a colorist who works that way can keep a LUT profile.
+"plan.compare.title": |-
+  ICC profile, 3D LUT or application compatibility
+"plan.compare.text": |-
+  An ICC profile is used by every colour-managed application on the computer, so compatibility matters: a matrix profile is the safest choice there. A 3D LUT is used by the one application or device that loads it (for example a grading or playback tool), so it can follow the screen more closely without depending on how other applications read ICC profiles. More patches can help a LUT; they are not a guarantee, they cost time and they let the display drift, so verify the result after profiling.

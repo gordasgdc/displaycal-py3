@@ -204,3 +204,21 @@ def test_usage_probes_are_not_sessions(worker):
     assert worker.session_journal is None and len(calls) == 2
     worker.exec_cmd("/x/spotread", ["-v", "-d1"])
     assert worker.session_journal is not None
+
+
+@pytest.mark.parametrize("n,size", [(401, 100), (601, 500), (1500, 500), (721, 600)])
+def test_executed_blocks_equal_the_displayed_plan(worker, tmp_path, monkeypatch, n, size):
+    from DisplayCAL import measured_speed, measurement_plan as mp
+
+    recorded = []
+    monkeypatch.setattr(measured_speed, "record", lambda *a, **k: recorded.append(a))
+    result, base, calls = run_chart(worker, tmp_path, n=n, size=size)
+    plan = mp.make_plan(n, size)
+    assert result is True
+    assert len(calls) == plan.blocks
+    assert len(mb.read_table(base + ".ti3").rows) == n  # the total never changes
+    if plan.split:
+        assert sum(r[1] for r in recorded) >= 0 and len(recorded) == plan.blocks
+        assert sum(r[1] for r in recorded) == plan.readings
+    else:
+        assert [r[1] for r in recorded] == [n]

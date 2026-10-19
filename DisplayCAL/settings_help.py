@@ -121,6 +121,7 @@ ITEMS: dict[str, Item] = {
         _i("profile_quality", "profile_quality_ctrl", "profile.quality"),
         _i("testchart", "testchart_ctrl testchart_btn create_testchart_btn", "testchart.file"),
         _i("patches", "testchart_patches_amount testchart_patches_amount_ctrl"),
+        _i("blocks", "plan_block_combo plan_chart_btn", "measurement.block_size"),
         _i("sequence", "testchart_patch_sequence_ctrl", "testchart.patch_sequence"),
         _i("profile_name", "profile_name_textctrl profile_name_info_btn profile_save_path_btn", "profile.name"),
         # --- 3D LUT ----------------------------------------------------------
@@ -162,7 +163,7 @@ SECTIONS: dict[str, tuple[tuple[str, tuple[str, ...]], ...]] = {
     ),
     "profiling": (
         ("type", ("profile_type", "bpc", "profile_quality")),
-        ("chart", ("testchart", "patches", "sequence")),
+        ("chart", ("testchart", "patches", "blocks", "sequence")),
         ("name", ("profile_name",)),
     ),
     "lut3d": (

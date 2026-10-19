@@ -23,7 +23,14 @@ import shutil
 import tempfile
 import time
 
-from DisplayCAL import config, keep_awake, measurement_blocks, session_journal
+from DisplayCAL import (
+    config,
+    keep_awake,
+    measured_speed,
+    measurement_blocks,
+    measurement_plan,
+    session_journal,
+)
 from DisplayCAL import localization as lang
 from DisplayCAL.config import getcfg
 from DisplayCAL import diagnostics
@@ -311,7 +318,7 @@ class SessionMixin:
         ti1 = f"{base}.ti1"
         ok, _why = self.blocks_supported()
         if size <= 0 or not ok or not os.path.isfile(ti1):
-            return self.exec_cmd(cmd, args2)
+            return self._single_run(cmd, args2, ti1)
         reused: dict[int, str] = {}
         if self.resume_from:
             outcome = self._resume_prepare(ti1, size)
@@ -320,9 +327,10 @@ class SessionMixin:
             reused = outcome
         try:
             table = measurement_blocks.read_table(ti1)
-            n_blocks = measurement_blocks.plan_blocks(len(table.rows), size)
-            if n_blocks <= 1:
-                return self.exec_cmd(cmd, args2)
+            # The same function the plan on screen uses, so what was shown is
+            # what runs.
+            if not measurement_plan.make_plan(len(table.rows), size).split:
+                return self._single_run(cmd, args2, ti1)
             blocks = measurement_blocks.split_ti1(ti1, os.path.basename(base), size)
         except measurement_blocks.CGATSError as exc:
             self.log(f"Blocks not used: {exc}")
@@ -343,7 +351,11 @@ class SessionMixin:
             j.checkpoint(ti1, "chart.full.ti1")
             for name in self._session_extra_files():
                 j.checkpoint(name)
-        self.log(f"Measuring {total} patches in {len(blocks)} blocks of about {size}.")
+        shown = measurement_plan.make_plan(total, size)
+        self.log(
+            f"Measuring {total} patches in {shown.blocks} blocks of at most "
+            f"{shown.per_block} (+1 repeated white each; {shown.readings} readings)."
+        )
         parts: list[str] = []
         done_before = 0
         for blk in blocks:
@@ -372,10 +384,12 @@ class SessionMixin:
             self._block_ctx = (done_before, total)
             if j is not None:
                 j.stage("measuring", block=blk.number, blocks=len(blocks))
+            started = time.monotonic()
             result = self.exec_cmd(cmd, blk_args)
             self._block_ctx = None
             if isinstance(result, Exception) or not result:
                 return result  # earlier blocks remain on disk and in the journal
+            self._note_speed(len(blk.row_indices), time.monotonic() - started)
             ti3 = f"{blk.base}.ti3"
             if not measurement_blocks.block_ti3_valid(ti3, len(blk.row_indices)):
                 return Error(f"Block {blk.number} produced an incomplete result file.")
@@ -396,6 +410,25 @@ class SessionMixin:
                 except OSError:
                     pass
         return True
+
+    def _single_run(self, cmd, args2, ti1):
+        """One ``exec_cmd`` over the whole chart, timed for the speed history."""
+        started = time.monotonic()
+        result = self.exec_cmd(cmd, args2)
+        if result is True or (result and not isinstance(result, Exception)):
+            try:
+                rows = len(measurement_blocks.read_table(ti1).rows)
+            except (OSError, measurement_blocks.CGATSError):
+                rows = 0
+            self._note_speed(rows, time.monotonic() - started)
+        return result
+
+    def _note_speed(self, readings: int, seconds: float) -> None:
+        """Keep how long a finished piece really took (a hint for the estimate)."""
+        try:
+            measured_speed.record(self.get_instrument_name(), readings, seconds)
+        except Exception as exc:  # noqa: BLE001 - never disturb a measurement
+            self.log(f"Speed history not updated: {exc}")
 
     def _session_extra_files(self) -> list[str]:
         """Calibration/settings files in the work directory worth keeping."""
