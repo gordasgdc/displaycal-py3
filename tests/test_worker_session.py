@@ -181,6 +181,7 @@ def test_resume_measures_only_the_remaining_blocks(worker, tmp_path):
 
 
 def test_resume_refuses_when_conditions_changed(worker, tmp_path):
+    setcfg("measurement_mode", "l")  # known starting point, whatever ran before
     sd = _interrupted(worker, tmp_path)
     worker.tempdir = None
     worker.resume_from = sd
