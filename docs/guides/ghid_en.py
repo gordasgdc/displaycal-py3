@@ -6,7 +6,7 @@
 CONTENT = {
     "title": "DisplayCAL-CG User Guide",
     "subtitle": "Monitor calibration and profiling, step by step — GDC edition",
-    "note": "Document version 1.0 · based on DisplayCAL-CG 3.10.0.dev82",
+    "note": "Document version 2.0 · based on DisplayCAL-CG 3.10.0.dev82-cg.4",
     "toc_title": "Contents",
     "cover_subtitle": "Display calibration and characterization powered by ArgyllCMS",
     "cover_version_label": "App version",
@@ -430,3 +430,12 @@ CONTENT = {
         },
     ],
 }
+
+
+# Chapters about the guided flow (shared module) — inserted after Installation
+# and after the licence chapter.
+from guided_sections import sections, support_section  # noqa: E402
+
+CONTENT["sections"][2:2] = sections("en")
+_i = next(i for i, sec in enumerate(CONTENT["sections"]) if "GPLv3" in sec["h"])
+CONTENT["sections"].insert(_i + 1, support_section("en"))
