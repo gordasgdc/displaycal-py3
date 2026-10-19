@@ -4141,8 +4141,30 @@ class MainWindow(BaseWindow):
         self._section_headers.append(header)
         return header
 
+    def _update_patches_note(self) -> None:
+        """Say, in context, how many patches the chosen profile type can use."""
+        from DisplayCAL.ui.settings_sections import muted_css
+
+        note = getattr(self, "patches_note", None)
+        if note is None:
+            return
+        try:
+            count = int(self.testchart_patches_amount.text() or 0)
+        except (ValueError, AttributeError):
+            count = 0
+        ptype = getcfg("profile.type")
+        key = None
+        if ptype in ("X", "x", "l") and 0 < count < 300:
+            key = "profile.patches_note.lut_few"
+        elif ptype not in ("X", "x", "l") and count > 1500:
+            key = "profile.patches_note.matrix_many"
+        note.setStyleSheet(f"color: {muted_css()};")
+        note.setText(lang.getstr(key, [count]) if key else "")
+        note.setVisible(bool(key))
+
     def refresh_sections(self) -> None:
         """Re-evaluate every section header (visibility, 'unavailable because')."""
+        self._update_patches_note()
         for header in self._section_headers:
             header.refresh()
         panel = getattr(self, "_report_panel", None)
@@ -4605,6 +4627,12 @@ class MainWindow(BaseWindow):
 
         self.testchart_meas_time = QLabel()
         form.addRow("", self.testchart_meas_time)
+        # Context note (not a rule): what the ArgyllCMS documentation says about
+        # patch counts for the chosen profile type.
+        self.patches_note = QLabel()
+        self.patches_note.setWordWrap(True)
+        self.patches_note.setObjectName("patches_note")
+        form.addRow("", self.patches_note)
 
         self.profile_name_textctrl = QLineEdit()
         self.profile_name_textctrl.editingFinished.connect(self._profile_name_changed)

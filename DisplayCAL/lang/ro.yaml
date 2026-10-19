@@ -3963,3 +3963,45 @@
   Verificări de soft-proofing sau de standarde.
 "help.verify_simulation_profile.needs": |-
   Cere un profil de simulare al cărui spațiu de culoare corespunde diagramei.
+"tc.help.intro": |-
+  O diagramă este lista de patch-uri (culori) care vor fi măsurate. Majoritatea profilurilor folosesc diagrama automată aleasă în fila Profilare; folosește acest editor când ai nevoie de o diagramă fixă. Câmpurile urmează opțiunile „targen” din ArgyllCMS; trece cu mouse-ul peste un câmp ca să vezi ce schimbă.
+"tc.help.source": |-
+  Sursă: documentația ArgyllCMS targen
+"tc.help.white": |-
+  Numărul de patch-uri albe. Albul stabilește punctul alb față de care se face profilul, deci mai multe fac rezultatul mai robust.
+"tc.help.black": |-
+  Numărul de patch-uri negre.
+"tc.help.single": |-
+  Pași pe fiecare rampă de o singură culoare (roșu, verde și albastru separat). 0 nu adaugă niciunul.
+"tc.help.gray": |-
+  Pași pe axa neutră (gri), unde roșu = verde = albastru.
+"tc.help.multi": |-
+  Pași pe axă ai unei grile regulate prin cubul de culoare. Numărul de patch-uri crește cu cubul pașilor.
+"tc.help.bcc": |-
+  Folosește o grilă cubică centrată în volum: se adaugă și un punct în mijlocul fiecărei celule.
+"tc.help.fullspread": |-
+  Numărul de patch-uri suplimentare răspândite pe tot spațiul de culoare de algoritmul ales alături.
+"tc.help.algo": |-
+  Cum sunt distribuite patch-urile suplimentare: punct cel mai îndepărtat optimizat (implicit), punct îndepărtat incremental, aleator sau cvasi-aleator în spațiul dispozitivului sau perceptual, ori o grilă cubică centrată în volum.
+"tc.help.adaption": |-
+  Cât de puternic se adaptează distribuția optimizată la dispozitiv (0–100 %). Implicit în ArgyllCMS este 10 %, iar 100 % când se folosește un profil de precondiționare.
+"tc.help.angle": |-
+  Unghiul grilei simplex pentru grila cubică centrată în volum, între 0,0 și 0,5 (implicit în ArgyllCMS 0,3333).
+"tc.help.gamma": |-
+  O valoare de tip putere aplicată tuturor valorilor dispozitivului; schimbă locul în care cad patch-urile pe fiecare axă.
+"tc.help.neutral": |-
+  Concentrează patch-uri în jurul axei neutre, de la 0 la 100 % (implicit în ArgyllCMS 50 %).
+"tc.help.dark": |-
+  Concentrează mai multe patch-uri în regiunile întunecate. 0 % înseamnă fără accent suplimentar.
+"tc.help.precond": |-
+  Folosește un profil existent al dispozitivului ca să plaseze patch-urile unde se află cu adevărat culorile lui (precondiționare).
+"tc.help.sphere": |-
+  Păstrează doar patch-urile din interiorul unei sfere din spațiul de culoare Lab (centru L, a, b și rază), pentru diagrame limitate la o regiune de culoare.
+"tc.help.order": |-
+  Sortează patch-urile pentru măsurare. Pentru ecrane, unele ordini reduc întârzierea cât ecranul se schimbă între patch-uri.
+"tc.help.create": |-
+  Construiește diagrama din setările de mai sus.
+"profile.patches_note.lut_few": |-
+  Această diagramă are %s patch-uri. Documentația ArgyllCMS sugerează între 500 și 3000 de patch-uri pentru dispozitive RGB cu un profil de tip LUT; cu mai puține, profilul este doar aproximativ.
+"profile.patches_note.matrix_many": |-
+  Această diagramă are %s patch-uri. Conform documentației ArgyllCMS, un profil de tip matrice pentru un dispozitiv RGB cu comportament bun are nevoie doar de câteva sute, deci o diagramă mai mare adaugă mai ales timp de măsurare.

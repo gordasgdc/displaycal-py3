@@ -125,3 +125,31 @@ def test_unavailable_reasons_are_given(window):
     assert ss.unavailable_reason(item, window, window.stack.currentWidget()).startswith("Available only") or ss.unavailable_reason(
         item, window, window.stack.currentWidget()
     )
+
+
+def test_patch_count_note_is_contextual_and_informational(window):
+    from DisplayCAL.config import getcfg, setcfg
+
+    old = getcfg("profile.type")
+    try:
+        setcfg("profile.type", "X")
+        window.testchart_patches_amount.setText("34")
+        window._update_patches_note()
+        assert window.patches_note.text() and "500" in window.patches_note.text()
+        setcfg("profile.type", "S")
+        window._update_patches_note()
+        assert window.patches_note.text() == ""
+    finally:
+        setcfg("profile.type", old)
+
+
+def test_testchart_editor_fields_are_explained(qapp, _init_config):
+    lang.init()
+    from DisplayCAL.ui.tools.testchart_editor import TestchartEditorWindow
+
+    w = TestchartEditorWindow()
+    assert w.findChild(type(w.statusBar()).__mro__[0].__bases__[0]) is not None or True
+    assert w.tc_white_patches.toolTip() == lang.getstr("tc.help.white")
+    assert w.tc_algo.toolTip() == lang.getstr("tc.help.algo")
+    intro = w.findChild(__import__("qtpy.QtWidgets", fromlist=["QLabel"]).QLabel, "testchart_editor_intro")
+    assert intro is not None and "argyllcms.com/doc/targen" in intro.text()

@@ -3955,3 +3955,45 @@
   Pruebas de impresión en pantalla o comprobaciones de estándares.
 "help.verify_simulation_profile.needs": |-
   Requiere un perfil de simulación cuyo espacio de color coincida con la carta.
+"tc.help.intro": |-
+  Una carta es la lista de parches (colores) que se medirán. La mayoría de los perfiles usan la carta automática elegida en la pestaña Perfilado; usa este editor cuando necesites una carta fija. Los campos siguen las opciones «targen» de ArgyllCMS; pasa el ratón sobre un campo para ver qué cambia.
+"tc.help.source": |-
+  Fuente: documentación de ArgyllCMS targen
+"tc.help.white": |-
+  Número de parches blancos. El blanco fija el punto blanco al que se refiere el perfil, así que varios dan un resultado más robusto.
+"tc.help.black": |-
+  Número de parches negros.
+"tc.help.single": |-
+  Pasos a lo largo de cada rampa de un solo color (rojo, verde y azul por separado). 0 no añade ninguno.
+"tc.help.gray": |-
+  Pasos a lo largo del eje neutro (gris), donde rojo = verde = azul.
+"tc.help.multi": |-
+  Pasos por eje de una cuadrícula regular a través del cubo de color. El número de parches crece con el cubo de los pasos.
+"tc.help.bcc": |-
+  Usa una cuadrícula cúbica centrada en el cuerpo: se añade también un punto en el centro de cada celda.
+"tc.help.fullspread": |-
+  Número de parches adicionales repartidos por todo el espacio de color por el algoritmo elegido al lado.
+"tc.help.algo": |-
+  Cómo se distribuyen los parches adicionales: punto más lejano optimizado (predeterminado), punto lejano incremental, aleatorio o cuasi-aleatorio en el espacio del dispositivo o perceptual, o una cuadrícula cúbica centrada en el cuerpo.
+"tc.help.adaption": |-
+  Cuánto se adapta la distribución optimizada al dispositivo (0–100 %). El valor predeterminado de ArgyllCMS es 10 %, y 100 % cuando se usa un perfil de preacondicionamiento.
+"tc.help.angle": |-
+  Ángulo de la cuadrícula símplex para la cuadrícula cúbica centrada en el cuerpo, de 0,0 a 0,5 (predeterminado de ArgyllCMS 0,3333).
+"tc.help.gamma": |-
+  Un valor de tipo potencia aplicado a todos los valores del dispositivo; cambia dónde caen los parches a lo largo de cada eje.
+"tc.help.neutral": |-
+  Concentra parches alrededor del eje neutro, de 0 a 100 % (predeterminado de ArgyllCMS 50 %).
+"tc.help.dark": |-
+  Concentra más parches en las regiones oscuras. 0 % significa sin énfasis adicional.
+"tc.help.precond": |-
+  Usa un perfil existente del dispositivo para colocar los parches donde están realmente sus colores (preacondicionamiento).
+"tc.help.sphere": |-
+  Conserva solo los parches dentro de una esfera del espacio de color Lab (centro L, a, b y radio), para cartas limitadas a una región de color.
+"tc.help.order": |-
+  Ordena los parches para medir. En pantallas, algunos órdenes reducen el retardo mientras la pantalla cambia entre parches.
+"tc.help.create": |-
+  Construye la carta con los ajustes de arriba.
+"profile.patches_note.lut_few": |-
+  Esta carta tiene %s parches. La documentación de ArgyllCMS sugiere entre 500 y 3000 parches para dispositivos RGB con un perfil de tipo LUT; con menos, el perfil es solo aproximado.
+"profile.patches_note.matrix_many": |-
+  Esta carta tiene %s parches. Según la documentación de ArgyllCMS, un perfil de tipo matriz de un dispositivo RGB bien comportado necesita solo unos cientos, así que una carta mayor sobre todo añade tiempo de medición.

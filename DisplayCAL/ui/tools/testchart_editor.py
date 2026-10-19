@@ -635,6 +635,9 @@ class TestchartEditorWindow(BaseWindow):
         )
         root.addWidget(self.grid, 1)
 
+        from DisplayCAL.ui.tools.testchart_editor_help import apply_help
+
+        apply_help(self, root)
         self.setCentralWidget(central)
         self.setStatusBar(self.statusBar())
 

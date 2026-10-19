@@ -3963,3 +3963,45 @@
   Soft-proofing or standards checks.
 "help.verify_simulation_profile.needs": |-
   Needs a simulation profile whose colour space matches the chart.
+"tc.help.intro": |-
+  A chart is the list of patches (colours) that will be measured. Most profiles use the automatic chart chosen in the Profiling tab; use this editor when you need a fixed chart. The fields follow the ArgyllCMS "targen" options; hover over a field to see what it changes.
+"tc.help.source": |-
+  Source: ArgyllCMS targen documentation
+"tc.help.white": |-
+  Number of white patches. White sets the white point the profile is made relative to, so several make the result more robust.
+"tc.help.black": |-
+  Number of black patches.
+"tc.help.single": |-
+  Steps along each single-colour ramp (red, green and blue on their own). 0 adds none.
+"tc.help.gray": |-
+  Steps along the neutral (gray) axis, where red = green = blue.
+"tc.help.multi": |-
+  Steps per axis of a regular grid through the colour cube. The number of patches grows with the cube of the steps.
+"tc.help.bcc": |-
+  Uses a body-centred cubic grid: a point is also added in the middle of each cell.
+"tc.help.fullspread": |-
+  Number of extra patches spread over the whole colour space by the algorithm chosen next to it.
+"tc.help.algo": |-
+  How the extra patches are distributed: optimised farthest point (default), incremental far point, random or quasi-random in device or perceptual space, or a body-centred cubic grid.
+"tc.help.adaption": |-
+  How strongly the optimised distribution adapts to the device (0–100 %). ArgyllCMS default is 10 %, and 100 % when a pre-conditioning profile is used.
+"tc.help.angle": |-
+  Simplex grid angle for the body-centred cubic grid, from 0.0 to 0.5 (ArgyllCMS default 0.3333).
+"tc.help.gamma": |-
+  A power-like value applied to all device values; it changes where along each axis the patches fall.
+"tc.help.neutral": |-
+  Concentrates patches around the neutral axis, from 0 to 100 % (ArgyllCMS default 50 %).
+"tc.help.dark": |-
+  Concentrates more patches in dark regions. 0 % means no extra emphasis.
+"tc.help.precond": |-
+  Uses an existing profile of the device to place patches where its colours really lie (pre-conditioning).
+"tc.help.sphere": |-
+  Keeps only patches inside a sphere in Lab colour space (centre L, a, b and radius), for charts limited to one region of colour.
+"tc.help.order": |-
+  Sorts the patches for measuring. For displays some orders minimise the delay while the screen changes between patches.
+"tc.help.create": |-
+  Builds the chart from the settings above.
+"profile.patches_note.lut_few": |-
+  This chart has %s patches. The ArgyllCMS documentation suggests somewhere between 500 and 3000 patches for RGB devices with a LUT-type profile; with fewer, the profile is only approximate.
+"profile.patches_note.matrix_many": |-
+  This chart has %s patches. According to the ArgyllCMS documentation a matrix-type profile of a well-behaved RGB device needs only a few hundred, so a larger chart mostly adds measuring time.
