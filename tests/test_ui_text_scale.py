@@ -208,3 +208,18 @@ def test_no_guided_page_needs_sideways_scrolling_at_the_largest_text(window, ste
         QApplication.processEvents()
     bar = g.pages.currentWidget().horizontalScrollBar()
     assert bar.maximum() == 0, (step, bar.maximum())
+
+
+def test_style_sheet_labels_follow_the_text_size_both_ways(window):
+    """Section descriptions in the advanced tabs (they carry a style sheet) change with the level."""
+    window._select_tab("profiling")
+    QApplication.processEvents()
+    headers = window._section_headers
+    assert headers
+    for level in ("xlarge", "normal", "large", "normal"):
+        ts.apply(level)
+        QApplication.processEvents()
+        app_pt = round(QApplication.font().pointSizeF(), 1)
+        for h in headers:
+            assert round(h.purpose.font().pointSizeF(), 1) == app_pt, (level, h.section)
+            assert round(h.toggle.font().pointSizeF(), 1) == app_pt, (level, h.section)

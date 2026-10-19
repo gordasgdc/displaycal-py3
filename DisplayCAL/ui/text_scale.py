@@ -90,6 +90,7 @@ def apply(level: str | None = None, persist: bool = False) -> float:
     app = QApplication.instance()
     f = factor(level)
     if app is not None:
+        _state["prev_size"] = app.font().pointSizeF()
         font = QFont(app.font())
         font.setPointSizeF(base_points() * f)
         app.setFont(font)
@@ -109,6 +110,16 @@ def refresh() -> None:
 
 def _refresh_widget(w: QWidget) -> None:
     mult = w.property("_fmult")
+    if not mult and w.styleSheet():
+        # A widget with its own style sheet keeps the font it first inherited
+        # instead of following the application font: bring it along, but only
+        # if it still has the old application size (a deliberate size is kept).
+        prev = _state.get("prev_size")
+        cur = QApplication.font().pointSizeF()
+        if prev and abs(w.font().pointSizeF() - prev) < 0.05 and abs(prev - cur) > 0.05:
+            f = QFont(w.font())
+            f.setPointSizeF(cur)
+            w.setFont(f)
     if mult:
         f = QFont(QApplication.font())
         f.setPointSizeF(f.pointSizeF() * float(mult))
