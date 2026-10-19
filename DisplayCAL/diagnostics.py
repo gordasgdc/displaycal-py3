@@ -222,6 +222,9 @@ def _check_previous_run(logdir: str) -> None:
         )
 
 
+_STARTED = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+
+
 def _write_last_run(logdir: str, clean: bool) -> None:
     from DisplayCAL.session_journal import _atomic_json
 
@@ -230,7 +233,7 @@ def _write_last_run(logdir: str, clean: bool) -> None:
             os.path.join(logdir, LAST_RUN_FILE),
             {
                 "session": dlog.APP_SESSION_ID,
-                "started": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                "started": _STARTED,
                 "clean": clean,
             },
         )
@@ -339,7 +342,13 @@ def versions_report(worker: object | None = None) -> list[tuple[str, str]]:
     except ImportError:
         pass
     for pkg in ("PySide6", "qtpy", "numpy", "Pillow", "PyYAML"):
-        rows.append((pkg, _pkg_version(pkg)))
+        version = _pkg_version(pkg)
+        if version == "—" and pkg == "PyYAML":
+            with contextlib.suppress(Exception):
+                import yaml
+
+                version = getattr(yaml, "__version__", "—")
+        rows.append((pkg, version))
     try:
         from DisplayCAL import argyll
 
@@ -347,7 +356,13 @@ def versions_report(worker: object | None = None) -> list[tuple[str, str]]:
         rows.append(("ArgyllCMS found", "yes" if found else "no"))
         if found:
             rows.append(
-                ("ArgyllCMS version", argyll.get_argyll_version("dispcal", silent=True))
+                (
+                    "ArgyllCMS version",
+                    ".".join(
+                        str(n)
+                        for n in argyll.get_argyll_version("dispcal", silent=True)
+                    ),
+                )
             )
             rows.append(("ArgyllCMS folder", str(argyll.get_argyll_util("dispcal") or "")))
     except Exception as exc:  # noqa: BLE001
