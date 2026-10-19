@@ -379,6 +379,16 @@ def diagnose(state: dict, now: float | None = None) -> list[tuple[str, dict]]:
     return facts
 
 
+def _nothing_measured(state: dict) -> bool:
+    """A session that never measured anything (no plan, no progress)."""
+    return (
+        not state.get("plan")
+        and not state.get("progress")
+        and not state.get("blocks_done")
+        and (state.get("child_exit") is not None or state.get("child") is None)
+    )
+
+
 def scan_incomplete(root: str) -> list[IncompleteSession]:
     """Sessions under ``root`` that never recorded an outcome and are not running."""
     found: list[IncompleteSession] = []
@@ -399,6 +409,8 @@ def scan_incomplete(root: str) -> list[IncompleteSession]:
             continue  # another running instance owns it
         if state.get("app_pid") == os.getpid():
             continue  # this very process
+        if _nothing_measured(state):
+            continue  # a probe or an aborted start: nothing to recover
         found.append(IncompleteSession(d, state, diagnose(state)))
     return found
 

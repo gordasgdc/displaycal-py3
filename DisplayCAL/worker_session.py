@@ -248,7 +248,10 @@ class SessionMixin:
     def exec_cmd(self, cmd, args=None, *a, **kw):
         """Run a command; measuring commands are journaled (see module doc)."""
         name = os.path.splitext(os.path.basename(str(cmd)))[0]
-        measuring = name in MEASURING
+        # ``-?`` / ``-??`` only print the usage text (capability probes at
+        # start-up): not a measurement, so no session and no sleep prevention.
+        probe = any(str(a).startswith("-?") for a in (args or []))
+        measuring = name in MEASURING and not probe
         if measuring:
             self.session_begin()
         j = self.session_journal

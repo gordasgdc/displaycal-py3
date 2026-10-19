@@ -192,3 +192,14 @@ def test_resume_refuses_when_conditions_changed(worker, tmp_path):
     assert isinstance(result, Exception)
     assert calls == []  # nothing was measured, nothing combined
     assert not os.path.exists(base + ".ti3")
+
+
+def test_usage_probes_are_not_sessions(worker):
+    """``dispcal -?`` at start-up must not open a session or hold the machine awake."""
+    calls = []
+    worker._exec_cmd_impl = lambda cmd, args=None, *a, **k: calls.append(args) or True
+    worker.exec_cmd("/x/dispcal", ["-?"])
+    worker.exec_cmd("/x/ccxxmake", ["-??"])
+    assert worker.session_journal is None and len(calls) == 2
+    worker.exec_cmd("/x/spotread", ["-v", "-d1"])
+    assert worker.session_journal is not None

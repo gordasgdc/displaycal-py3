@@ -135,6 +135,8 @@ def test_export_copies_without_moving(tmp_path):
 
 def test_review_hides_the_session_next_time(tmp_path):
     j = new(tmp_path)
+    j.progress(3, 10)  # something was measured, so it is worth offering
+    j.beat()
     st = sj.load_state(j.dir)
     st["app_pid"] = 2**30
     sj._atomic_json(os.path.join(j.dir, "session.json"), st)
@@ -165,3 +167,14 @@ def test_prune_removes_only_old_finished_sessions(tmp_path):
         )
     assert sj.prune_finished(str(tmp_path)) == 1
     assert sorted(p.name for p in tmp_path.iterdir()) == ["b", "c"]
+
+
+def test_sessions_that_measured_nothing_are_not_offered(tmp_path):
+    d = tmp_path / "s"
+    d.mkdir()
+    sj._atomic_json(
+        str(d / "session.json"),
+        {"id": "s", "app_pid": 99999999, "outcome": None, "plan": None, "progress": None,
+         "blocks_done": [], "child": {"name": "dispcal"}, "child_exit": {"code": 1}},
+    )
+    assert sj.scan_incomplete(str(tmp_path)) == []
