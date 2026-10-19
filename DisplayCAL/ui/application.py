@@ -62,6 +62,11 @@ class Application(QApplication):
 
         if install_sigint:
             signal.signal(signal.SIGINT, self._signal_handler)
+            # SIGTERM (logout, shutdown, `kill`) must also end the application
+            # through its normal shutdown (exit handlers, session journal) rather
+            # than killing it outright.
+            if hasattr(signal, "SIGTERM"):
+                signal.signal(signal.SIGTERM, self._signal_handler)
             # Give the Python interpreter a chance to run its signal handlers;
             # without periodic re-entry Qt's C++ loop never yields to Python.
             self._signal_timer = QTimer(self)
@@ -102,6 +107,34 @@ class Application(QApplication):
             except Exception:  # noqa: BLE001  (mirror wx behaviour: never abort cleanup)
                 print("Error in Application exit handler:")
                 print(traceback.format_exc())
+        cls._fast_exit()
+
+    @staticmethod
+    def _fast_exit() -> None:
+        """Leave the process right after cleanup on macOS.
+
+        A macOS crash report (2026-10-19, PySide6 6.12, Python 3.13) showed the
+        process segfaulting *while quitting*: ``NSApplication terminate:`` ->
+        ``exit()`` -> PySide's ``BindingManager`` destructor -> a widget's
+        ``destroyed`` signal -> ``SenderSignalDeletionTracker::senderDestroyed``.
+        A crash at exit is reported to the user as "quit unexpectedly" and can
+        skip whatever still had to be written. All cleanup (exit handlers,
+        settings, logs) has run by now, so the process ends without running
+        the binding destructors. ``DISPLAYCAL_NO_FAST_EXIT=1`` restores the
+        normal path (for debugging).
+        """
+        if sys.platform != "darwin" or os.environ.get("DISPLAYCAL_NO_FAST_EXIT"):
+            return
+        try:
+            import logging
+
+            logging.shutdown()
+            for stream in (sys.stdout, sys.stderr):
+                if stream is not None:
+                    stream.flush()
+        except Exception:  # noqa: BLE001, S110  (nothing may stop the exit)
+            pass
+        os._exit(0)
 
     # -- file opening -------------------------------------------------------
 
@@ -162,6 +195,6 @@ class Application(QApplication):
             signum (int): The signal number received.
             frame (object): The current stack frame (unused).
         """
-        if signum == signal.SIGINT:
-            print("Received SIGINT")
+        if signum in (signal.SIGINT, getattr(signal, "SIGTERM", None)):
+            print(f"Received signal {signum}")
             self.quit()

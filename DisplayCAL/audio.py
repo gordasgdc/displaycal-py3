@@ -50,6 +50,49 @@ if TYPE_CHECKING:
     import wx
 
 
+def _contain_pyglet_cocoa() -> None:
+    """Keep pyglet from taking over the macOS application and its signals.
+
+    Importing ``pyglet.app`` on macOS instantiates a ``CocoaPlatformEventLoop``
+    that (a) sets its own ``NSApplication`` delegate and main menu, replacing
+    Qt's, and (b) installs SIGINT/SIGTERM handlers that call
+    ``[NSApp terminate:]``. Observed on 2026-10-19 (crash report plus
+    ``DisplayCAL-fault.log``): every Ctrl-C/SIGTERM then went straight to
+    ``exit()`` without the application's own shutdown, and the process crashed
+    in PySide's destructors while quitting. Sounds only need ``pyglet.media``;
+    this registers a plain, inert platform loop in place of the Cocoa one so
+    neither the delegate nor the signal handlers are touched.
+    """
+    if sys.platform != "darwin" or "pyglet.app.cocoa" in sys.modules:
+        return
+    import types
+
+    stub = types.ModuleType("pyglet.app.cocoa")
+
+    def _getattr(name: str) -> object:
+        from pyglet.app import base
+
+        if name == "CocoaPlatformEventLoop":
+            return type(
+                "InertPlatformEventLoop",
+                (base.PlatformEventLoop,),
+                {
+                    # Events are queued by the base class; nothing waits on them
+                    # (the UI toolkit owns the real event loop).
+                    "notify": lambda self: None,
+                    "step": lambda self, timeout=None: False,
+                },
+            )
+        if name == "CocoaAlternateEventLoop":
+            return base.EventLoop
+        raise AttributeError(name)
+
+    stub.__getattr__ = _getattr  # type: ignore[attr-defined]
+    sys.modules["pyglet.app.cocoa"] = stub
+
+
+_contain_pyglet_cocoa()
+
 # Workaround for pyglet crash on exit
 try:
     import pyglet
