@@ -471,8 +471,17 @@ def test_get_ui_toolkit_reads_persisted_preference(monkeypatch):
     assert config.get_ui_toolkit() == "qt"
 
 
-def test_get_ui_toolkit_defaults_to_wx(monkeypatch):
-    """With no flag, env var, or persisted preference, wx is the default."""
+def test_get_ui_toolkit_defaults_to_qt(monkeypatch):
+    """With no flag, env var, or persisted preference, Qt is the default."""
+    monkeypatch.setattr(sys, "argv", ["DisplayCAL"])
+    monkeypatch.delenv("DISPLAYCAL_UI", raising=False)
+    monkeypatch.setattr(config, "getcfg", lambda name: None)
+
+    assert config.get_ui_toolkit() == "qt"
+
+
+def test_get_ui_toolkit_persisted_wx_still_honoured(monkeypatch):
+    """A user who switched to wx keeps wx."""
     monkeypatch.setattr(sys, "argv", ["DisplayCAL"])
     monkeypatch.delenv("DISPLAYCAL_UI", raising=False)
     monkeypatch.setattr(

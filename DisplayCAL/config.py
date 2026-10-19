@@ -1985,7 +1985,7 @@ DEFAULTS = {
     "trc.should_use_viewcond_adjust.show_msg": 1,
     "trc.type": "g",
     "trc.type.backup": "g",
-    "ui.toolkit": "wx",
+    "ui.toolkit": "qt",
     "uniformity.cols": 5,
     "uniformity.measure.continuous": 0,
     "uniformity.rows": 5,
@@ -2539,12 +2539,13 @@ def get_ui_toolkit() -> str:
     The ``DISPLAYCAL_UI=qt``/``DISPLAYCAL_UI=wx`` environment variable or the
     ``--qt``/``--wx`` command line flags take precedence and force a toolkit
     for this process; otherwise the persisted ``ui.toolkit`` preference (set via
-    the UI's own toolkit-switch menu action, default ``"wx"``) is used. Entry
+    the UI's own toolkit-switch menu action, default ``"qt"`` in DisplayCAL-CG,
+    where the guided workflow lives in the Qt interface) is used. Entry
     points consult this and dispatch to the Qt implementation only where one
     exists.
 
     Returns:
-        str: ``"qt"`` if Qt was requested, ``"wx"`` otherwise.
+        str: ``"wx"`` if the wx interface was requested, ``"qt"`` otherwise.
     """
     if "--qt" in sys.argv[1:]:
         return "qt"
@@ -2553,7 +2554,7 @@ def get_ui_toolkit() -> str:
     env = os.getenv("DISPLAYCAL_UI", "").lower()
     if env in ("qt", "wx"):
         return env
-    return getcfg("ui.toolkit") or "wx"
+    return getcfg("ui.toolkit") or "qt"
 
 
 def restart_application() -> None:
