@@ -8,11 +8,25 @@
 DisplayCAL-CG — GDC Distribution
 =================================
 
-This is **DisplayCAL-CG**, a GDC-maintained distribution of this project —
-signed and notarized native macOS installer (`.pkg`), a Windows installer
-(coming soon), and a complete Romanian translation of the interface, on top
-of the same code and the same GPLv3 license as the upstream project below.
+This is **DisplayCAL-CG**, a GDC-maintained distribution of this project, on
+top of the same code and the same GPLv3 license as the upstream project below.
 No licensing, no trial, no monetization of any kind.
+
+What this edition adds:
+
+- **Guided calibration** in five steps, with a Qt interface: monitor and
+  instrument, goal, physical preparation (a sourced checklist, placement
+  animation for instruments the maker documents), measurement plan, profile
+  install and verification.
+- **Honest instrument identification**: when several models share one USB
+  identity, you confirm the exact model.
+- **Safer long sessions**: measurement in blocks saved as they finish, a
+  session journal, continuing with the remaining blocks (only under the same
+  conditions), sleep prevention only while a run is active.
+- **ArgyllCMS included** in the installer and verified against a fixed
+  SHA-256 hash.
+- Interface and guides in Romanian, English and Spanish; native installers
+  for macOS (`.pkg`, signed and notarized) and Windows.
 
 - **Download & website:** [gordas.dev/DisplayCAL-CG](https://gordas.dev/DisplayCAL-CG/)
 - **Releases (macOS `.pkg`):** [github.com/gordasgdc/displaycal-py3/releases](https://github.com/gordasgdc/displaycal-py3/releases)
