@@ -502,6 +502,29 @@ class StartupController(QObject):
         QTimer.singleShot(self._hold_ms, lambda: self._on_ready(self.worker))
 
 
+def _headless_diagnostic_export() -> int:
+    """``--diagnostic-export PATH``: write the default support package and exit.
+
+    The same package as Help > Diagnostic and support (default categories, text
+    redacted), without opening a window -- for support and for checking a
+    distributed build on a machine without a display session.
+    """
+    from DisplayCAL import diagnostics
+
+    args = sys.argv[1:]
+    i = args.index("--diagnostic-export")
+    if i + 1 >= len(args):
+        print("usage: --diagnostic-export <file.zip>")
+        return 2
+    dest = args[i + 1]
+    cats = diagnostics.plan_package()
+    manifest = diagnostics.export_package(
+        dest, {c.key for c in cats if c.default}, cats
+    )
+    print(f"diagnostic package written: {dest} ({len(manifest['files'])} files)")
+    return 0
+
+
 def main() -> int:
     """Run the Qt application: splash screen, then the main window.
 
@@ -513,6 +536,8 @@ def main() -> int:
     lang.update_defaults()
     from DisplayCAL import diagnostics
 
+    if "--diagnostic-export" in sys.argv[1:]:
+        return _headless_diagnostic_export()
     diagnostics.install_crash_hooks()
     diagnostics.event("info", "startup", "app.start", "application starting")
 
