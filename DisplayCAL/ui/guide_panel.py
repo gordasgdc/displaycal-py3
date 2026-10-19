@@ -107,21 +107,28 @@ class _Rail(QWidget):
         super().__init__(parent)
         self._current = 0
         self._reached = 0
-        self.setMinimumWidth(176)
+        self.setMinimumWidth(self._min_width())
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self.setCursor(Qt.PointingHandCursor)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setAccessibleName(lang.getstr("guide.title"))
+
+    def _row_h(self) -> int:
+        """Row height follows the font, so large text scales instead of clipping."""
+        return max(60, int(self.fontMetrics().height() * 3.2))
+
+    def _min_width(self) -> int:
+        return max(176, self.fontMetrics().horizontalAdvance("M") * 15)
 
     def set_state(self, current: int, reached: int) -> None:
         self._current, self._reached = current, reached
         self.update()
 
     def sizeHint(self) -> QSize:  # noqa: N802
-        return QSize(190, 60 * STEPS + 24)
+        return QSize(self._min_width() + 14, self._row_h() * STEPS + 24)
 
     def _row_rect(self, i: int) -> QRectF:
-        return QRectF(6, 12 + i * 60, self.width() - 12, 52)
+        return QRectF(6, 12 + i * self._row_h(), self.width() - 12, self._row_h() - 8)
 
     def keyPressEvent(self, event: object) -> None:  # noqa: N802
         """Up/Down (or Left/Right) move between the steps already reached."""
@@ -157,18 +164,20 @@ class _Rail(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         x = 24.0
         p.setPen(QPen(t["line"], 2))
-        p.drawLine(int(x), 12 + 26, int(x), 12 + (STEPS - 1) * 60 + 26)
+        half = self._row_h() // 2 - 4
+        row = self._row_h()
+        p.drawLine(int(x), 12 + half, int(x), 12 + (STEPS - 1) * row + half)
         # progressed part of the line in the spectrum
         if self._current > 0:
-            grad = QLinearGradient(0, 38, 0, 38 + self._current * 60)
+            grad = QLinearGradient(0, 12 + half, 0, 12 + half + self._current * row)
             for i, hex_ in enumerate(_SPECTRUM):
                 grad.setColorAt(i / (len(_SPECTRUM) - 1), QColor(hex_))
             p.setPen(QPen(grad, 2.5))
-            p.drawLine(int(x), 38, int(x), 38 + self._current * 60)
+            p.drawLine(int(x), 12 + half, int(x), 12 + half + self._current * row)
         font = QFont(self.font())
         for i in range(STEPS):
             r = self._row_rect(i)
-            cy = r.top() + 26
+            cy = r.top() + r.height() / 2
             reached = i <= self._reached
             done = i < self._current
             active = i == self._current
@@ -201,7 +210,7 @@ class _Rail(QWidget):
             p.setFont(tf)
             p.setPen(t["text"] if reached else t["muted"])
             p.drawText(
-                QRectF(x + 22, r.top(), r.width() - x - 22, 52),
+                QRectF(x + 22, r.top(), r.width() - x - 22, r.height()),
                 Qt.AlignVCenter | Qt.TextWordWrap,
                 lang.getstr(f"guide.step.{i + 1}"),
             )

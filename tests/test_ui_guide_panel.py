@@ -245,7 +245,9 @@ def test_start_summary_lists_evidence_kinds(guide, window, monkeypatch):
 
 def test_stop_motion_before_start(guide, window, monkeypatch):
     started = []
-    monkeypatch.setattr(window, "guided_primary_action", lambda: lambda: started.append(1))
+    monkeypatch.setattr(
+        window, "guided_primary_action", lambda: lambda: started.append(1)
+    )
     _confirm_everything(guide, window, monkeypatch)
     for cb in guide.prepare._boxes.values():
         cb.setChecked(True)
@@ -254,3 +256,51 @@ def test_stop_motion_before_start(guide, window, monkeypatch):
     guide.start_btn.click()
     assert started == [1]
     assert not guide.prepare.player.is_playing()
+
+
+def test_rail_is_keyboard_navigable(guide):
+    from qtpy.QtCore import Qt
+    from qtpy.QtTest import QTest
+
+    assert guide.rail.focusPolicy() == Qt.StrongFocus
+    guide._reached = 2
+    guide.go(1)
+    QTest.keyClick(guide.rail, Qt.Key_Down)
+    assert guide._step == 2
+    QTest.keyClick(guide.rail, Qt.Key_Down)  # step 4 not reached: stays
+    assert guide._step == 2
+    QTest.keyClick(guide.rail, Qt.Key_Up)
+    assert guide._step == 1
+
+
+def test_essential_controls_are_reachable_by_keyboard(guide):
+    from qtpy.QtCore import Qt
+
+    guide.go(0)
+    assert guide.monitor_combo.focusPolicy() != Qt.NoFocus
+    assert guide.instrument_combo.focusPolicy() != Qt.NoFocus
+    assert guide.next_btn.focusPolicy() != Qt.NoFocus
+    assert guide.back_btn.focusPolicy() != Qt.NoFocus
+
+
+def test_large_text_scales_the_rail_instead_of_clipping(guide, qapp):
+    base = guide.rail.sizeHint()
+    font = qapp.font()
+    big = type(font)(font)
+    big.setPointSizeF(font.pointSizeF() * 1.8)
+    guide.rail.setFont(big)
+    scaled = guide.rail.sizeHint()
+    assert scaled.height() > base.height() and scaled.width() >= base.width()
+    guide.rail.setFont(font)
+
+
+def test_small_window_keeps_instructions_reachable(window):
+    window.resize(560, 520)
+    window._select_tab("guide")
+    guide = window._guide
+    guide.go(0)
+    # every page lives in a scroll area, so nothing essential can be cut off
+    from qtpy.QtWidgets import QScrollArea
+
+    assert isinstance(guide.pages.currentWidget(), QScrollArea)
+    assert guide.pages.currentWidget().widgetResizable()
