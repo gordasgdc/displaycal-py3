@@ -417,7 +417,7 @@ class _Canvas(QWidget):
         self.t = 1.0
         self.variant = "generic"
         self.kind = ic.KIND_COLORIMETER
-        self.setMinimumSize(300, 198)
+        self.setMinimumSize(240, 158)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
     def hasHeightForWidth(self) -> bool:  # noqa: N802

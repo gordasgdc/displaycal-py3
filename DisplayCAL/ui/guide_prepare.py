@@ -52,6 +52,22 @@ def sources_html(keys: tuple[str, ...]) -> str:
     return "".join(rows)
 
 
+class _ToggleLabel(QLabel):
+    """A wrapped title that toggles its checkbox when clicked."""
+
+    def __init__(self, text: str, box: QCheckBox) -> None:
+        super().__init__(text)
+        self._box = box
+        self.setWordWrap(True)
+        self.setTextFormat(Qt.PlainText)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def mouseReleaseEvent(self, event: object) -> None:  # noqa: N802, D102
+        if event.button() == Qt.LeftButton:
+            self._box.toggle()
+        super().mouseReleaseEvent(event)
+
+
 class PreparePage(QWidget):
     """Checklist + placement sequence for the preparation step."""
 
@@ -168,14 +184,20 @@ class PreparePage(QWidget):
         bl.setContentsMargins(0, 0, 0, 0)
         bl.setSpacing(3)
         row = QHBoxLayout()
-        cb = QCheckBox(m(_tr(item.title_key)))
-        f = cb.font()
-        f.setBold(True)
-        f.setPointSizeF(f.pointSizeF() * 1.12)
-        cb.setFont(f)
+        row.setSpacing(8)
+        # The box carries no text of its own (a QCheckBox cannot wrap long
+        # text and would force the column wide); the wrapped title next to it
+        # toggles it, and the accessible name keeps the full sentence.
+        cb = QCheckBox()
+        cb.setAccessibleName(_tr(item.title_key))
         cb.setChecked(item.key in self._prep.done)
         cb.toggled.connect(lambda on, k=item.key: self._toggled(k, on))
         self._boxes[item.key] = cb
+        title = _ToggleLabel(_tr(item.title_key), cb)
+        f = title.font()
+        f.setBold(True)
+        f.setPointSizeF(f.pointSizeF() * 1.12)
+        title.setFont(f)
         tag = label(
             _tr("guide.s3.required") if item.required else _tr("guide.s3.recommended"),
             size=0.85,
@@ -183,8 +205,9 @@ class PreparePage(QWidget):
             bold=item.required,
             wrap=False,
         )
-        row.addWidget(cb, 1)
-        row.addWidget(tag, 0, Qt.AlignRight)
+        row.addWidget(cb, 0, Qt.AlignTop)
+        row.addWidget(title, 1)
+        row.addWidget(tag, 0, Qt.AlignRight | Qt.AlignTop)
         bl.addLayout(row)
         action = label(_tr(item.action_key), size=1.05)
         action.setContentsMargins(26, 0, 0, 0)
@@ -224,11 +247,9 @@ class PreparePage(QWidget):
         v = QVBoxLayout(w)
         v.setContentsMargins(26, 2, 0, 0)
         v.setSpacing(2)
+        v.addWidget(label(_tr("guide.prep.timer.label"), size=0.95, muted=True))
         h = QHBoxLayout()
         h.setContentsMargins(0, 0, 0, 0)
-        h.addWidget(
-            label(_tr("guide.prep.timer.label"), size=0.95, muted=True, wrap=False)
-        )
         self._spin = QSpinBox()
         self._spin.setRange(1, 180)
         self._spin.setValue(30)

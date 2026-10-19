@@ -1391,7 +1391,7 @@
 "hdr_mincll": |-
   HDR MinCLL
 "header": |-
-  Encabezado
+  Calibración y caracterización de pantallas con tecnología ArgyllCMS
 "help_support": |-
   Ayuda y soporte...
 "host.invalid.lookup_failed": |-
@@ -2674,6 +2674,10 @@
   Amarillo XYZ
 "yes": |-
   Si
+"whitepoint.visual_editor.panel.dock": |-
+  Acoplar el panel a la ventana del editor
+"whitepoint.visual_editor.panel.float": |-
+  Separar el panel en su propia ventana
 # --- guide.* (guided workflow, DisplayCAL-CG) ---
 "guide.tab": |-
   Guía
