@@ -15,6 +15,8 @@ name: Release Builds
 # parte din livrarea oficiala a fork-ului (doar Mac .pkg + Windows .exe,
 # vezi CLAUDE.md "Decizii de scop confirmate de Cristi").
 on:
+  # Manual run builds and tests the Windows installer without publishing.
+  workflow_dispatch:
   push:
     tags:
       - 'v*-cg.*'  # v3.10.0.dev82-cg.1, v3.10.1-cg.1, etc. - tag-urile fork-ului
@@ -602,6 +604,7 @@ jobs:
     # anulat complet acest job de release.
     name: Create GitHub Release
     needs: [windows]
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
       contents: write
