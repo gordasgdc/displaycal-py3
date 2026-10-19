@@ -223,3 +223,72 @@ def test_style_sheet_labels_follow_the_text_size_both_ways(window):
         for h in headers:
             assert round(h.purpose.font().pointSizeF(), 1) == app_pt, (level, h.section)
             assert round(h.toggle.font().pointSizeF(), 1) == app_pt, (level, h.section)
+
+
+def test_long_paths_get_break_points_but_markup_and_short_words_are_untouched():
+    text = "Logs: /Volumes/Cristi/TESTE/GDC_PROJECTS/DisplayCAL-CG/Library/Logs <b>/very/long/path/inside/markup/here/x</b> ok"
+    out = ts.breakable(text)
+    assert "​" in out.split()[1] or "/​" in out
+    assert out.replace("​", "") == text
+    assert ts.breakable("short words only") == "short words only"
+    assert "<b>/very/long/path/inside/markup/here/x</b>" in out
+
+
+def test_diagnostic_dialog_fits_its_window_at_the_largest_text(qapp, monkeypatch, tmp_path):
+    from qtpy.QtWidgets import QScrollArea
+
+    from DisplayCAL import config as cfg
+    from DisplayCAL.ui import diagnostic_dialog as dd
+
+    long_dir = str(tmp_path / ("a_very_long_folder_name_" * 4) / "Library" / "Logs" / "DisplayCAL")
+    monkeypatch.setattr(dd.dlog, "_LOGDIR", long_dir, raising=False)
+    ts.apply("xlarge")
+    dlg = dd.DiagnosticDialog()
+    dlg.show()
+    for _ in range(5):
+        QApplication.processEvents()
+    area = dlg.findChild(QScrollArea)
+    assert area.horizontalScrollBar().maximum() == 0
+
+
+@pytest.mark.parametrize("which", ["export", "feedback", "support_star", "support_welcome"])
+def test_other_dialogs_do_not_need_sideways_scrolling_at_the_largest_text(qapp, which):
+    from qtpy.QtWidgets import QScrollArea
+
+    from DisplayCAL.ui import diagnostic_dialog as dd
+    from DisplayCAL.ui import support_dialog as sd
+
+    ts.apply("xlarge")
+    if which == "export":
+        dlg = dd.ExportDialog()
+    elif which == "feedback":
+        dlg = sd.FeedbackDialog()
+    else:
+        classes = [getattr(sd, n) for n in dir(sd) if n.endswith("Dialog") and n not in ("FeedbackDialog", "_TextDialog")]
+        if len(classes) < 2:
+            pytest.skip("no such dialog")
+        cls = classes[0 if which == "support_star" else 1]
+        try:
+            dlg = cls() if which == "support_star" else cls("3.10.0.dev82")
+        except TypeError:
+            pytest.skip("different constructor")
+    dlg.show()
+    for _ in range(5):
+        QApplication.processEvents()
+    for area in dlg.findChildren(QScrollArea):
+        assert area.horizontalScrollBar().maximum() == 0, (which, area.horizontalScrollBar().maximum())
+    assert dlg.width() <= QApplication.primaryScreen().availableGeometry().width()
+
+
+@pytest.mark.parametrize("tab", ["display_instrument", "calibration", "profiling", "lut3d", "verification"])
+def test_advanced_tabs_have_no_sideways_scroll_at_the_largest_text(window, tab):
+    window.resize(916, 864)
+    window.show()
+    ts.apply("xlarge")
+    window._select_tab(tab)
+    for _ in range(6):
+        QApplication.processEvents()
+    window._pin_stack_size_to_current_tab()
+    for _ in range(3):
+        QApplication.processEvents()
+    assert window._scroll_area.horizontalScrollBar().maximum() == 0, (tab, window._scroll_area.horizontalScrollBar().maximum())

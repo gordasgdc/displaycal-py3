@@ -127,7 +127,7 @@ class FeedbackDialog(QDialog):
         lay.addWidget(self.info)
 
         diag = QHBoxLayout()
-        self.diag_cb = QCheckBox(_tr("support.feedback.diagnostic"))
+        self.diag_cb = text_scale.WrapCheckBox(_tr("support.feedback.diagnostic"))
         self.diag_cb.setChecked(False)  # never on by default
         self.preview_btn = QPushButton(_tr("support.feedback.preview"))
         self.preview_btn.clicked.connect(self._preview)
@@ -148,7 +148,7 @@ class FeedbackDialog(QDialog):
 
     @staticmethod
     def _wrap(text: str, muted: bool = False) -> QLabel:
-        lab = QLabel(text)
+        lab = QLabel(text_scale.breakable(text))
         lab.setWordWrap(True)
         if muted:
             from DisplayCAL.ui.settings_sections import muted_css

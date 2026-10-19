@@ -21,7 +21,7 @@ from __future__ import annotations
 from qtpy.QtCore import QObject, Signal
 from qtpy.QtGui import QColor, QFont, QFontDatabase
 from qtpy.QtCore import QSize
-from qtpy.QtWidgets import QApplication, QLabel, QPushButton, QSizePolicy, QWidget
+from qtpy.QtWidgets import QApplication, QAbstractButton, QCheckBox, QLabel, QPushButton, QSizePolicy, QWidget
 
 from DisplayCAL import config
 
@@ -166,6 +166,25 @@ def chars_px(widget: QWidget, chars: int) -> int:
     return QFontMetrics(font).averageCharWidth() * chars
 
 
+def breakable(text: str, minimum: int = 24) -> str:
+    """Let a long unbroken token (a file path) wrap: add break points after separators.
+
+    A label wraps only at spaces, so one long path would make a whole dialog
+    wider than its window (seen at large text). A zero-width space after each
+    separator changes nothing visible but gives the label somewhere to break.
+    Tokens containing markup are left alone.
+    """
+    import re
+
+    def one(m: "re.Match[str]") -> str:
+        token = m.group(0)
+        if len(token) < minimum or "<" in token or ">" in token:
+            return token
+        return re.sub(r"([/\\_.:-])", "\\1\u200b", token)
+
+    return re.sub(r"\S+", one, text)
+
+
 class WrapLabel(QLabel):
     """A wrapping label whose height follows its REAL (width-limited) width.
 
@@ -179,15 +198,14 @@ class WrapLabel(QLabel):
         return super().heightForWidth(min(w, self.maximumWidth()))
 
 
-class WrapPushButton(QPushButton):
-    """A flat text button that wraps onto several lines instead of widening the page."""
+class _WrapText:
+    """Shared by buttons whose text wraps onto several lines (set before ``__init__``)."""
 
     _PAD_X, _PAD_Y = 24, 14
 
-    def __init__(self, text: str = "") -> None:
-        super().__init__()
+    def _wrap_init(self, text: str) -> None:
         self._full = text
-        super().setText(text)
+        QAbstractButton.setText(self, text)
         policy = self.sizePolicy()
         policy.setHorizontalPolicy(QSizePolicy.Preferred)  # not "its text must fit"
         policy.setHeightForWidth(True)
@@ -217,8 +235,8 @@ class WrapPushButton(QPushButton):
 
     def _rewrap(self, width: int) -> None:
         shown = "\n".join(self._lines(width)) if width > 0 else self._full
-        if shown != super().text():
-            super().setText(shown)
+        if shown != QAbstractButton.text(self):
+            QAbstractButton.setText(self, shown)
 
     def hasHeightForWidth(self) -> bool:  # noqa: N802
         return True
@@ -238,6 +256,24 @@ class WrapPushButton(QPushButton):
     def resizeEvent(self, event: object) -> None:  # noqa: N802
         self._rewrap(self.width())
         super().resizeEvent(event)
+
+
+class WrapPushButton(_WrapText, QPushButton):
+    """A flat text button that wraps onto several lines instead of widening the page."""
+
+    def __init__(self, text: str = "") -> None:
+        QPushButton.__init__(self)
+        self._wrap_init(text)
+
+
+class WrapCheckBox(_WrapText, QCheckBox):
+    """A check box whose (long) text wraps next to the box instead of widening the window."""
+
+    _PAD_X, _PAD_Y = 34, 8
+
+    def __init__(self, text: str = "") -> None:
+        QCheckBox.__init__(self)
+        self._wrap_init(text)
 
 
 def limit_reading_width(label: QWidget, chars: int = READING_CHARS) -> None:

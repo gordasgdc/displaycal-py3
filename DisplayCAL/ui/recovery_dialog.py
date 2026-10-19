@@ -158,7 +158,7 @@ class RecoveryDialog(QDialog):
         dest = QFileDialog.getExistingDirectory(self, _tr("recover.export"), os.path.expanduser("~"))
         if dest:
             self.exported_to = sj.export_session(s.dir, dest)
-            self.details.setText(escape(_tr("recover.exported", self.exported_to)))
+            self.details.setText(text_scale.breakable(escape(_tr("recover.exported", self.exported_to))))
 
     def _folder(self) -> None:
         s = self._current()

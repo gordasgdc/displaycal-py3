@@ -29,6 +29,7 @@ from DisplayCAL import config, diagnostics, support
 from DisplayCAL import localization as lang
 from DisplayCAL import log as dlog
 from DisplayCAL.ui import text_scale
+from DisplayCAL.ui.guide_widgets import WrapRow
 from DisplayCAL.ui.recovery_dialog import human_bytes
 from DisplayCAL.ui.support_dialog import open_url
 from DisplayCAL.util_os import launch_file
@@ -39,7 +40,7 @@ def _tr(key: str, *args: object) -> str:
 
 
 def _wrap(text: str, muted: bool = False) -> QLabel:
-    lab = QLabel(text)
+    lab = QLabel(text_scale.breakable(text))
     lab.setWordWrap(True)
     lab.setTextInteractionFlags(Qt.TextSelectableByMouse)
     if muted:
@@ -76,7 +77,7 @@ class ExportDialog(QDialog):
             lay.addWidget(_wrap(_tr("diag.export.optional_note"), muted=True))
             for cat in opt:
                 self._add_category(lay, cat)
-        self.redact_cb = QCheckBox(_tr("diag.export.redact"))
+        self.redact_cb = text_scale.WrapCheckBox(_tr("diag.export.redact"))
         self.redact_cb.setChecked(True)
         self.redact_cb.toggled.connect(self._redact_toggled)
         lay.addWidget(self.redact_cb)
@@ -106,7 +107,7 @@ class ExportDialog(QDialog):
         size = f" — {count} · {human_bytes(cat.size)}" if cat.files else ""
         if not available:
             size = f" — {_tr('diag.cat.none')}"
-        box = QCheckBox(_tr(f"diag.cat.{cat.key}") + size)
+        box = text_scale.WrapCheckBox(_tr(f"diag.cat.{cat.key}") + size)
         box.setChecked(cat.default and available)
         box.setEnabled(available)
         self.boxes[cat.key] = box
@@ -188,26 +189,18 @@ class DiagnosticDialog(QDialog):
         self.versions.setReadOnly(True)
         text_scale.set_min_height(self.versions, 170)
         lay.addWidget(self.versions)
-        row = QHBoxLayout()
         self.copy_versions_btn = QPushButton(_tr("diag.copy_versions"))
         self.copy_versions_btn.clicked.connect(self._copy_versions)
         self.copy_id_btn = QPushButton(_tr("diag.copy_id", dlog.APP_SESSION_ID))
         self.copy_id_btn.clicked.connect(self._copy_id)
-        row.addWidget(self.copy_versions_btn)
-        row.addWidget(self.copy_id_btn)
-        row.addStretch(1)
-        lay.addLayout(row)
+        lay.addWidget(WrapRow(self.copy_versions_btn, self.copy_id_btn, left=True))
         lay.addWidget(_wrap(_tr("diag.logs_where", dlog._LOGDIR or config.LOGDIR), True))
-        row2 = QHBoxLayout()
         self.open_logs_btn = QPushButton(_tr("diag.open_logs"))
         self.open_logs_btn.clicked.connect(self.open_logs)
         self.export_btn = QPushButton(_tr("diag.export_btn"))
         self.export_btn.clicked.connect(self.export)
-        row2.addWidget(self.open_logs_btn)
-        row2.addWidget(self.export_btn)
-        row2.addStretch(1)
-        lay.addLayout(row2)
-        self.debug_cb = QCheckBox(_tr("diag.debug", diagnostics.DEBUG_MINUTES))
+        lay.addWidget(WrapRow(self.open_logs_btn, self.export_btn, left=True))
+        self.debug_cb = text_scale.WrapCheckBox(_tr("diag.debug", diagnostics.DEBUG_MINUTES))
         self.debug_cb.setChecked(diagnostics.debug_enabled())
         self.debug_cb.toggled.connect(diagnostics.set_debug)
         lay.addWidget(self.debug_cb)

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from qtpy.QtCore import Qt
+from qtpy.QtCore import QSize, Qt
 from qtpy.QtGui import QColor
 from qtpy.QtWidgets import (
     QApplication,
+    QBoxLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -164,4 +165,52 @@ class AdaptiveRow(QWidget):
             self._box.setDirection(
                 QHBoxLayout.TopToBottom if narrow else QHBoxLayout.LeftToRight
             )
+        super().resizeEvent(event)
+
+
+class WrapRow(QWidget):
+    """Two widgets side by side, one above the other when they do not fit.
+
+    At large text sizes the pair is wider than a modest window; instead of
+    pushing the whole page wider (and cutting it off) the second one moves
+    below the first.
+    """
+
+    def __init__(
+        self, first: QWidget, second: QWidget, grow_second: bool = False, left: bool = False
+    ) -> None:
+        super().__init__()
+        self._first, self._second = first, second
+        self._box = QBoxLayout(QBoxLayout.LeftToRight, self)
+        self._box.setContentsMargins(0, 0, 0, 0)
+        self._box.setSpacing(8)
+        self._box.addWidget(first, 0, Qt.AlignLeft | Qt.AlignVCenter)
+        if grow_second:
+            self._box.addWidget(second, 1)
+        elif left:
+            self._box.addWidget(second, 0, Qt.AlignLeft | Qt.AlignVCenter)
+            self._box.addStretch(1)
+        else:
+            self._box.addStretch(1)
+            self._box.addWidget(second, 0, Qt.AlignLeft | Qt.AlignVCenter)
+        self._stacked = False
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        widest = max(
+            self._first.minimumSizeHint().width(), self._second.minimumSizeHint().width()
+        )
+        return QSize(widest, super().minimumSizeHint().height())
+
+    def reflow(self) -> None:
+        need = self._first.sizeHint().width() + self._second.sizeHint().width() + 8
+        narrow = self.width() > 0 and need > self.width()
+        if narrow != self._stacked:
+            self._stacked = narrow
+            self._box.setDirection(
+                QBoxLayout.TopToBottom if narrow else QBoxLayout.LeftToRight
+            )
+            self._box.invalidate()
+
+    def resizeEvent(self, event: object) -> None:  # noqa: N802
+        self.reflow()
         super().resizeEvent(event)

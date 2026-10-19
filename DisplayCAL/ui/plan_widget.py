@@ -9,9 +9,7 @@ function the runner itself uses, and the block size is the one configuration key
 
 from __future__ import annotations
 
-from qtpy.QtCore import QSize, Qt
 from qtpy.QtWidgets import (
-    QBoxLayout,
     QComboBox,
     QInputDialog,
     QMenu,
@@ -28,6 +26,7 @@ from DisplayCAL.ui import text_scale
 from DisplayCAL.ui.guide_widgets import css as _css
 from DisplayCAL.ui.guide_widgets import label as _label
 from DisplayCAL.ui.guide_widgets import m as _m
+from DisplayCAL.ui.guide_widgets import WrapRow
 from DisplayCAL.ui.guide_widgets import tokens as _tokens
 
 _OTHER = -1
@@ -78,49 +77,6 @@ def speed_for(window, plan: mp.Plan) -> mp.Speed | None:
     return measured_speed.specified((est.hours * 3600 + est.minutes * 60) / plan.total)
 
 
-class _WrapRow(QWidget):
-    """Two widgets side by side, one above the other when they do not fit.
-
-    At large text sizes the pair is wider than a modest window; instead of
-    pushing the whole page wider (and cutting it off) the second one moves
-    below the first.
-    """
-
-    def __init__(self, first: QWidget, second: QWidget, grow_second: bool = False) -> None:
-        super().__init__()
-        self._first, self._second = first, second
-        self._box = QBoxLayout(QBoxLayout.LeftToRight, self)
-        self._box.setContentsMargins(0, 0, 0, 0)
-        self._box.setSpacing(8)
-        self._box.addWidget(first, 0, Qt.AlignLeft | Qt.AlignVCenter)
-        if grow_second:
-            self._box.addWidget(second, 1)
-        else:
-            self._box.addStretch(1)
-            self._box.addWidget(second, 0, Qt.AlignLeft | Qt.AlignVCenter)
-        self._stacked = False
-
-    def minimumSizeHint(self) -> QSize:  # noqa: N802
-        widest = max(
-            self._first.minimumSizeHint().width(), self._second.minimumSizeHint().width()
-        )
-        return QSize(widest, super().minimumSizeHint().height())
-
-    def reflow(self) -> None:
-        need = self._first.sizeHint().width() + self._second.sizeHint().width() + 8
-        narrow = self.width() > 0 and need > self.width()
-        if narrow != self._stacked:
-            self._stacked = narrow
-            self._box.setDirection(
-                QBoxLayout.TopToBottom if narrow else QBoxLayout.LeftToRight
-            )
-            self._box.invalidate()
-
-    def resizeEvent(self, event: object) -> None:  # noqa: N802
-        self.reflow()
-        super().resizeEvent(event)
-
-
 class ChartPlanWidget(QWidget):
     """Chart total, chart chooser, block size, blocks and estimated time."""
 
@@ -133,13 +89,13 @@ class ChartPlanWidget(QWidget):
         lay.setSpacing(4)
         self.total_label = _label("", size=1.05, bold=True)
         self.chart_menu_btn = self._make_chart_button()
-        self._top_row = _WrapRow(self.total_label, self.chart_menu_btn)
+        self._top_row = WrapRow(self.total_label, self.chart_menu_btn)
         lay.addWidget(self._top_row)
         self.block_combo = QComboBox()
         self.block_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         self.block_combo.setMinimumContentsLength(12)
         self.block_combo.currentIndexChanged.connect(self._block_changed)
-        self._block_row = _WrapRow(
+        self._block_row = WrapRow(
             _label(_tr("plan.blocks.title"), bold=True), self.block_combo, grow_second=True
         )
         lay.addWidget(self._block_row)
