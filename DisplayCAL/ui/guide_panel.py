@@ -20,7 +20,7 @@ from __future__ import annotations
 from html import escape
 from typing import TYPE_CHECKING
 
-from qtpy.QtCore import QRectF, QSize, Qt, Signal
+from qtpy.QtCore import QTimer, QRectF, QSize, Qt, Signal
 from qtpy.QtGui import QColor, QFont, QLinearGradient, QPainter, QPen, QPixmap
 from qtpy.QtWidgets import (
     QButtonGroup,
@@ -587,6 +587,23 @@ class GuidePanel(QWidget):
         if step == 2:
             self.prepare.on_shown()
         self.refresh()
+        self.relayout_page()
+
+    def relayout_page(self) -> None:
+        """Recompute the current page's layout after its content changed.
+
+        Wrapped labels and rows replaced after the first layout pass otherwise
+        keep a stale, too small height until the window is resized.
+        """
+        self._relayout_now()
+        QTimer.singleShot(0, self._relayout_now)  # once the page is shown
+
+    def _relayout_now(self) -> None:
+        page = self.pages.currentWidget()
+        holder = page.widget() if page is not None else None
+        if holder is not None and holder.layout() is not None:
+            holder.layout().invalidate()
+            holder.layout().activate()
 
     def stop_motion(self) -> None:
         """Stop every decorative animation (called before any measurement)."""
@@ -889,7 +906,11 @@ class GuidePanel(QWidget):
             row.setTextFormat(Qt.RichText)
             row.setWordWrap(True)
             self.summary_lay.addWidget(row)
+        # Rows were replaced after the first layout pass: have the box and the
+        # page recompute their wrapped heights so lines never overlap.
+        self.summary_lay.invalidate()
         self._paint_plan()
+        self.relayout_page()
         ok = r.ok and self._prep.complete and self._goal is not None
         self.start_btn.setEnabled(ok)
         if ok:

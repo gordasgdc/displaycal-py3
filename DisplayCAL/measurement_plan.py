@@ -39,5 +39,7 @@ def hours_text(hours: float | None) -> str:
     if hours is None:
         return ""
     total_min = round(hours * 60)
+    if total_min < 1:
+        return "< 1 min"
     h, m = divmod(total_min, 60)
     return f"{h} h {m:02d} min" if h else f"{m} min"

@@ -100,7 +100,8 @@ def main() -> int:
                 if step == 0:
                     g.go(0)
                 g.prepare.stop_motion()
-                app.processEvents()
+                for _ in range(3):  # deferred relayouts settle over a few passes
+                    app.processEvents()
                 base = win.grab().toImage()
                 img = QImage(base.width(), base.height() + 34, QImage.Format_ARGB32)
                 img.fill(QColor(200, 70, 30))
