@@ -2742,7 +2742,7 @@
 "guide.s1.mode_current": |-
   Mode: %s
 "guide.ready.ok": |-
-  Ready: monitor and instrument detected.
+  Monitor and instrument detected by the system. Nothing else has been checked yet.
 "guide.ready.busy": |-
   A measurement or a scan is running.
 "guide.ready.no_argyll": |-
@@ -2838,9 +2838,9 @@
 "guide.goal.softproof.info": |-
   White point 5800 K, 160 cd/m², L* curve, medium quality. Matches the screen to paper under a viewing booth.
 "guide.s3.title": |-
-  Prepare the monitor and the room
+  Prepare the monitor, the room and the instrument
 "guide.s3.hint": |-
-  Required items change the result; recommended ones improve repeatability. Tick them as you go.
+  Nothing here is ticked for you: warming up, light and placement cannot be observed by the application. Tick each item when it is true for you. Expand “Why and sources” for the reasoning and where each recommendation comes from.
 "guide.s3.required": |-
   Required
 "guide.s3.recommended": |-
@@ -2948,7 +2948,7 @@
 "guide.s1.details": |-
   Details and options
 "guide.s1.action_ready": |-
-  Everything is ready. Continue to choose your goal.
+  The monitor and the instrument are selected. Continue with your goal and the preparation.
 "guide.s1.action_fix": |-
   Fix the point above, then rescan.
 "guide.s1.summary": |-
@@ -2969,3 +2969,221 @@
   Generic illustration: a pen-style spectrophotometer with a display holder.
 "guide.place.kind.other": |-
   No model picture: the instrument is not in the guide catalogue.
+"guide.state.detected": |-
+  detected by the system
+"guide.state.confirmed": |-
+  confirmed by you
+"guide.state.unverified": |-
+  not verified
+"guide.state.blocking": |-
+  blocks the measurement
+"guide.mode.guided": |-
+  Guided
+"guide.mode.advanced": |-
+  Advanced
+"guide.prep.why": |-
+  Why and sources
+"guide.prep.sources": |-
+  Sources
+"guide.prep.group.monitor": |-
+  The monitor
+"guide.prep.group.room": |-
+  The room
+"guide.prep.group.instrument": |-
+  The instrument
+"guide.prep.group.run": |-
+  During the measurement
+"guide.prep.stabilize": |-
+  The monitor is on and has stabilised
+"guide.prep.stabilize.action": |-
+  Tick only if you know the monitor has been on long enough. The application cannot tell how long it has been on.
+"guide.prep.stabilize.info": |-
+  There is no universal warm-up time. The ArgyllCMS documentation gives no fixed duration: it offers white-level drift compensation for a display that is still warming up (Options in the Display & instrument tab), and spectrometers may also need to settle. Some manufacturers give their own figure for their own product (see below). A panel that is still drifting shifts brightness and white point during the run.
+"guide.prep.vendor_warmup": |-
+  The manufacturer of your model recommends having the display powered up for at least %s minutes before calibrating (its own recommendation, not a universal rule).
+"guide.prep.timer.label": |-
+  Optional reminder timer
+"guide.prep.timer.minutes": |-
+  minutes
+"guide.prep.timer.start": |-
+  Start timer
+"guide.prep.timer.stop": |-
+  Stop timer
+"guide.prep.timer.running": |-
+  Reminder in %s
+"guide.prep.timer.done": |-
+  The timer has ended. It only reminds you; tick the item above only if you judge the monitor stable.
+"guide.prep.timer.note": |-
+  The timer counts from now. It does not know how long the monitor was already on.
+"guide.prep.settings": |-
+  The monitor is in a neutral mode with automatic functions off
+"guide.prep.settings.action": |-
+  Standard or default picture mode. Turn off automatic brightness, dynamic contrast, night/true-tone colour shifting and HDR, where your monitor or system has them.
+"guide.prep.settings.info": |-
+  Functions that change the picture by themselves change it during the run, so the measurements would describe a state that no longer exists. If your monitor has controls, the Datacolor guide asks for them to be set to their defaults before calibrating. Which controls matter depends on your monitor: if you calibrate with the interactive adjustment, the application will ask you to change brightness or colour gains at that point.
+"guide.prep.room": |-
+  Light reaching the screen is under control
+"guide.prep.room.default": |-
+  No lamp or window shining or reflecting on the screen; keep the room light steady during the run.
+"guide.prep.room.photo": |-
+  Calibrate in the light you normally edit in, with no lamp or window shining or reflecting on the screen. Matching prints also depends on the light you view them in, which is separate.
+"guide.prep.room.video": |-
+  Use the dim, steady surroundings you grade or watch in. Nothing should shine or reflect on the screen; a bright surround changes how contrast looks and is not measured here.
+"guide.prep.room.office_web": |-
+  Normal working light is fine if it is steady. Avoid direct sun or lamps shining or reflecting on the screen.
+"guide.prep.room.laptop": |-
+  Avoid glare on a glossy panel. Light will change when you move the laptop; calibrate where you use it most, with nothing reflecting on the screen.
+"guide.prep.room.srgb": |-
+  sRGB assumes a typical lit workspace. Keep the light steady and keep lamps and windows from shining or reflecting on the screen.
+"guide.prep.room.softproof": |-
+  The screen must not receive direct light. Compare against paper in your viewing booth or the lamp you will judge prints under; that light is separate from the light on the screen.
+"guide.prep.room.info": |-
+  Two different things. (1) Light falling on the screen: you control it, and no source should shine or reflect directly on the screen or on the instrument (Datacolor guide). (2) Ambient measurement with the instrument: optional, only for instruments that have an ambient diffuser or head, done separately with the instrument pointing up on the desk beside the monitor (DisplayCAL documentation; Calibrite guide); ArgyllCMS can use that value for viewing-condition adjustment. This check has NOT measured your room and cannot say that it is optimal; there is no universal lux figure.
+"guide.prep.instrument": |-
+  The instrument is connected and I know how to place it
+"guide.prep.instrument.action": |-
+  Plug it straight into the computer (not into a hub or keyboard), have its accessories at hand and read the placement sequence on the right.
+"guide.prep.instrument.info": |-
+  The Datacolor guide asks for a direct USB port, because hubs, extension cables and keyboard ports can disturb the data flow. The exact placement depends on the model: the sequence on the right follows the manufacturer document where one was checked and says so when none was.
+"guide.prep.run": |-
+  I will not disturb the measurement
+"guide.prep.run.action": |-
+  No sleep, screen saver, lock or notifications; I will not move the instrument or touch the monitor settings during the run, unless the application asks me to.
+"guide.prep.run.info": |-
+  A screen that dims, locks or shows a pop-up mid-run invalidates the measurements, and any movement of the instrument can spoil them (Datacolor guide). The interactive adjustment is the one moment when changing the monitor controls is expected.
+"guide.pl.title": |-
+  Placing the instrument
+"guide.pl.prev": |-
+  Previous step
+"guide.pl.next": |-
+  Next step
+"guide.pl.play": |-
+  ▶ Play
+"guide.pl.pause": |-
+  ❚❚ Pause
+"guide.pl.canvas_desc": |-
+  Illustration of the current placement step. The same steps are listed in text below.
+"guide.pl.reduced_note": |-
+  Your system asks for reduced motion: the sequence does not play by itself. Use the arrows or “Play”.
+"guide.pl.choose_model": |-
+  The exact model decides the physical steps. Choose yours in step 1 to see model-specific steps; until then these general steps apply.
+"guide.pl.verified_note": |-
+  These steps follow the manufacturer’s guide for the model you chose (sources in the preparation list).
+"guide.pl.unverified_note": |-
+  General steps. No manufacturer document was checked for this instrument; where its own instructions differ, follow them.
+"guide.pl.step.calibrate": |-
+  Calibrate the instrument first
+"guide.pl.step.face": |-
+  Identify the measuring face
+"guide.pl.step.diffuser": |-
+  Move the ambient diffuser out of the way
+"guide.pl.step.cover": |-
+  Take the cover off the sensor
+"guide.pl.step.cable": |-
+  Route the cable and set the counterweight
+"guide.pl.step.contact": |-
+  Rest the sensor against the screen
+"guide.pl.step.tilt": |-
+  Tilt the display back slightly, if it allows
+"guide.pl.step.position": |-
+  Centre it on the measurement area
+"guide.pl.generic.calibrate": |-
+  If your instrument has a reference tile, base or dark cap for sensor calibration, do that calibration when the application asks, before placing the instrument on the screen. Keep stray light away during a dark calibration (ArgyllCMS documentation).
+"guide.pl.generic.face": |-
+  Find the measuring face: the side with the lens or optics. It is the side that goes against the screen. Check your instrument’s own instructions if you are not sure.
+"guide.pl.generic.contact": |-
+  Rest the instrument flat on the screen with the measuring face on the glass. No pressure is needed; do not press on the panel.
+"guide.pl.generic.position": |-
+  Centre it on the measurement area shown by the measurement window and keep it still for the whole run.
+"guide.pl.i1d3.face": |-
+  The side with the foam pad is the measuring face: it goes against the screen.
+"guide.pl.i1d3.diffuser": |-
+  Lift the ambient diffuser arm first, then rotate it to the rear position until it snaps into place, so the optics are uncovered. Always lift before rotating.
+"guide.pl.i1d3.cable": |-
+  Run the USB cable over the top of the display and let the counterweight hang behind it. Press the counterweight button and slide it to suit the size of your display.
+"guide.pl.i1d3.contact": |-
+  Put the optics in contact with the centre of the screen with the foam pad flat on the glass. Do not press.
+"guide.pl.i1d3.position": |-
+  Centre it on the measurement area shown by the measurement window and keep it still for the whole run.
+"guide.pl.spyder_x.face": |-
+  Find the measuring face: the side with the sensor that goes against the screen.
+"guide.pl.spyder_x.cover": |-
+  Remove the cover of the sensor: it is used as the counterweight, so the unit stays in place and flat against the screen.
+"guide.pl.spyder_x.contact": |-
+  Place the unit flat against the screen. No pressure is needed.
+"guide.pl.spyder_x.tilt": |-
+  If your stand allows it, tilt the display back slightly so the unit rests against the screen without you holding it; any movement can spoil the calibration. Skip this if the stand does not allow it.
+"guide.pl.spyder_x.position": |-
+  Centre it on the measurement area shown by the measurement window and keep it still for the whole run.
+"guide.acc.sensor_cover": |-
+  sensor cover (used as the counterweight)
+"guide.s4.summary_title": |-
+  Before you start
+"guide.sum.monitor": |-
+  Monitor
+"guide.sum.instrument": |-
+  Instrument
+"guide.sum.model": |-
+  Model
+"guide.sum.correction": |-
+  Correction
+"guide.sum.goal": |-
+  Goal
+"guide.sum.prep": |-
+  Preparation confirmed
+"guide.sum.engine": |-
+  Engine
+"guide.s4.reminder": |-
+  During the measurement do not move the instrument and do not change the monitor settings, except when the application asks you to adjust them. Keep the screen from sleeping or locking.
+"guide.s4.interrupt_title": |-
+  If the run stops or fails
+"guide.s4.interrupt": |-
+  Measurements already taken are kept in the session folder. When you start again the application may offer to continue an interrupted measurement: accept only if nothing was moved or changed; otherwise start that step again. Nothing is installed until you accept the final dialog, and your previous profile stays active until then. The error message says what failed; the application log has the details.
+"guide.s4.blocked_prep": |-
+  Confirm the required preparation items first.
+"guide.s1.model_pick": |-
+  Which model do you have? (changes only the placement help, not the measurement)
+"guide.s1.model_choose": |-
+  — choose your model —
+"guide.s1.model_unsure": |-
+  Another model / I am not sure
+"guide.s4.stages_title": |-
+  What the run does
+"support.star.question": |-
+  Is the application useful to you? You can support the project with a star on GitHub.
+"support.star.button": |-
+  Give a star on GitHub
+"support.feedback.button": |-
+  Send feedback
+"support.feedback.title": |-
+  Send feedback
+"support.feedback.intro": |-
+  Tell us what happened or what would help. This opens a pre-filled page of the project’s GitHub issue tracker in your browser; you review and send it there.
+"support.feedback.type": |-
+  Type
+"support.kind.problem": |-
+  Problem
+"support.kind.suggestion": |-
+  Suggestion
+"support.kind.experience": |-
+  General experience
+"support.feedback.description": |-
+  Description
+"support.feedback.included": |-
+  Included with your message:
+"support.feedback.diagnostic": |-
+  Also include a redacted diagnostic (never included unless you tick this)
+"support.feedback.preview": |-
+  Preview diagnostic
+"support.feedback.note": |-
+  The application sends nothing itself, and you need a GitHub account to submit the issue there. The diagnostic is redacted (home folder, user name, e-mail, IP address, serial numbers, tokens) but check the preview before you include it.
+"support.feedback.open": |-
+  Open in browser
+"support.credits": |-
+  These actions support the %(fork)s adaptation. %(original)s was created by Florian Höch and is continued by the community at %(upstream)s; the measurement engine is %(argyll)s by Graeme Gill. They have their own pages and are not affiliated with this fork’s adaptation.
+"support.invite.close": |-
+  Close
+"support.invite.never": |-
+  Do not show this again
+"support.menu.about_section": |-
+  Support and feedback

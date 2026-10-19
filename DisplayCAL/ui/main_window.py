@@ -234,6 +234,7 @@ from DisplayCAL.ui.colorimeter_correction_window import CreateCorrectionWindow
 from DisplayCAL.ui.display_adjustment_window import DisplayAdjustmentWindow
 from DisplayCAL.ui.gamap_window import GamapWindow
 from DisplayCAL.ui.guide_panel import GuidePanel
+from DisplayCAL.ui.support_dialog import FeedbackDialog, github_icon, star_clicked
 from DisplayCAL.ui.header_banner import (
     HEADER_BANNER_SIZE,
     HeaderBanner,
@@ -3125,6 +3126,19 @@ class MainWindow(BaseWindow):
             lambda: launch_file(f"{DEVELOPMENT_HOME_PAGE}/issues")
         )
 
+        # Voluntary support and feedback (never conditions for any feature).
+        help_menu.addSeparator()
+        star_action = help_menu.addAction(
+            github_icon(16), lang.getstr("support.star.button")
+        )
+        star_action.setMenuRole(QAction.NoRole)
+        star_action.triggered.connect(star_clicked)
+        feedback_action = help_menu.addAction(lang.getstr("support.feedback.button"))
+        feedback_action.setMenuRole(QAction.NoRole)
+        feedback_action.triggered.connect(
+            lambda: FeedbackDialog(self).exec()
+        )
+
         help_menu.addSeparator()
         self.update_check_onstartup_action = help_menu.addAction(
             lang.getstr("update_check.onstartup")
@@ -3394,6 +3408,7 @@ class MainWindow(BaseWindow):
         # the CSS style engine instead of the native one, losing the native
         # chevron / popup chrome the rest of the app's combo boxes keep.
         bar.setStyleSheet("QWidget#headerpanel { background-color: #17181b; }")
+        self._header_bar = bar
         bar_row = QHBoxLayout(bar)
         bar_row.setContentsMargins(self._HEADER_LOGO_INSET, 8, 16, 8)
         bar_row.setSpacing(8)
@@ -8868,6 +8883,13 @@ class MainWindow(BaseWindow):
             key (str): The tab identifier (see :data:`_TABS`).
         """
         self.stack.setCurrentWidget(self._panels[key])
+        # Guided mode: one clear place to be. The file bar and the tab bar are
+        # advanced-mode chrome; they come back (with the Guide tab among them)
+        # as soon as an advanced tab is opened.
+        guided = key == "guide"
+        self._tabbar_widget.setVisible(not guided)
+        if getattr(self, "_header_bar", None) is not None:
+            self._header_bar.setVisible(not guided)
         self._pin_stack_size_to_current_tab()
         button = self._tab_buttons[key]
         if not button.isChecked():

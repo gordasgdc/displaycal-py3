@@ -52,12 +52,12 @@ def test_every_goal_resolves_to_a_bundled_preset():
 def test_prep_required_items_gate_completion():
     st = gm.PrepState()
     assert not st.complete
-    for item in gm.PREPARATION:
+    for item in st.items:
         if item.required:
             st.toggle(item.key, True)
     assert st.complete
-    st.toggle("probe", False)
-    assert st.required_missing() == ["probe"]
+    st.toggle("run", False)
+    assert st.required_missing() == ["run"]
 
 
 def test_all_guide_keys_exist_in_english_and_in_ro_es():
@@ -73,8 +73,10 @@ def test_all_guide_keys_exist_in_english_and_in_ro_es():
     keys = set()
     for g in gm.GOALS:
         keys |= {g.title_key, g.summary_key}
-    for p in gm.PREPARATION:
-        keys |= {p.title_key, p.detail_key}
+    for goal in [g.key for g in gm.GOALS] + [None]:
+        for variant in ("generic", "i1d3", "spyder_x"):
+            for p in gm.build_preparation(goal, variant):
+                keys |= {p.title_key, p.action_key, p.detail_key}
     for a, b in gm.CONCEPTS:
         keys |= {a, b}
     keys |= set(gm.LIMITS)
@@ -110,9 +112,25 @@ def test_every_guide_key_used_by_the_panel_exists_in_ro_en_es():
     keys |= {f"guide.place.kind.{k}" for k in ("colorimeter", "spectro_puck", "spectro_pen", "other")}
     from DisplayCAL import instrument_catalog as ic
 
-    for fam in ic.FAMILIES:
-        keys |= {f"guide.acc.{a}" for a in fam.accessories}
-        keys |= set(ic.placement_steps(fam.kind, needs_reference_tile=fam.needs_reference_tile))
+    keys |= {f"guide.pl.step.{x}" for x in ("calibrate", "face", "diffuser", "cover", "cable", "contact", "tilt", "position")}
+    keys |= {f"guide.pl.generic.{x}" for x in ("calibrate", "face", "contact", "position")}
+    for model, (variant, steps, _src, acc) in ic.VERIFIED_MODELS.items():
+        keys |= {f"guide.pl.{variant}.{x}" for x in steps}
+        keys |= {f"guide.acc.{a}" for a in acc}
+    keys |= {
+        "guide.pl.prev", "guide.pl.next", "guide.pl.play", "guide.pl.pause",
+        "guide.pl.canvas_desc", "guide.pl.reduced_note", "guide.pl.choose_model",
+        "guide.pl.verified_note", "guide.pl.unverified_note", "guide.pl.title",
+    }
+    for st in ("detected", "confirmed", "unverified", "blocking"):
+        keys.add(f"guide.state.{st}")
+    for k in ("monitor", "instrument", "model", "correction", "goal", "prep", "engine"):
+        keys.add(f"guide.sum.{k}")
+    for g in ("monitor", "room", "instrument", "run"):
+        keys.add(f"guide.prep.group.{g}")
+    keys |= {"guide.prep.vendor_warmup", "guide.prep.why", "guide.prep.sources"} | {
+        f"guide.prep.timer.{x}" for x in ("label", "minutes", "start", "stop", "running", "done", "note")
+    }
     keys.add("guide.place.generic")
     for code in ("en", "ro", "es"):
         with open(os.path.join(here, "DisplayCAL", "lang", f"{code}.yaml"), encoding="utf-8") as f:

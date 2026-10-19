@@ -116,6 +116,7 @@ config = {
             "theme/icons/256x256/*.png",
             "theme/icons/512x512/*.png",
             "theme/instruments/*.svg",
+            "theme/brands/*.svg",
             "theme/jet_anim/*.png",
             "theme/patch_anim/*.png",
             "theme/splash_anim/*.png",

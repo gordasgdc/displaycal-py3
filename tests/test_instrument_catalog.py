@@ -54,9 +54,40 @@ def test_vendor_prefix_is_stripped():
     assert ident is not None
 
 
-def test_placement_steps_reference_tile_first():
-    steps = ic.placement_steps(ic.KIND_SPECTRO_PEN, needs_reference_tile=True)
-    assert steps[0] == "guide.place.calibrate_first"
-    assert steps[-1] == "guide.place.screensaver_off"
-    colorimeter = ic.placement_steps(ic.KIND_COLORIMETER, needs_reference_tile=False)
-    assert "guide.place.calibrate_first" not in colorimeter
+def test_unverified_family_gets_only_generic_steps_and_no_accessories():
+    ident = ic.identify("Spyder5")
+    seq = ic.resolve_placement(ident, None)
+    assert not seq.verified and seq.variant == "generic"
+    assert seq.accessories == ()  # nothing is claimed that was not verified
+    assert "suction" not in " ".join(seq.accessories)
+
+
+def test_ambiguous_family_asks_for_model_before_specific_steps():
+    ident = ic.identify("i1 DisplayPro, ColorMunki Display")
+    generic = ic.resolve_placement(ident, None)
+    assert generic.needs_model_choice and not generic.verified
+    chosen = ic.resolve_placement(ident, "Calibrite ColorChecker Display / Pro / Plus")
+    assert chosen.verified and chosen.variant == "i1d3"
+    assert chosen.sources == ("calibrite_qsg",)
+    assert "tilt" not in chosen.steps  # the Calibrite guide does not mention it
+    assert "suction_cups" not in chosen.accessories
+
+
+def test_spyderx_steps_follow_the_datacolor_guide():
+    ident = ic.identify("SpyderX")
+    seq = ic.resolve_placement(ident, "Datacolor SpyderX Pro / Elite")
+    assert seq.verified and seq.variant == "spyder_x"
+    assert seq.steps == ("face", "cover", "contact", "tilt", "position")
+    assert seq.accessories == ("sensor_cover",)
+
+
+def test_x2_is_not_assumed_to_behave_like_spyderx():
+    ident = ic.identify("SpyderX2")
+    seq = ic.resolve_placement(ident, "Datacolor Spyder X2 Pro / Elite / Ultra")
+    assert not seq.verified
+
+
+def test_reference_tile_instruments_calibrate_first():
+    ident = ic.identify("i1 Pro 2")
+    seq = ic.resolve_placement(ident, None)
+    assert seq.steps[0] == "calibrate"

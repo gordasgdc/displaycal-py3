@@ -169,48 +169,197 @@ def preset_path(goal_key: str, presets: list[str]) -> str | None:
 
 # --- preparation ------------------------------------------------------------
 
+GROUP_MONITOR = "monitor"
+GROUP_ROOM = "room"
+GROUP_INSTRUMENT = "instrument"
+GROUP_RUN = "run"
+
 
 @dataclass(frozen=True)
 class PrepItem:
-    """One preparation item shown on the preparation step."""
+    """One preparation item: a visible action plus an expandable "why"."""
 
     key: str
-    #: Required (will affect the result) vs recommended (good practice).
+    group: str
+    #: Required items gate the start; recommended ones are advice only.
     required: bool
     title_key: str
+    #: One-line action, always visible (the essential step is never hidden).
+    action_key: str
+    #: Longer explanation, expandable.
     detail_key: str
+    #: Keys of :data:`DisplayCAL.guide_sources.SOURCES` behind the advice.
+    sources: tuple[str, ...] = ()
 
 
-PREPARATION: tuple[PrepItem, ...] = (
-    PrepItem("warmup", False, "guide.prep.warmup", "guide.prep.warmup.info"),
-    PrepItem("reset", True, "guide.prep.reset", "guide.prep.reset.info"),
-    PrepItem("auto", True, "guide.prep.auto", "guide.prep.auto.info"),
-    PrepItem("ambient", False, "guide.prep.ambient", "guide.prep.ambient.info"),
-    PrepItem(
-        "screensaver", True, "guide.prep.screensaver", "guide.prep.screensaver.info"
-    ),
-    PrepItem("probe", True, "guide.prep.probe", "guide.prep.probe.info"),
-)
+#: Vendors' own warm-up figures, shown *as that vendor's recommendation* and
+#: never as a universal rule. Only documents actually read are listed.
+VENDOR_WARMUP: dict[str, tuple[int, str]] = {
+    # placement variant -> (minutes, source key)
+    "spyder_x": (30, "datacolor_spyderx"),
+}
+
+
+def build_preparation(
+    goal_key: str | None, placement_variant: str = "generic"
+) -> list[PrepItem]:
+    """Return the preparation checklist for a goal and instrument variant.
+
+    The checklist is contextual (the room-light advice follows the goal) but
+    never pre-confirmed: every item starts unconfirmed and only the user can
+    confirm it.
+    """
+    goal = goal_key if goal_key in _GOALS_BY_KEY else "default"
+    warm_sources = ["argyll_dispcal", "displaycal"]
+    if placement_variant in VENDOR_WARMUP:
+        warm_sources.append(VENDOR_WARMUP[placement_variant][1])
+    return [
+        PrepItem(
+            "stabilize",
+            GROUP_MONITOR,
+            True,
+            "guide.prep.stabilize",
+            "guide.prep.stabilize.action",
+            "guide.prep.stabilize.info",
+            tuple(warm_sources),
+        ),
+        PrepItem(
+            "settings",
+            GROUP_MONITOR,
+            True,
+            "guide.prep.settings",
+            "guide.prep.settings.action",
+            "guide.prep.settings.info",
+            ("datacolor_spyderx",),
+        ),
+        PrepItem(
+            "room",
+            GROUP_ROOM,
+            False,
+            "guide.prep.room",
+            f"guide.prep.room.{goal}",
+            "guide.prep.room.info",
+            ("datacolor_spyderx", "argyll_dispcal", "displaycal", "calibrite_qsg"),
+        ),
+        PrepItem(
+            "instrument",
+            GROUP_INSTRUMENT,
+            True,
+            "guide.prep.instrument",
+            "guide.prep.instrument.action",
+            "guide.prep.instrument.info",
+            ("datacolor_spyderx",),
+        ),
+        PrepItem(
+            "run",
+            GROUP_RUN,
+            True,
+            "guide.prep.run",
+            "guide.prep.run.action",
+            "guide.prep.run.info",
+        ),
+    ]
 
 
 @dataclass
 class PrepState:
-    """Which preparation items the user has confirmed (session-only)."""
+    """Which preparation items the user has confirmed (session-only).
 
+    Nothing is ever confirmed automatically: warming up, lighting and
+    placement are facts the application cannot observe.
+    """
+
+    items: list[PrepItem] = field(default_factory=lambda: build_preparation(None))
     done: set[str] = field(default_factory=set)
 
+    def set_items(self, items: list[PrepItem]) -> None:
+        """Replace the checklist (e.g. after the goal changed), keeping ticks."""
+        self.items = items
+        self.done &= {i.key for i in items}
+
     def toggle(self, key: str, value: bool) -> None:
-        """Mark an item done or not done."""
+        """Mark an item confirmed or not."""
         (self.done.add if value else self.done.discard)(key)
 
     def required_missing(self) -> list[str]:
         """Keys of required items not yet confirmed."""
-        return [i.key for i in PREPARATION if i.required and i.key not in self.done]
+        return [i.key for i in self.items if i.required and i.key not in self.done]
 
     @property
     def complete(self) -> bool:
         """Whether every required item is confirmed."""
         return not self.required_missing()
+
+
+# --- states -----------------------------------------------------------------
+
+DETECTED = "detected"  # reported by the system, not touched by the user
+CONFIRMED = "confirmed"  # the user said so
+UNVERIFIED = "unverified"  # nobody can vouch for it
+BLOCKING = "blocking"  # prevents the measurement
+
+
+@dataclass(frozen=True)
+class StateLine:
+    """A labelled fact with the *kind* of evidence behind it."""
+
+    label_key: str
+    value: str
+    state: str
+
+
+def start_summary(
+    *,
+    monitor: str | None,
+    instrument: str | None,
+    model: str | None,
+    model_needs_choice: bool,
+    correction: str,
+    goal_title: str | None,
+    prep: PrepState,
+    readiness: Readiness,
+) -> list[StateLine]:
+    """Facts shown right before starting, each with its kind of evidence."""
+    lines = [
+        StateLine(
+            "guide.sum.monitor",
+            monitor or "—",
+            DETECTED if monitor else BLOCKING,
+        ),
+        StateLine(
+            "guide.sum.instrument",
+            instrument or "—",
+            DETECTED if instrument else BLOCKING,
+        ),
+    ]
+    if model or model_needs_choice:
+        lines.append(
+            StateLine(
+                "guide.sum.model",
+                model or "—",
+                CONFIRMED if model else UNVERIFIED,
+            )
+        )
+    lines.append(StateLine("guide.sum.correction", correction, DETECTED))
+    lines.append(
+        StateLine(
+            "guide.sum.goal",
+            goal_title or "—",
+            CONFIRMED if goal_title else BLOCKING,
+        )
+    )
+    missing = prep.required_missing()
+    confirmed = len(prep.done)
+    lines.append(
+        StateLine(
+            "guide.sum.prep",
+            f"{confirmed}/{len(prep.items)}",
+            CONFIRMED if not missing else BLOCKING,
+        )
+    )
+    if not readiness.ok:
+        lines.append(StateLine("guide.sum.engine", readiness.message_key, BLOCKING))
+    return lines
 
 
 # --- concept clarifications -------------------------------------------------

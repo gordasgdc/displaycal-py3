@@ -2730,7 +2730,7 @@
 "guide.s1.mode_current": |-
   Modo: %s
 "guide.ready.ok": |-
-  Listo: monitor e instrumento detectados.
+  Monitor e instrumento detectados por el sistema. Todavía no se ha comprobado nada más.
 "guide.ready.busy": |-
   Hay una medición o una búsqueda en curso.
 "guide.ready.no_argyll": |-
@@ -2826,9 +2826,9 @@
 "guide.goal.softproof.info": |-
   Punto blanco 5800 K, 160 cd/m², curva L*, calidad media. Iguala la pantalla con el papel bajo una cabina de visualización.
 "guide.s3.title": |-
-  Prepara el monitor y la sala
+  Prepara el monitor, la sala y el instrumento
 "guide.s3.hint": |-
-  Los elementos obligatorios cambian el resultado; los recomendados mejoran la repetibilidad. Márcalos a medida que avances.
+  Aquí nada se marca por ti: el calentamiento, la luz y la colocación no los puede observar la aplicación. Marca cada elemento cuando sea cierto para ti. Abre «Por qué y fuentes» para ver los motivos y el origen de cada recomendación.
 "guide.s3.required": |-
   Obligatorio
 "guide.s3.recommended": |-
@@ -2936,7 +2936,7 @@
 "guide.s1.details": |-
   Detalles y opciones
 "guide.s1.action_ready": |-
-  Todo está listo. Continúa y elige tu objetivo.
+  El monitor y el instrumento están seleccionados. Continúa con el objetivo y la preparación.
 "guide.s1.action_fix": |-
   Resuelve el punto anterior y vuelve a buscar.
 "guide.s1.summary": |-
@@ -2957,3 +2957,221 @@
   Ilustración genérica: un espectrofotómetro tipo bolígrafo con soporte de pantalla.
 "guide.place.kind.other": |-
   Sin imagen del modelo: el instrumento no está en el catálogo de la guía.
+"guide.state.detected": |-
+  detectado por el sistema
+"guide.state.confirmed": |-
+  confirmado por ti
+"guide.state.unverified": |-
+  sin verificar
+"guide.state.blocking": |-
+  impide la medición
+"guide.mode.guided": |-
+  Guiado
+"guide.mode.advanced": |-
+  Avanzado
+"guide.prep.why": |-
+  Por qué y fuentes
+"guide.prep.sources": |-
+  Fuentes
+"guide.prep.group.monitor": |-
+  El monitor
+"guide.prep.group.room": |-
+  La sala
+"guide.prep.group.instrument": |-
+  El instrumento
+"guide.prep.group.run": |-
+  Durante la medición
+"guide.prep.stabilize": |-
+  El monitor está encendido y se ha estabilizado
+"guide.prep.stabilize.action": |-
+  Marca solo si sabes que el monitor lleva encendido el tiempo suficiente. La aplicación no puede saber cuánto lleva encendido.
+"guide.prep.stabilize.info": |-
+  No existe un tiempo de calentamiento universal. La documentación de ArgyllCMS no da una duración fija: ofrece compensación de la deriva del nivel de blanco para una pantalla que aún se calienta (opciones de la pestaña Pantalla e instrumento), y los espectrómetros también pueden necesitar estabilizarse. Algunos fabricantes dan su propia cifra para su propio producto (ver abajo). Un panel que aún deriva cambia el brillo y el punto blanco durante la ejecución.
+"guide.prep.vendor_warmup": |-
+  El fabricante de tu modelo recomienda que la pantalla lleve encendida al menos %s minutos antes de calibrar (su propia recomendación, no una regla universal).
+"guide.prep.timer.label": |-
+  Temporizador opcional de recordatorio
+"guide.prep.timer.minutes": |-
+  minutos
+"guide.prep.timer.start": |-
+  Iniciar temporizador
+"guide.prep.timer.stop": |-
+  Detener temporizador
+"guide.prep.timer.running": |-
+  Recordatorio en %s
+"guide.prep.timer.done": |-
+  El temporizador ha terminado. Solo te lo recuerda; marca el elemento anterior solo si consideras estable el monitor.
+"guide.prep.timer.note": |-
+  El temporizador cuenta desde ahora. No sabe cuánto tiempo llevaba ya encendido el monitor.
+"guide.prep.settings": |-
+  El monitor está en un modo neutro con las funciones automáticas desactivadas
+"guide.prep.settings.action": |-
+  Modo de imagen estándar o predeterminado. Desactiva el brillo automático, el contraste dinámico, el desplazamiento de color nocturno/true-tone y el HDR, donde tu monitor o sistema los tengan.
+"guide.prep.settings.info": |-
+  Las funciones que cambian la imagen por sí solas la cambian durante la ejecución, por lo que las mediciones describirían un estado que ya no existe. Si tu monitor tiene controles, la guía de Datacolor pide ponerlos en sus valores predeterminados antes de calibrar. Qué controles importan depende de tu monitor: si usas el ajuste interactivo, la aplicación te pedirá cambiar el brillo o las ganancias de color en ese momento.
+"guide.prep.room": |-
+  La luz que llega a la pantalla está controlada
+"guide.prep.room.default": |-
+  Ninguna lámpara o ventana que ilumine o se refleje en la pantalla; mantén estable la luz de la sala durante la ejecución.
+"guide.prep.room.photo": |-
+  Calibra con la luz con la que editas normalmente, sin lámparas ni ventanas que iluminen o se reflejen en la pantalla. Igualar impresiones depende también de la luz en que las miras, que es aparte.
+"guide.prep.room.video": |-
+  Usa el entorno tenue y estable en el que etalonas o ves. Nada debe iluminar ni reflejarse en la pantalla; un entorno luminoso cambia cómo se ve el contraste y aquí no se mide.
+"guide.prep.room.office_web": |-
+  La luz normal de trabajo está bien si es estable. Evita el sol directo o las lámparas que iluminen o se reflejen en la pantalla.
+"guide.prep.room.laptop": |-
+  Evita el deslumbramiento en un panel brillante. La luz cambia al mover el portátil; calibra donde más lo uses, sin nada que se refleje en la pantalla.
+"guide.prep.room.srgb": |-
+  sRGB supone un espacio de trabajo iluminado típico. Mantén la luz estable y evita que lámparas y ventanas iluminen o se reflejen en la pantalla.
+"guide.prep.room.softproof": |-
+  La pantalla no debe recibir luz directa. Compara con el papel en tu cabina de visualización o bajo la lámpara con la que juzgarás las impresiones; esa luz es aparte de la que cae sobre la pantalla.
+"guide.prep.room.info": |-
+  Dos cosas distintas. (1) La luz que cae sobre la pantalla: la controlas tú y ninguna fuente debe iluminar ni reflejarse directamente en la pantalla ni en el instrumento (guía de Datacolor). (2) Medición ambiental con el instrumento: opcional, solo para instrumentos con difusor o cabezal ambiental, hecha aparte con el instrumento apuntando hacia arriba sobre el escritorio junto al monitor (documentación de DisplayCAL; guía de Calibrite); ArgyllCMS puede usar ese valor para ajustar a las condiciones de visualización. Esta comprobación NO ha medido tu sala y no puede decir que sea óptima; no existe un valor universal en lux.
+"guide.prep.instrument": |-
+  El instrumento está conectado y sé cómo colocarlo
+"guide.prep.instrument.action": |-
+  Conéctalo directamente al ordenador (no a un hub ni al teclado), ten a mano sus accesorios y revisa la secuencia de colocación de la derecha.
+"guide.prep.instrument.info": |-
+  La guía de Datacolor pide un puerto USB directo, porque hubs, alargadores y puertos de teclado pueden perturbar el flujo de datos. La colocación exacta depende del modelo: la secuencia de la derecha sigue el documento del fabricante cuando se ha comprobado uno y lo dice cuando no.
+"guide.prep.run": |-
+  No perturbaré la medición
+"guide.prep.run.action": |-
+  Sin suspensión, salvapantallas, bloqueo ni notificaciones; no moveré el instrumento ni tocaré los ajustes del monitor durante la ejecución, salvo que la aplicación me lo pida.
+"guide.prep.run.info": |-
+  Una pantalla que se atenúa, se bloquea o muestra una ventana emergente a mitad de la ejecución invalida las mediciones, y cualquier movimiento del instrumento puede estropearlas (guía de Datacolor). El ajuste interactivo es el único momento en que se espera cambiar los controles del monitor.
+"guide.pl.title": |-
+  Colocación del instrumento
+"guide.pl.prev": |-
+  Paso anterior
+"guide.pl.next": |-
+  Paso siguiente
+"guide.pl.play": |-
+  ▶ Reproducir
+"guide.pl.pause": |-
+  ❚❚ Pausa
+"guide.pl.canvas_desc": |-
+  Ilustración del paso de colocación actual. Los mismos pasos están en texto más abajo.
+"guide.pl.reduced_note": |-
+  Tu sistema pide movimiento reducido: la secuencia no se reproduce sola. Usa las flechas o «Reproducir».
+"guide.pl.choose_model": |-
+  El modelo exacto decide los pasos físicos. Elige el tuyo en el paso 1 para ver los pasos específicos; hasta entonces se aplican estos pasos generales.
+"guide.pl.verified_note": |-
+  Estos pasos siguen la guía del fabricante para el modelo elegido (fuentes en la lista de preparación).
+"guide.pl.unverified_note": |-
+  Pasos generales. No se ha comprobado ningún documento del fabricante para este instrumento; donde sus propias instrucciones difieran, síguelas.
+"guide.pl.step.calibrate": |-
+  Calibra primero el instrumento
+"guide.pl.step.face": |-
+  Identifica la cara de medición
+"guide.pl.step.diffuser": |-
+  Aparta el difusor ambiental
+"guide.pl.step.cover": |-
+  Quita la tapa del sensor
+"guide.pl.step.cable": |-
+  Coloca el cable y ajusta el contrapeso
+"guide.pl.step.contact": |-
+  Apoya el sensor contra la pantalla
+"guide.pl.step.tilt": |-
+  Inclina ligeramente la pantalla hacia atrás, si lo permite
+"guide.pl.step.position": |-
+  Céntralo en el área de medición
+"guide.pl.generic.calibrate": |-
+  Si tu instrumento tiene baldosa de referencia, base o tapa oscura para calibrar el sensor, haz esa calibración cuando la aplicación lo pida, antes de colocarlo en la pantalla. Evita la luz parásita durante una calibración en oscuridad (documentación de ArgyllCMS).
+"guide.pl.generic.face": |-
+  Localiza la cara de medición: el lado con la lente u óptica. Es el lado que va contra la pantalla. Consulta las instrucciones del instrumento si no estás seguro.
+"guide.pl.generic.contact": |-
+  Apoya el instrumento plano sobre la pantalla con la cara de medición sobre el cristal. No hace falta presión; no presiones el panel.
+"guide.pl.generic.position": |-
+  Céntralo en el área de medición que muestra la ventana de medición y mantenlo quieto durante toda la ejecución.
+"guide.pl.i1d3.face": |-
+  El lado con la almohadilla de espuma es la cara de medición: va contra la pantalla.
+"guide.pl.i1d3.diffuser": |-
+  Levanta primero el brazo del difusor ambiental y gíralo a la posición trasera hasta que encaje, para dejar la óptica descubierta. Levanta siempre antes de girar.
+"guide.pl.i1d3.cable": |-
+  Pasa el cable USB por encima de la pantalla y deja el contrapeso colgando detrás. Pulsa el botón del contrapeso y deslízalo según el tamaño de tu pantalla.
+"guide.pl.i1d3.contact": |-
+  Pon la óptica en contacto con el centro de la pantalla con la almohadilla plana sobre el cristal. No presiones.
+"guide.pl.i1d3.position": |-
+  Céntralo en el área de medición que muestra la ventana de medición y mantenlo quieto durante toda la ejecución.
+"guide.pl.spyder_x.face": |-
+  Localiza la cara de medición: el lado con el sensor que va contra la pantalla.
+"guide.pl.spyder_x.cover": |-
+  Quita la tapa del sensor: se usa como contrapeso, para que la unidad se quede en su sitio y plana contra la pantalla.
+"guide.pl.spyder_x.contact": |-
+  Coloca la unidad plana contra la pantalla. No hace falta presión.
+"guide.pl.spyder_x.tilt": |-
+  Si tu soporte lo permite, inclina ligeramente la pantalla hacia atrás para que la unidad se apoye en ella sin sujetarla; cualquier movimiento puede estropear la calibración. Omite este paso si el soporte no lo permite.
+"guide.pl.spyder_x.position": |-
+  Céntralo en el área de medición que muestra la ventana de medición y mantenlo quieto durante toda la ejecución.
+"guide.acc.sensor_cover": |-
+  tapa del sensor (se usa como contrapeso)
+"guide.s4.summary_title": |-
+  Antes de empezar
+"guide.sum.monitor": |-
+  Monitor
+"guide.sum.instrument": |-
+  Instrumento
+"guide.sum.model": |-
+  Modelo
+"guide.sum.correction": |-
+  Corrección
+"guide.sum.goal": |-
+  Objetivo
+"guide.sum.prep": |-
+  Preparación confirmada
+"guide.sum.engine": |-
+  Motor
+"guide.s4.reminder": |-
+  Durante la medición no muevas el instrumento ni cambies los ajustes del monitor, salvo cuando la aplicación te pida ajustarlos. No dejes que la pantalla se suspenda o se bloquee.
+"guide.s4.interrupt_title": |-
+  Si la ejecución se detiene o falla
+"guide.s4.interrupt": |-
+  Las mediciones ya hechas se conservan en la carpeta de la sesión. Al empezar de nuevo, la aplicación puede ofrecer continuar una medición interrumpida: acepta solo si nada se movió ni cambió; si no, repite ese paso. No se instala nada hasta que aceptes el diálogo final, y tu perfil anterior sigue activo hasta entonces. El mensaje de error dice qué falló; el registro de la aplicación tiene los detalles.
+"guide.s4.blocked_prep": |-
+  Confirma primero los elementos de preparación obligatorios.
+"guide.s1.model_pick": |-
+  ¿Qué modelo tienes? (solo cambia la ayuda de colocación, no la medición)
+"guide.s1.model_choose": |-
+  — elige tu modelo —
+"guide.s1.model_unsure": |-
+  Otro modelo / no estoy seguro
+"guide.s4.stages_title": |-
+  Qué hace la ejecución
+"support.star.question": |-
+  ¿Te resulta útil la aplicación? Puedes apoyar el proyecto con una estrella en GitHub.
+"support.star.button": |-
+  Dar una estrella en GitHub
+"support.feedback.button": |-
+  Enviar comentarios
+"support.feedback.title": |-
+  Enviar comentarios
+"support.feedback.intro": |-
+  Cuéntanos qué pasó o qué ayudaría. Se abre en el navegador una página rellenada del gestor de incidencias de GitHub del proyecto; la revisas y la envías allí.
+"support.feedback.type": |-
+  Tipo
+"support.kind.problem": |-
+  Problema
+"support.kind.suggestion": |-
+  Sugerencia
+"support.kind.experience": |-
+  Experiencia general
+"support.feedback.description": |-
+  Descripción
+"support.feedback.included": |-
+  Incluido en tu mensaje:
+"support.feedback.diagnostic": |-
+  Incluir también un diagnóstico redactado (nunca se incluye salvo que lo marques)
+"support.feedback.preview": |-
+  Vista previa del diagnóstico
+"support.feedback.note": |-
+  La aplicación no envía nada por sí misma y necesitas una cuenta de GitHub para enviarlo allí. El diagnóstico está redactado (carpeta personal, nombre de usuario, correo, dirección IP, números de serie, tokens), pero revisa la vista previa antes de incluirlo.
+"support.feedback.open": |-
+  Abrir en el navegador
+"support.credits": |-
+  Estas acciones apoyan la adaptación %(fork)s. %(original)s fue creado por Florian Höch y lo continúa la comunidad en %(upstream)s; el motor de medición es %(argyll)s, de Graeme Gill. Tienen sus propias páginas y no están afiliados a la adaptación de este fork.
+"support.invite.close": |-
+  Cerrar
+"support.invite.never": |-
+  No volver a mostrar
+"support.menu.about_section": |-
+  Apoyo y comentarios

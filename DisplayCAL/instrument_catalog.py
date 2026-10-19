@@ -26,7 +26,7 @@ manufacturer is implied.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from DisplayCAL.argyll_instruments import (
     get_canonical_instrument_name,
@@ -60,8 +60,6 @@ class InstrumentFamily:
             on a reference tile or base (Argyll ``sensor_cal``).
         ambient: ``True`` when the family has an ambient-light measurement
             option for at least one commercial model (model dependent).
-        accessories: Keys (``guide.acc.<key>`` in the language files) of the
-            accessories to have at hand.
     """
 
     key: str
@@ -73,7 +71,6 @@ class InstrumentFamily:
     spectral: bool
     needs_reference_tile: bool
     ambient: bool = False
-    accessories: tuple[str, ...] = field(default_factory=tuple)
 
 
 FAMILIES: tuple[InstrumentFamily, ...] = (
@@ -93,7 +90,6 @@ FAMILIES: tuple[InstrumentFamily, ...] = (
         spectral=False,
         needs_reference_tile=False,
         ambient=True,
-        accessories=("counterweight", "ambient_diffuser"),
     ),
     InstrumentFamily(
         key="i1d2",
@@ -108,7 +104,6 @@ FAMILIES: tuple[InstrumentFamily, ...] = (
         kind=KIND_COLORIMETER,
         spectral=False,
         needs_reference_tile=False,
-        accessories=("suction_cups", "counterweight"),
     ),
     InstrumentFamily(
         key="colormunki_photo",
@@ -120,7 +115,6 @@ FAMILIES: tuple[InstrumentFamily, ...] = (
         spectral=True,
         needs_reference_tile=True,
         ambient=True,
-        accessories=("reference_tile", "ambient_head"),
     ),
     InstrumentFamily(
         key="colormunki_smile",
@@ -131,7 +125,6 @@ FAMILIES: tuple[InstrumentFamily, ...] = (
         kind=KIND_COLORIMETER,
         spectral=False,
         needs_reference_tile=False,
-        accessories=("calibration_cover",),
     ),
     InstrumentFamily(
         key="i1pro",
@@ -148,10 +141,6 @@ FAMILIES: tuple[InstrumentFamily, ...] = (
         spectral=True,
         needs_reference_tile=True,
         ambient=True,
-        accessories=(
-            "reference_tile",
-            "emission_holder",
-        ),
     ),
     InstrumentFamily(
         key="spyder_x",
@@ -166,7 +155,6 @@ FAMILIES: tuple[InstrumentFamily, ...] = (
         spectral=False,
         needs_reference_tile=True,
         ambient=True,
-        accessories=("calibration_cap",),
     ),
     InstrumentFamily(
         key="spyder_5",
@@ -182,7 +170,6 @@ FAMILIES: tuple[InstrumentFamily, ...] = (
         spectral=False,
         needs_reference_tile=False,
         ambient=True,
-        accessories=("counterweight", "suction_cups"),
     ),
     InstrumentFamily(
         key="huey",
@@ -193,7 +180,6 @@ FAMILIES: tuple[InstrumentFamily, ...] = (
         kind=KIND_COLORIMETER,
         spectral=False,
         needs_reference_tile=False,
-        accessories=("counterweight",),
     ),
     InstrumentFamily(
         key="colorhug",
@@ -297,26 +283,65 @@ def shared_usb_identity(argyll_name: str) -> list[str]:
     )
 
 
-def placement_steps(kind: str, *, needs_reference_tile: bool) -> list[str]:
-    """Language-neutral keys for the probe-placement steps of an instrument kind.
+@dataclass(frozen=True)
+class PlacementSequence:
+    """The physical placement steps to show for an instrument.
 
-    The keys resolve in ``lang/*.yaml`` (``guide.place.*``). Kept as keys so the
-    wording is translated and reviewed in one place.
+    ``verified`` is true only when the steps come from a manufacturer document
+    for exactly the model the user confirmed; otherwise the generic, honest
+    steps are returned and ``needs_model_choice`` says whether confirming the
+    model would unlock model-specific ones.
     """
-    steps: list[str] = []
-    if needs_reference_tile:
-        steps.append("guide.place.calibrate_first")
-    if kind == KIND_COLORIMETER:
-        steps += [
-            "guide.place.colorimeter.flat",
-            "guide.place.colorimeter.counterweight",
-            "guide.place.colorimeter.center",
-        ]
-    elif kind == KIND_SPECTRO_PUCK:
-        steps += ["guide.place.spectro.display_position", "guide.place.spectro.center"]
-    elif kind == KIND_SPECTRO_PEN:
-        steps += ["guide.place.spectro_pen.emission", "guide.place.spectro.center"]
-    else:
-        steps += ["guide.place.generic"]
-    steps.append("guide.place.screensaver_off")
-    return steps
+
+    steps: tuple[str, ...]  # step ids, in order
+    verified: bool
+    #: Variant key for the step texts (``guide.pl.<variant>.<step>``).
+    variant: str
+    sources: tuple[str, ...]  # keys of DisplayCAL.guide_sources.SOURCES
+    accessories: tuple[str, ...]  # ``guide.acc.<key>``
+    needs_model_choice: bool
+    kind: str
+
+
+#: Models for which a manufacturer document describes the physical steps:
+#: ``candidate name -> (variant, steps, sources, accessories)``.
+VERIFIED_MODELS: dict[
+    str, tuple[str, tuple[str, ...], tuple[str, ...], tuple[str, ...]]
+] = {
+    "Calibrite ColorChecker Display / Pro / Plus": (
+        "i1d3",
+        ("face", "diffuser", "cable", "contact", "position"),
+        ("calibrite_qsg",),
+        ("counterweight", "ambient_diffuser"),
+    ),
+    "Datacolor SpyderX Pro / Elite": (
+        "spyder_x",
+        ("face", "cover", "contact", "tilt", "position"),
+        ("datacolor_spyderx",),
+        ("sensor_cover",),
+    ),
+}
+
+GENERIC_STEPS = ("face", "contact", "position")
+
+
+def resolve_placement(
+    ident: Identification | None, chosen_model: str | None = None
+) -> PlacementSequence:
+    """Return the placement steps for the detected instrument and chosen model."""
+    kind = ident.family.kind if ident and ident.family else KIND_OTHER
+    needs_tile = bool(ident and ident.family and ident.family.needs_reference_tile)
+    generic = (("calibrate",) if needs_tile else ()) + GENERIC_STEPS
+    if ident and ident.family and chosen_model in VERIFIED_MODELS:
+        variant, steps, sources, accessories = VERIFIED_MODELS[chosen_model]
+        return PlacementSequence(
+            steps, True, variant, sources, accessories, False, kind
+        )
+    unlock = bool(
+        ident
+        and ident.family
+        and not ident.certain
+        and any(c in VERIFIED_MODELS for c in ident.candidates)
+        and chosen_model is None
+    )
+    return PlacementSequence(generic, False, "generic", (), (), unlock, kind)

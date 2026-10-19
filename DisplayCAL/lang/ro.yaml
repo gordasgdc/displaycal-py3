@@ -2742,7 +2742,7 @@
 "guide.s1.mode_current": |-
   Mod: %s
 "guide.ready.ok": |-
-  Gata: monitor și instrument detectate.
+  Monitor și instrument detectate de sistem. Nimic altceva nu a fost verificat încă.
 "guide.ready.busy": |-
   O măsurare sau o scanare este în curs.
 "guide.ready.no_argyll": |-
@@ -2838,9 +2838,9 @@
 "guide.goal.softproof.info": |-
   Punct alb 5800 K, 160 cd/m², curbă L*, calitate medie. Potrivește ecranul cu hârtia sub o cabină de vizualizare.
 "guide.s3.title": |-
-  Pregătește monitorul și camera
+  Pregătește monitorul, camera și instrumentul
 "guide.s3.hint": |-
-  Elementele obligatorii influențează rezultatul; cele recomandate îmbunătățesc repetabilitatea. Bifează-le pe parcurs.
+  Nimic de aici nu este bifat în locul tău: încălzirea, lumina și poziționarea nu pot fi observate de aplicație. Bifează fiecare element când este adevărat pentru tine. Deschide „De ce și surse” pentru motive și pentru originea fiecărei recomandări.
 "guide.s3.required": |-
   Obligatoriu
 "guide.s3.recommended": |-
@@ -2948,7 +2948,7 @@
 "guide.s1.details": |-
   Detalii și opțiuni
 "guide.s1.action_ready": |-
-  Totul este pregătit. Continuă și alege obiectivul.
+  Monitorul și instrumentul sunt selectate. Continuă cu obiectivul și pregătirea.
 "guide.s1.action_fix": |-
   Rezolvă punctul de mai sus, apoi rescanează.
 "guide.s1.summary": |-
@@ -2969,3 +2969,221 @@
   Ilustrație generică: un spectrofotometru tip stilou cu suport de display.
 "guide.place.kind.other": |-
   Fără imagine de model: instrumentul nu este în catalogul ghidului.
+"guide.state.detected": |-
+  detectat de sistem
+"guide.state.confirmed": |-
+  confirmat de tine
+"guide.state.unverified": |-
+  neverificat
+"guide.state.blocking": |-
+  împiedică măsurarea
+"guide.mode.guided": |-
+  Ghidat
+"guide.mode.advanced": |-
+  Avansat
+"guide.prep.why": |-
+  De ce și surse
+"guide.prep.sources": |-
+  Surse
+"guide.prep.group.monitor": |-
+  Monitorul
+"guide.prep.group.room": |-
+  Camera
+"guide.prep.group.instrument": |-
+  Instrumentul
+"guide.prep.group.run": |-
+  Pe durata măsurării
+"guide.prep.stabilize": |-
+  Monitorul este pornit și s-a stabilizat
+"guide.prep.stabilize.action": |-
+  Bifează doar dacă știi că monitorul este pornit de suficient timp. Aplicația nu poate ști de cât timp este pornit.
+"guide.prep.stabilize.info": |-
+  Nu există un timp de încălzire universal. Documentația ArgyllCMS nu dă o durată fixă: oferă compensarea derivei nivelului de alb pentru un ecran care încă se încălzește (opțiunile din fila Monitor și instrument), iar spectrometrele pot avea nevoie și ele să se stabilizeze. Unii producători dau propria cifră pentru propriul produs (vezi mai jos). Un panou care încă derivă schimbă luminozitatea și punctul alb în timpul rulării.
+"guide.prep.vendor_warmup": |-
+  Producătorul modelului tău recomandă ca ecranul să fie pornit cel puțin %s de minute înainte de calibrare (recomandarea lui, nu o regulă universală).
+"guide.prep.timer.label": |-
+  Temporizator opțional de reamintire
+"guide.prep.timer.minutes": |-
+  minute
+"guide.prep.timer.start": |-
+  Pornește temporizatorul
+"guide.prep.timer.stop": |-
+  Oprește temporizatorul
+"guide.prep.timer.running": |-
+  Reamintire peste %s
+"guide.prep.timer.done": |-
+  Temporizatorul s-a încheiat. Doar îți reamintește; bifează elementul de mai sus doar dacă consideri monitorul stabil.
+"guide.prep.timer.note": |-
+  Temporizatorul numără de acum. Nu știe de cât timp era deja pornit monitorul.
+"guide.prep.settings": |-
+  Monitorul este într-un mod neutru, cu funcțiile automate oprite
+"guide.prep.settings.action": |-
+  Mod de imagine standard sau implicit. Oprește luminozitatea automată, contrastul dinamic, deplasarea de culoare de noapte/true-tone și HDR, acolo unde monitorul sau sistemul le au.
+"guide.prep.settings.info": |-
+  Funcțiile care schimbă singure imaginea o schimbă în timpul rulării, deci măsurătorile ar descrie o stare care nu mai există. Dacă monitorul are controale, ghidul Datacolor cere ca ele să fie puse pe valorile implicite înainte de calibrare. Ce controale contează depinde de monitor: dacă folosești reglajul interactiv, aplicația îți va cere să schimbi luminozitatea sau câștigurile de culoare chiar atunci.
+"guide.prep.room": |-
+  Lumina care ajunge pe ecran este sub control
+"guide.prep.room.default": |-
+  Nicio lampă sau fereastră care luminează sau se reflectă în ecran; menține lumina camerei constantă pe durata rulării.
+"guide.prep.room.photo": |-
+  Calibrează în lumina în care editezi de obicei, fără lămpi sau ferestre care luminează sau se reflectă în ecran. Potrivirea cu printurile depinde și de lumina în care le privești, care este separată.
+"guide.prep.room.video": |-
+  Folosește mediul slab luminat și constant în care corectezi culoarea sau te uiți. Nimic nu trebuie să lumineze sau să se reflecte în ecran; un fundal luminos schimbă aspectul contrastului și nu este măsurat aici.
+"guide.prep.room.office_web": |-
+  Lumina normală de lucru este în regulă dacă este constantă. Evită soarele direct sau lămpile care luminează sau se reflectă în ecran.
+"guide.prep.room.laptop": |-
+  Evită reflexiile pe un panou lucios. Lumina se schimbă când muți laptopul; calibrează unde îl folosești cel mai des, fără nimic care se reflectă în ecran.
+"guide.prep.room.srgb": |-
+  sRGB presupune un spațiu de lucru iluminat obișnuit. Menține lumina constantă și ferește ecranul de lămpi și ferestre care luminează sau se reflectă.
+"guide.prep.room.softproof": |-
+  Ecranul nu trebuie să primească lumină directă. Compară cu hârtia în cabina de vizualizare sau sub lampa cu care vei judeca printurile; acea lumină este separată de lumina de pe ecran.
+"guide.prep.room.info": |-
+  Două lucruri diferite. (1) Lumina care cade pe ecran: o controlezi tu și nicio sursă nu trebuie să lumineze sau să se reflecte direct pe ecran sau pe instrument (ghidul Datacolor). (2) Măsurarea ambientală cu instrumentul: opțională, doar pentru instrumente cu difuzor sau cap ambiental, făcută separat cu instrumentul orientat în sus pe birou, lângă monitor (documentația DisplayCAL; ghidul Calibrite); ArgyllCMS poate folosi valoarea pentru ajustarea la condițiile de vizualizare. Această verificare NU a măsurat camera și nu poate spune că este optimă; nu există o valoare universală în lux.
+"guide.prep.instrument": |-
+  Instrumentul este conectat și știu cum se poziționează
+"guide.prep.instrument.action": |-
+  Conectează-l direct la computer (nu la un hub sau la tastatură), ține accesoriile la îndemână și parcurge secvența de poziționare din dreapta.
+"guide.prep.instrument.info": |-
+  Ghidul Datacolor cere un port USB direct, pentru că hub-urile, prelungitoarele și porturile tastaturii pot perturba fluxul de date. Poziționarea exactă depinde de model: secvența din dreapta urmează documentul producătorului acolo unde a fost verificat unul și spune explicit când nu a fost.
+"guide.prep.run": |-
+  Nu voi perturba măsurarea
+"guide.prep.run.action": |-
+  Fără repaus, screen saver, blocare sau notificări; nu voi muta instrumentul și nu voi atinge setările monitorului în timpul rulării, decât dacă aplicația îmi cere.
+"guide.prep.run.info": |-
+  Un ecran care își reduce luminozitatea, se blochează sau afișează o fereastră pop-up în mijlocul rulării invalidează măsurătorile, iar orice mișcare a instrumentului le poate strica (ghidul Datacolor). Reglajul interactiv este singurul moment în care schimbarea controalelor monitorului este așteptată.
+"guide.pl.title": |-
+  Poziționarea instrumentului
+"guide.pl.prev": |-
+  Pasul anterior
+"guide.pl.next": |-
+  Pasul următor
+"guide.pl.play": |-
+  ▶ Redă
+"guide.pl.pause": |-
+  ❚❚ Pauză
+"guide.pl.canvas_desc": |-
+  Ilustrație a pasului curent de poziționare. Aceiași pași sunt listați în text mai jos.
+"guide.pl.reduced_note": |-
+  Sistemul tău cere mișcare redusă: secvența nu pornește singură. Folosește săgețile sau „Redă”.
+"guide.pl.choose_model": |-
+  Modelul exact decide pașii fizici. Alege-l pe al tău în pasul 1 ca să vezi pașii specifici modelului; până atunci se aplică acești pași generali.
+"guide.pl.verified_note": |-
+  Acești pași urmează ghidul producătorului pentru modelul ales (surse în lista de pregătire).
+"guide.pl.unverified_note": |-
+  Pași generali. Pentru acest instrument nu a fost verificat niciun document al producătorului; unde instrucțiunile lui diferă, urmează-le pe ale lui.
+"guide.pl.step.calibrate": |-
+  Calibrează întâi instrumentul
+"guide.pl.step.face": |-
+  Identifică fața de măsurare
+"guide.pl.step.diffuser": |-
+  Mută difuzorul ambiental din calea măsurării
+"guide.pl.step.cover": |-
+  Scoate capacul de pe senzor
+"guide.pl.step.cable": |-
+  Așază cablul și reglează contragreutatea
+"guide.pl.step.contact": |-
+  Sprijină senzorul pe ecran
+"guide.pl.step.tilt": |-
+  Înclină ușor ecranul pe spate, dacă permite
+"guide.pl.step.position": |-
+  Centrează-l pe zona de măsurare
+"guide.pl.generic.calibrate": |-
+  Dacă instrumentul are o placă de referință, un suport sau un capac întunecat pentru calibrarea senzorului, fă acea calibrare când aplicația o cere, înainte de a pune instrumentul pe ecran. Ferește lumina parazită în timpul unei calibrări în întuneric (documentația ArgyllCMS).
+"guide.pl.generic.face": |-
+  Găsește fața de măsurare: partea cu lentila sau optica. Aceasta este partea care se pune pe ecran. Verifică instrucțiunile instrumentului dacă nu ești sigur.
+"guide.pl.generic.contact": |-
+  Sprijină instrumentul plat pe ecran, cu fața de măsurare pe sticlă. Nu e nevoie de presiune; nu apăsa pe panou.
+"guide.pl.generic.position": |-
+  Centrează-l pe zona de măsurare arătată de fereastra de măsurare și ține-l nemișcat pe toată durata rulării.
+"guide.pl.i1d3.face": |-
+  Partea cu pad-ul de spumă este fața de măsurare: se pune pe ecran.
+"guide.pl.i1d3.diffuser": |-
+  Ridică întâi brațul difuzorului ambiental, apoi rotește-l în poziția din spate până se fixează, ca optica să fie descoperită. Ridică întotdeauna înainte de a roti.
+"guide.pl.i1d3.cable": |-
+  Trece cablul USB peste marginea de sus a ecranului și lasă contragreutatea să atârne în spate. Apasă butonul contragreutății și glisează-o după dimensiunea ecranului.
+"guide.pl.i1d3.contact": |-
+  Pune optica în contact cu centrul ecranului, cu pad-ul de spumă plat pe sticlă. Nu apăsa.
+"guide.pl.i1d3.position": |-
+  Centrează-l pe zona de măsurare arătată de fereastra de măsurare și ține-l nemișcat pe toată durata rulării.
+"guide.pl.spyder_x.face": |-
+  Găsește fața de măsurare: partea cu senzorul care se pune pe ecran.
+"guide.pl.spyder_x.cover": |-
+  Scoate capacul senzorului: este folosit drept contragreutate, ca unitatea să rămână pe loc și plată pe ecran.
+"guide.pl.spyder_x.contact": |-
+  Așază unitatea plat pe ecran. Nu e nevoie de presiune.
+"guide.pl.spyder_x.tilt": |-
+  Dacă suportul permite, înclină ușor ecranul pe spate ca unitatea să se sprijine pe ecran fără să o ții; orice mișcare poate strica calibrarea. Sari peste acest pas dacă suportul nu permite.
+"guide.pl.spyder_x.position": |-
+  Centrează-l pe zona de măsurare arătată de fereastra de măsurare și ține-l nemișcat pe toată durata rulării.
+"guide.acc.sensor_cover": |-
+  capacul senzorului (folosit drept contragreutate)
+"guide.s4.summary_title": |-
+  Înainte de a porni
+"guide.sum.monitor": |-
+  Monitor
+"guide.sum.instrument": |-
+  Instrument
+"guide.sum.model": |-
+  Model
+"guide.sum.correction": |-
+  Corecție
+"guide.sum.goal": |-
+  Obiectiv
+"guide.sum.prep": |-
+  Pregătire confirmată
+"guide.sum.engine": |-
+  Motor
+"guide.s4.reminder": |-
+  Pe durata măsurării nu muta instrumentul și nu schimba setările monitorului, decât când aplicația îți cere să le reglezi. Nu lăsa ecranul să intre în repaus sau să se blocheze.
+"guide.s4.interrupt_title": |-
+  Dacă rularea se oprește sau eșuează
+"guide.s4.interrupt": |-
+  Măsurătorile deja făcute sunt păstrate în folderul sesiunii. Când pornești din nou, aplicația poate oferi continuarea unei măsurători întrerupte: acceptă doar dacă nimic nu a fost mutat sau schimbat; altfel repornește acel pas. Nu se instalează nimic până nu accepți dialogul final, iar profilul tău anterior rămâne activ până atunci. Mesajul de eroare spune ce a eșuat; jurnalul aplicației are detaliile.
+"guide.s4.blocked_prep": |-
+  Confirmă întâi elementele obligatorii de pregătire.
+"guide.s1.model_pick": |-
+  Ce model ai? (schimbă doar ajutorul de poziționare, nu măsurarea)
+"guide.s1.model_choose": |-
+  — alege modelul tău —
+"guide.s1.model_unsure": |-
+  Alt model / nu sunt sigur
+"guide.s4.stages_title": |-
+  Ce face rularea
+"support.star.question": |-
+  Îți este utilă aplicația? Poți susține proiectul cu o stea pe GitHub.
+"support.star.button": |-
+  Oferă o stea pe GitHub
+"support.feedback.button": |-
+  Trimite feedback
+"support.feedback.title": |-
+  Trimite feedback
+"support.feedback.intro": |-
+  Spune-ne ce s-a întâmplat sau ce ar ajuta. Se deschide în browser o pagină precompletată din tracker-ul de probleme GitHub al proiectului; o verifici și o trimiți acolo.
+"support.feedback.type": |-
+  Tip
+"support.kind.problem": |-
+  Problemă
+"support.kind.suggestion": |-
+  Sugestie
+"support.kind.experience": |-
+  Experiență generală
+"support.feedback.description": |-
+  Descriere
+"support.feedback.included": |-
+  Inclus în mesajul tău:
+"support.feedback.diagnostic": |-
+  Include și un diagnostic redactat (nu se include niciodată decât dacă bifezi)
+"support.feedback.preview": |-
+  Previzualizează diagnosticul
+"support.feedback.note": |-
+  Aplicația nu trimite nimic singură, iar pentru a trimite acolo ai nevoie de un cont GitHub. Diagnosticul este redactat (folder personal, nume de utilizator, e-mail, adresă IP, numere de serie, tokenuri), dar verifică previzualizarea înainte să-l incluzi.
+"support.feedback.open": |-
+  Deschide în browser
+"support.credits": |-
+  Aceste acțiuni susțin adaptarea %(fork)s. %(original)s a fost creat de Florian Höch și este continuat de comunitate la %(upstream)s; motorul de măsurare este %(argyll)s, de Graeme Gill. Ei au propriile pagini și nu sunt afiliați cu adaptarea acestui fork.
+"support.invite.close": |-
+  Închide
+"support.invite.never": |-
+  Nu mai afișa
+"support.menu.about_section": |-
+  Susținere și feedback

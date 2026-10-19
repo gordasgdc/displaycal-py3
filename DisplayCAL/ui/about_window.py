@@ -36,6 +36,7 @@ from DisplayCAL.ui.header_banner import (
     HeaderBanner,
     header_banner_pixmap,
 )
+from DisplayCAL.ui.support_dialog import SupportActions
 
 if TYPE_CHECKING:
     from DisplayCAL.worker import Worker
@@ -77,11 +78,6 @@ class AboutWindow(BaseWindow):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        strip = QWidget()
-        strip.setFixedHeight(6)
-        strip.setStyleSheet("background-color: #66CC00;")
-        outer.addWidget(strip)
-
         # Taller than MainWindow's own header bar (which is wide enough for
         # the tagline to fit on one line to the right of the wordmark): this
         # dialog is narrow enough that the tagline wraps to two lines, so it
@@ -91,11 +87,7 @@ class AboutWindow(BaseWindow):
         banner = HeaderBanner(
             header_banner_pixmap(), lang.getstr("header"), self._TAGLINE_INSET
         )
-        banner.setFixedHeight(2 * HEADER_BANNER_SIZE[1])
-        banner.setStyleSheet(
-            "background: qlineargradient(x1:0, y1:0, x2:0, y2:1,"
-            " stop:0 #093d75, stop:0.5 #0e59a9, stop:1 #0e59a9);"
-        )
+        banner.setFixedHeight(HEADER_BANNER_SIZE[1] + 24)
         outer.addWidget(banner)
 
         body = QWidget()
@@ -112,6 +104,11 @@ class AboutWindow(BaseWindow):
             label.linkActivated.connect(lambda url: QDesktopServices.openUrl(QUrl(url)))
             label.setWordWrap(True)
             body_layout.addWidget(label)
+        body_layout.addSpacing(14)
+        heading = QLabel(f"<b>{lang.getstr('support.menu.about_section')}</b>")
+        heading.setTextFormat(Qt.RichText)
+        body_layout.addWidget(heading)
+        body_layout.addWidget(SupportActions())
         body_layout.addStretch(1)
 
         scroll = QScrollArea()
@@ -122,7 +119,7 @@ class AboutWindow(BaseWindow):
         container = QWidget()
         container.setLayout(outer)
         self.setCentralWidget(container)
-        self.resize(420, 480)
+        self.resize(480, 560)
 
     @staticmethod
     def _body_lines(worker: Worker | None) -> list[str | None]:

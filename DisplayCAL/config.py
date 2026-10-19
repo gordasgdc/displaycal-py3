@@ -1985,6 +1985,11 @@ DEFAULTS = {
     "trc.should_use_viewcond_adjust.show_msg": 1,
     "trc.type": "g",
     "trc.type.backup": "g",
+    # Voluntary support/feedback invitation on the final screen of a finished
+    # flow only: 0 = never show it again; the dismissed version silences it
+    # until the next release.
+    "support.invite": 1,
+    "support.dismissed_version": "",
     "ui.toolkit": "qt",
     "uniformity.cols": 5,
     "uniformity.measure.continuous": 0,

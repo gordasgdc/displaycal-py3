@@ -70,9 +70,11 @@ def test_not_ready_without_argyll(guide, monkeypatch):
 def test_shared_identifier_asks_user_to_confirm_model(guide, window):
     window.comport_ctrl.setCurrentIndex(0)  # i1 DisplayPro, ColorMunki Display
     guide.refresh()
-    assert len(guide.candidates_group.buttons()) >= 4
-    assert "Calibrite" in " ".join(b.text() for b in guide.candidates_group.buttons())
-    assert "guide.s1" not in guide.ident_info.text()  # translated, not a raw key
+    assert not guide.model_box.isHidden()
+    items = [guide.model_combo.itemText(i) for i in range(guide.model_combo.count())]
+    assert any("Calibrite" in t for t in items) and len(items) >= 6
+    assert guide.model_combo.currentIndex() == 0  # nothing is preselected
+    assert "guide.s1" not in guide.model_hint.text()  # translated, not a raw key
 
 
 def test_cannot_skip_ahead_before_requirements(guide):
@@ -102,9 +104,9 @@ def test_preparation_gates_progress(guide, monkeypatch, window):
     guide._next()
     assert guide._step == 2
     assert not guide.next_btn.isEnabled()
-    for item in gm.PREPARATION:
+    for item in guide._prep.items:
         if item.required:
-            guide.prep_boxes[item.key].setChecked(True)
+            guide.prepare._boxes[item.key].setChecked(True)
     assert guide.next_btn.isEnabled()
 
 
@@ -119,9 +121,9 @@ def test_start_button_requires_everything_then_runs_primary_action(
     guide._next()
     guide.goal_buttons["office_web"].setChecked(True)
     guide._next()
-    for item in gm.PREPARATION:
+    for item in guide._prep.items:
         if item.required:
-            guide.prep_boxes[item.key].setChecked(True)
+            guide.prepare._boxes[item.key].setChecked(True)
     guide._next()
     assert guide._step == 3
     assert guide.start_btn.isEnabled()
@@ -147,7 +149,7 @@ def test_unknown_instrument_is_not_guessed(guide, window):
     window.update_comports()
     guide.refresh()
     assert "Totally New Meter" in guide.ident_title.text()
-    assert guide.candidates_group.buttons() == []
+    assert guide.model_box.isHidden()
 
 
 def test_finish_page_without_profile_says_so(guide):
@@ -188,3 +190,67 @@ def test_rescan_is_asynchronous_and_single_flight(window, monkeypatch):
     assert started == [1]
     assert window.display_ctrl.count() == 1
     assert window.detect_displays_and_ports_btn.isEnabled()
+
+
+def _confirm_everything(guide, window, monkeypatch, goal="photo"):
+    monkeypatch.setattr(window, "_load_calibration_file", lambda *a, **k: None)
+    guide._next()
+    guide.goal_buttons[goal].setChecked(True)
+    guide._next()
+
+
+def test_nothing_in_preparation_is_ticked_for_the_user(guide, window, monkeypatch):
+    _confirm_everything(guide, window, monkeypatch)
+    assert all(not cb.isChecked() for cb in guide.prepare._boxes.values())
+    assert not guide._prep.complete
+    assert guide.start_btn.isEnabled() is False
+
+
+def test_ready_message_claims_only_what_is_demonstrated(guide):
+    text = guide.action_label.text()
+    assert "Continue with your goal and the preparation" in text
+    assert "everything" not in text.lower()
+
+
+def test_model_choice_drives_the_placement_steps_without_touching_measurement(
+    guide, window
+):
+    window.comport_ctrl.setCurrentIndex(0)  # i1 DisplayPro family
+    guide.refresh()
+    mode_before = window.measurement_mode_ctrl.currentIndex()
+    cfg_before = window.get_measurement_mode()
+    assert not guide.prepare.player._steps == []
+    assert "diffuser" not in guide.prepare.player._steps
+    idx = guide.model_combo.findData("Calibrite ColorChecker Display / Pro / Plus")
+    guide.model_combo.setCurrentIndex(idx)
+    assert "diffuser" in guide.prepare.player._steps
+    assert "tilt" not in guide.prepare.player._steps
+    assert window.measurement_mode_ctrl.currentIndex() == mode_before
+    assert window.get_measurement_mode() == cfg_before
+
+
+def test_start_summary_lists_evidence_kinds(guide, window, monkeypatch):
+    _confirm_everything(guide, window, monkeypatch)
+    for cb in guide.prepare._boxes.values():
+        cb.setChecked(True)
+    guide._next()
+    text = " ".join(
+        guide.summary_lay.itemAt(i).widget().text()
+        for i in range(guide.summary_lay.count())
+    )
+    assert "detected by the system" in text
+    assert "not verified" in text  # model of the shared identifier is unconfirmed
+    assert "confirmed by you" in text
+
+
+def test_stop_motion_before_start(guide, window, monkeypatch):
+    started = []
+    monkeypatch.setattr(window, "guided_primary_action", lambda: lambda: started.append(1))
+    _confirm_everything(guide, window, monkeypatch)
+    for cb in guide.prepare._boxes.values():
+        cb.setChecked(True)
+    guide._next()
+    guide.prepare.player.autoplay_once()
+    guide.start_btn.click()
+    assert started == [1]
+    assert not guide.prepare.player.is_playing()
