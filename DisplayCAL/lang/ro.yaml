@@ -3423,3 +3423,67 @@
   Copii ale ultimelor rapoarte scrise de macOS despre aplicație. Fișierele sistemului nu sunt modificate. Pot conține căi de fișiere.
 "diag.package_readme": |-
   Pachet de diagnostic DisplayCAL-CG. A fost creat pe computerul tău și salvat unde ai ales; nu s-a încărcat nimic. Deschide-l cu orice program ZIP. manifest.json arată ce conține și ce a fost lăsat deoparte; environment.txt are versiunile; logs/ jurnalul aplicației; sessions/ jurnalele sesiunilor de măsurare.
+"lookup.link": |-
+  Nu știi tehnologia monitorului? Caută modelul
+"lookup.title": |-
+  Află tehnologia monitorului
+"lookup.intro": |-
+  Ca să alegi o corecție potrivită, ajută să știi ce fel de monitor este. Caută modelul pe un site de specificații, apoi revino și alege din lista de corecții. Nimic nu se alege în locul tău.
+"lookup.model.title": |-
+  Monitorul tău
+"lookup.model.builtin": |-
+  Ecranul integrat Apple al acestui Mac. Identificatorul modelului de Mac: %s
+"lookup.model.builtin_noid": |-
+  Ecranul integrat Apple al acestui Mac. Identificatorul modelului de Mac nu a putut fi citit.
+"lookup.model.external": |-
+  Monitor conectat la acest calculator (nu un ecran integrat Apple).
+"lookup.model.unknown": |-
+  Modelul nu a putut fi identificat.
+"lookup.model.edit": |-
+  Modelul care va fi căutat (corectează-l dacă e greșit sau incomplet):
+"lookup.go.title": |-
+  Caută
+"lookup.act.everymac_id": |-
+  Caută %s pe everymac.com
+"lookup.act.everymac_home": |-
+  Copiază modelul și deschide everymac.com
+"lookup.act.copy_open_specs": |-
+  Copiază modelul și deschide displayspecifications.com
+"lookup.note.several_variants": |-
+  Site-ul listează toate configurațiile care au acest identificator, deci pot apărea mai multe intrări. Sunt arătate ca atare; nimic nu se alege în locul tău.
+"lookup.note.no_mac_id": |-
+  Identificatorul modelului de Mac nu este cunoscut, deci nu se oferă o căutare directă. Când se deschide site-ul, lipește modelul în căutarea lui.
+"lookup.note.paste_in_search": |-
+  Căutarea acestui site face parte din pagina lui și nu poate fi completată dintr-un link. Modelul este copiat: lipește-l în caseta de căutare.
+"lookup.note.no_model": |-
+  Nu se cunoaște niciun model. Site-ul se deschide fără căutare; scrie modelul citit pe eticheta monitorului sau în meniul lui.
+"lookup.offline": |-
+  Aplicația nu folosește internetul aici: browserul tău deschide site-ul. Fără conexiune, modelul rămâne în clipboard ca să îl cauți mai târziu.
+"lookup.copied": |-
+  Copiat în clipboard: %s
+"lookup.open_failed": |-
+  Browserul nu a putut fi deschis. Deschide tu %s; modelul este în clipboard.
+"lookup.concepts.title": |-
+  Patru lucruri diferite — nu le amesteca
+"lookup.concept.panel": |-
+  <b>Tehnologia panoului</b> — cum funcționează stratul de cristale lichide (IPS, VA, TN). Spune despre unghiuri de vizualizare și contrast. Nu alege singură corecția.
+"lookup.concept.emissive": |-
+  <b>Iluminarea / tehnologia emisivă</b> — ce produce lumina (LED alb, LED cu fosfor, quantum dot, RGB LED, CCFL, OLED). Spectrul luminii ei este ce trebuie să compenseze în principal o corecție de colorimetru.
+"lookup.concept.mode": |-
+  <b>Modul de măsurare</b> — o setare a instrumentului (de exemplu tipul de ecran cu sau fără reîmprospătare, sau un mod încorporat în instrument). Nu este o proprietate a monitorului.
+"lookup.concept.correction": |-
+  <b>Corecția</b> — spectrală (un eșantion spectral al ecranului, pentru colorimetre cu date spectrale încorporate) sau matriceală (o matrice pentru o combinație colorimetru + ecran, făcută cu un instrument de referință).
+"lookup.src_link": |-
+  Sursă: documentația ArgyllCMS (ccxxmake)
+"lookup.upstream.title": |-
+  Tehnologii descrise în ghidul DisplayCAL
+"lookup.upstream.source": |-
+  Sursă: proiectul DisplayCAL (text upstream, neschimbat). Cifrele sunt din datele producătorilor, așa cum sunt date acolo.
+"lookup.caution.title": |-
+  Ce îți spune și ce nu îți spune o pagină de specificații
+"lookup.caution": |-
+  O pagină de specificații ajută la recunoașterea monitorului. Nu este o corecție validată pentru combinația acestui monitor cu sonda ta. Aplicația nu alege o corecție după un nume comercial, o cifră de gamut sau cuvântul „LED”: tu confirmi alegerea, iar uneltele existente de corecții (listă, import, verificare pe web, creare) rămân disponibile.
+"lookup.goto_correction": |-
+  Mergi la alegerea corecției
+"lookup.close": |-
+  Închide

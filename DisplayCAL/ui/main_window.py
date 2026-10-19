@@ -4094,6 +4094,14 @@ class MainWindow(BaseWindow):
         )
         ccmx_row.addWidget(self.colorimeter_correction_create_btn)
         outer.addLayout(ccmx_row)
+        # "Don't know the monitor's technology? Search the model" -- next to the
+        # technology / correction choice.
+        from DisplayCAL.ui.display_lookup_dialog import lookup_button
+
+        self.display_lookup_btn = lookup_button(
+            self, on_goto_correction=self._focus_correction_choice
+        )
+        outer.addWidget(self.display_lookup_btn, 0, Qt.AlignLeft)
 
         self.display_tech_info_show_btn = QToolButton()
         self.display_tech_info_show_btn.setAutoRaise(True)
@@ -4114,6 +4122,13 @@ class MainWindow(BaseWindow):
             1,
         )
         return panel
+
+    def _focus_correction_choice(self) -> None:
+        """Bring the user to the correction list (advanced Display tab)."""
+        self._select_tab("display_instrument")
+        ctrl = getattr(self, "colorimeter_correction_matrix_ctrl", None)
+        if ctrl is not None:
+            ctrl.setFocus()
 
     def _display_tech_info_show_btn_handler(self) -> None:
         """Show (or raise) the display-technology info popup."""

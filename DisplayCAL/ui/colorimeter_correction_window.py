@@ -481,6 +481,12 @@ class CreateCorrectionWindow(BaseWindow):
         tech_info_btn.setText(lang.getstr("info.display_tech.show"))
         tech_info_btn.clicked.connect(self._display_tech_info_show_btn_handler)
         grid.addWidget(tech_info_btn, 4, 1)
+        from DisplayCAL.ui.display_lookup_dialog import lookup_button
+
+        self.display_lookup_btn = lookup_button(
+            self, entry_getter=lambda: self.display_ctrl.text()
+        )
+        grid.addWidget(self.display_lookup_btn, 5, 1)
         # See _build_type_box: without a stretch to absorb leftover vertical
         # space, plain QGroupBoxes grow to fill it instead of staying put.
         box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)

@@ -396,6 +396,8 @@ class GuidePanel(QWidget):
         dl.addWidget(self.mode_combo)
         self.correction_label = _label("", muted=True)
         dl.addWidget(self.correction_label)
+        self.lookup_btn = self._make_lookup_button()
+        dl.addWidget(self.lookup_btn, 0, Qt.AlignLeft)
         dl.addSpacing(8)
         self.ident_title = _label("", bold=True)
         self.ident_info = _label("", muted=True)
@@ -445,6 +447,18 @@ class GuidePanel(QWidget):
         self.prepare.changed.connect(self._prep_changed)
         lay.addWidget(self.prepare)
 
+    def _make_lookup_button(self) -> QPushButton:
+        """"Don't know the monitor's technology? Search the model" (both modes)."""
+        from DisplayCAL.ui.display_lookup_dialog import lookup_button
+
+        return lookup_button(self, on_goto_correction=self._goto_advanced_correction)
+
+    def _goto_advanced_correction(self) -> None:
+        """Open the advanced correction choice (the existing mechanism)."""
+        w = self.window_ref
+        if hasattr(w, "_focus_correction_choice"):
+            w._focus_correction_choice()
+
     # page 4 ----------------------------------------------------------------
     def _build_page_measure(self, lay: QVBoxLayout) -> None:
         lay.addWidget(_label(_tr("guide.s4.title"), size=1.6, bold=True))
@@ -454,6 +468,8 @@ class GuidePanel(QWidget):
         self.summary_lay.setContentsMargins(0, 0, 0, 0)
         self.summary_lay.setSpacing(2)
         lay.addWidget(self.summary_box)
+        self.lookup_btn2 = self._make_lookup_button()
+        lay.addWidget(self.lookup_btn2, 0, Qt.AlignLeft)
         self._build_plan(lay)
         self.start_blocked = _label("", size=1.05)
         lay.addWidget(self.start_blocked)

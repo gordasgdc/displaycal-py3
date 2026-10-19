@@ -3423,3 +3423,67 @@
   Copies of the last reports macOS wrote about the application. The system files are not changed. They can contain file paths.
 "diag.package_readme": |-
   DisplayCAL-CG diagnostic package. It was created on your computer and saved where you chose; nothing was uploaded. Open it with any ZIP tool. manifest.json lists what is inside and what was left out; environment.txt has the versions; logs/ the application log; sessions/ the measurement session journals.
+"lookup.link": |-
+  Don't know your monitor's technology? Search the model
+"lookup.title": |-
+  Find your monitor's technology
+"lookup.intro": |-
+  To choose a suitable correction it helps to know what kind of monitor this is. Look its model up on a specification site, then come back and choose in the correction list. Nothing is chosen for you.
+"lookup.model.title": |-
+  Your monitor
+"lookup.model.builtin": |-
+  Built-in Apple screen of this Mac. Mac model identifier: %s
+"lookup.model.builtin_noid": |-
+  Built-in Apple screen of this Mac. The Mac model identifier could not be read.
+"lookup.model.external": |-
+  Monitor connected to this computer (not a built-in Apple screen).
+"lookup.model.unknown": |-
+  The model could not be identified.
+"lookup.model.edit": |-
+  Model that will be searched (correct it if it is wrong or incomplete):
+"lookup.go.title": |-
+  Look it up
+"lookup.act.everymac_id": |-
+  Look up %s on everymac.com
+"lookup.act.everymac_home": |-
+  Copy the model and open everymac.com
+"lookup.act.copy_open_specs": |-
+  Copy the model and open displayspecifications.com
+"lookup.note.several_variants": |-
+  The site lists every configuration that shares this identifier, so several entries may appear. They are shown as they are; nothing is picked for you.
+"lookup.note.no_mac_id": |-
+  The Mac model identifier is not known, so no direct lookup is offered. When the site opens, paste the model into its search.
+"lookup.note.paste_in_search": |-
+  This site's search is part of its page and cannot be filled from a link. The model is copied: paste it into the search box.
+"lookup.note.no_model": |-
+  No model is known. The site opens without a search; type the model you read on the monitor's label or in its menu.
+"lookup.offline": |-
+  The application itself uses no internet here: your browser opens the site. Without a connection the model stays on the clipboard so you can look it up later.
+"lookup.copied": |-
+  Copied to the clipboard: %s
+"lookup.open_failed": |-
+  The browser could not be opened. Open %s yourself; the model is on the clipboard.
+"lookup.concepts.title": |-
+  Four different things — do not mix them up
+"lookup.concept.panel": |-
+  <b>Panel technology</b> — how the liquid-crystal layer works (IPS, VA, TN). It tells about viewing angles and contrast. It does not choose the correction by itself.
+"lookup.concept.emissive": |-
+  <b>Backlight / light-emitting technology</b> — what produces the light (white LED, phosphor LED, quantum dot, RGB LED, CCFL, OLED). Its light spectrum is what a colorimeter correction mainly has to account for.
+"lookup.concept.mode": |-
+  <b>Measurement mode</b> — a setting of the instrument (for example a refresh or non-refresh display type, or a mode built into the instrument). It is not a property of the monitor.
+"lookup.concept.correction": |-
+  <b>Correction</b> — spectral (a spectral sample of the display, for colorimeters with built-in spectral data) or matrix (a matrix for one colorimeter + display combination, made with a reference instrument).
+"lookup.src_link": |-
+  Source: ArgyllCMS documentation (ccxxmake)
+"lookup.upstream.title": |-
+  Technologies described in the DisplayCAL guide
+"lookup.upstream.source": |-
+  Source: the DisplayCAL project (upstream text, unchanged). Figures are from manufacturer data as given there.
+"lookup.caution.title": |-
+  What a specification page does and does not tell you
+"lookup.caution": |-
+  A specification page helps to recognise the monitor. It is not a validated correction for the combination of this monitor and your probe. The application does not pick a correction from a product name, a gamut figure or the word "LED": you confirm the choice, and the existing correction tools (list, import, web check, create) stay available.
+"lookup.goto_correction": |-
+  Go to the correction choice
+"lookup.close": |-
+  Close

@@ -3415,3 +3415,67 @@
   Copias de los últimos informes que macOS escribió sobre la aplicación. Los archivos del sistema no se modifican. Pueden contener rutas de archivos.
 "diag.package_readme": |-
   Paquete de diagnóstico de DisplayCAL-CG. Se creó en tu ordenador y se guardó donde elegiste; no se subió nada. Ábrelo con cualquier programa ZIP. manifest.json indica qué contiene y qué se dejó fuera; environment.txt tiene las versiones; logs/ el registro de la aplicación; sessions/ los diarios de las sesiones de medición.
+"lookup.link": |-
+  ¿No conoces la tecnología de tu monitor? Busca el modelo
+"lookup.title": |-
+  Descubre la tecnología de tu monitor
+"lookup.intro": |-
+  Para elegir una corrección adecuada ayuda saber qué tipo de monitor es. Busca su modelo en un sitio de especificaciones y vuelve para elegir en la lista de correcciones. No se elige nada por ti.
+"lookup.model.title": |-
+  Tu monitor
+"lookup.model.builtin": |-
+  Pantalla integrada de Apple de este Mac. Identificador del modelo de Mac: %s
+"lookup.model.builtin_noid": |-
+  Pantalla integrada de Apple de este Mac. No se pudo leer el identificador del modelo de Mac.
+"lookup.model.external": |-
+  Monitor conectado a este ordenador (no una pantalla integrada de Apple).
+"lookup.model.unknown": |-
+  No se pudo identificar el modelo.
+"lookup.model.edit": |-
+  Modelo que se buscará (corrígelo si es incorrecto o incompleto):
+"lookup.go.title": |-
+  Buscar
+"lookup.act.everymac_id": |-
+  Buscar %s en everymac.com
+"lookup.act.everymac_home": |-
+  Copiar el modelo y abrir everymac.com
+"lookup.act.copy_open_specs": |-
+  Copiar el modelo y abrir displayspecifications.com
+"lookup.note.several_variants": |-
+  El sitio lista todas las configuraciones que comparten este identificador, así que pueden aparecer varias entradas. Se muestran tal cual; no se elige nada por ti.
+"lookup.note.no_mac_id": |-
+  No se conoce el identificador del modelo de Mac, así que no se ofrece una búsqueda directa. Al abrirse el sitio, pega el modelo en su búsqueda.
+"lookup.note.paste_in_search": |-
+  La búsqueda de este sitio forma parte de su página y no se puede rellenar desde un enlace. El modelo se copia: pégalo en el cuadro de búsqueda.
+"lookup.note.no_model": |-
+  No se conoce ningún modelo. El sitio se abre sin búsqueda; escribe el modelo que leas en la etiqueta del monitor o en su menú.
+"lookup.offline": |-
+  La aplicación no usa internet aquí: tu navegador abre el sitio. Sin conexión, el modelo queda en el portapapeles para buscarlo más tarde.
+"lookup.copied": |-
+  Copiado al portapapeles: %s
+"lookup.open_failed": |-
+  No se pudo abrir el navegador. Abre %s tú mismo; el modelo está en el portapapeles.
+"lookup.concepts.title": |-
+  Cuatro cosas distintas: no las mezcles
+"lookup.concept.panel": |-
+  <b>Tecnología del panel</b> — cómo funciona la capa de cristal líquido (IPS, VA, TN). Indica ángulos de visión y contraste. Por sí sola no elige la corrección.
+"lookup.concept.emissive": |-
+  <b>Retroiluminación / tecnología emisiva</b> — qué produce la luz (LED blanco, LED con fósforo, punto cuántico, RGB LED, CCFL, OLED). Su espectro de luz es lo que una corrección de colorímetro debe compensar sobre todo.
+"lookup.concept.mode": |-
+  <b>Modo de medición</b> — un ajuste del instrumento (por ejemplo, tipo de pantalla con o sin refresco, o un modo integrado en el instrumento). No es una propiedad del monitor.
+"lookup.concept.correction": |-
+  <b>Corrección</b> — espectral (una muestra espectral de la pantalla, para colorímetros con datos espectrales integrados) o matricial (una matriz para una combinación colorímetro + pantalla, hecha con un instrumento de referencia).
+"lookup.src_link": |-
+  Fuente: documentación de ArgyllCMS (ccxxmake)
+"lookup.upstream.title": |-
+  Tecnologías descritas en la guía de DisplayCAL
+"lookup.upstream.source": |-
+  Fuente: el proyecto DisplayCAL (texto original, sin cambios). Las cifras son datos de los fabricantes tal como se indican allí.
+"lookup.caution.title": |-
+  Qué te dice y qué no te dice una página de especificaciones
+"lookup.caution": |-
+  Una página de especificaciones ayuda a reconocer el monitor. No es una corrección validada para la combinación de este monitor con tu sonda. La aplicación no elige una corrección por un nombre comercial, una cifra de gamut o la palabra «LED»: tú confirmas la elección y las herramientas de correcciones existentes (lista, importar, comprobación web, crear) siguen disponibles.
+"lookup.goto_correction": |-
+  Ir a la elección de la corrección
+"lookup.close": |-
+  Cerrar
