@@ -3225,6 +3225,7 @@ class MainWindow(BaseWindow):
 
         root = os.path.join(DATA_HOME, "sessions")
         try:
+            session_journal.prune_finished(root)
             pending = session_journal.scan_incomplete(root)
         except Exception:  # noqa: BLE001 - recovery must never block start-up
             return False

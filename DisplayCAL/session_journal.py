@@ -395,6 +395,30 @@ def scan_incomplete(root: str) -> list[IncompleteSession]:
     return found
 
 
+def prune_finished(root: str, keep_days: float = 30, now: float | None = None) -> int:
+    """Delete journals of sessions that ended (or were reviewed) long ago.
+
+    A session that never recorded an outcome is never touched here: only the
+    user decides about it (:func:`mark_reviewed`). Returns the number removed.
+    """
+    now = now if now is not None else time.time()
+    removed = 0
+    try:
+        names = os.listdir(root)
+    except OSError:
+        return 0
+    for name in names:
+        d = os.path.join(root, name)
+        state = load_state(d) if os.path.isdir(d) else None
+        if not state or state.get("outcome") is None:
+            continue
+        ended = state.get("reviewed") or state.get("last_heartbeat") or 0
+        if now - ended > keep_days * 86400:
+            shutil.rmtree(d, ignore_errors=True)
+            removed += 1
+    return removed
+
+
 def mark_reviewed(session_dir: str, action: str) -> None:
     """Record the user's decision so the session is not offered again."""
     state = load_state(session_dir)

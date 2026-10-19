@@ -4,6 +4,7 @@ import errno
 import json
 import os
 import shutil
+import time
 
 import pytest
 
@@ -151,3 +152,16 @@ def test_heartbeat_thread_runs_and_stops(tmp_path):
     j.stop_heartbeat()
     assert len(sj.load_state(j.dir)["samples"]) >= 2
     assert json.loads(open(os.path.join(j.dir, "events.jsonl")).readline())["e"] == "begin"
+
+
+def test_prune_removes_only_old_finished_sessions(tmp_path):
+    old = time.time() - 40 * 86400
+    for name, outcome in (("a", "completed"), ("b", None), ("c", "completed")):
+        d = tmp_path / name
+        d.mkdir()
+        sj._atomic_json(
+            str(d / "session.json"),
+            {"id": name, "outcome": outcome, "last_heartbeat": old if name != "c" else time.time()},
+        )
+    assert sj.prune_finished(str(tmp_path)) == 1
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["b", "c"]
