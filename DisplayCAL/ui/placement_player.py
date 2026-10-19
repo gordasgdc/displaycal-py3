@@ -519,7 +519,10 @@ class PlacementPlayer(QWidget):
     def stop(self) -> None:
         """Stop all motion (leaving the page, or before any measurement)."""
         self._timeline.pause()
-        self._timer.stop()
+        try:
+            self._timer.stop()
+        except RuntimeError:  # Qt already destroyed it (window closing)
+            return
         self._render()
 
     # --- internals ------------------------------------------------------

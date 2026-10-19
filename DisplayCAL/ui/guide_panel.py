@@ -806,7 +806,7 @@ class GuidePanel(QWidget):
             row = QLabel(
                 f"<b>{escape(_tr(ln.label_key))}:</b> {escape(value)} "
                 f'<span style="color:{_css(colors[ln.state])}">'
-                f"— {escape(_tr('guide.state.' + ln.state))}</span>"
+                f"· {escape(_tr('guide.state.' + ln.state))}</span>"
             )
             row.setTextFormat(Qt.RichText)
             row.setWordWrap(True)

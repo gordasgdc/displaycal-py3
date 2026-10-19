@@ -182,6 +182,7 @@ config = {
             "theme/icons/flags/*.png",
             "theme/instruments/*.svg",
             "theme/brands/*.svg",
+            "theme/guide/*.svg",
             "theme/jet_anim/*.png",
             "theme/patch_anim/*.png",
             "theme/splash_anim/*.png",

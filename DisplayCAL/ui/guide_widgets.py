@@ -14,6 +14,8 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+from DisplayCAL import config
+
 
 def tokens() -> dict[str, QColor]:
     """Colour tokens derived from the active palette (follows light/dark)."""
@@ -98,6 +100,10 @@ def control_css() -> str:
     t = tokens()
     ring = css(QColor(t["text"].red(), t["text"].green(), t["text"].blue(), 190))
     acc = css(t["accent"])
+    check = config.get_data_path("theme/guide/check.svg")
+    check_image = (
+        f'image:url("{check.replace(chr(92), "/")}");' if isinstance(check, str) else ""
+    )
     return (
         "QRadioButton::indicator{width:16px;height:16px;border-radius:9px;"
         f"border:2px solid {ring};background:transparent;}}"
@@ -106,7 +112,8 @@ def control_css() -> str:
         f"stop:0 {acc},stop:.55 {acc},stop:.6 transparent,stop:1 transparent);}}"
         "QCheckBox::indicator{width:16px;height:16px;border-radius:4px;"
         f"border:2px solid {ring};background:transparent;}}"
-        f"QCheckBox::indicator:checked{{border:2px solid {acc};background:{acc};}}"
+        f"QCheckBox::indicator:checked{{border:2px solid {acc};background:{acc};"
+        f"{check_image}}}"
     )
 
 
