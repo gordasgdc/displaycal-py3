@@ -10021,6 +10021,8 @@ class MainWindow(BaseWindow):
             self.update_calibration_file_ctrl()
         self.worker.log(f"{APPNAME}: Profile created: {profile_path}")
         self._apply_lut3d_path()
+        if hasattr(self, "_guide"):
+            self._guide.on_profile_built()
         if getcfg("3dlut.create"):
             self._chain_3dlut_after_profile()
             return

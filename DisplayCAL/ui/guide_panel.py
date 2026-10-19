@@ -590,6 +590,11 @@ class GuidePanel(QWidget):
             lay.addWidget(_label("• " + _tr(key), muted=True))
 
     # --------------------------------------------------------------- behaviour
+    def on_profile_built(self) -> None:
+        """A valid profile now exists: open the install-and-verify step."""
+        self._reached = max(self._reached, STEPS - 1)
+        self.go(STEPS - 1)
+
     def go(self, step: int) -> None:
         """Show a step if it has been reached."""
         step = max(0, min(STEPS - 1, step))
@@ -683,9 +688,9 @@ class GuidePanel(QWidget):
             return
         handler = w.guided_primary_action()
         if handler is not None:
-            self._reached = max(self._reached, 4)
+            # Stay on this step while the run happens (it can be cancelled);
+            # the last step opens once a valid profile has actually been built.
             handler()
-            self.go(4)
 
     # refresh ----------------------------------------------------------------
     def refresh(self) -> None:

@@ -127,6 +127,10 @@ def test_start_button_requires_everything_then_runs_primary_action(
     assert guide.start_btn.isEnabled()
     guide.start_btn.click()
     assert started == [1]
+    # the run can be cancelled: the last step opens only once a profile exists
+    assert guide._step == 3
+    guide.on_profile_built()
+    assert guide._step == 4
 
 
 def test_primary_action_matches_action_bar_rule(window):
