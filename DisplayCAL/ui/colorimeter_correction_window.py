@@ -81,6 +81,7 @@ from qtpy.QtWidgets import (
 )
 
 from DisplayCAL import argyll_instruments, colord, colormath
+from DisplayCAL.ui import text_scale
 from DisplayCAL import colorimeter_correction as ccxx_helpers
 from DisplayCAL import localization as lang
 from DisplayCAL.argyll import get_argyll_version
@@ -138,7 +139,7 @@ class _Ti3Browse(QWidget):
         self._combo.lineEdit().editingFinished.connect(self._on_edit_finished)
         layout.addWidget(self._combo, 1)
         self._btn = QPushButton("…")
-        self._btn.setFixedWidth(32)
+        self._btn.setFixedWidth(text_scale.scale_px(32))
         self._btn.clicked.connect(self._on_browse)
         layout.addWidget(self._btn)
 

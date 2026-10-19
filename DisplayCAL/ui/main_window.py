@@ -4390,7 +4390,7 @@ class MainWindow(BaseWindow):
         self.trc_ctrl.addItems(self._trc_labels())
         self.trc_ctrl.currentIndexChanged.connect(self._trc_changed)
         self.trc_textctrl = QLineEdit()
-        self.trc_textctrl.setMaximumWidth(80)
+        self.trc_textctrl.setMaximumWidth(text_scale.scale_px(80))
         self.trc_textctrl.editingFinished.connect(self._trc_changed)
         self.trc_type_ctrl = QComboBox()
         self.trc_type_ctrl.addItems(
@@ -4748,7 +4748,7 @@ class MainWindow(BaseWindow):
         self.lut3d_trc_gamma_ctrl = QComboBox()
         self.lut3d_trc_gamma_ctrl.setEditable(True)
         self.lut3d_trc_gamma_ctrl.addItems(["2.2", "2.4"])
-        self.lut3d_trc_gamma_ctrl.setMaximumWidth(80)
+        self.lut3d_trc_gamma_ctrl.setMaximumWidth(text_scale.scale_px(80))
         self.lut3d_trc_gamma_ctrl.lineEdit().editingFinished.connect(
             self._lut3d_trc_gamma_changed
         )
@@ -4769,7 +4769,7 @@ class MainWindow(BaseWindow):
         self.lut3d_hdr_peak_luminance_ctrl.setRange(100, 10000)
         self.lut3d_hdr_peak_luminance_ctrl.setDecimals(0)
         self.lut3d_hdr_peak_luminance_ctrl.setSuffix(" cd/m²")
-        self.lut3d_hdr_peak_luminance_ctrl.setMaximumWidth(110)
+        self.lut3d_hdr_peak_luminance_ctrl.setMaximumWidth(text_scale.scale_px(110))
         self.lut3d_hdr_peak_luminance_ctrl.valueChanged.connect(
             self._lut3d_hdr_peak_luminance_changed
         )

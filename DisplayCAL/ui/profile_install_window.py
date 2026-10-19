@@ -62,6 +62,7 @@ from qtpy.QtWidgets import (
 )
 
 from DisplayCAL import config
+from DisplayCAL.ui import text_scale
 from DisplayCAL import localization as lang
 from DisplayCAL import profile_install as pi
 from DisplayCAL.argyll import check_set_argyll_bin
@@ -150,7 +151,7 @@ class InstallProfileWindow(BaseWindow):
         self.path_label.setWordWrap(True)
         path_row.addWidget(self.path_label, 1)
         browse_btn = QPushButton("…")
-        browse_btn.setFixedWidth(32)
+        browse_btn.setFixedWidth(text_scale.scale_px(32))
         browse_btn.clicked.connect(self._browse)
         path_row.addWidget(browse_btn)
         layout.addLayout(path_row)

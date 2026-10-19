@@ -64,6 +64,7 @@ from qtpy.QtWidgets import (
 )
 
 from DisplayCAL import config
+from DisplayCAL.ui import text_scale
 from DisplayCAL import localization as lang
 from DisplayCAL.cgats import (
     CGATS,
@@ -207,7 +208,7 @@ class _FileBrowse(QWidget):
         self._combo.lineEdit().editingFinished.connect(self._on_edit_finished)
         layout.addWidget(self._combo, 1)
         self._btn = QPushButton("…")
-        self._btn.setFixedWidth(32)
+        self._btn.setFixedWidth(text_scale.scale_px(32))
         self._btn.clicked.connect(self._on_browse)
         layout.addWidget(self._btn)
 
@@ -487,11 +488,11 @@ class ReportPanel(QWidget):
             self.chart_btn.setIcon(QIcon(pixmap))
         self.chart_btn.setToolTip(lang.getstr("testchart.edit"))
         self.chart_btn.setFlat(True)
-        self.chart_btn.setFixedWidth(28)
+        self.chart_btn.setFixedWidth(text_scale.scale_px(28))
         self.chart_btn.clicked.connect(self.chart_btn_handler)
         layout.addWidget(self.chart_btn)
         self.chart_patches_amount = QLabel("0")
-        self.chart_patches_amount.setFixedWidth(48)
+        self.chart_patches_amount.setFixedWidth(text_scale.scale_px(48))
         layout.addWidget(self.chart_patches_amount)
         self._add_row(self.testchart_or_reference_label, row)
 
@@ -607,7 +608,7 @@ class ReportPanel(QWidget):
         self.mr_trc_gamma_ctrl = QComboBox()
         self.mr_trc_gamma_ctrl.setEditable(True)
         self.mr_trc_gamma_ctrl.addItems(["2.2", "2.4"])
-        self.mr_trc_gamma_ctrl.setFixedWidth(80)
+        self.mr_trc_gamma_ctrl.setFixedWidth(text_scale.scale_px(80))
         self.mr_trc_gamma_ctrl.setEnabled(False)
         self.mr_trc_gamma_ctrl.activated.connect(
             lambda _i: self.mr_trc_gamma_ctrl_handler()
@@ -645,7 +646,7 @@ class ReportPanel(QWidget):
         layout.addWidget(self.mr_black_output_offset_label)
         self.mr_black_output_offset_ctrl = QSlider(Qt.Horizontal)
         self.mr_black_output_offset_ctrl.setRange(0, 100)
-        self.mr_black_output_offset_ctrl.setFixedWidth(128)
+        self.mr_black_output_offset_ctrl.setFixedWidth(text_scale.scale_px(128))
         self.mr_black_output_offset_ctrl.setEnabled(False)
         self.mr_black_output_offset_ctrl.setVisible(False)
         self.mr_black_output_offset_ctrl.valueChanged.connect(

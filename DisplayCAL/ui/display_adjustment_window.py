@@ -47,6 +47,7 @@ from qtpy.QtWidgets import (
 )
 
 from DisplayCAL import localization as lang
+from DisplayCAL.ui import text_scale
 from DisplayCAL.config import get_data_path, getcfg, writecfg
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.ui.assets import get_theme_pixmap
@@ -607,7 +608,7 @@ class DisplayAdjustmentWindow(BaseWindow):
         )
         button_height = 31
         self.adjustment_btn.setObjectName("adjustmentBtn")
-        self.adjustment_btn.setFixedHeight(button_height)
+        text_scale.set_min_height(self.adjustment_btn, button_height)
         icon, icon_size = _button_icon("play")
         self.adjustment_btn.setIcon(icon)
         self.adjustment_btn.setIconSize(icon_size)
@@ -615,14 +616,14 @@ class DisplayAdjustmentWindow(BaseWindow):
         self.adjustment_btn.clicked.connect(self.start_interactive_adjustment)
         button_row.addWidget(self.adjustment_btn)
         self.sound_on_off_btn = QToolButton()
-        self.sound_on_off_btn.setFixedHeight(button_height)
+        text_scale.set_min_height(self.sound_on_off_btn, button_height)
         self.sound_on_off_btn.setObjectName("soundButton")
         self.sound_on_off_btn.setToolTip(lang.getstr("measurement.play_sound"))
         self.sound_on_off_btn.clicked.connect(self._toggle_sound)
         button_row.addWidget(self.sound_on_off_btn)
         self.calibration_btn = QPushButton(lang.getstr("calibration.start"))
         self.calibration_btn.setObjectName("calibrationBtn")
-        self.calibration_btn.setFixedHeight(button_height)
+        text_scale.set_min_height(self.calibration_btn, button_height)
         icon, icon_size = _button_icon("skip")
         self.calibration_btn.setIcon(icon)
         self.calibration_btn.setIconSize(icon_size)
