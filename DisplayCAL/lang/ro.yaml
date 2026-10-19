@@ -4005,3 +4005,15 @@
   Această diagramă are %s patch-uri. Documentația ArgyllCMS sugerează între 500 și 3000 de patch-uri pentru dispozitive RGB cu un profil de tip LUT; cu mai puține, profilul este doar aproximativ.
 "profile.patches_note.matrix_many": |-
   Această diagramă are %s patch-uri. Conform documentației ArgyllCMS, un profil de tip matrice pentru un dispozitiv RGB cu comportament bun are nevoie doar de câteva sute, deci o diagramă mai mare adaugă mai ales timp de măsurare.
+"textsize.title": |-
+  Dimensiunea textului
+"textsize.normal": |-
+  Normal
+"textsize.large": |-
+  Mare
+"textsize.xlarge": |-
+  Foarte mare
+"textsize.reset": |-
+  Revino la dimensiunea implicită
+"textsize.tip": |-
+  Dimensiunea textului: mărește sau micșorează imediat tot textul aplicației. Nu schimbă fereastra de măsurare și nici măsurătorile.

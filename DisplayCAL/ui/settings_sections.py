@@ -19,6 +19,7 @@ from qtpy.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout, QWidget
 from DisplayCAL import config
 from DisplayCAL import localization as lang
 from DisplayCAL import settings_help as sh
+from DisplayCAL.ui import text_scale
 
 
 def _tr(key: str) -> str:
@@ -26,18 +27,8 @@ def _tr(key: str) -> str:
 
 
 def muted_css() -> str:
-    """Secondary text colour with enough contrast in light and dark themes."""
-    from qtpy.QtGui import QColor
-    from qtpy.QtWidgets import QApplication
-
-    pal = QApplication.palette()
-    fg, bg = pal.windowText().color(), pal.window().color()
-    mix = QColor(
-        round(fg.red() * 0.72 + bg.red() * 0.28),
-        round(fg.green() * 0.72 + bg.green() * 0.28),
-        round(fg.blue() * 0.72 + bg.blue() * 0.28),
-    )
-    return mix.name()
+    """Secondary text colour with WCAG AA contrast (see :mod:`text_scale`)."""
+    return text_scale.muted_css()
 
 
 def _has(key: str) -> bool:
@@ -176,7 +167,7 @@ def describe(item: sh.Item, owner: object, panel: QWidget) -> str:
     reason = unavailable_reason(item, owner, panel)
     if reason:
         parts.append(f"<span style='color:#b25000'><b>{escape(_tr('help.label.unavailable'))}</b> {escape(reason)}</span>")
-    return "<p style='margin:0 0 9px 0'>" + "<br>".join(parts) + "</p>"
+    return "<p style='margin:0 0 10px 0; line-height:125%'>" + "<br>".join(parts) + "</p>"
 
 
 class SectionHeader(QFrame):
@@ -193,13 +184,12 @@ class SectionHeader(QFrame):
         tkey, pkey = sh.section_keys(tab, section)
         self.title = QLabel(f"<b>{escape(_tr(tkey))}</b>")
         self.title.setTextFormat(Qt.RichText)
-        f = self.title.font()
-        f.setPointSizeF(f.pointSizeF() * 1.1)
-        self.title.setFont(f)
+        text_scale.set_scaled_font(self.title, 1.1)
         lay.addWidget(self.title)
         self.purpose = QLabel(_tr(pkey))
         self.purpose.setWordWrap(True)
         self.purpose.setStyleSheet(f"color: {muted_css()};")
+        text_scale.limit_reading_width(self.purpose, 96)
         lay.addWidget(self.purpose)
         self.toggle = QPushButton()
         self.toggle.setFlat(True)
@@ -212,6 +202,7 @@ class SectionHeader(QFrame):
         self.body.setTextFormat(Qt.RichText)
         self.body.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.body.setContentsMargins(12, 2, 0, 6)
+        text_scale.limit_reading_width(self.body, 110)
         self.body.hide()
         lay.addWidget(self.body)
         self._update_toggle()

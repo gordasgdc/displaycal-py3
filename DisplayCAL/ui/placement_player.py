@@ -36,6 +36,7 @@ from qtpy.QtWidgets import (
 )
 
 from DisplayCAL import instrument_catalog as ic
+from DisplayCAL.ui import text_scale
 from DisplayCAL import localization as lang
 from DisplayCAL.ui.motion import prefers_reduced_motion
 
@@ -459,10 +460,7 @@ class PlacementPlayer(QWidget):
         self.caption = QLabel()
         self.caption.setWordWrap(True)
         self.caption.setTextFormat(Qt.PlainText)
-        f = self.caption.font()
-        f.setPointSizeF(f.pointSizeF() * 1.1)
-        f.setBold(True)
-        self.caption.setFont(f)
+        text_scale.set_scaled_font(self.caption, 1.1, bold=True)
         root.addWidget(self.caption)
 
         controls = QHBoxLayout()

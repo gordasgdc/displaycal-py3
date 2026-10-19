@@ -169,9 +169,11 @@ def apply_theme(app: QApplication) -> None:
     if sys.platform == "win32":
         app.setStyle(QStyleFactory.create("Fusion"))
     app.setPalette(build_palette(is_dark()))
-    font = app.font()
-    font.setPointSize(FONT_POINT_SIZE)
-    app.setFont(font)
+    # The base size is the system font (not a fixed 11 points) times the saved
+    # "Text size" level; see :mod:`DisplayCAL.ui.text_scale`.
+    from DisplayCAL.ui import text_scale
+
+    text_scale.apply()
 
 
 def label_color(source: QWidget | None = None) -> QColor:

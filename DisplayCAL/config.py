@@ -1545,6 +1545,7 @@ VALID_VALUES = {
     ],
     "trc": ["240", "709", "l", "s", ""],
     "trc.type": ["g", "G"],
+    "ui.text_size": ["normal", "large", "xlarge"],
     "ui.toolkit": ["wx", "qt"],
     "uniformity.cols": [3, 5, 7, 9],
     "uniformity.rows": [3, 5, 7, 9],
@@ -1999,6 +2000,7 @@ DEFAULTS = {
     # Prevent idle system/display sleep only while a measurement session runs.
     "session.keep_awake": 1,
     "support.dismissed_version": "",
+    "ui.text_size": "normal",
     "ui.toolkit": "qt",
     "uniformity.cols": 5,
     "uniformity.measure.continuous": 0,

@@ -39,6 +39,7 @@ from qtpy.QtWidgets import (
 from DisplayCAL import config, support
 from DisplayCAL import localization as lang
 from DisplayCAL.config import getcfg, setcfg
+from DisplayCAL.ui import text_scale
 
 
 def _tr(key: str) -> str:
@@ -102,7 +103,7 @@ class FeedbackDialog(QDialog):
         self.setWindowTitle(_tr("support.feedback.title"))
         self._log_path = log_path or self._default_log()
         self.opened_url: str | None = None
-        lay = QVBoxLayout(self)
+        lay, buttons = text_scale.scrollable_dialog(self)
         lay.addWidget(self._wrap(_tr("support.feedback.intro")))
 
         form = QFormLayout()
@@ -113,7 +114,7 @@ class FeedbackDialog(QDialog):
         lay.addLayout(form)
         lay.addWidget(QLabel(_tr("support.feedback.description")))
         self.description = QPlainTextEdit()
-        self.description.setMinimumHeight(120)
+        text_scale.set_min_height(self.description, 120)
         lay.addWidget(self.description)
 
         # What will be included, visible before anything leaves the machine.
@@ -135,7 +136,6 @@ class FeedbackDialog(QDialog):
         lay.addLayout(diag)
         lay.addWidget(self._wrap(_tr("support.feedback.note"), muted=True))
 
-        buttons = QHBoxLayout()
         buttons.addStretch(1)
         cancel = QPushButton(_tr("cancel"))
         cancel.clicked.connect(self.reject)
@@ -144,8 +144,7 @@ class FeedbackDialog(QDialog):
         self.send_btn.clicked.connect(self._open)
         buttons.addWidget(cancel)
         buttons.addWidget(self.send_btn)
-        lay.addLayout(buttons)
-        self.resize(560, 520)
+        self.resize(600, 560)
 
     @staticmethod
     def _wrap(text: str, muted: bool = False) -> QLabel:

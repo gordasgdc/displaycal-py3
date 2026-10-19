@@ -37,6 +37,8 @@ def main() -> int:
     ap.add_argument("--theme", default="light")
     ap.add_argument("--size", default="1180x1000")
     ap.add_argument("--only", default="")
+    ap.add_argument("--text", default="normal", help="text size level: normal|large|xlarge")
+    ap.add_argument("--out-name", default="", help="sub-folder name instead of <theme>")
     args = ap.parse_args()
     width, height = (int(v) for v in args.size.split("x"))
     only = {n for n in args.only.split(",") if n}
@@ -90,6 +92,9 @@ def main() -> int:
     app.setPalette(pal)
     from DisplayCAL.ui import main_window as mw
 
+    from DisplayCAL.ui import text_scale
+
+    text_scale.apply(args.text)
     win = mw.MainWindow(worker=Worker())
     win.resize(width, height)
     win.show()
@@ -121,7 +126,7 @@ def main() -> int:
                 bad.append(f"{type(w).__name__}: '{(w.text() if not isinstance(w, QComboBox) else w.currentText())[:60]}' needs {need}px has {have}px")
         return bad
 
-    out_dir = os.path.join(args.out, code, theme)
+    out_dir = os.path.join(args.out, code, args.out_name or theme)
     os.makedirs(out_dir, exist_ok=True)
     index: list[dict] = []
     counter = [0]

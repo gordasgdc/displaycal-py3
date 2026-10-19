@@ -28,6 +28,7 @@ from qtpy.QtWidgets import (
 from DisplayCAL import config, diagnostics, support
 from DisplayCAL import localization as lang
 from DisplayCAL import log as dlog
+from DisplayCAL.ui import text_scale
 from DisplayCAL.ui.recovery_dialog import human_bytes
 from DisplayCAL.ui.support_dialog import open_url
 from DisplayCAL.util_os import launch_file
@@ -62,7 +63,7 @@ class ExportDialog(QDialog):
         self._worker = worker
         self._cats = categories if categories is not None else self._plan()
         self.saved_path: str | None = None
-        lay = QVBoxLayout(self)
+        lay, footer = text_scale.scrollable_dialog(self)
         lay.addWidget(_wrap(_tr("diag.export.intro")))
         self.boxes: dict[str, QCheckBox] = {}
         lay.addWidget(_wrap("<b>" + _tr("diag.export.included") + "</b>"))
@@ -80,17 +81,15 @@ class ExportDialog(QDialog):
         self.redact_cb.toggled.connect(self._redact_toggled)
         lay.addWidget(self.redact_cb)
         lay.addWidget(_wrap(_tr("diag.export.never"), muted=True))
-        row = QHBoxLayout()
-        row.addStretch(1)
+        footer.addStretch(1)
         cancel = QPushButton(_tr("cancel"))
         cancel.clicked.connect(self.reject)
         self.save_btn = QPushButton(_tr("diag.export.save"))
         self.save_btn.setDefault(True)
         self.save_btn.clicked.connect(self._save)
-        row.addWidget(cancel)
-        row.addWidget(self.save_btn)
-        lay.addLayout(row)
-        self.resize(640, 560)
+        footer.addWidget(cancel)
+        footer.addWidget(self.save_btn)
+        self.resize(660, 600)
 
     def _plan(self) -> list[diagnostics.Category]:
         profile = None
@@ -182,12 +181,12 @@ class DiagnosticDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(_tr("diag.title"))
         self._worker = worker
-        lay = QVBoxLayout(self)
+        lay, footer = text_scale.scrollable_dialog(self)
         lay.addWidget(_wrap(_tr("diag.intro")))
         lay.addWidget(_wrap("<b>" + _tr("diag.versions") + "</b>"))
         self.versions = QPlainTextEdit(diagnostics.versions_text(worker, redacted=False))
         self.versions.setReadOnly(True)
-        self.versions.setMinimumHeight(170)
+        text_scale.set_min_height(self.versions, 170)
         lay.addWidget(self.versions)
         row = QHBoxLayout()
         self.copy_versions_btn = QPushButton(_tr("diag.copy_versions"))
@@ -214,16 +213,14 @@ class DiagnosticDialog(QDialog):
         lay.addWidget(self.debug_cb)
         lay.addWidget(_wrap("<b>" + _tr("diag.send_title") + "</b>"))
         lay.addWidget(_wrap(_tr("diag.send_how")))
-        row3 = QHBoxLayout()
         self.issue_btn = QPushButton(_tr("diag.open_issue"))
         self.issue_btn.clicked.connect(lambda: open_url(support.ISSUES_NEW_URL))
-        row3.addWidget(self.issue_btn)
-        row3.addStretch(1)
         close = QPushButton(_tr("ok"))
         close.clicked.connect(self.accept)
-        row3.addWidget(close)
-        lay.addLayout(row3)
-        self.resize(640, 640)
+        footer.addWidget(self.issue_btn)
+        footer.addStretch(1)
+        footer.addWidget(close)
+        self.resize(660, 680)
 
     def _copy_versions(self) -> None:
         QApplication.clipboard().setText(self.versions.toPlainText())

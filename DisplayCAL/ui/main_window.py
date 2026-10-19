@@ -215,7 +215,7 @@ from DisplayCAL.meta import DEVELOPMENT_HOME_PAGE, DOMAIN, VERSION_STRING
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.options import TEST
 from DisplayCAL.profile_verify import verify_active_profile
-from DisplayCAL.ui import message_box
+from DisplayCAL.ui import message_box, text_scale
 from DisplayCAL.ui.about_window import AboutWindow
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import (
@@ -797,9 +797,7 @@ class _DonationDialog(QDialog):
         right_column.setContentsMargins(12, 12, 12, 12)
 
         header = QLabel(lang.getstr("donation_header"), self)
-        font = header.font()
-        font.setPointSize(font.pointSize() + 4)
-        header.setFont(font)
+        text_scale.set_scaled_font(header, 1.3)
         right_column.addWidget(header)
 
         message = QLabel(lang.getstr("donation_message"), self)
@@ -2178,6 +2176,12 @@ class MainWindow(BaseWindow):
             self._show_advanced_options_toggled
         )
 
+        from DisplayCAL.ui.text_size_menu import make_menu
+
+        self.text_size_menu = make_menu(self)
+        options_menu.addMenu(self.text_size_menu)
+        text_scale.bus.changed.connect(self._text_size_changed)
+
         advanced_menu = options_menu.addMenu(lang.getstr("advanced"))
 
         self.use_separate_lut_access_action = advanced_menu.addAction(
@@ -3442,7 +3446,7 @@ class MainWindow(BaseWindow):
             lang.getstr("header"),
             self._HEADER_LOGO_INSET,
         )
-        banner.setFixedHeight(HEADER_BANNER_SIZE[1] + 12)
+        banner.set_base_height(HEADER_BANNER_SIZE[1] + 12)
         # Matches the actual gradient sampled from ``theme/header@2x.png``: it
         # reaches its final blue by the vertical midpoint and stays flat below
         # that (a plain 2-stop linear gradient over-darkens the top half).
@@ -3498,6 +3502,11 @@ class MainWindow(BaseWindow):
             "install", "profile.install", self.install_profile_btn_handler
         )
         bar_row.addWidget(self.install_profile_btn)
+
+        from DisplayCAL.ui.text_size_menu import TextSizeButton
+
+        self.header_text_size_btn = TextSizeButton(on_dark_bar=True)
+        bar_row.addWidget(self.header_text_size_btn)
 
         outer.addWidget(bar)
         return container
@@ -4161,6 +4170,17 @@ class MainWindow(BaseWindow):
         note.setStyleSheet(f"color: {muted_css()};")
         note.setText(lang.getstr(key, [count]) if key else "")
         note.setVisible(bool(key))
+
+    def _text_size_changed(self, _factor: float = 0.0) -> None:
+        """Text size changed: re-measure the pinned tab and let the window grow."""
+        from qtpy.QtCore import QTimer
+
+        def later() -> None:
+            self._pin_stack_size_to_current_tab()
+            for header in self._section_headers:
+                header.refresh()
+
+        QTimer.singleShot(0, later)
 
     def refresh_sections(self) -> None:
         """Re-evaluate every section header (visibility, 'unavailable because')."""
@@ -9040,9 +9060,19 @@ class MainWindow(BaseWindow):
         widget = self.stack.currentWidget()
         if widget is None:
             return
-        hint = widget.sizeHint()
+        # Wrapped text has a wide sizeHint but a small minimum: size the page to the
+        # viewport (reflow) and only scroll vertically; never force a wide minimum.
+        from qtpy.QtCore import QSize
+
+        viewport = self._scroll_area.viewport().size()
+        min_hint = widget.minimumSizeHint()
+        width = max(viewport.width(), min_hint.width())
+        height = widget.sizeHint().height()
+        if widget.hasHeightForWidth():
+            height = max(height, widget.heightForWidth(width))
+        hint = QSize(width, max(height, min_hint.height()))
         self.stack.setMinimumSize(hint)
-        self.stack.resize(self._scroll_area.viewport().size().expandedTo(hint))
+        self.stack.resize(viewport.expandedTo(hint))
 
     def _update_lut3d_tab_enabled(self) -> None:
         """Enable/disable the 3D LUT tab per the ``3dlut.tab.enable`` toggle.

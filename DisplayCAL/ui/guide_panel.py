@@ -20,7 +20,7 @@ from __future__ import annotations
 from html import escape
 from typing import TYPE_CHECKING
 
-from qtpy.QtCore import QTimer, QRectF, QSize, Qt, Signal
+from qtpy.QtCore import QEvent, QTimer, QRectF, QSize, Qt, Signal
 from qtpy.QtGui import QColor, QFont, QLinearGradient, QPainter, QPen, QPixmap
 from qtpy.QtWidgets import (
     QButtonGroup,
@@ -47,6 +47,7 @@ from DisplayCAL import profile_name as profile_name_mod
 from DisplayCAL.argyll import check_argyll_bin
 from DisplayCAL.config import getcfg, setcfg
 from DisplayCAL.ui.guide_prepare import PreparePage
+from DisplayCAL.ui import text_scale
 from DisplayCAL.ui.guide_widgets import (
     AdaptiveRow as _AdaptiveRow,
 )
@@ -135,6 +136,13 @@ class _Rail(QWidget):
     def _min_width(self) -> int:
         return max(176, self.fontMetrics().horizontalAdvance("M") * 15)
 
+    def changeEvent(self, event: object) -> None:  # noqa: N802, D102
+        if event.type() == QEvent.FontChange:
+            self.setMinimumWidth(self._min_width())
+            self.updateGeometry()
+            self.update()
+        super().changeEvent(event)
+
     def set_state(self, current: int, reached: int) -> None:
         self._current, self._reached = current, reached
         self.update()
@@ -216,7 +224,7 @@ class _Rail(QWidget):
             p.setPen(t["window"] if (active or done) else t["muted"])
             nf = QFont(font)
             nf.setBold(True)
-            nf.setPointSizeF(font.pointSizeF() * 0.9)
+            nf.setPointSizeF(font.pointSizeF() * 0.95)
             p.setFont(nf)
             p.drawText(node, Qt.AlignCenter, "✓" if done else str(i + 1))
             tf = QFont(font)
@@ -244,6 +252,7 @@ class GuidePanel(QWidget):
         self._model: dict[str, str] = {}
         self._syncing = False
         self.setStyleSheet(_control_css())
+        text_scale.bus.changed.connect(lambda _f: self.setStyleSheet(_control_css()))
         self._build()
         self.refresh()
 
@@ -266,6 +275,10 @@ class GuidePanel(QWidget):
         self.advanced_btn.clicked.connect(
             lambda: self.window_ref._select_tab("display_instrument")
         )
+        from DisplayCAL.ui.text_size_menu import TextSizeButton
+
+        self.text_size_btn = TextSizeButton()
+        head.addWidget(self.text_size_btn, 0, Qt.AlignTop)
         head.addWidget(self.advanced_btn, 0, Qt.AlignTop)
         root.addLayout(head)
 
@@ -337,10 +350,8 @@ class GuidePanel(QWidget):
         self.instrument_combo = QComboBox()
         self.mode_combo = QComboBox()
         for combo in (self.monitor_combo, self.instrument_combo, self.mode_combo):
-            f = combo.font()
-            f.setPointSizeF(f.pointSizeF() * 1.15)
-            combo.setFont(f)
-            combo.setMinimumHeight(34)
+            text_scale.set_scaled_font(combo, 1.15)
+            text_scale.set_min_height(combo, 34)
         ll.addWidget(_label(_tr("guide.s1.monitor"), size=1.05, muted=True))
         ll.addWidget(self.monitor_combo)
         ll.addSpacing(10)
@@ -355,7 +366,7 @@ class GuidePanel(QWidget):
         mb.setSpacing(3)
         mb.addWidget(_label(_tr("guide.s1.model_pick"), size=1.0, muted=True))
         self.model_combo = QComboBox()
-        self.model_combo.setMinimumHeight(30)
+        text_scale.set_min_height(self.model_combo, 30)
         self.model_combo.currentIndexChanged.connect(self._model_changed)
         mb.addWidget(self.model_combo)
         ll.addWidget(self.model_box)
@@ -420,10 +431,7 @@ class GuidePanel(QWidget):
             gl.setSpacing(2)
             row = QHBoxLayout()
             radio = QRadioButton(_m(_tr(goal.title_key)))
-            f = radio.font()
-            f.setBold(True)
-            f.setPointSizeF(f.pointSizeF() * 1.1)
-            radio.setFont(f)
+            text_scale.set_scaled_font(radio, 1.1, bold=True)
             radio.toggled.connect(lambda on, k=goal.key: on and self._goal_chosen(k))
             self.goal_group.addButton(radio)
             self.goal_buttons[goal.key] = radio
@@ -492,11 +500,8 @@ class GuidePanel(QWidget):
         self.start_blocked = _label("", size=1.05)
         lay.addWidget(self.start_blocked)
         self.start_btn = QPushButton(_m(_tr("guide.s4.start")))
-        self.start_btn.setMinimumHeight(44)
-        f = self.start_btn.font()
-        f.setBold(True)
-        f.setPointSizeF(f.pointSizeF() * 1.15)
-        self.start_btn.setFont(f)
+        text_scale.set_min_height(self.start_btn, 44)
+        text_scale.set_scaled_font(self.start_btn, 1.15, bold=True)
         self.start_btn.clicked.connect(self._start)
         lay.addWidget(self.start_btn)
         lay.addWidget(_label(_tr("guide.s4.reminder"), size=1.05, bold=True))

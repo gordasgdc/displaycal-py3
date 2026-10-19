@@ -28,6 +28,7 @@ from qtpy.QtWidgets import (
 from DisplayCAL import localization as lang
 from DisplayCAL import session_journal as sj
 from DisplayCAL.config import setcfg
+from DisplayCAL.ui import text_scale
 from DisplayCAL.util_os import launch_file
 
 
@@ -86,7 +87,7 @@ class RecoveryDialog(QDialog):
         self._sessions = sessions
         self._worker = worker
         self.exported_to: str | None = None
-        lay = QVBoxLayout(self)
+        lay, footer = text_scale.scrollable_dialog(self)
         self.intro = QLabel(_tr("recover.intro", f"{len(sessions)} {_tr('recover.sessions')}"))
         self.intro.setWordWrap(True)
         lay.addWidget(self.intro)
@@ -114,7 +115,7 @@ class RecoveryDialog(QDialog):
             row.addWidget(b)
         row.addStretch(1)
         lay.addLayout(row)
-        row2 = QHBoxLayout()
+        row2 = footer
         row2.addStretch(1)
         self.later_btn = QPushButton(_tr("recover.dismiss"))
         self.seen_btn = QPushButton(_tr("recover.discard"))
@@ -122,8 +123,7 @@ class RecoveryDialog(QDialog):
         self.seen_btn.clicked.connect(self._seen)
         row2.addWidget(self.later_btn)
         row2.addWidget(self.seen_btn)
-        lay.addLayout(row2)
-        self.resize(640, 520)
+        self.resize(680, 560)
         self.listing.setCurrentRow(0)
 
     # -- helpers --------------------------------------------------------

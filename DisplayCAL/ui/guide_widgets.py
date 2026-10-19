@@ -15,6 +15,7 @@ from qtpy.QtWidgets import (
 )
 
 from DisplayCAL import config
+from DisplayCAL.ui import text_scale
 
 
 def tokens() -> dict[str, QColor]:
@@ -28,7 +29,8 @@ def tokens() -> dict[str, QColor]:
     return {
         "window": window,
         "text": text,
-        "muted": QColor(text.red(), text.green(), text.blue(), 150),
+        # Secondary text is never "disabled" grey: it keeps WCAG AA contrast.
+        "muted": text_scale.muted_color(text, window),
         "plate": plate,
         "line": QColor(text.red(), text.green(), text.blue(), 40),
         "accent": QColor("#ffb347") if dark else QColor("#b86e00"),
@@ -81,9 +83,7 @@ class Disclosure(QWidget):
         self.button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self.button.setAutoRaise(True)
         self.button.setCursor(Qt.PointingHandCursor)
-        f = self.button.font()
-        f.setPointSizeF(f.pointSizeF() * 1.05)
-        self.button.setFont(f)
+        text_scale.set_scaled_font(self.button, 1.05)
         self.content = content
         self.content.setVisible(False)
         self.button.toggled.connect(self._toggled)
@@ -104,13 +104,14 @@ def control_css() -> str:
     check_image = (
         f'image:url("{check.replace(chr(92), "/")}");' if isinstance(check, str) else ""
     )
+    px = text_scale.scale_px(16)
     return (
-        "QRadioButton::indicator{width:16px;height:16px;border-radius:9px;"
+        f"QRadioButton::indicator{{width:{px}px;height:{px}px;border-radius:{px // 2 + 1}px;"
         f"border:2px solid {ring};background:transparent;}}"
         f"QRadioButton::indicator:checked{{border:2px solid {acc};"
         f"background:qradialgradient(cx:.5,cy:.5,radius:.5,fx:.5,fy:.5,"
         f"stop:0 {acc},stop:.55 {acc},stop:.6 transparent,stop:1 transparent);}}"
-        "QCheckBox::indicator{width:16px;height:16px;border-radius:4px;"
+        f"QCheckBox::indicator{{width:{px}px;height:{px}px;border-radius:4px;"
         f"border:2px solid {ring};background:transparent;}}"
         f"QCheckBox::indicator:checked{{border:2px solid {acc};background:{acc};"
         f"{check_image}}}"
@@ -128,11 +129,10 @@ def label(
     """Return a word-wrapped plain-text label with optional size/weight/tone."""
     lab = QLabel(text)
     lab.setWordWrap(wrap)
-    f = lab.font()
-    f.setPointSizeF(f.pointSizeF() * size)
-    f.setBold(bold)
-    lab.setFont(f)
+    text_scale.set_scaled_font(lab, size, bold)
     lab.setTextFormat(Qt.PlainText)
+    if wrap:
+        text_scale.limit_reading_width(lab)
     if muted:
         lab.setStyleSheet(f"color:{css(tokens()['muted'])};")
     return lab

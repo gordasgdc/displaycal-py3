@@ -4005,3 +4005,15 @@
   This chart has %s patches. The ArgyllCMS documentation suggests somewhere between 500 and 3000 patches for RGB devices with a LUT-type profile; with fewer, the profile is only approximate.
 "profile.patches_note.matrix_many": |-
   This chart has %s patches. According to the ArgyllCMS documentation a matrix-type profile of a well-behaved RGB device needs only a few hundred, so a larger chart mostly adds measuring time.
+"textsize.title": |-
+  Text size
+"textsize.normal": |-
+  Normal
+"textsize.large": |-
+  Large
+"textsize.xlarge": |-
+  Very large
+"textsize.reset": |-
+  Reset to the default size
+"textsize.tip": |-
+  Text size: makes all text in the application larger or smaller, at once. It does not change the measurement window or any measurement.

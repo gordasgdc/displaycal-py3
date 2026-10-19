@@ -3997,3 +3997,15 @@
   Esta carta tiene %s parches. La documentación de ArgyllCMS sugiere entre 500 y 3000 parches para dispositivos RGB con un perfil de tipo LUT; con menos, el perfil es solo aproximado.
 "profile.patches_note.matrix_many": |-
   Esta carta tiene %s parches. Según la documentación de ArgyllCMS, un perfil de tipo matriz de un dispositivo RGB bien comportado necesita solo unos cientos, así que una carta mayor sobre todo añade tiempo de medición.
+"textsize.title": |-
+  Tamaño del texto
+"textsize.normal": |-
+  Normal
+"textsize.large": |-
+  Grande
+"textsize.xlarge": |-
+  Muy grande
+"textsize.reset": |-
+  Volver al tamaño predeterminado
+"textsize.tip": |-
+  Tamaño del texto: agranda o reduce al instante todo el texto de la aplicación. No cambia la ventana de medición ni las mediciones.

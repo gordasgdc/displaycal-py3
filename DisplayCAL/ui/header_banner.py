@@ -108,6 +108,30 @@ class HeaderBanner(QWidget):
         self._inset = inset
         self._icon = brand_icon_pixmap(128)
         self.setAttribute(Qt.WA_StyledBackground, True)
+        self._base_height = 0
+        from DisplayCAL.ui import text_scale
+
+        text_scale.bus.changed.connect(lambda _f: self._fit_height())
+
+    def set_base_height(self, px: int) -> None:
+        """Height at the Normal text size; grows when the text does."""
+        self._base_height = px
+        self._fit_height()
+
+    def _fit_height(self) -> None:
+        """Wordmark (1.9x) + tagline must fit: never clip at a large text size."""
+        if not self._base_height:
+            return
+        fm = self.fontMetrics()
+        need = round(fm.height() * 1.9 * 1.3 + fm.height() * 1.6 + 40)
+        self.setFixedHeight(max(self._base_height, need))
+
+    def changeEvent(self, event) -> None:  # noqa: N802, D102
+        from qtpy.QtCore import QEvent
+
+        if event.type() == QEvent.FontChange:
+            self._fit_height()
+        super().changeEvent(event)
 
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: D102, N802
         painter = QPainter(self)
@@ -139,7 +163,12 @@ class HeaderBanner(QWidget):
         painter.setFont(tag)
         painter.setPen(QColor(255, 255, 255, 165))
         painter.drawText(
-            QRect(text_x, baseline + 6, rect.width() - text_x - 12, 20),
+            QRect(
+                text_x,
+                baseline + 6,
+                rect.width() - text_x - 12,
+                painter.fontMetrics().height() + 8,
+            ),
             int(Qt.AlignLeft | Qt.AlignTop),
             self._tagline,
         )

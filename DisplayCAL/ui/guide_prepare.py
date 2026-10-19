@@ -30,6 +30,7 @@ from DisplayCAL import guide_model as gm
 from DisplayCAL import instrument_catalog as ic
 from DisplayCAL import localization as lang
 from DisplayCAL.guide_sources import SOURCES
+from DisplayCAL.ui import text_scale
 from DisplayCAL.ui.guide_widgets import AdaptiveRow, Disclosure, label, m
 from DisplayCAL.ui.placement_player import PlacementPlayer
 
@@ -194,10 +195,7 @@ class PreparePage(QWidget):
         cb.toggled.connect(lambda on, k=item.key: self._toggled(k, on))
         self._boxes[item.key] = cb
         title = _ToggleLabel(_tr(item.title_key), cb)
-        f = title.font()
-        f.setBold(True)
-        f.setPointSizeF(f.pointSizeF() * 1.12)
-        title.setFont(f)
+        text_scale.set_scaled_font(title, 1.12, bold=True)
         tag = label(
             _tr("guide.s3.required") if item.required else _tr("guide.s3.recommended"),
             size=0.85,
