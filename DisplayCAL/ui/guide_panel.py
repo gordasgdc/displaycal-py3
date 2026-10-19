@@ -243,6 +243,9 @@ class _Rail(QWidget):
 class GuidePanel(QWidget):
     """The guided-flow panel; one instance lives in the main window's stack."""
 
+    #: Scrolls inside itself and keeps its footer: the window never pins it taller.
+    fills_viewport = True
+
     def __init__(self, window: MainWindow) -> None:
         super().__init__()
         self.window_ref = window

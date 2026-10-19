@@ -9087,6 +9087,11 @@ class MainWindow(BaseWindow):
         height = widget.sizeHint().height()
         if widget.hasHeightForWidth():
             height = max(height, widget.heightForWidth(width))
+        if getattr(widget, "fills_viewport", False):
+            # A page that scrolls inside itself and keeps its own fixed footer
+            # (the guided flow): never taller than the window, so the footer
+            # stays on screen at any text size instead of hiding below.
+            height = min_hint.height()
         hint = QSize(width, max(height, min_hint.height()))
         self.stack.setMinimumSize(hint)
         self.stack.resize(viewport.expandedTo(hint))

@@ -30,6 +30,15 @@ _T = {
                     "back the active profile and tells you whether it is really "
                     "the one that was just created.",
                 ]),
+                ("info", ("Text size",
+                          "The <b>Aa</b> button (also in the Options menu) sets "
+                          "the text size: Normal, Large or Very large. It starts "
+                          "from the size your system uses, applies at once to "
+                          "the whole application including explanations and "
+                          "dialogs, and can be reset to the default. It changes "
+                          "only the text of the application; the measurement "
+                          "window, the patch size and colours are not affected."
+                          )),
                 ("info", ("If something is missing",
                           "When ArgyllCMS, a display or an instrument is not "
                           "found, the first step says so plainly and what to do. "
@@ -68,31 +77,55 @@ _T = {
         "plan": {
             "h": "Measurement plan and long sessions",
             "blocks": [
-                ("p", "Step 4 shows the plan before anything starts: the "
-                      "profile type, the number of patches and an estimated "
-                      "time."),
+                ("p", "Step 4 shows the plan before anything starts, with three "
+                      "numbers kept apart: the <b>total patches in the chart</b>, "
+                      "the <b>largest block</b> and the <b>number of blocks</b> "
+                      "(for example “11,000 patches in total · blocks of at most "
+                      "500 · about 22 blocks”), plus the estimated time. The same "
+                      "plan appears in the Profiling tab, and the button "
+                      "<b>Choose or create a chart</b> beside the total opens the "
+                      "chart file chooser or the chart editor. The block size "
+                      "never changes the total: it only decides how the same "
+                      "chart is cut into pieces."),
                 ("ul", [
                     "<b>Profile type</b> — a matrix profile (one shared curve "
                     "or per-channel curves) is small and predictable; a LUT "
                     "profile (XYZ or Lab) describes more of the screen's "
-                    "behaviour but needs more patches. On macOS the preset uses "
-                    "the single-curve matrix, inherited from the original "
-                    "project because of reported problems with other types on "
-                    "that system. More patches is not automatically better: "
-                    "it costs time and only helps where the profile type can "
-                    "use it.",
+                    "behaviour but needs more patches. The profile type, the "
+                    "calibration curves and the measurement chart are three "
+                    "different things: curves adjust the monitor, the chart is "
+                    "what is measured, the type is how the result is described "
+                    "to applications. <i>Macs:</i> on macOS 10.8 or newer the "
+                    "application asks once if the type is anything other than "
+                    "single curve + matrix with black point compensation, "
+                    "because, according to the original project, applications "
+                    "that use Apple's own colour module (Preview, Quick Look) "
+                    "may show black crush and posterization with other display "
+                    "profile types. It is a question, not a ban: Yes switches, "
+                    "No keeps your choice. Applications with their own colour "
+                    "management (Adobe, GIMP, Krita) and workflows using a 3D "
+                    "LUT are not affected. More patches is not automatically "
+                    "better: it costs time, lets the display drift and only "
+                    "helps where the profile type can use it; verify the "
+                    "result afterwards.",
                     "<b>Calibration vs profiling</b> — calibration adjusts the "
                     "screen towards a target; profiling measures it and writes "
                     "the ICC profile. The chart (the set of patches) belongs to "
                     "profiling.",
                     "<b>Safe long run (blocks)</b> — a large chart can be "
-                    "measured in blocks of 250, 500 or 1000 patches. A "
-                    "finished block is saved to disk; if the run is "
+                    "measured in blocks of at most 100, 250, 500, 1000 or 2000 patches "
+                    "(or another size you type). There is no fixed upper limit "
+                    "on the chart itself: charts of 11,000 patches or more can "
+                    "be measured this way. A finished block is saved to disk; if the run is "
                     "interrupted, only the block in progress is lost. Each "
                     "block repeats the white reference, so the run needs one "
-                    "extra patch per block and re-initialises the instrument "
-                    "between blocks. Instruments that need their own "
-                    "calibration cycle measure in one run.",
+                    "extra white reading per block after the first (shown "
+                    "separately) and re-initialises the instrument between "
+                    "blocks. The time estimate uses the speed this instrument "
+                    "really had in earlier runs on this computer when there is "
+                    "such a history, otherwise its specification, and says "
+                    "which; it is never a guarantee. Instruments that need "
+                    "their own calibration cycle measure in one run.",
                     "<b>Keep the computer awake</b> — on by default, only for "
                     "the duration of the run, released at the end. It cannot "
                     "prevent: closing the lid, choosing Sleep, the power "
@@ -301,6 +334,16 @@ _T = {
                     "citește profilul activ și îți spune dacă este chiar "
                     "cel creat acum.",
                 ]),
+                ("info", ("Dimensiunea textului",
+                          "Butonul <b>Aa</b> (și din meniul Opțiuni) stabilește "
+                          "dimensiunea textului: Normal, Mare sau Foarte mare. "
+                          "Pornește de la dimensiunea folosită de sistem, se "
+                          "aplică imediat întregii aplicații, inclusiv "
+                          "explicațiilor și dialogurilor, și poate fi readusă la "
+                          "valoarea implicită. Schimbă doar textul aplicației; "
+                          "fereastra de măsurare, mărimea patch-urilor și "
+                          "culorile nu sunt afectate."
+                          )),
                 ("info", ("Dacă lipsește ceva",
                           "Când ArgyllCMS, un monitor sau un instrument nu "
                           "este găsit, primul pas spune clar acest lucru și ce "
@@ -340,31 +383,58 @@ _T = {
         "plan": {
             "h": "Planul de măsurare și sesiunile lungi",
             "blocks": [
-                ("p", "Pasul 4 arată planul înainte de orice pornire: tipul de "
-                      "profil, numărul de patch-uri și un timp estimat."),
+                ("p", "Pasul 4 arată planul înainte de orice pornire, cu trei "
+                      "numere ținute separat: <b>totalul de patch-uri din "
+                      "diagramă</b>, <b>cel mai mare bloc</b> și <b>numărul de "
+                      "blocuri</b> (de exemplu „11.000 de patch-uri în total · "
+                      "blocuri de maximum 500 · aproximativ 22 de blocuri”), plus "
+                      "timpul estimat. Același plan apare în fila Profilare, iar "
+                      "butonul <b>Alege sau creează diagrama</b> de lângă total "
+                      "deschide selectorul de fișier sau editorul de diagrame. "
+                      "Mărimea blocului nu schimbă niciodată totalul: decide "
+                      "doar cum este tăiată aceeași diagramă în bucăți."),
                 ("ul", [
                     "<b>Tipul de profil</b> — un profil matricial (o curbă "
                     "comună sau curbe pe canale) este mic și previzibil; un "
                     "profil LUT (XYZ sau Lab) descrie mai mult din "
                     "comportamentul ecranului, dar cere mai multe patch-uri. "
-                    "Pe macOS presetarea folosește matricea cu o singură "
-                    "curbă, moștenită de la proiectul original din cauza unor "
-                    "probleme raportate cu alte tipuri pe acel sistem. Mai "
-                    "multe patch-uri nu înseamnă automat mai bine: costă "
-                    "timp și ajută doar acolo unde tipul de profil le poate "
-                    "folosi.",
+                    "Tipul de profil, curbele de calibrare și diagrama de "
+                    "măsurare sunt trei lucruri diferite: curbele reglează "
+                    "monitorul, diagrama este ce se măsoară, tipul este felul "
+                    "în care rezultatul este descris aplicațiilor. <i>Pe "
+                    "Mac:</i> pe macOS 10.8 sau mai nou aplicația întreabă o "
+                    "dată dacă tipul este altul decât curbă unică + matrice cu "
+                    "compensarea punctului negru, pentru că, potrivit "
+                    "proiectului original, aplicațiile care folosesc modulul de "
+                    "culoare propriu al Apple (Preview, Quick Look) pot arăta "
+                    "negru strivit și posterizare cu alte tipuri de profil. Este "
+                    "o întrebare, nu o interdicție: Da schimbă, Nu păstrează "
+                    "alegerea ta. Aplicațiile cu management propriu al culorii "
+                    "(Adobe, GIMP, Krita) și fluxurile cu LUT 3D nu sunt "
+                    "afectate. Mai multe patch-uri nu înseamnă automat mai bine: "
+                    "costă timp, lasă ecranul să derive și ajută doar acolo "
+                    "unde tipul de profil le poate folosi; verifică rezultatul "
+                    "după aceea.",
                     "<b>Calibrare față de profilare</b> — calibrarea ajustează "
                     "ecranul spre o țintă; profilarea îl măsoară și scrie "
                     "profilul ICC. Diagrama (setul de patch-uri) ține de "
                     "profilare.",
                     "<b>Rulare lungă sigură (blocuri)</b> — o diagramă mare "
-                    "poate fi măsurată în blocuri de 250, 500 sau 1000 de "
-                    "patch-uri. Un bloc terminat se salvează pe disc; dacă "
+                    "poate fi măsurată în blocuri de maximum 100, 250, 500, 1000 sau "
+                    "2000 de patch-uri (sau altă mărime pe care o scrii). Nu "
+                    "există o limită superioară fixă pentru diagrama însăși: "
+                    "diagrame de 11.000 de patch-uri sau mai multe pot fi "
+                    "măsurate așa. Un bloc terminat se salvează pe disc; dacă "
                     "rularea se întrerupe, se pierde doar blocul în curs. "
-                    "Fiecare bloc repetă referința albă, deci rularea cere un "
-                    "patch în plus per bloc și reinițializează instrumentul "
-                    "între blocuri. Instrumentele care au nevoie de propriul "
-                    "ciclu de calibrare măsoară într-o singură rulare.",
+                    "Fiecare bloc repetă referința albă, deci rularea cere o "
+                    "citire de alb în plus per bloc după primul (afișată "
+                    "separat) și reinițializează instrumentul între blocuri. "
+                    "Estimarea de timp folosește viteza pe care a avut-o "
+                    "efectiv acest instrument în rulările anterioare de pe "
+                    "acest calculator, dacă există un istoric, altfel "
+                    "specificațiile lui, și spune care; nu este niciodată o "
+                    "garanție. Instrumentele care au nevoie de propriul ciclu "
+                    "de calibrare măsoară într-o singură rulare.",
                     "<b>Ține computerul treaz</b> — activ implicit, doar pe "
                     "durata rulării, eliberat la final. Nu poate împiedica: "
                     "închiderea capacului, alegerea Repaus, butonul de "
@@ -582,6 +652,16 @@ _T = {
                     "perfil activo y te dice si es realmente el que acaba de "
                     "crearse.",
                 ]),
+                ("info", ("Tamaño del texto",
+                          "El botón <b>Aa</b> (también en el menú Opciones) fija "
+                          "el tamaño del texto: Normal, Grande o Muy grande. "
+                          "Parte del tamaño que usa el sistema, se aplica al "
+                          "instante a toda la aplicación, incluidas las "
+                          "explicaciones y los diálogos, y puede restablecerse al "
+                          "valor predeterminado. Solo cambia el texto de la "
+                          "aplicación; la ventana de medición, el tamaño de los "
+                          "parches y los colores no se ven afectados."
+                          )),
                 ("info", ("Si falta algo",
                           "Cuando no se encuentra ArgyllCMS, una pantalla o un "
                           "instrumento, el primer paso lo dice con claridad y "
@@ -621,31 +701,59 @@ _T = {
         "plan": {
             "h": "Plan de medición y sesiones largas",
             "blocks": [
-                ("p", "El paso 4 muestra el plan antes de empezar: el tipo de "
-                      "perfil, el número de parches y un tiempo estimado."),
+                ("p", "El paso 4 muestra el plan antes de empezar, con tres "
+                      "números separados: el <b>total de parches de la "
+                      "carta</b>, el <b>bloque más grande</b> y el <b>número de "
+                      "bloques</b> (por ejemplo «11.000 parches en total · "
+                      "bloques de como máximo 500 · aproximadamente 22 "
+                      "bloques»), más el tiempo estimado. El mismo plan aparece "
+                      "en la pestaña Perfilado, y el botón <b>Elegir o crear la "
+                      "carta</b> junto al total abre el selector de archivo o el "
+                      "editor de cartas. El tamaño del bloque nunca cambia el "
+                      "total: solo decide cómo se corta la misma carta en "
+                      "trozos."),
                 ("ul", [
                     "<b>Tipo de perfil</b> — un perfil matricial (una curva "
                     "compartida o curvas por canal) es pequeño y predecible; "
                     "un perfil LUT (XYZ o Lab) describe más del comportamiento "
-                    "de la pantalla pero requiere más parches. En macOS el "
-                    "preajuste usa la matriz de curva única, heredada del "
-                    "proyecto original por problemas notificados con otros "
-                    "tipos en ese sistema. Más parches no es automáticamente "
-                    "mejor: cuesta tiempo y solo ayuda donde el tipo de perfil "
-                    "puede aprovecharlos.",
+                    "de la pantalla pero requiere más parches. El tipo de perfil, "
+                    "las curvas de calibración y la carta de medición son tres "
+                    "cosas distintas: las curvas ajustan el monitor, la carta "
+                    "es lo que se mide, el tipo es cómo se describe el "
+                    "resultado a las aplicaciones. <i>En Mac:</i> en macOS 10.8 "
+                    "o posterior la aplicación pregunta una vez si el tipo es "
+                    "distinto de curva única + matriz con compensación del "
+                    "punto negro porque, según el proyecto original, las "
+                    "aplicaciones que usan el módulo de color propio de Apple "
+                    "(Vista Previa, Quick Look) pueden mostrar negros "
+                    "aplastados y posterización con otros tipos de perfil. Es "
+                    "una pregunta, no una prohibición: Sí cambia, No mantiene "
+                    "tu elección. Las aplicaciones con gestión de color propia "
+                    "(Adobe, GIMP, Krita) y los flujos con LUT 3D no se ven "
+                    "afectados. Más parches no es automáticamente mejor: "
+                    "cuesta tiempo, deja que la pantalla derive y solo ayuda "
+                    "donde el tipo de perfil puede aprovecharlos; verifica el "
+                    "resultado después.",
                     "<b>Calibración frente a perfilado</b> — la calibración "
                     "ajusta la pantalla hacia un objetivo; el perfilado la "
                     "mide y escribe el perfil ICC. La carta (el conjunto de "
                     "parches) pertenece al perfilado.",
                     "<b>Ejecución larga segura (bloques)</b> — una carta "
-                    "grande puede medirse en bloques de 250, 500 o 1000 "
-                    "parches. Un bloque terminado se guarda en disco; si la "
+                    "grande puede medirse en bloques de como máximo 100, 250, 500, "
+                    "1000 o 2000 parches (u otro tamaño que escribas). No hay un "
+                    "límite superior fijo para la carta en sí: cartas de 11.000 "
+                    "parches o más pueden medirse así. Un bloque terminado se "
+                    "guarda en disco; si la "
                     "ejecución se interrumpe, solo se pierde el bloque en "
                     "curso. Cada bloque repite la referencia blanca, así que "
-                    "se necesita un parche extra por bloque y el instrumento "
-                    "se reinicializa entre bloques. Los instrumentos que "
-                    "necesitan su propio ciclo de calibración miden en una "
-                    "sola ejecución.",
+                    "se necesita una lectura de blanco extra por bloque "
+                    "después del primero (mostrada aparte) y el instrumento se "
+                    "reinicializa entre bloques. La estimación de tiempo usa la "
+                    "velocidad que tuvo realmente este instrumento en "
+                    "ejecuciones anteriores en este ordenador, si hay "
+                    "historial, y si no su especificación, e indica cuál; "
+                    "nunca es una garantía. Los instrumentos que necesitan su "
+                    "propio ciclo de calibración miden en una sola ejecución.",
                     "<b>Mantener el ordenador despierto</b> — activo por "
                     "defecto, solo durante la ejecución, se libera al "
                     "terminar. No puede evitar: cerrar la tapa, elegir "

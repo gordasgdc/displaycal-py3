@@ -103,3 +103,23 @@ def test_reading_width_is_limited_and_grows_with_text(qapp):
     w1 = lab.maximumWidth()
     ts.apply("xlarge")
     assert 0 < w1 < lab.maximumWidth() < 100000
+
+
+@pytest.mark.parametrize("level", ["normal", "large", "xlarge"])
+def test_guided_footer_stays_on_screen_in_a_modest_window(window, level):
+    """At any text size the Back/Continue buttons are visible without outer scroll."""
+    from qtpy.QtCore import QPoint
+
+    window.resize(766, 864)
+    window.show()
+    window._select_tab("guide")
+    ts.apply(level)
+    for _ in range(4):
+        QApplication.processEvents()
+    window._pin_stack_size_to_current_tab()
+    for _ in range(3):
+        QApplication.processEvents()
+    g = window._guide
+    bottom = g.next_btn.mapTo(window, QPoint(0, g.next_btn.height())).y()
+    assert bottom <= window.height(), (level, bottom, window.height())
+    assert window._scroll_area.verticalScrollBar().maximum() == 0
