@@ -129,58 +129,36 @@ def label(
 
 
 def section_head(text: str) -> QWidget:
-    """A section of a page: its name as a slug over a hairline."""
+    """A section of a page: its name in bold, a whisper of a rule under it."""
     from DisplayCAL.ui import design_a
 
     box = QWidget()
     col = QVBoxLayout(box)
-    col.setContentsMargins(0, 6, 0, 0)
-    col.setSpacing(4)
-    col.addWidget(slug(text, strong=True, size=0.9))
+    col.setContentsMargins(0, 10, 0, 0)
+    col.setSpacing(5)
+    lab = slug(text, strong=True, size=1.05)
+    text_scale.set_scaled_font(lab, 1.05, weight=700)
+    col.addWidget(lab)
     col.addWidget(design_a.Rule(1, hair=True))
     return box
 
 
-def slug(text: str = "", strong: bool = False, size: float = 0.82) -> QLabel:
-    """A small upper-case label in the proof's mono face (a field's name)."""
-    from DisplayCAL.ui import design_a
-
-    lab = text_scale.WrapLabel(text.upper())
+def slug(text: str = "", strong: bool = False, size: float = 0.92) -> QLabel:
+    """A small field/section name (sans, muted; ``strong`` = ink)."""
+    lab = text_scale.WrapLabel(text)
     lab.setWordWrap(True)
     lab.setTextFormat(Qt.PlainText)
-    lab.setAccessibleName(text)
-    text_scale.set_scaled_font(lab, size, bold=True)
-    mono = design_a.family("mono")
-    if mono:
-        lab.setProperty("_ffamily", mono)
-    f = lab.font()
-    f.setFamily(mono or f.family())
-    f.setLetterSpacing(f.SpacingType.PercentageSpacing, 105)
-    lab.setFont(f)
+    text_scale.set_scaled_font(lab, size, bold=strong)
     lab.setStyleSheet(f"color:{css(tokens()['text' if strong else 'muted'])};")
     return lab
 
 
 def page_head(number: int, title: str) -> QWidget:
-    """The head of a step's page: a large numeral, the title, then an ink rule."""
-    from DisplayCAL.ui import design_a
-
-    box = QWidget()
-    col = QVBoxLayout(box)
-    col.setContentsMargins(0, 0, 0, 0)
-    col.setSpacing(8)
-    row = QHBoxLayout()
-    row.setSpacing(14)
-    num = text_scale.WrapLabel(f"{number:02d}")
-    num.setWordWrap(False)
-    text_scale.set_scaled_font(num, 2.9, weight=800)
-    name = label(title, size=1.7, wrap=True)
-    text_scale.set_scaled_font(name, 1.7, weight=800)
-    row.addWidget(num, 0, Qt.AlignBottom)
-    row.addWidget(name, 1, Qt.AlignBottom | Qt.AlignLeft)
-    col.addLayout(row)
-    col.addWidget(design_a.Rule(2))
-    return box
+    """The head of a step's page: the title, large and plain (the steps show the number)."""
+    name = label(title, size=2.0, wrap=True)
+    text_scale.set_scaled_font(name, 2.0, weight=800)
+    name.setContentsMargins(0, 6, 0, 4)
+    return name
 
 
 class AdaptiveRow(QWidget):

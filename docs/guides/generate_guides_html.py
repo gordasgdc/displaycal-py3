@@ -19,7 +19,7 @@ NAMES = {"ro": "DisplayCAL-CG_Ghid_RO.pdf", "en": "DisplayCAL-CG_Guide_EN.pdf", 
 
 
 def _cover(design_src: str, lang: str, out_pdf: str) -> None:
-    html = os.path.join(design_src, f"A_cover_{lang}.html")
+    html = os.path.join(design_src, f"V2_cover_{lang}.html")
     subprocess.run(
         [eng.BRAVE, "--headless=new", "--disable-gpu", "--no-pdf-header-footer",
          "--virtual-time-budget=15000", f"--print-to-pdf={out_pdf}", f"file://{html}"],

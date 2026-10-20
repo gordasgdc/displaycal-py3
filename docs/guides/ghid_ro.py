@@ -6,7 +6,7 @@
 CONTENT = {
     "title": "Ghid de utilizare DisplayCAL-CG",
     "subtitle": "Calibrare și profilare de monitor, pas cu pas — ediția GDC",
-    "note": "Versiune document 3.0 · bazat pe DisplayCAL-CG 3.10.0.dev82-cg.5",
+    "note": "Versiune document 3.0 · bazat pe DisplayCAL-CG 3.10.0.dev82-cg.6",
     "toc_title": "Cuprins",
     "cover_subtitle": "Calibrare și caracterizare monitor pe baza ArgyllCMS",
     "cover_version_label": "Versiune aplicație",

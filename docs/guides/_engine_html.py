@@ -46,70 +46,70 @@ CSS = """
 @font-face{font-family:"Archivo Wide";src:url("file://@@fonts@@/Archivo-800-wide.ttf");font-weight:800}
 @font-face{font-family:"B612 Mono";src:url("file://@@fonts@@/B612Mono-Regular.ttf");font-weight:400}
 @font-face{font-family:"B612 Mono";src:url("file://@@fonts@@/B612Mono-Bold.ttf");font-weight:700}
-@page{size:210mm 297mm;margin:25mm 15mm 19mm 15mm;
-  @top-left{content:"@@top_left@@";font:700 7.2pt "B612 Mono";letter-spacing:.07em;color:#16171a;vertical-align:top;padding-top:11mm}
-  @top-right{content:"@@top_right@@";font:400 7.2pt "B612 Mono";letter-spacing:.07em;color:#4a4c52;vertical-align:top;padding-top:11mm}
-  @bottom-left{content:"@@foot@@";font:400 7pt "B612 Mono";letter-spacing:.07em;color:#4a4c52;vertical-align:bottom;padding-bottom:9mm}
-  @bottom-right{content:counter(page);font:700 8pt "B612 Mono";color:#16171a;vertical-align:bottom;padding-bottom:9mm}
-  background:#f6f6f4 @@strip@@ no-repeat 15mm 18mm / calc(100% - 30mm) 3.2mm}
+@page{size:210mm 297mm;margin:24mm 16mm 19mm 16mm;
+  @top-left{content:"DisplayCAL-CG";font:700 9pt "Archivo";color:#1d1f24;vertical-align:top;padding-top:10mm}
+  @top-right{content:"@@top_right@@";font:500 8pt "Archivo";color:#5b5f68;vertical-align:top;padding-top:10mm}
+  @bottom-left{content:"@@foot@@";font:400 8pt "Archivo";color:#5b5f68;vertical-align:bottom;padding-bottom:9mm}
+  @bottom-right{content:counter(page);font:700 9pt "Archivo";color:#1d1f24;vertical-align:bottom;padding-bottom:9mm}
+  background:#f7f6f3 linear-gradient(90deg,rgba(255,255,255,0),#2e3192 8%,#d4147a 28%,#e8312f 46%,#ffd400 62%,#00a651 80%,#00a3e0 92%,rgba(255,255,255,0)) no-repeat 16mm 17mm / calc(100% - 32mm) .7mm}
 *{box-sizing:border-box}
 html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-body{margin:0;font:400 10pt/1.5 "Archivo",sans-serif;color:#16171a;background:transparent}
-.mono{font-family:"B612 Mono",monospace;letter-spacing:.07em;text-transform:uppercase}
-a{color:#16171a;text-decoration:underline;text-underline-offset:.5mm}
+body{margin:0;font:400 10pt/1.5 "Archivo",sans-serif;color:#1d1f24;background:transparent}
+.mono{font-family:"Archivo";font-weight:600}
+a{color:#1d1f24;text-decoration:underline;text-underline-offset:.5mm}
 b{font-weight:700}
 .tok{font-size:1px;color:transparent;position:absolute}
 .chap{break-before:page}
 .chap:first-of-type{break-before:auto}
-.head{display:flex;gap:6mm;align-items:flex-end;border-bottom:.45mm solid #16171a;padding-bottom:3.6mm;margin:0 0 5mm}
-.num{font:800 50pt/.78 "Archivo";letter-spacing:-.04em}
+.head{display:flex;gap:6mm;align-items:flex-end;padding-bottom:2mm;margin:0 0 4mm}
+.num{display:none}
 h1{font:800 22pt/1.04 "Archivo Wide","Archivo";letter-spacing:-.025em;margin:0;break-after:avoid}
-h2{font:800 13pt/1.2 "Archivo";letter-spacing:-.01em;margin:6mm 0 2.2mm;padding-bottom:1.4mm;border-bottom:.2mm solid rgba(22,23,26,.35);break-after:avoid}
+h2{font:800 13pt/1.2 "Archivo";letter-spacing:-.01em;margin:6mm 0 2.2mm;break-after:avoid}
 p{margin:0 0 2.8mm;orphans:3;widows:3}
 ul{margin:0 0 3mm;padding:0;list-style:none}
 ul li{position:relative;padding-left:5mm;margin:0 0 1.4mm}
-ul li::before{content:"";position:absolute;left:.6mm;top:1.9mm;width:1.8mm;height:1.8mm;background:#16171a}
-pre{font:400 8.4pt/1.45 "B612 Mono",monospace;background:#fdfdfc;border:.2mm solid #16171a;padding:2.6mm 3.2mm;margin:0 0 3.4mm;white-space:pre-wrap;word-break:break-word}
+ul li::before{content:"";position:absolute;left:.6mm;top:2.1mm;width:1.6mm;height:1.6mm;border-radius:50%;background:#2c2f36}
+pre{font:400 8.4pt/1.45 "B612 Mono",monospace;background:#fbfbf9;border:.2mm solid rgba(29,31,36,.16);border-radius:3mm;padding:2.6mm 3.4mm;margin:0 0 3.4mm;white-space:pre-wrap;word-break:break-word}
 ol.steps{list-style:none;margin:0 0 4mm;padding:0;counter-reset:s}
 ol.steps li{counter-increment:s;position:relative;padding:0 0 2.6mm 10mm;break-inside:avoid}
-ol.steps li::before{content:counter(s);position:absolute;left:0;top:-.2mm;width:6.4mm;height:6.4mm;border:.3mm solid #16171a;border-radius:50%;font:700 7.6pt/6.1mm "B612 Mono";text-align:center;background:#fdfdfc}
-.call{border:.25mm solid #16171a;background:#fdfdfc;margin:3mm 0 4mm;break-inside:avoid}
-.call .tag{display:inline-block;font:700 7pt "B612 Mono";letter-spacing:.08em;text-transform:uppercase;padding:1.1mm 2.6mm;background:#16171a;color:#f6f6f4}
+ol.steps li::before{content:counter(s);position:absolute;left:0;top:-.2mm;width:6.4mm;height:6.4mm;border:.3mm solid #2c2f36;border-radius:50%;font:700 8pt/6.1mm "Archivo";text-align:center;background:#fbfbf9}
+.call{border:.2mm solid rgba(29,31,36,.16);border-radius:3.5mm;background:#fbfbf9;margin:3mm 0 4mm;break-inside:avoid;overflow:hidden}
+.call .tag{display:inline-block;font:700 8pt "Archivo";padding:1.2mm 3mm;margin:2mm 0 0 2.4mm;border-radius:5mm;background:#2c2f36;color:#f7f6f3}
 .call.warn .tag{background:#d4147a}
 .call.ok .tag{background:#00a651;color:#fff}
 .call .body{padding:2.2mm 3.2mm 1.2mm;font-size:9.4pt;line-height:1.45}
-.call.warn{border-style:dashed}
+.call.warn{border-color:rgba(179,18,31,.45)}
 table.opt{width:100%;border-collapse:collapse;margin:0 0 5mm;font-size:9pt;line-height:1.4}
-table.opt th{background:#16171a;color:#f6f6f4;font:700 7.2pt "B612 Mono";letter-spacing:.08em;text-transform:uppercase;text-align:left;padding:1.8mm 2.4mm}
+table.opt th{background:#2c2f36;color:#f7f6f3;font:700 8pt "Archivo";text-align:left;padding:2mm 2.6mm}
 table.opt td{padding:2mm 2.4mm;border-bottom:.2mm solid rgba(22,23,26,.35);vertical-align:top}
 table.opt td:first-child{font-weight:700;width:34%}
 table.opt tr{break-inside:avoid}
 figure{margin:3mm 0 5mm;break-inside:avoid}
-figure .fig{position:relative;background:#fff;box-shadow:0 0 0 .25mm #16171a;line-height:0}
+figure .fig{position:relative;background:#fff;border-radius:3mm;overflow:hidden;box-shadow:0 0 0 .2mm rgba(29,31,36,.18),0 1.2mm 3mm rgba(29,31,36,.14);line-height:0}
 figure img{width:100%;display:block}
-figure .reg{position:absolute;width:5mm;height:5mm;border:.25mm solid #16171a;border-radius:50%;background:#f6f6f4}
-figure .reg::before,figure .reg::after{content:"";position:absolute;background:#16171a}
+figure .reg{position:absolute;width:5mm;height:5mm;border:.25mm solid #1d1f24;border-radius:50%;background:#f6f6f4}
+figure .reg::before,figure .reg::after{content:"";position:absolute;background:#1d1f24}
 figure .reg::before{left:-1.4mm;right:-1.4mm;top:2.3mm;height:.25mm}figure .reg::after{top:-1.4mm;bottom:-1.4mm;left:2.3mm;width:.25mm}
 figcaption{display:flex;gap:3mm;margin-top:1.8mm;color:#4a4c52;font-size:8pt;line-height:1.4}
-figcaption .mono{color:#16171a;white-space:nowrap;font-size:7pt;padding-top:.3mm}
+figcaption .mono{color:#1d1f24;white-space:nowrap;font-size:8pt}
 .wcv{break-before:page}
-.wcv .slugline{color:#4a4c52;font-size:7.2pt}
-.wcv .slugline b{color:#16171a}
-h2.wcvh{display:flex;align-items:baseline;gap:4mm;font:800 20pt/1.05 "Archivo";letter-spacing:-.025em;border-bottom:.45mm solid #16171a;padding-bottom:2.4mm;margin:2mm 0 3mm}
-h2.wcvh .wn{font:800 34pt/.8 "Archivo";letter-spacing:-.04em}
+.wcv .slugline{color:#5b5f68;font-size:8.4pt}
+.wcv .slugline b{color:#1d1f24}
+h2.wcvh{display:flex;align-items:baseline;gap:4mm;font:800 20pt/1.05 "Archivo";letter-spacing:-.025em;padding-bottom:1mm;margin:2mm 0 3mm}
+h2.wcvh .wn{display:none}
 .purpose{font:500 10.6pt/1.4 "Archivo";margin:0 0 3mm}
 .three{display:grid;grid-template-columns:repeat(3,1fr);gap:5mm;margin-top:3mm}
-.blk{border-top:.6mm solid #16171a;padding-top:2mm}
-.blk h3{font:700 7.6pt "B612 Mono";letter-spacing:.08em;text-transform:uppercase;margin:0 0 2mm;display:flex;align-items:center;gap:2mm}
-.blk h3 i{width:5mm;height:5mm;border-radius:50%;border:.3mm solid #16171a;display:grid;place-items:center;font-style:normal;font-size:6.8pt}
+.blk{border-top:.25mm solid rgba(29,31,36,.25);padding-top:2.2mm}
+.blk h3{font:700 9pt "Archivo";margin:0 0 2mm;display:flex;align-items:center;gap:2mm}
+.blk h3 i{width:5mm;height:5mm;border-radius:50%;background:#2c2f36;color:#f7f6f3;border:0;display:grid;place-items:center;font-style:normal;font-size:6.8pt}
 .blk p{margin:0 0 1.6mm;font-size:8.8pt;line-height:1.4}
 .blk.why,.blk.chk{border-top-color:#8a8c92}
 .tocp{break-before:page}
 .toc{list-style:none;margin:6mm 0 0;padding:0}
 .toc li::before{content:none}
 .toc li{padding-left:0}
-.toc li{display:flex;align-items:baseline;gap:3mm;padding:1.6mm 0;border-bottom:.2mm solid rgba(22,23,26,.3)}
-.toc li.l1{font-weight:800;font-size:11pt;margin-top:2.4mm;border-bottom:.3mm solid #16171a}
+.toc li{display:flex;align-items:baseline;gap:3mm;padding:1.6mm 0;border-bottom:.2mm solid rgba(29,31,36,.14)}
+.toc li.l1{font-weight:800;font-size:11pt;margin-top:2.4mm}
 .toc li.l2{padding-left:11mm;font-size:9.2pt;color:#4a4c52}
 .toc .n{font:700 8pt "B612 Mono";width:8mm}
 .toc .t{flex:1}
@@ -117,7 +117,7 @@ h2.wcvh .wn{font:800 34pt/.8 "Archivo";letter-spacing:-.04em}
 .title h1{font-size:30pt;margin-top:4mm}
 .title .sub{font:500 13pt/1.35 "Archivo";margin:4mm 0 1mm;max-width:150mm}
 .title .note{color:#4a4c52;font-size:9pt}
-.limit{margin:4mm 0;padding:2.6mm 3.4mm;border:.25mm dashed #6a6c72;font-size:8.8pt;color:#4a4c52}
+.limit{margin:4mm 0;padding:2.6mm 3.6mm;border:.2mm solid rgba(29,31,36,.2);border-radius:3.5mm;font-size:8.8pt;color:#4a4c52}
 """
 
 
@@ -142,8 +142,8 @@ def _fig(block_args: tuple, ctx: dict) -> str:
     ctx["fig_in"] += 1
     return (
         f'<figure><div class="fig"><img src="file://{html.escape(path)}" alt="">'
-        '<span class="reg" style="right:-2.6mm;top:-2.6mm"></span>'
-        '<span class="reg" style="left:-2.6mm;bottom:-2.6mm"></span></div>'
+        ''
+        '</div>'
         f'<figcaption><span class="mono">{ctx["fig_word"]} {label}</span><span>{_markup(caption)}</span></figcaption></figure>'
     )
 
@@ -163,8 +163,8 @@ def _wcv(d: dict, ctx: dict) -> str:
     if os.path.exists(path):
         fig = (
             f'<figure><div class="fig"><img src="file://{html.escape(path)}" alt="">'
-            '<span class="reg" style="right:-2.6mm;top:-2.6mm"></span>'
-            '<span class="reg" style="left:-2.6mm;bottom:-2.6mm"></span></div>'
+            ''
+            '</div>'
             f'<figcaption><span class="mono">{ctx["fig_word"]} {ctx["chapter"]}.{d["n"]}</span>'
             f'<span>{_markup(d["fig"])}</span></figcaption></figure>'
         )
@@ -246,7 +246,7 @@ def render_html(content: dict, lang: str, toc_pages: dict | None = None, img_dir
         "fonts": FONTS,
         "strip": _strip_gradient(),
         "top_left": "DISPLAYCAL-CG",
-        "top_right": lang.upper(),
+        "top_right": {"ro": "Ghid de utilizare", "en": "User guide", "es": "Guía de uso"}.get(lang, ""),
         "foot": content["footer"],
     }
     css = CSS

@@ -165,7 +165,11 @@ class _Rail(QWidget):
             num = [fm.horizontalAdvance(str(i + 1)) + 2 * pad + mark * 1.6 + pad * 0.6
                    for i in range(STEPS)]
             widths = list(num)
-            widths[self._current] = max(num[self._current], width - (sum(num) - num[self._current]))
+            bold_font = QFont(self.font())
+            bold_font.setWeight(QFont.Weight(700))
+            need = (QFontMetrics(bold_font).horizontalAdvance(self._label(self._current))
+                    + 2 * pad + mark * 1.6 + pad * 3.2)
+            widths[self._current] = min(need, max(num[self._current], width - (sum(num) - num[self._current])))
         rects, x = [], 0.0
         for w in widths:
             rects.append(QRectF(x, top, w, h))
@@ -243,6 +247,9 @@ class _Rail(QWidget):
                 p.setPen(QPen(hair, 1))
                 p.drawLine(QPointF(x0, cy), QPointF(x1, cy))
             pill = QRectF(r.left() + 2, cy - d / 2 - 3, r.width() - 8, d + 6)
+            if active:  # only as wide as its content
+                need = d + 3 + 10 + QFontMetrics(bold).horizontalAdvance(lang.getstr(f"guide.step.{i + 1}")) + 22
+                pill.setWidth(min(pill.width(), need))
             if active:
                 grad = QLinearGradient(0, pill.top(), 0, pill.bottom())
                 for stop, hexc in ((0.0, "#3b3e47"), (0.5, "#2c2f36"), (1.0, "#24262c")) if not t.dark else ((0.0, "#4a4d57"), (1.0, "#3b3e47")):
@@ -395,7 +402,7 @@ class GuidePanel(QWidget):
         """Left (about 43 %): the choices. Right: the product image. Details stay folded."""
         left = QWidget()
         ll = QVBoxLayout(left)
-        ll.setContentsMargins(0, 10, 28, 0)
+        ll.setContentsMargins(0, 4, 28, 0)
         ll.setSpacing(0)
         title = _label(_tr("guide.s1.title"), size=2.2, wrap=True)
         text_scale.set_scaled_font(title, 2.2, weight=800)
@@ -480,7 +487,8 @@ class GuidePanel(QWidget):
         rl = QVBoxLayout(right)
         rl.setContentsMargins(0, 0, 0, 0)
         rl.setSpacing(6)
-        rl.addWidget(design_a.ProductImage(), 1)
+        self.product_image = design_a.ProductImage()
+        rl.addWidget(self.product_image, 1)
         self.illustration = design_a.FigureFrame()  # per-instrument drawing (placement help)
         self.illustration_caption = _label(_tr("guide.place.kind.other"), size=0.85, muted=True)
         self.illustration_caption.setAlignment(Qt.AlignHCenter)

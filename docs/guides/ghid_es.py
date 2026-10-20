@@ -6,7 +6,7 @@
 CONTENT = {
     "title": "Guía de uso de DisplayCAL-CG",
     "subtitle": "Calibración y perfilado de monitor, paso a paso — edición GDC",
-    "note": "Versión del documento 3.0 · basado en DisplayCAL-CG 3.10.0.dev82-cg.5",
+    "note": "Versión del documento 3.0 · basado en DisplayCAL-CG 3.10.0.dev82-cg.6",
     "toc_title": "Índice",
     "cover_subtitle": "Calibración y caracterización de monitor con ArgyllCMS",
     "cover_version_label": "Versión de la app",

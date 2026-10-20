@@ -6,7 +6,7 @@
 CONTENT = {
     "title": "DisplayCAL-CG User Guide",
     "subtitle": "Monitor calibration and profiling, step by step — GDC edition",
-    "note": "Document version 3.0 · based on DisplayCAL-CG 3.10.0.dev82-cg.5",
+    "note": "Document version 3.0 · based on DisplayCAL-CG 3.10.0.dev82-cg.6",
     "toc_title": "Contents",
     "cover_subtitle": "Display calibration and characterization powered by ArgyllCMS",
     "cover_version_label": "App version",

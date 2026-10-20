@@ -183,7 +183,7 @@ def global_qss(t: Tokens | None = None) -> str:
     graphite_down = "#22242a" if light else "#33363e"
     graphite_edge = "#1c1e23" if light else "rgba(236,238,242,0.30)"
     tick = config.get_data_path(
-        "theme/guide/check.svg" if t.dark else "theme/guide/check_light.svg"
+        "theme/guide/check_light.svg"
     )
     check_image = (
         f'image:url("{tick.replace(chr(92), "/")}");' if isinstance(tick, str) else ""
@@ -222,6 +222,20 @@ QComboBox{{background:{satin};color:{ink};border:1px solid {t.hair};
   border-radius:11px;padding:0.4em 0.85em;min-height:1.35em;}}
 QComboBox:hover{{border-color:{edge};background:{satin_hover};}}
 QComboBox:on{{border-color:{t.focus};}}
+QRadioButton::indicator{{width:0.95em;height:0.95em;border-radius:0.55em;
+  border:1.5px solid {t.ink2};background:{inset};}}
+QRadioButton::indicator:checked{{border:1.5px solid {graphite_edge};
+  background:qradialgradient(cx:.5,cy:.5,radius:.5,fx:.5,fy:.5,
+  stop:0 {t.patch_bg},stop:.5 {t.patch_bg},stop:.58 {inset},stop:1 {inset});}}
+QRadioButton::indicator:disabled,QCheckBox::indicator:disabled{{border-color:{t.off_ink};}}
+QCheckBox::indicator{{width:0.95em;height:0.95em;border-radius:5px;
+  border:1.5px solid {t.ink2};background:{inset};}}
+QCheckBox::indicator:checked{{border:1.5px solid {graphite_edge};background:{t.patch_bg};{check_image}}}
+QSlider::groove:horizontal{{height:4px;background:{t.hair};border-radius:2px;margin:0;}}
+QSlider::sub-page:horizontal{{background:{t.patch_bg};border-radius:2px;}}
+QSlider::handle:horizontal{{background:{satin};border:1px solid {edge};
+  width:1.1em;height:1.1em;margin:-0.5em 0;border-radius:0.6em;}}
+QSlider::handle:horizontal:hover{{border-color:{t.focus};}}
 QToolButton{{background:transparent;color:{ink};border:1px solid transparent;
   border-radius:8px;padding:0.25em 0.4em;}}
 QToolButton:hover{{background:{satin_hover};border-color:{t.hair};}}
@@ -241,8 +255,8 @@ QSpinBox::down-button,QDoubleSpinBox::down-button{{subcontrol-origin:border;
 QComboBox::drop-down{{border:none;width:1.8em;}}
 QComboBox QAbstractItemView{{background:{inset};color:{ink};border:1px solid {ink};
   selection-background-color:{t.patch_bg};selection-color:{t.patch_ink};outline:none;}}
-QLineEdit,QSpinBox,QDoubleSpinBox,QPlainTextEdit,QTextEdit{{background:{inset};color:{ink};
-  border:1px solid {ink};border-radius:0;padding:0.25em 0.45em;
+QLineEdit,QSpinBox,QDoubleSpinBox,QPlainTextEdit,QTextEdit{{background:{satin};color:{ink};
+  border:1px solid {t.hair};border-radius:8px;padding:0.25em 0.5em;
   selection-background-color:{t.patch_bg};selection-color:{t.patch_ink};}}
 QScrollBar:vertical{{background:transparent;width:0.8em;margin:0;}}
 QScrollBar::handle:vertical{{background:{handle};min-height:2.2em;border-radius:0;
@@ -543,15 +557,16 @@ class BlocksBar(QWidget):
         x = 0.0
         for i, n in enumerate(self._counts):
             span = (w - gap * (len(self._counts) - 1)) * n / total
-            rect = QRectF(x, 0, max(1.0, span), cell_h)
-            p.fillRect(rect, QColor(self.TINTS[i % len(self.TINTS)]))
-            p.setPen(QPen(ink, 1))
-            p.setBrush(Qt.NoBrush)
-            p.drawRect(rect.adjusted(0, 0, -1, -1))
+            rect = QRectF(x, 3, max(1.0, span), 8)
+            shade = QColor(ink)
+            shade.setAlpha(70 if i % 2 else 120)
+            p.setPen(Qt.NoPen)
+            p.setBrush(shade)
+            p.drawRoundedRect(rect, 3, 3)
             label = str(i + 1)
             if len(self._counts) <= 40 and fm.horizontalAdvance(label) + 4 < rect.width():
                 p.setPen(QColor(t.ink2))
-                p.drawText(QRectF(rect.left(), cell_h + 2, rect.width(), fm.height()),
+                p.drawText(QRectF(rect.left(), 13, rect.width(), fm.height()),
                            int(Qt.AlignHCenter | Qt.AlignTop), label)
             x += span + gap
         p.end()
@@ -642,32 +657,30 @@ def paint_sheet_shadow(p: QPainter, rect: QRectF, dark: bool) -> None:
 
 
 class ProductImage(QWidget):
-    """The rendered monitor (a clean image, no interface in it), light or dark to match.
+    """The product image: the monitor with its spectral ribbon, a transparent asset.
 
-    It rests on the page itself: the picture's ground is the page colour, so there is
-    no frame and no feathering. ``theme/guide/hero_monitor_{light,dark}.jpg``.
+    ``theme/guide/monitor_spectral.png`` (separate artwork, no interface in it), shown whole
+    with its alpha, smooth-scaled, aspect kept. It is purely decorative and is never shown
+    while a measurement runs (the guide hides it).
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         from qtpy.QtGui import QPixmap
 
-        self._pix = {}
-        for kind in ("light", "dark"):
-            found = config.get_data_path(f"theme/guide/hero_monitor_{kind}.jpg")
-            self._pix[kind] = QPixmap(found) if isinstance(found, str) else QPixmap()
+        found = config.get_data_path("theme/guide/monitor_spectral.png")
+        self._pix = QPixmap(found) if isinstance(found, str) else QPixmap()
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
         self.setMinimumHeight(120)
 
     def paintEvent(self, _event: object) -> None:  # noqa: N802
-        pix = self._pix["dark" if tokens().dark else "light"]
+        if self._pix.isNull():
+            return
         p = QPainter(self)
         p.setRenderHint(QPainter.SmoothPixmapTransform)
-        p.fillRect(self.rect(), QColor(tokens().sheet))
-        if not pix.isNull():
-            scale = min(self.width() / pix.width(), self.height() / pix.height())
-            w, h = pix.width() * scale, pix.height() * scale
-            p.drawPixmap(QRectF((self.width() - w) / 2, self.height() - h, w, h), pix, QRectF(pix.rect()))
+        scale = min(self.width() / self._pix.width(), self.height() / self._pix.height())
+        w, h = self._pix.width() * scale, self._pix.height() * scale
+        p.drawPixmap(QRectF(self.width() - w, 0, w, h), self._pix, QRectF(self._pix.rect()))
         p.end()
 
 

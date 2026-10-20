@@ -433,19 +433,19 @@ class _Canvas(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         # A figure is a print on its own paper: the same in light and dark.
-        p.fillRect(self.rect(), QColor(design_a.FigureFrame.PAPER))
+        card = QColor(design_a.tokens().inset)
+        edge = QColor(design_a.tokens().ink)
+        edge.setAlpha(40)
+        p.setPen(QPen(edge, 1))
+        p.setBrush(card)
+        p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 14, 14)
         scale = min(self.width() / W, self.height() / H)
         p.save()
         p.translate((self.width() - W * scale) / 2, (self.height() - H * scale) / 2)
         p.scale(scale, scale)
         draw_scene(p, self.step, self.t, self.variant, self.kind, False)
         p.restore()
-        ink = QColor(design_a.KEY)
-        p.setPen(QPen(ink, 1))
-        p.setBrush(Qt.NoBrush)
-        p.drawRect(self.rect().adjusted(0, 0, -1, -1))
-        design_a.draw_registration(p, self.width() - 13, 13, 5, ink)
-        design_a.draw_registration(p, 13, self.height() - 13, 5, ink)
+        p.setClipping(False)
 
 
 class PlacementPlayer(QWidget):

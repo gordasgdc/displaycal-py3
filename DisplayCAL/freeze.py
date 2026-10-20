@@ -119,6 +119,7 @@ config = {
             "theme/brands/*.svg",
             "theme/guide/*.svg",
             "theme/guide/*.jpg",
+            "theme/guide/*.png",
             "theme/fonts/*.ttf",
             "theme/fonts/NOTICE.txt",
             "theme/jet_anim/*.png",
