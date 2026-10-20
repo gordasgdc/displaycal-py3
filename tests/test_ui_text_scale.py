@@ -319,3 +319,12 @@ def test_sleep_option_text_is_never_squeezed_or_centred(window, monkeypatch, wid
     assert label.height() >= label.heightForWidth(label.width())
     gap = label.mapTo(g, QPoint(0, 0)).x() - g.awake_cb.mapTo(g, QPoint(g.awake_cb.width(), 0)).x()
     assert gap < 40, gap
+
+
+def test_text_size_button_on_the_dark_bar_states_its_own_colours(qapp):
+    """White text on a transparent fill with an outline: readable whatever the platform style."""
+    from DisplayCAL.ui.text_size_menu import TextSizeButton
+
+    btn = TextSizeButton(on_dark_bar=True)
+    css = btn.styleSheet()
+    assert "color: #ffffff" in css and "background: transparent" in css and "border:" in css

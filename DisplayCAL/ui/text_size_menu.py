@@ -34,9 +34,12 @@ def populate(menu: QMenu) -> None:
     menu.actions_by_level = actions  # type: ignore[attr-defined]
 
     def sync(_factor: float = 0.0) -> None:
-        for key, act in actions.items():
-            act.setChecked(key == text_scale.current_level())
-        reset.setEnabled(text_scale.current_level() != text_scale.DEFAULT_LEVEL)
+        try:
+            for key, act in actions.items():
+                act.setChecked(key == text_scale.current_level())
+            reset.setEnabled(text_scale.current_level() != text_scale.DEFAULT_LEVEL)
+        except RuntimeError:  # the menu was destroyed with its window: stop listening
+            text_scale.bus.changed.disconnect(sync)
 
     text_scale.bus.changed.connect(sync)
     sync()
@@ -64,4 +67,12 @@ class TextSizeButton(QToolButton):
         self.setMenu(make_menu(self))
         text_scale.set_scaled_font(self, 1.1, bold=True)
         if on_dark_bar:
-            self.setStyleSheet("QToolButton { color: white; padding: 2px 8px; }")
+            # The bar is dark in every appearance: spell out text, fill and outline
+            # so the platform's light-mode button never turns it into pale-on-pale.
+            self.setStyleSheet(
+                "QToolButton { color: #ffffff; background: transparent;"
+                " border: 1px solid rgba(255,255,255,0.45); border-radius: 5px;"
+                " padding: 2px 8px; }"
+                "QToolButton:hover, QToolButton:pressed {"
+                " background: rgba(255,255,255,0.18); }"
+            )
