@@ -178,7 +178,7 @@ def global_qss(t: Tokens | None = None) -> str:
     )
     return f"""{arrow}
 QToolTip{{background:{inset};color:{ink};border:1px solid {ink};padding:0.3em 0.5em;}}
-QPushButton{{background:{inset};color:{ink};border:1px solid {ink};border-radius:0;
+QPushButton{{background:{inset};color:{ink};border:1px solid {t.hair};border-radius:5px;
   padding:0.42em 1.1em;min-height:1.2em;}}
 QPushButton:hover{{background:{t.patch_bg};color:{t.patch_ink};}}
 QPushButton:pressed{{background:{t.patch_bg};color:{t.patch_ink};}}
@@ -188,7 +188,7 @@ QPushButton:flat{{background:transparent;border:none;color:{ink};
   text-decoration:underline;padding:0.3em 0.4em;}}
 QPushButton:flat:hover{{background:transparent;color:{t.focus};}}
 QPushButton[primary="true"]{{background:{t.patch_bg};color:{t.patch_ink};
-  border:1px solid {t.patch_bg};padding:0.5em 1.6em;font-weight:700;}}
+  border:1px solid {t.patch_bg};border-radius:5px;padding:0.55em 1.8em;font-weight:700;}}
 QPushButton[primary="true"]:hover{{background:{t.ink2};border-color:{t.ink2};}}
 QPushButton[primary="true"]:disabled{{background:{t.off_bg};color:{t.off_ink};
   border:1px solid {t.hair};}}
@@ -211,10 +211,10 @@ QToolButton{{background:transparent;color:{ink};border:1px solid transparent;
   border-radius:0;padding:0.25em 0.4em;}}
 QToolButton:hover{{background:{t.patch_bg};color:{t.patch_ink};}}
 QToolButton:focus{{border:2px solid {t.focus};}}
-QToolButton#text_size_button{{border:1px solid {ink};padding:0.1em 0.5em;}}
+QToolButton#text_size_button{{border:1px solid {t.hair};border-radius:5px;padding:0.2em 0.6em;}}
 QToolButton::menu-indicator{{image:none;width:0;}}
-QComboBox{{background:{inset};color:{ink};border:1px solid {t.hair};border-bottom:2px solid {ink};
-  border-radius:0;padding:0.3em 0.6em;min-height:1.3em;}}
+QComboBox{{background:{inset};color:{ink};border:1px solid {t.hair};
+  border-radius:5px;padding:0.35em 0.7em;min-height:1.3em;}}
 QComboBox:focus,QLineEdit:focus,QSpinBox:focus,QDoubleSpinBox:focus{{
   border:2px solid {t.focus};}}
 QComboBox:disabled,QLineEdit:disabled,QSpinBox:disabled,QDoubleSpinBox:disabled{{
@@ -554,15 +554,6 @@ class Booth(QWidget):
         p.fillRect(self.rect(), g)
         m = self.MARGIN
         paint_sheet_shadow(p, QRectF(self.rect().adjusted(m, m, -m, -m)), t.dark)
-        # crop marks around the sheet
-        ink = QColor(t.ink)
-        ink.setAlpha(190)
-        p.setPen(QPen(ink, 1))
-        L = 12
-        for x, sx in ((m - 5, -1), (w - m + 5, 1)):
-            for y, sy in ((m - 5, -1), (h - m + 5, 1)):
-                p.drawLine(x, y + sy * 2, x, y + sy * (2 + L))
-                p.drawLine(x + sx * 2, y, x + sx * (2 + L), y)
         p.end()
 
 
@@ -663,7 +654,12 @@ class HeroPlate(QWidget):
     def paintEvent(self, _event: object) -> None:  # noqa: N802
         p = QPainter(self)
         p.setRenderHint(QPainter.SmoothPixmapTransform)
+        from qtpy.QtGui import QPainterPath
+
         r = self.rect().adjusted(0, 0, -1, -1)
+        clip = QPainterPath()
+        clip.addRoundedRect(QRectF(self.rect()), 8, 8)
+        p.setClipPath(clip)
         if not self._pix.isNull():
             # cover: crop the picture to the plate's shape around the monitor
             pw, ph = self._pix.width(), self._pix.height()
@@ -672,10 +668,4 @@ class HeroPlate(QWidget):
             sh = sw / want
             sx = max(0.0, min(pw - sw, pw * self._focus - sw / 2))
             p.drawPixmap(QRectF(self.rect()), self._pix, QRectF(sx, (ph - sh) / 2, sw, sh))
-        ink = QColor(KEY)
-        p.setPen(QPen(ink, 1))
-        p.setBrush(Qt.NoBrush)
-        p.drawRect(r)
-        draw_registration(p, r.right() - 14, r.top() + 14, 5, ink)
-        draw_registration(p, r.left() + 14, r.bottom() - 14, 5, ink)
         p.end()

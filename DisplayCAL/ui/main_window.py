@@ -3456,7 +3456,7 @@ class MainWindow(BaseWindow):
             lang.getstr("header"),
             self._HEADER_LOGO_INSET,
         )
-        banner.set_base_height(HEADER_BANNER_SIZE[1] + 20)
+        banner.set_base_height(HEADER_BANNER_SIZE[1])
         # Matches the actual gradient sampled from ``theme/header@2x.png``: it
         # reaches its final blue by the vertical midpoint and stays flat below
         # that (a plain 2-stop linear gradient over-darkens the top half).

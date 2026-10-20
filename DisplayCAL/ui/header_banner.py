@@ -144,69 +144,34 @@ class HeaderBanner(QWidget):
         rect = self.rect()
         painter.fillRect(rect, QColor(t.sheet))
         w, h = rect.width(), rect.height()
-        pad = 14
-        # Slug line.
-        slug_font = design_a.mono_font(self._chrome_size(0.72))
-        painter.setFont(slug_font)
-        slug_h = painter.fontMetrics().height() + 8
-        painter.setPen(QColor(t.ink2))
-        painter.drawText(
-            QRect(pad, 0, w - 2 * pad, slug_h), int(Qt.AlignLeft | Qt.AlignVCenter),
-            self._slug_text().upper(),
-        )
-        painter.drawText(
-            QRect(pad, 0, w - 2 * pad, slug_h), int(Qt.AlignRight | Qt.AlignVCenter),
-            "GPLV3",
-        )
-        painter.fillRect(QRect(pad, slug_h - 1, w - 2 * pad, 1), QColor(t.rule))
-        # Control strip along the bottom edge.
-        strip_h = 10
-        strip_top = h - strip_h - 1
+        pad = 28
+        # The colour strip: a thin accent along the top edge, not a ruler.
         n = len(design_a.STRIP)
         for i, hexcolor in enumerate(design_a.STRIP):
-            x0 = pad + round(i * (w - 2 * pad) / n)
-            x1 = pad + round((i + 1) * (w - 2 * pad) / n)
-            painter.fillRect(x0, strip_top, x1 - x0, strip_h, QColor(hexcolor))
-        painter.setPen(QPen(QColor(t.rule), 1))
-        painter.setBrush(Qt.NoBrush)
-        painter.drawRect(pad, strip_top, w - 2 * pad - 1, strip_h - 1)
-        # Symbol, wordmark, tagline in the band between the two.
-        band_top, band_bottom = slug_h + 4, strip_top - 4
-        band_h = max(20, band_bottom - band_top)
-        side = min(band_h, 48)
+            x0, x1 = round(i * w / n), round((i + 1) * w / n)
+            painter.fillRect(x0, 0, x1 - x0, 5, QColor(hexcolor))
+        side = min(h - 20, 44)
+        icon_rect = QRect(pad, (h - side) // 2 + 2, side, side)
         if not self._icon.isNull():
-            icon_rect = QRect(pad, band_top + (band_h - side) // 2, side, side)
             if t.dark:
-                # the symbol is black: on the dark sheet it sits on a paper chip
-                painter.fillRect(icon_rect, QColor(design_a.LIGHT.sheet))
-                icon_rect = icon_rect.adjusted(3, 3, -3, -3)
+                painter.setBrush(QColor(design_a.LIGHT.sheet))
+                painter.setPen(Qt.NoPen)
+                painter.drawRoundedRect(icon_rect, 9, 9)
+                icon_rect = icon_rect.adjusted(4, 4, -4, -4)
             painter.drawPixmap(icon_rect, self._icon)
-        text_x = pad + side + 10
-        title = design_a.sans_font(self._chrome_size(1.75), 800)
+        text_x = pad + side + 12
+        title = design_a.sans_font(self._chrome_size(1.55), 800)
         painter.setFont(title)
         fm = painter.fontMetrics()
         word = "DisplayCAL-CG"
-        word_w = fm.horizontalAdvance(word)
-        base = band_top + (band_h - 4 - fm.height()) // 2 + fm.ascent()
+        base = (h - fm.height()) // 2 + fm.ascent() + 3
         painter.setPen(QColor(t.ink))
         painter.drawText(text_x, base, word)
-        bar_y = base + fm.descent() + 1
-        for i, hexcolor in enumerate((design_a.CYAN, design_a.MAGENTA, design_a.YELLOW, t.ink)):
-            x0 = text_x + round(i * word_w / 4)
-            x1 = text_x + round((i + 1) * word_w / 4)
-            painter.fillRect(x0, bar_y, x1 - x0, 3, QColor(hexcolor))
-        # Tagline on the right of the wordmark, never wider than what is left.
-        tag_x = text_x + word_w + 22
+        tag_x = text_x + fm.horizontalAdvance(word) + 18
         room = w - pad - tag_x
-        if room > 120:
-            tag = design_a.sans_font(self._chrome_size(0.95), 400)
-            painter.setFont(tag)
+        if room > 160:
+            painter.setFont(design_a.sans_font(self._chrome_size(0.92), 400))
             painter.setPen(QColor(t.ink2))
-            elided = painter.fontMetrics().elidedText(
-                self._tagline, Qt.ElideRight, room
-            )
-            painter.drawText(
-                QRect(tag_x, band_top, room, band_h - 4),
-                int(Qt.AlignLeft | Qt.AlignVCenter), elided,
-            )
+            elided = painter.fontMetrics().elidedText(self._tagline, Qt.ElideRight, room)
+            painter.drawText(QRect(tag_x, 3, room, h), int(Qt.AlignLeft | Qt.AlignVCenter), elided)
         painter.end()
