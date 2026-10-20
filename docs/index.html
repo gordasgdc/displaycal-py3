@@ -1,4 +1,4 @@
-<!doctype html><html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DisplayCAL-CG — calibrare și profilare de monitor, ghidată</title><meta name="description" content="Calibrare și profilare de monitor în cinci pași, pe baza ArgyllCMS: gratuit, open source (GPLv3), fără activare, pentru macOS și Windows, în română, engleză și spaniolă."><link rel="canonical" href="https://gordas.dev/DisplayCAL-CG/"><link rel="alternate" hreflang="ro" href="https://gordas.dev/DisplayCAL-CG/"><link rel="alternate" hreflang="en" href="https://gordas.dev/DisplayCAL-CG/en/"><link rel="alternate" hreflang="es" href="https://gordas.dev/DisplayCAL-CG/es/"><link rel="alternate" hreflang="x-default" href="https://gordas.dev/DisplayCAL-CG/"><meta name="theme-color" content="#0d0e11" media="(prefers-color-scheme: dark)"><meta name="theme-color" content="#f6f3ee" media="(prefers-color-scheme: light)"><link rel="icon" type="image/png" href="assets/site/favicon-32.png"><link rel="apple-touch-icon" href="assets/site/icon-b-180.png"><meta property="og:type" content="website"><meta property="og:title" content="DisplayCAL-CG — calibrare și profilare de monitor, ghidată"><meta property="og:description" content="Calibrare și profilare de monitor în cinci pași, pe baza ArgyllCMS: gratuit, open source (GPLv3), fără activare, pentru macOS și Windows, în română, engleză și spaniolă."><meta property="og:url" content="https://gordas.dev/DisplayCAL-CG/"><meta property="og:image" content="https://gordas.dev/DisplayCAL-CG/assets/site/real-mac-step1-ro.webp"><style>
+<!doctype html><html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DisplayCAL-CG — calibrare și profilare de monitor, ghidată</title><meta name="description" content="Calibrare și profilare de monitor în cinci pași, pe baza ArgyllCMS: gratuit, open source (GPLv3), fără activare, pentru macOS și Windows, în română, engleză și spaniolă."><link rel="canonical" href="https://gordas.dev/DisplayCAL-CG/"><link rel="alternate" hreflang="ro" href="https://gordas.dev/DisplayCAL-CG/"><link rel="alternate" hreflang="en" href="https://gordas.dev/DisplayCAL-CG/en/"><link rel="alternate" hreflang="es" href="https://gordas.dev/DisplayCAL-CG/es/"><link rel="alternate" hreflang="x-default" href="https://gordas.dev/DisplayCAL-CG/"><meta name="theme-color" content="#b3b5b8"><link rel="icon" type="image/png" href="assets/site/favicon-32.png"><link rel="apple-touch-icon" href="assets/site/icon-b-180.png"><meta property="og:type" content="website"><meta property="og:title" content="DisplayCAL-CG — calibrare și profilare de monitor, ghidată"><meta property="og:description" content="Calibrare și profilare de monitor în cinci pași, pe baza ArgyllCMS: gratuit, open source (GPLv3), fără activare, pentru macOS și Windows, în română, engleză și spaniolă."><meta property="og:url" content="https://gordas.dev/DisplayCAL-CG/"><meta property="og:image" content="https://gordas.dev/DisplayCAL-CG/assets/site/real-mac-step1-ro.webp"><style>@font-face{font-family:Archivo;src:url(assets/site/fonts/Archivo-VF.ttf);font-weight:100 900;font-stretch:62% 125%;font-display:swap}@font-face{font-family:'B612 Mono';src:url(assets/site/fonts/B612Mono-Regular.ttf);font-weight:400;font-display:swap}@font-face{font-family:'B612 Mono';src:url(assets/site/fonts/B612Mono-Bold.ttf);font-weight:700;font-display:swap}</style><style>
 :root{color-scheme:dark light;--bg:#0d0e11;--bg2:#14161b;--surface:#191c22;--surface2:#20242b;--line:rgba(255,255,255,.10);--text:#eef0f4;--mut:#aab0bc;--ac:#ffb347;--ac2:#ff8a3d;--acink:#1b1205;--ok:#4cc38a;--warn:#ffb347;--markink:#06180f;--shadow:0 30px 70px -24px rgba(0,0,0,.75);--glow:radial-gradient(60% 50% at 78% 0%,rgba(255,150,40,.16),transparent 70%),radial-gradient(50% 40% at 0% 30%,rgba(90,140,255,.10),transparent 70%)}
 @media (prefers-color-scheme:light){:root{--bg:#f6f3ee;--bg2:#efebe4;--surface:#ffffff;--surface2:#f4f0e9;--line:rgba(20,20,30,.12);--text:#17181c;--mut:#555a66;--ac:#8c4f00;--ac2:#a8420a;--acink:#ffffff;--ok:#18794e;--warn:#8c4f00;--markink:#ffffff;--shadow:0 26px 60px -26px rgba(40,30,10,.35);--glow:radial-gradient(60% 50% at 78% 0%,rgba(255,170,60,.22),transparent 70%),radial-gradient(50% 40% at 0% 30%,rgba(90,140,255,.10),transparent 70%)}}
 *{box-sizing:border-box}html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
@@ -120,13 +120,66 @@ table.opt{border-collapse:collapse;width:100%;margin:14px 0;font-size:.95rem}tab
 .callout.warn{box-shadow:0 0 0 1px color-mix(in srgb,var(--warn) 55%,transparent)}.callout.ok{box-shadow:0 0 0 1px color-mix(in srgb,var(--ok) 55%,transparent)}
 .callout strong{display:block;margin-bottom:4px}.callout p{margin:0}
 pre{overflow:auto;background:var(--surface);padding:12px 14px;border-radius:10px;box-shadow:0 0 0 1px var(--line)}
+
+/* ===== Direcția A «Foaia de probă» ===== */
+:root,:root{color-scheme:light;--bg:#b3b5b8;--bg2:#c9cacc;--surface:#fff;--surface2:#efefed;--line:rgba(22,23,26,.30);--text:#16171a;--mut:#4a4c52;--ac:#16171a;--ac2:#16171a;--acink:#fff;--ok:#00794a;--warn:#8a5a00;--markink:#fff;--shadow:none;--glow:none;--sheet:#f6f6f4;--mono:"B612 Mono",ui-monospace,Menlo,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#b3b5b8;--bg2:#c9cacc;--surface:#fff;--surface2:#efefed;--line:rgba(22,23,26,.30);--text:#16171a;--mut:#4a4c52;--ac:#16171a;--ac2:#16171a;--acink:#fff;--ok:#00794a;--warn:#8a5a00;--markink:#fff;--shadow:none;--glow:none}}
+html{background:#b3b5b8}
+body{background:radial-gradient(1200px 700px at 50% 20%,#c9cacc,#b3b5b8 70%) no-repeat fixed;font-family:"Archivo",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--text)}
+header.top,main,footer{width:min(1368px,calc(100% - 28px));margin-inline:auto;background:var(--sheet);position:relative}
+header.top{margin-top:18px;backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--sheet);box-shadow:0 1px 0 #fff inset}
+main{box-shadow:0 28px 60px -22px rgba(16,18,22,.45)}
+footer{margin-top:0;margin-bottom:34px;border-top:1px solid var(--text);padding-inline:clamp(16px,3vw,40px)}
+.wrap{width:auto;padding-inline:clamp(16px,3vw,40px)}
+header.top:after{height:16px;background:linear-gradient(90deg,#00a3e0 0 12.5%,#d4147a 12.5% 25%,#ffd400 25% 37.5%,#16171a 37.5% 50%,#e8312f 50% 62.5%,#00a651 62.5% 75%,#2e3192 75% 87.5%,#8c8c8a 87.5%);border-block:1px solid var(--text)}
+.bar{padding-block:12px}
+.brand{font-family:"Archivo";font-weight:800;font-stretch:108%;letter-spacing:-.02em}.brand b{color:var(--text)}.brand img{border-radius:6px}
+nav.main a{font:700 12px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--text);border-radius:0;padding:10px 12px}
+nav.main a:hover{background:var(--text);color:#fff}
+.langs a{font:700 11px var(--mono);border-radius:0!important;border-color:var(--text);color:var(--text)}.langs a[aria-current=page]{background:var(--text);color:#fff;border-color:var(--text)}
+.btn{border-radius:0;font:700 13px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;background:var(--text);color:#fff;box-shadow:0 3px 6px -3px rgba(0,0,0,.55);padding:16px 22px}
+.btn:hover{filter:none;transform:none;background:#2a2c31}
+.btn.ghost{background:transparent;color:var(--text);box-shadow:inset 0 0 0 1px var(--text)}
+.btn.ghost:hover{background:var(--text);color:#fff}
+.kicker{display:none}
+h1{font-family:"Archivo";font-stretch:108%;font-weight:800;letter-spacing:-.035em;font-size:clamp(2.2rem,5.4vw,4.6rem);line-height:.96}
+h1 .ac{background:none;-webkit-text-fill-color:currentColor;color:var(--text);display:inline-block;padding-bottom:.06em;border-bottom:.075em solid;border-image:linear-gradient(90deg,#00a3e0 0 25%,#d4147a 25% 50%,#ffd400 50% 75%,#16171a 75%) 1}
+h2{font-family:"Archivo";font-stretch:106%;font-weight:800;letter-spacing:-.03em}
+.lead{color:var(--text)}
+.facts li+li:before{color:var(--text)}
+.stage{border-radius:0;padding:0;background:#a8aaad;box-shadow:0 0 0 1px var(--text)}
+.stage:before{border-radius:0;background:linear-gradient(180deg,rgba(255,255,255,.14),transparent 30%)}
+.stage img{border-radius:0}
+.stage .reflect{display:none}.stage img.badge-icon{display:none}
+.stage figcaption,.cap{color:var(--mut)}
+.ill-tag,.real-tag,.demo-tag{display:inline-block;font:700 11px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:#fff;border-radius:0;padding:4px 7px;margin-right:8px;vertical-align:1px}
+.ill-tag{background:#16171a}.real-tag{background:#00794a}.demo-tag{background:#b4401a}
+section.alt{background:transparent;border-block:1px solid var(--text)}
+.note{border-left:0;border:1px solid var(--text);padding:12px 16px;background:#fff}
+.callout{border-radius:0;box-shadow:0 0 0 1px var(--text);background:#fff}.callout.warn,.callout.ok{box-shadow:0 0 0 1px var(--text)}
+.rail:before,.pipe:before{background:var(--text);opacity:1;width:1px}.pipe:before{height:1px;width:auto}
+.rail .n,.place li:before,.pipe .dot{border-radius:50%;background:#fff;color:var(--text);box-shadow:0 0 0 1px var(--text);font-family:var(--mono)}
+.rail button[aria-current=true] .n,.place li[aria-current=true]:before{background:var(--text);color:#fff;box-shadow:none}
+.progress{background:var(--line);border-radius:0}.progress i{background:var(--text)}
+.place svg{border-radius:0;background:#fff;box-shadow:0 0 0 1px var(--text)}
+.toc h2{color:var(--text);font-family:var(--mono)}.toc a{border-left-color:var(--text);color:var(--text)}
+.toc a:hover{background:var(--text);color:#fff;border-color:var(--text)}
+table.opt th{color:var(--text);font-family:var(--mono);font-size:.78rem;text-transform:uppercase;letter-spacing:.06em}
+table.opt th,table.opt td{border-color:var(--text)}
+article section{border-color:var(--text)}
+pre{border-radius:0;box-shadow:0 0 0 1px var(--text);background:#fff}
+a{color:#16171a;text-decoration-thickness:1px;text-underline-offset:3px}
+:focus-visible{outline:3px solid #2e3192}
+.lim .y .mk{background:var(--ok)}.lim .n .mk{background:var(--warn)}
+.star .btn{box-shadow:0 0 0 1px var(--text)}
+details.more summary{color:var(--text)}
 </style><script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"DisplayCAL-CG","applicationCategory":"MultimediaApplication","operatingSystem":"macOS, Windows","softwareVersion":"3.10.0.dev82","license":"https://www.gnu.org/licenses/gpl-3.0.html","offers":{"@type":"Offer","price":"0","priceCurrency":"EUR"},"url":"https://gordas.dev/DisplayCAL-CG/","codeRepository":"https://github.com/gordasgdc/displaycal-py3","author":{"@type":"Person","name":"Cristi Gordaș"}}</script></head><body><a class="skip" href="#main">Sari la conținut</a><header class="top"><div class="wrap bar"><a class="brand" href=""><img src="assets/site/icon-b-180.png" width="32" height="32" alt=""><span>Display<b>CAL-CG</b></span></a><nav class="main" aria-label="Ghid tehnic"><a class="hide-s" href="#flow-h">Fluxul</a><a class="hide-s" href="#prep-h">Pregătirea</a><a class="hide-s" href="#plan-h">Planul</a><a class="hide-s" href="#limits-h">Limite</a><a href="ghid/">Ghid tehnic</a><a href="#get">Descarcă</a><div class="langs" role="group" aria-label="Language"><a href="" hreflang="ro" lang="ro" aria-current="page">RO</a><a href="en/" hreflang="en" lang="en">EN</a><a href="es/" hreflang="es" lang="es">ES</a></div></nav></div></header>
 <main id="main">
 <section class="hero" id="top"><div class="wrap grid">
 <div><p class="kicker">Calibrare și profilare de monitor</p><h1>Culori în care poți avea încredere, <span class="ac">pas cu pas.</span></h1><p class="lead">DisplayCAL-CG te conduce de la sondă la un profil ICC verificat: ce pregătești, cum așezi instrumentul, cât durează, ce se întâmplă dacă ceva se oprește. Peste motorul ArgyllCMS, gratuit și deschis.</p>
 <div class="cta" id="get"><a class="btn" href="https://github.com/gordasgdc/displaycal-py3/releases/latest/download/DisplayCAL-CG.dmg">Descarcă pentru macOS</a><a class="btn" href="https://github.com/gordasgdc/displaycal-py3/releases/latest/download/DisplayCAL-CG-Setup.exe">Descarcă pentru Windows</a><a class="btn ghost" href="ghid/">Ghid tehnic detaliat</a></div>
 <ul class="facts"><li>100% gratuit</li><li>GPLv3, fără trial sau activare</li><li>ArgyllCMS inclus și verificat</li><li>RO · EN · ES</li><li>macOS · Windows</li></ul><p class="ver">Versiunea 3.10.0.dev82 (cg.4) · Apple Silicon pentru macOS, x64 pentru Windows</p></div>
-<figure class="stage" style="margin:0"><img class="badge-icon" src="assets/site/icon-b-512.webp" width="84" height="84" alt="DisplayCAL-CG"><img src="assets/site/real-mac-step1-ro.webp" width="1300" height="1466" alt="Fereastra DisplayCAL-CG, pasul «Monitor și instrument»" fetchpriority="high"><span class="reflect"></span><figcaption><span class="real-tag">REAL</span>Captură reală din aplicație (macOS, temă întunecată).</figcaption></figure>
+<figure class="stage" style="margin:0"><img class="badge-icon" src="assets/site/icon-b-512.webp" width="84" height="84" alt="DisplayCAL-CG"><img src="assets/site/hero-render.webp" width="1500" height="844" alt="Monitor cu sonda generică așezată pe pătratul alb de măsurare" fetchpriority="high"><span class="reflect"></span><figcaption><span class="ill-tag">ILUSTRAȚIE</span>Randare originală: sonda pe pătratul alb de măsurare, în timp ce aplicația rulează planul. Nu este o fotografie de produs și nu este un model anume de instrument; imaginea de pe ecran este captura reală a aplicației.</figcaption></figure>
 </div></section>
 
 <section class="band"><div class="wrap three prose"><div><h2>Ce face și pentru cine este</h2><p>Aplicația măsoară cum își afișează ecranul culorile și scrie un profil ICC pe care sistemul și programele îl folosesc pentru culori corecte. Este pentru fotografi, coloriști, designeri și oricine are nevoie ca monitorul să arate la fel de la o zi la alta și de la un program la altul.</p></div>

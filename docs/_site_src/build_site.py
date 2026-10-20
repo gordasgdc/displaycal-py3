@@ -68,6 +68,12 @@ def prep_images(out_root: str) -> dict[str, tuple[int, int]]:
                 hit = next((f for f in files if f.endswith(".png") and frag in f), None)
                 if hit:
                     save(f"{base}/{hit}", f"{key}-{lang}-{theme}", 1100 if key.startswith(("flow", "adv")) else 760)
+    save(f"{EXT}/design/render/hero_A_final.png", "hero-render", 1500, 82)
+    fdir = os.path.join(out, "fonts"); os.makedirs(fdir, exist_ok=True)
+    import shutil
+    for fn in ("Archivo-VF.ttf", "B612Mono-Regular.ttf", "B612Mono-Bold.ttf"):
+        shutil.copy(f"{EXT}/design/src/fonts/{fn}", os.path.join(fdir, fn))
+    shutil.copy(f"{EXT}/design/FONTS_NOTICE.txt", os.path.join(fdir, "NOTICE.txt"))
     real = f"{EXT}/site/real"
     if os.path.isdir(real):
         for f in sorted(os.listdir(real)):
@@ -232,6 +238,59 @@ table.opt{border-collapse:collapse;width:100%;margin:14px 0;font-size:.95rem}tab
 .callout.warn{box-shadow:0 0 0 1px color-mix(in srgb,var(--warn) 55%,transparent)}.callout.ok{box-shadow:0 0 0 1px color-mix(in srgb,var(--ok) 55%,transparent)}
 .callout strong{display:block;margin-bottom:4px}.callout p{margin:0}
 pre{overflow:auto;background:var(--surface);padding:12px 14px;border-radius:10px;box-shadow:0 0 0 1px var(--line)}
+
+/* ===== Direcția A «Foaia de probă» ===== */
+:root,:root{color-scheme:light;--bg:#b3b5b8;--bg2:#c9cacc;--surface:#fff;--surface2:#efefed;--line:rgba(22,23,26,.30);--text:#16171a;--mut:#4a4c52;--ac:#16171a;--ac2:#16171a;--acink:#fff;--ok:#00794a;--warn:#8a5a00;--markink:#fff;--shadow:none;--glow:none;--sheet:#f6f6f4;--mono:"B612 Mono",ui-monospace,Menlo,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#b3b5b8;--bg2:#c9cacc;--surface:#fff;--surface2:#efefed;--line:rgba(22,23,26,.30);--text:#16171a;--mut:#4a4c52;--ac:#16171a;--ac2:#16171a;--acink:#fff;--ok:#00794a;--warn:#8a5a00;--markink:#fff;--shadow:none;--glow:none}}
+html{background:#b3b5b8}
+body{background:radial-gradient(1200px 700px at 50% 20%,#c9cacc,#b3b5b8 70%) no-repeat fixed;font-family:"Archivo",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--text)}
+header.top,main,footer{width:min(1368px,calc(100% - 28px));margin-inline:auto;background:var(--sheet);position:relative}
+header.top{margin-top:18px;backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--sheet);box-shadow:0 1px 0 #fff inset}
+main{box-shadow:0 28px 60px -22px rgba(16,18,22,.45)}
+footer{margin-top:0;margin-bottom:34px;border-top:1px solid var(--text);padding-inline:clamp(16px,3vw,40px)}
+.wrap{width:auto;padding-inline:clamp(16px,3vw,40px)}
+header.top:after{height:16px;background:linear-gradient(90deg,#00a3e0 0 12.5%,#d4147a 12.5% 25%,#ffd400 25% 37.5%,#16171a 37.5% 50%,#e8312f 50% 62.5%,#00a651 62.5% 75%,#2e3192 75% 87.5%,#8c8c8a 87.5%);border-block:1px solid var(--text)}
+.bar{padding-block:12px}
+.brand{font-family:"Archivo";font-weight:800;font-stretch:108%;letter-spacing:-.02em}.brand b{color:var(--text)}.brand img{border-radius:6px}
+nav.main a{font:700 12px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--text);border-radius:0;padding:10px 12px}
+nav.main a:hover{background:var(--text);color:#fff}
+.langs a{font:700 11px var(--mono);border-radius:0!important;border-color:var(--text);color:var(--text)}.langs a[aria-current=page]{background:var(--text);color:#fff;border-color:var(--text)}
+.btn{border-radius:0;font:700 13px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;background:var(--text);color:#fff;box-shadow:0 3px 6px -3px rgba(0,0,0,.55);padding:16px 22px}
+.btn:hover{filter:none;transform:none;background:#2a2c31}
+.btn.ghost{background:transparent;color:var(--text);box-shadow:inset 0 0 0 1px var(--text)}
+.btn.ghost:hover{background:var(--text);color:#fff}
+.kicker{display:none}
+h1{font-family:"Archivo";font-stretch:108%;font-weight:800;letter-spacing:-.035em;font-size:clamp(2.2rem,5.4vw,4.6rem);line-height:.96}
+h1 .ac{background:none;-webkit-text-fill-color:currentColor;color:var(--text);display:inline-block;padding-bottom:.06em;border-bottom:.075em solid;border-image:linear-gradient(90deg,#00a3e0 0 25%,#d4147a 25% 50%,#ffd400 50% 75%,#16171a 75%) 1}
+h2{font-family:"Archivo";font-stretch:106%;font-weight:800;letter-spacing:-.03em}
+.lead{color:var(--text)}
+.facts li+li:before{color:var(--text)}
+.stage{border-radius:0;padding:0;background:#a8aaad;box-shadow:0 0 0 1px var(--text)}
+.stage:before{border-radius:0;background:linear-gradient(180deg,rgba(255,255,255,.14),transparent 30%)}
+.stage img{border-radius:0}
+.stage .reflect{display:none}.stage img.badge-icon{display:none}
+.stage figcaption,.cap{color:var(--mut)}
+.ill-tag,.real-tag,.demo-tag{display:inline-block;font:700 11px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:#fff;border-radius:0;padding:4px 7px;margin-right:8px;vertical-align:1px}
+.ill-tag{background:#16171a}.real-tag{background:#00794a}.demo-tag{background:#b4401a}
+section.alt{background:transparent;border-block:1px solid var(--text)}
+.note{border-left:0;border:1px solid var(--text);padding:12px 16px;background:#fff}
+.callout{border-radius:0;box-shadow:0 0 0 1px var(--text);background:#fff}.callout.warn,.callout.ok{box-shadow:0 0 0 1px var(--text)}
+.rail:before,.pipe:before{background:var(--text);opacity:1;width:1px}.pipe:before{height:1px;width:auto}
+.rail .n,.place li:before,.pipe .dot{border-radius:50%;background:#fff;color:var(--text);box-shadow:0 0 0 1px var(--text);font-family:var(--mono)}
+.rail button[aria-current=true] .n,.place li[aria-current=true]:before{background:var(--text);color:#fff;box-shadow:none}
+.progress{background:var(--line);border-radius:0}.progress i{background:var(--text)}
+.place svg{border-radius:0;background:#fff;box-shadow:0 0 0 1px var(--text)}
+.toc h2{color:var(--text);font-family:var(--mono)}.toc a{border-left-color:var(--text);color:var(--text)}
+.toc a:hover{background:var(--text);color:#fff;border-color:var(--text)}
+table.opt th{color:var(--text);font-family:var(--mono);font-size:.78rem;text-transform:uppercase;letter-spacing:.06em}
+table.opt th,table.opt td{border-color:var(--text)}
+article section{border-color:var(--text)}
+pre{border-radius:0;box-shadow:0 0 0 1px var(--text);background:#fff}
+a{color:#16171a;text-decoration-thickness:1px;text-underline-offset:3px}
+:focus-visible{outline:3px solid #2e3192}
+.lim .y .mk{background:var(--ok)}.lim .n .mk{background:var(--warn)}
+.star .btn{box-shadow:0 0 0 1px var(--text)}
+details.more summary{color:var(--text)}
 """
 
 JS = r"""
@@ -313,12 +372,14 @@ def head(lang: str, kind: str, depth: int, title: str, desc: str, og_img: str) -
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
         f"<title>{E(title)}</title><meta name=\"description\" content=\"{E(desc)}\">"
         f'<link rel="canonical" href="{canon}">{alts}<link rel="alternate" hreflang="x-default" href="{S.SITE}">'
-        '<meta name="theme-color" content="#0d0e11" media="(prefers-color-scheme: dark)">'
-        '<meta name="theme-color" content="#f6f3ee" media="(prefers-color-scheme: light)">'
+        '<meta name="theme-color" content="#b3b5b8">'
         f'<link rel="icon" type="image/png" href="{r}{ASSETS}/favicon-32.png"><link rel="apple-touch-icon" href="{r}{ASSETS}/icon-b-180.png">'
         f'<meta property="og:type" content="website"><meta property="og:title" content="{E(title)}">'
         f'<meta property="og:description" content="{E(desc)}"><meta property="og:url" content="{canon}">'
         f'<meta property="og:image" content="{S.SITE}{ASSETS}/{og_img}.webp">'
+        f"<style>@font-face{{font-family:Archivo;src:url({r}{ASSETS}/fonts/Archivo-VF.ttf);font-weight:100 900;font-stretch:62% 125%;font-display:swap}}"
+        f"@font-face{{font-family:'B612 Mono';src:url({r}{ASSETS}/fonts/B612Mono-Regular.ttf);font-weight:400;font-display:swap}}"
+        f"@font-face{{font-family:'B612 Mono';src:url({r}{ASSETS}/fonts/B612Mono-Bold.ttf);font-weight:700;font-display:swap}}</style>"
         f"<style>{CSS}</style><script type=\"application/ld+json\">{ld}</script></head>"
     )
 
@@ -383,10 +444,11 @@ def landing(lang: str, sizes: dict) -> str:
     depth = S.PATHS[lang]["home"].count("/")
     r = rel(depth)
     real_hero = f"real-mac-step1-{lang}"
-    hero_img = single(real_hero, depth, t["hero_alt"], sizes, lazy=False) or pic("flow1", lang, depth, t["hero_alt"], sizes, lazy=False)
-    hero_tag = "real" if real_hero in sizes else "demo"
-    tag_html = (f'<span class="real-tag">REAL</span>{E(t["hero_cap_real"])}' if hero_tag == "real"
-                else f'<span class="demo-tag">DEMO</span>{E(t["flow_demo"])}')
+    ill = {"ro": ("ILUSTRAȚIE", "Randare originală: sonda pe pătratul alb de măsurare, în timp ce aplicația rulează planul. Nu este o fotografie de produs și nu este un model anume de instrument; imaginea de pe ecran este captura reală a aplicației.", "Monitor cu sonda generică așezată pe pătratul alb de măsurare"),
+           "en": ("ILLUSTRATION", "Original render: the probe on the white measurement square while the application runs the plan. It is not a product photo and not a specific instrument model; the picture on the screen is a real capture of the application.", "A monitor with a generic probe resting on the white measurement square"),
+           "es": ("ILUSTRACIÓN", "Render original: la sonda sobre el cuadrado blanco de medición mientras la aplicación ejecuta el plan. No es una foto de producto ni un modelo concreto de instrumento; la imagen de la pantalla es una captura real de la aplicación.", "Un monitor con una sonda genérica sobre el cuadrado blanco de medición")}[lang]
+    hero_img = single("hero-render", depth, ill[2], sizes, lazy=False) or pic("flow1", lang, depth, t["hero_alt"], sizes, lazy=False)
+    tag_html = f'<span class="ill-tag">{ill[0]}</span>{E(ill[1])}'
     steps = t["flow_steps"]
     rail = "".join(
         f'<li><button type="button" aria-current="{"true" if k == 0 else "false"}"><span class="n">{k+1}</span>'

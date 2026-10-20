@@ -1,0 +1,5 @@
+Fonts distributed with this site (SIL Open Font License 1.1, https://openfontlicense.org):
+- Archivo (variable) — Copyright 2018 The Archivo Project Authors (Omnibus-Type), https://github.com/Omnibus-Type/Archivo
+- B612 Mono — Copyright 2012-2023 The B612 Project Authors (Airbus; Intactile DESIGN), https://github.com/polarsys/b612
+These font files are unmodified. The full license text is available at https://openfontlicense.org/open-font-license-official-text/ .
+The fonts are used only as web fonts for this site; they may not be sold on their own.
