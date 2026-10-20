@@ -36,7 +36,7 @@ from reportlab.platypus.tableofcontents import TableOfContents
 HERE = os.path.dirname(os.path.abspath(__file__))
 IMG_DIR = os.path.join(HERE, "img")
 # Urmareste upstream (DisplayCAL/VERSION), nu un contor GDC separat -
-# vezi Regula 14, nota specifica acestui repo in CLAUDE.md.
+# vezi docs/ARCHITECTURE_NOTES.md.
 APP_VERSION = "3.10.0.dev82"
 
 # Arial (nu Helvetica standard-14) - WinAnsiEncoding-ul fonturilor standard

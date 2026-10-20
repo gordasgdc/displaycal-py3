@@ -6,7 +6,7 @@
 - Instrument identification that does not guess: when several models share one USB identity you confirm the exact model; model-specific placement help only where the maker documents it.
 - Physical-preparation checklist with sources and, for documented instruments, a short placement animation with text steps and reduced-motion support.
 - Measurement plan before you start: profile type explained in plain language, patch count, estimated time.
-- Safer long runs: large charts can be measured in blocks that are saved as they finish; an interrupted run can be continued with the remaining blocks when the conditions are the same; a session journal records facts about how a run ended; start-up recovery window; sleep prevention only while a run is active; a local notification at the end.
+- Measurement in blocks with recovery: large charts can be measured in blocks that are saved locally as they finish; after an interruption the finished blocks are kept and the run can be continued with the remaining blocks when the conditions are the same (recovery is not guaranteed in every situation); a session journal records facts about how a run ended; start-up recovery window; sleep prevention only while a run is active; a local notification at the end. Sessions of several hours have not been validated yet.
 - ArgyllCMS is now included in the installer and verified against a fixed hash; unverifiable downloads are refused.
 - After installing a profile, the active profile is read back and compared.
 - Fixed a crash at exit on macOS.
@@ -17,4 +17,7 @@
 - Log lines now carry an ISO time with offset, a level and a run ID; an unexpected stop is noted at the next start.
 - Advanced settings are now grouped by decision. Each section says what each setting changes, when it fits, its unit and default, what it depends on and why a control is unavailable; the guided and advanced modes share one configuration, and a new goal keeps your current settings. The test chart editor explains its fields.
 - New link beside the correction choice: "Don't know your monitor's technology? Search the model" (model identifier for built-in Apple screens, copy-and-open for other monitors; nothing is selected for you).
-- TODO parity: Windows build verification of the new flow pending.
+- Text size (Normal / Large / Very large), remembered, live preview, with checked contrast; at a larger size the header keeps its size, the step column becomes one row and the page uses the full width. On macOS the pop-up buttons use a scalable style above Normal so their labels are not cut off.
+- Filled primary button on each guided page; quieter secondary controls.
+- The macOS installer now installs every file readable by normal users (some bundled files were not).
+- Windows: guided flow verified on a clean Windows 11 install (ARM64 VM, x64 emulation).

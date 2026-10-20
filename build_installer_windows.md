@@ -70,7 +70,7 @@ Build complet, testat pe Windows 11 ARM64 (Parallels pe Apple Silicon —
 cazul cel mai dificil, cere emulare x64). Trei bug-uri reale găsite și
 reparate în timpul acestui build (encoding Inno Setup, identificator de
 arhitectură "x64" vs "x64compatible", crash real la instalare din
-`taskscheduler.py`) — vezi jurnalul complet din `CLAUDE.md`. Instalerul
+`taskscheduler.py`) — vezi `docs/ARCHITECTURE_NOTES.md`. Instalerul
 rezultat a fost publicat pe release-ul GitHub existent și e live pe
 pagina web (`gordas.dev/DisplayCAL-CG/`).
 

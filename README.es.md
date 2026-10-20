@@ -1,74 +1,69 @@
-![license](https://img.shields.io/badge/License-GPL%20v3-blue.svg)
-![pyversion](https://img.shields.io/pypi/pyversions/DisplayCAL.svg)
-![pypiversion](https://img.shields.io/pypi/v/DisplayCAL.svg)
-![wheel](https://img.shields.io/pypi/wheel/DisplayCAL.svg)
+[🇷🇴 Română](README.md) · [🇬🇧 English](README.en.md) · [🇪🇸 Español](README.es.md)
 
-[🇷🇴 Română](README.md) &middot; [🇬🇧 English](README.en.md) &middot; [🇪🇸 Español](README.es.md)
+<p align="center"><img src="docs/assets/site/icon-b-180.png" width="96" alt="DisplayCAL-CG"></p>
 
-DisplayCAL-CG — Distribución GDC
-=================================
+<h1 align="center">DisplayCAL-CG</h1>
 
-Esta es **DisplayCAL-CG**, una distribución mantenida por GDC de este
-proyecto, sobre el mismo código y la misma licencia GPLv3 que el proyecto
-original de abajo. Sin licencias, sin prueba, sin ninguna forma de
-monetización.
+<p align="center"><b>Calibración y perfilado de monitor, guiados. Sobre ArgyllCMS, gratis y de código abierto.</b></p>
 
-Qué aporta esta edición:
+<p align="center"><a href="LICENSE.txt"><img alt="GPLv3" src="https://img.shields.io/badge/license-GPLv3-blue.svg"></a> <a href="https://github.com/gordasgdc/displaycal-py3/releases"><img alt="release" src="https://img.shields.io/github/v/release/gordasgdc/displaycal-py3?include_prereleases&label=release"></a></p>
 
-- **Calibración guiada** en cinco pasos, con interfaz Qt: monitor e
-  instrumento, objetivo, preparación física (lista con fuentes, animación de
-  colocación para los instrumentos que el fabricante documenta), plan de
-  medición, instalación y verificación del perfil.
-- **Identificación honesta del instrumento**: si varios modelos comparten la
-  misma identidad USB, el modelo exacto lo confirmas tú.
-- **Sesiones largas más seguras**: medición en bloques guardados al
-  terminar, diario de sesión, continuar con los bloques restantes (solo en
-  las mismas condiciones), prevención de suspensión solo durante la
-  ejecución.
-- **ArgyllCMS incluido** en el instalador y verificado con un hash SHA-256
-  fijo.
-- Interfaz y guías en rumano, inglés y español; instaladores nativos para
-  macOS (`.pkg`, firmado y notarizado) y Windows.
+DisplayCAL-CG te lleva de la sonda a un perfil ICC verificado en cinco pasos: qué preparar, cómo colocar el instrumento, cuánto tarda y qué pasa si algo se detiene. Es una edición de [DisplayCAL](https://displaycal.net) mantenida por Cristi Gordaș (la continuación de la comunidad es [displaycal-py3](https://github.com/eoyilmaz/displaycal-py3)), sobre el mismo código y la misma licencia GPLv3. **100% gratis: sin prueba, sin activación, sin funciones de pago.**
 
-- **Descarga y página web:** [gordas.dev/DisplayCAL-CG](https://gordas.dev/DisplayCAL-CG/)
-- **Versiones (macOS `.pkg`):** [github.com/gordasgdc/displaycal-py3/releases](https://github.com/gordasgdc/displaycal-py3/releases)
-- **Mantenido por:** Cristi Gordaș (GDC) — solo rebranding, traducción al
-  rumano y paquete nativo de instalación. Todo el crédito por DisplayCAL en
-  sí pertenece a los autores originales de abajo.
+<p align="center"><img src="docs/assets/readme/plan-es.jpg" alt="El paso «Medición»: el plan con total de parches, tamaño del bloque, número de bloques y tiempo estimado." width="760"><br><sub>El paso «Medición»: el plan con total de parches, tamaño del bloque, número de bloques y tiempo estimado.</sub></p>
 
-Todo lo que sigue es el `README.md` original del proyecto upstream,
-traducido al español — el código y la funcionalidad siguen siendo idénticos.
+## Qué hace
 
----
+Mide cómo muestra el color tu pantalla y escribe un perfil ICC que el sistema y tus programas usan para un color correcto. Es para fotógrafos, coloristas, diseñadores y cualquiera que necesite que el monitor se vea igual de un día a otro y de un programa a otro.
 
-Proyecto DisplayCAL para Python 3
-===================================
+**Qué necesitas:** un colorímetro o espectrofotómetro compatible con ArgyllCMS (por ejemplo de las familias i1Display, ColorMunki o Spyder). Sin un instrumento físico no se puede medir nada; la aplicación no simula mediciones.
 
-Este proyecto se propuso modernizar el código de DisplayCAL, incluyendo
-soporte para Python 3.
+## Qué aporta la edición CG al proyecto original
 
-Florian Höch, el desarrollador original, hizo un trabajo increíble creando
-y manteniendo DisplayCAL durante todos estos años. Pero, parece que,
-durante la pandemia, muy comprensiblemente, perdió la pasión por el
-proyecto. Ahora es momento de que nosotros, la comunidad de DisplayCAL,
-contribuyamos de vuelta a esta gran herramienta.
+- **Calibración guiada** en cinco pasos (monitor e instrumento, objetivo, preparación, medición, instalar y verificar), con interfaz Qt. El modo avanzado se mantiene, reagrupado por decisión, con la misma configuración.
+- **Preparación con fuentes y colocación de la sonda**, con una animación esquemática para los instrumentos que el fabricante documenta; el modelo exacto lo confirmas tú cuando varios productos comparten la misma identidad USB.
+- **El plan de medición antes de empezar**: total de parches, tamaño del bloque, número de bloques y tiempo estimado, mostrados por separado; elegir o crear la carta junto al total.
+- **Medición en bloques con recuperación**: los bloques terminados se guardan localmente, hay un diario de sesión y se puede continuar con los bloques restantes (solo en las mismas condiciones); el reposo se evita solo durante la ejecución. Las sesiones de varias horas todavía no se han validado; nada de esto garantiza estabilidad.
+- **Diagnóstico local**: registros rotativos y exportación de un paquete con redacción por defecto, sin envío automático.
+- **Texto ajustable** («Aa»), contraste comprobado, interfaz en rumano, inglés y español; **ArgyllCMS incluido** y verificado con una suma SHA-256 fija; instaladores nativos.
 
-Este proyecto se basa en el ``HEAD`` de la versión de Sourceforge, que tenía
-5 commits adicionales creados por Florian sobre la versión ``3.8.9.3``,
-lanzada el 14 de enero de 2020.
+<p align="center"><img src="docs/assets/readme/adv-es.jpg" alt="Modo avanzado, pestaña Perfilado, la misma configuración." width="760"><br><sub>Modo avanzado, pestaña Perfilado, la misma configuración.</sub></p>
 
-Gracias a todos los esfuerzos de la comunidad, DisplayCAL ahora funciona
-con Python 3.9+:
+## Descarga
 
-![image](screenshots/DisplayCAL-screenshot-GNOME-3.9.5-running_on_python3.10.png)
+Las descargas y la página de presentación están en **[gordas.dev/DisplayCAL-CG](https://gordas.dev/DisplayCAL-CG/es/)**; las versiones publicadas, en [Releases](https://github.com/gordasgdc/displaycal-py3/releases).
 
-Instrucciones de instalación
-==============================
+| Plataforma | Archivo | Notas |
+|---|---|---|
+| macOS (Apple Silicon) | `DisplayCAL-CG.dmg` / `.pkg` | firmado con Developer ID y notarizado |
+| Windows (x64) | `DisplayCAL-CG-Setup.exe` | aún sin firmar con un certificado de pago: SmartScreen puede avisar |
 
-Sigue las instrucciones según tu sistema operativo:
+## Requisitos y límites
 
-- [Windows](docs/install_instructions_windows.md)
-- [MacOS](docs/install_instructions_macos.md)
-- [Linux](docs/install_instructions_linux.md)
+- Un instrumento de medición compatible con ArgyllCMS.
+- Verificado: los instaladores de macOS, una instalación limpia en Windows 11 (VM ARM64 con emulación x64), una medición real corta (38 parches) con un colorímetro i1Display en macOS.
+- **No verificado**: sesiones de varias horas, desconexión de la sonda durante la medición y recuperación tras un corte de corriente, Windows en hardware x64 nativo, macOS en Intel, instrumentos distintos del probado, revisión de las traducciones por hablantes nativos.
 
-¡Que lo disfrutes!
+## Guía, soporte, incidencias
+
+- [Guía técnica detallada](https://gordas.dev/DisplayCAL-CG/es/guia/) (ES) · [PDF](docs/DisplayCAL-CG_Guia_ES.pdf)
+- Instrucciones de instalación: [macOS](docs/install_instructions_macos.md) · [Windows](docs/install_instructions_windows.md) · [Linux](docs/install_instructions_linux.md)
+- Diagnóstico: **? → Diagnóstico y soporte** en la aplicación crea un paquete en local que adjuntas tú a una incidencia; no se envía nada automáticamente.
+- [Informar de un problema](https://github.com/gordasgdc/displaycal-py3/issues/new)
+
+## Licencia y créditos
+
+GPLv3 (ver [LICENSE.txt](LICENSE.txt)). La aplicación puede mostrar el mensaje opcional de apoyo del proyecto original; puedes cerrarlo.
+
+- **DisplayCAL** — Florian Höch, el autor original.
+- **displaycal-py3** — la continuación de la comunidad (el port a Python 3).
+- **ArgyllCMS** — Graeme Gill, el motor de medición y de perfiles.
+- **DisplayCAL-CG** — adaptaciones, interfaz guiada e instaladores: Cristi Gordaș.
+
+Qué se tomó de forma selectiva del proyecto original: [UPSTREAM_INTEGRATED.md](docs/UPSTREAM_INTEGRATED.md).
+
+## Documentación del proyecto original
+
+El README original y sus instrucciones siguen accesibles: [README.upstream.es.md](docs/upstream/README.upstream.es.md) · [documentación](https://displaycal.net).
+
+<p align="center"><a href="https://github.com/gordasgdc/displaycal-py3"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/site/github-invertocat-white.svg"><img src="docs/assets/site/github-invertocat-black.svg" height="18" alt="GitHub"></picture></a> Si te ha sido útil, una estrella ayuda a que el proyecto se encuentre. <a href="https://github.com/gordasgdc/displaycal-py3">Dar una estrella</a></p>

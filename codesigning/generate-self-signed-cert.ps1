@@ -2,7 +2,7 @@
 #
 # Rulat O SINGURA DATA, de Cristi, pe Windows real (nu de Claude - un
 # certificat cu cheie privata nu trece niciodata prin conversatie, vezi
-# CLAUDE.md, Regula 34). Genereaza un certificat Self-Signed de Code
+# docs/ARCHITECTURE_NOTES.md). Genereaza un certificat Self-Signed de Code
 # Signing STABIL (valabil 5 ani) - NU se regenereaza la fiecare build,
 # ca sa nu rupa increderea deja acordata de colaboratori (fiecare
 # certificat nou ar cere re-import in Trusted Root pe toate masinile lor).

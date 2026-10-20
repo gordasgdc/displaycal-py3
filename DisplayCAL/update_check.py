@@ -72,7 +72,7 @@ def _parse_release_tag_version(tag_name: str) -> tuple[int, ...] | None:
     ``display_cal.parse_release_tag_version`` (this module must stay
     importable without ``wx``, see the module docstring). This fork's
     tags look like ``v3.10.0.dev82-cg.1`` (upstream version + our own
-    build suffix, see CLAUDE.md), not a plain ``X.Y.Z`` — strip a leading
+    build suffix, see docs/ARCHITECTURE_NOTES.md), not a plain ``X.Y.Z`` — strip a leading
     "v", keep only what precedes the first "-", and take the first 3
     numeric dot-separated segments.
 

@@ -1,421 +1,217 @@
-<!DOCTYPE html>
-<html lang="ro">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title id="page-title">DisplayCAL-CG</title>
-<meta id="meta-desc" name="description" content="DisplayCAL-CG — calibrare și profilare de display de nivel profesional, pentru Mac și Windows. Gratuit, open-source (GPLv3).">
-<link rel="icon" type="image/png" href="assets/icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<style>
-  /* Identitatea "Shift" — aceeasi paleta ca restul ecosistemului GDC. */
-  :root{
-    --bg:#14161A; --bg-2:#0F1114; --panel:#1A1D22; --panel-2:#20232A;
-    --border:#2B2F36; --text:#EDEFF2; --muted:#93989F; --faint:#5C6169;
-    --accent:#E8963C; --accent-ink:#1A1108; --accent-dim:#7A5426;
-    --accent-2:#F2A94F;
-    --success:#4CAF7D; --error:#E2584A;
-    --mono:'IBM Plex Mono', ui-monospace, monospace;
-    --sans:'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  }
-  *{ box-sizing:border-box; margin:0; padding:0; }
-  html{ scroll-behavior:smooth; }
-  body{
-    background:
-      radial-gradient(ellipse 900px 500px at 85% -10%, rgba(232,150,60,.16), transparent 60%),
-      radial-gradient(ellipse 700px 500px at 0% 15%, rgba(242,169,79,.10), transparent 55%),
-      var(--bg);
-    color:var(--text); font-family:var(--sans); line-height:1.6;
-    -webkit-font-smoothing:antialiased;
-  }
-  a{ color:inherit; }
-  img{ display:block; max-width:100%; }
-  .wrap{ max-width:1080px; margin:0 auto; padding:0 24px; }
-  ::selection{ background:var(--accent); color:var(--accent-ink); }
-  code{ font-family:var(--mono); background:var(--panel-2); padding:1px 6px; border-radius:4px; font-size:.9em; }
+<!doctype html><html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DisplayCAL-CG — calibrare și profilare de monitor, ghidată</title><meta name="description" content="Calibrare și profilare de monitor în cinci pași, pe baza ArgyllCMS: gratuit, open source (GPLv3), fără activare, pentru macOS și Windows, în română, engleză și spaniolă."><link rel="canonical" href="https://gordas.dev/DisplayCAL-CG/"><link rel="alternate" hreflang="ro" href="https://gordas.dev/DisplayCAL-CG/"><link rel="alternate" hreflang="en" href="https://gordas.dev/DisplayCAL-CG/en/"><link rel="alternate" hreflang="es" href="https://gordas.dev/DisplayCAL-CG/es/"><link rel="alternate" hreflang="x-default" href="https://gordas.dev/DisplayCAL-CG/"><meta name="theme-color" content="#0d0e11" media="(prefers-color-scheme: dark)"><meta name="theme-color" content="#f6f3ee" media="(prefers-color-scheme: light)"><link rel="icon" type="image/png" href="assets/site/favicon-32.png"><link rel="apple-touch-icon" href="assets/site/icon-b-180.png"><meta property="og:type" content="website"><meta property="og:title" content="DisplayCAL-CG — calibrare și profilare de monitor, ghidată"><meta property="og:description" content="Calibrare și profilare de monitor în cinci pași, pe baza ArgyllCMS: gratuit, open source (GPLv3), fără activare, pentru macOS și Windows, în română, engleză și spaniolă."><meta property="og:url" content="https://gordas.dev/DisplayCAL-CG/"><meta property="og:image" content="https://gordas.dev/DisplayCAL-CG/assets/site/real-mac-step1-ro.webp"><style>
+:root{color-scheme:dark light;--bg:#0d0e11;--bg2:#14161b;--surface:#191c22;--surface2:#20242b;--line:rgba(255,255,255,.10);--text:#eef0f4;--mut:#aab0bc;--ac:#ffb347;--ac2:#ff8a3d;--acink:#1b1205;--ok:#4cc38a;--warn:#ffb347;--markink:#06180f;--shadow:0 30px 70px -24px rgba(0,0,0,.75);--glow:radial-gradient(60% 50% at 78% 0%,rgba(255,150,40,.16),transparent 70%),radial-gradient(50% 40% at 0% 30%,rgba(90,140,255,.10),transparent 70%)}
+@media (prefers-color-scheme:light){:root{--bg:#f6f3ee;--bg2:#efebe4;--surface:#ffffff;--surface2:#f4f0e9;--line:rgba(20,20,30,.12);--text:#17181c;--mut:#555a66;--ac:#8c4f00;--ac2:#a8420a;--acink:#ffffff;--ok:#18794e;--warn:#8c4f00;--markink:#ffffff;--shadow:0 26px 60px -26px rgba(40,30,10,.35);--glow:radial-gradient(60% 50% at 78% 0%,rgba(255,170,60,.22),transparent 70%),radial-gradient(50% 40% at 0% 30%,rgba(90,140,255,.10),transparent 70%)}}
+*{box-sizing:border-box}html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}}
+body{margin:0;background:var(--bg) var(--glow) no-repeat;color:var(--text);font:400 clamp(16px,1.05vw + 12px,18px)/1.6 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable Text","Segoe UI",system-ui,Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--ac)}a:hover{text-decoration-thickness:2px}
+:focus-visible{outline:3px solid var(--ac);outline-offset:3px;border-radius:6px}
+.skip{position:absolute;left:12px;top:-60px;background:var(--ac);color:var(--acink);padding:10px 14px;border-radius:8px;font-weight:600;z-index:100}.skip:focus{top:12px}
+.wrap{width:min(1180px,100% - 32px);margin-inline:auto}
+header.top{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px)}
+header.top:after{content:"";display:block;height:2px;background:linear-gradient(90deg,#ff5a5f,#ffb347,#8bd45a,#38b6ff,#7c6cff)}
+.bar{display:flex;align-items:center;gap:14px;padding:10px 0}
+.brand{display:flex;align-items:center;gap:10px;color:var(--text);text-decoration:none;font-weight:700;letter-spacing:-.01em}
+.brand img{width:32px;height:32px;border-radius:8px}.brand b{color:var(--ac)}
+nav.main{display:flex;gap:4px;margin-left:auto;align-items:center;flex-wrap:wrap}
+nav.main a{color:var(--mut);text-decoration:none;padding:8px 10px;border-radius:8px;font-size:.92rem}
+nav.main a:hover{color:var(--text);background:var(--surface)}
+.langs{display:flex;gap:2px;margin-left:6px}.langs a{padding:6px 8px;border:1px solid var(--line);color:var(--mut);font-size:.82rem;text-decoration:none}
+.langs a:first-child{border-radius:8px 0 0 8px}.langs a:last-child{border-radius:0 8px 8px 0}.langs a[aria-current=page]{background:var(--ac);color:var(--acink);border-color:var(--ac);font-weight:700}
+@media(max-width:820px){nav.main a.hide-s{display:none}.bar{flex-wrap:wrap}}
+.btn{display:inline-flex;align-items:center;gap:10px;padding:13px 20px;border-radius:12px;font-weight:700;text-decoration:none;color:var(--acink);background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 92%,#fff),var(--ac) 46%,var(--ac2));box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -2px 0 rgba(0,0,0,.18),0 12px 28px -10px color-mix(in srgb,var(--ac2) 70%,transparent);border:0;cursor:pointer;font-size:1rem;letter-spacing:-.005em}
+.btn:hover{filter:brightness(1.05);transform:translateY(-1px)}.btn:active{transform:none}
+.btn.ghost{background:linear-gradient(180deg,var(--surface2),var(--surface));color:var(--text);box-shadow:inset 0 1px 0 rgba(255,255,255,.10),0 0 0 1px var(--line)}
+.btn.small{padding:9px 14px;font-size:.92rem;border-radius:10px}
+.hero{padding:clamp(34px,7vw,84px) 0 clamp(30px,5vw,60px)}
+.hero .grid{display:grid;grid-template-columns:minmax(0,1.02fr) minmax(0,1fr);gap:clamp(24px,4vw,64px);align-items:center}
+@media(max-width:940px){.hero .grid{grid-template-columns:1fr}}
+.kicker{color:var(--ac);font-weight:700;font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;margin:0 0 10px}
+h1{font-size:clamp(2.2rem,5.2vw,4rem);line-height:1.04;letter-spacing:-.035em;margin:0 0 18px;font-weight:800;text-wrap:balance}
+h1 .ac{background:linear-gradient(100deg,var(--ac),var(--ac2));-webkit-background-clip:text;background-clip:text;color:transparent}
+h2{font-size:clamp(1.55rem,3vw,2.3rem);line-height:1.12;letter-spacing:-.025em;margin:0 0 12px;font-weight:750;text-wrap:balance}
+h3{font-size:1.12rem;margin:0 0 6px;letter-spacing:-.01em}
+.lead{font-size:clamp(1.05rem,1.4vw + .6rem,1.28rem);color:var(--mut);max-width:62ch;margin:0 0 24px}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 20px}
+.facts{display:flex;flex-wrap:wrap;gap:6px 0;list-style:none;padding:0;margin:0 0 14px;color:var(--mut);font-size:.92rem}
+.facts li+li:before{content:"·";margin:0 10px;color:var(--ac)}
+.ver{color:var(--mut);font-size:.86rem;margin:0}
+.stage{position:relative;border-radius:20px;padding:10px;background:linear-gradient(160deg,color-mix(in srgb,var(--surface2) 85%,#fff 6%),var(--surface));box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.16),0 0 0 1px var(--line)}
+.stage:before{content:"";position:absolute;inset:0;border-radius:20px;background:linear-gradient(115deg,rgba(255,255,255,.14),transparent 34%);pointer-events:none}
+.stage img{display:block;width:100%;height:auto;border-radius:12px}
+.stage figcaption,.cap{color:var(--mut);font-size:.86rem;margin:10px 4px 2px}
+.stage .reflect{position:absolute;left:8%;right:8%;bottom:-26px;height:24px;background:radial-gradient(closest-side,rgba(255,150,40,.35),transparent);filter:blur(10px);opacity:.7;pointer-events:none}
+.stage img.badge-icon{position:absolute;left:-18px;top:-22px;width:84px;height:84px;border-radius:22px;box-shadow:0 18px 36px -10px rgba(0,0,0,.6),0 0 0 1px var(--line);z-index:2}
+@media(max-width:940px){.stage img.badge-icon{left:-6px;top:-18px;width:64px;height:64px}}
+section.band{padding:clamp(36px,6vw,76px) 0}
+section.alt{background:linear-gradient(180deg,transparent,color-mix(in srgb,var(--bg2) 80%,transparent) 14%,color-mix(in srgb,var(--bg2) 80%,transparent) 86%,transparent)}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:clamp(22px,4vw,56px);align-items:start}
+.split.rev{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}.split.rev>:first-child{order:2}
+@media(max-width:900px){.split,.split.rev{grid-template-columns:1fr}.split.rev>:first-child{order:0}}
+.three{display:grid;grid-template-columns:1.2fr 1fr;gap:clamp(20px,4vw,56px)}@media(max-width:820px){.three{grid-template-columns:1fr}}
+.cols{columns:2 330px;column-gap:44px;max-width:none!important}.cols li{break-inside:avoid}.prose p{margin:0 0 14px;max-width:68ch}.prose ul{padding-left:1.15em;margin:0 0 14px;max-width:66ch}.prose li{margin:0 0 8px}
+.note{border-left:3px solid var(--ac);padding:4px 0 4px 16px;margin:18px 0;color:var(--text);max-width:68ch}
+.note strong{display:block;margin-bottom:2px}
+.defs{display:grid;gap:14px;margin:0}.defs div{padding:12px 0 0;border-top:1px solid var(--line)}.defs dt{font-weight:700;margin:0 0 2px}.defs dd{margin:0;color:var(--mut);max-width:62ch}
+/* flow demo */
+.flow{display:grid;grid-template-columns:minmax(230px,300px) minmax(0,1fr);gap:clamp(16px,3vw,36px);align-items:start}
+@media(max-width:900px){.flow{grid-template-columns:1fr}}
+.rail{list-style:none;margin:0;padding:0;position:relative}
+.rail:before{content:"";position:absolute;left:17px;top:14px;bottom:14px;width:2px;background:linear-gradient(#ff5a5f,#ffb347,#8bd45a,#38b6ff,#7c6cff);opacity:.55;border-radius:2px}
+.rail li{position:relative}
+.rail button{all:unset;box-sizing:border-box;display:flex;gap:12px;align-items:flex-start;width:100%;padding:9px 8px 9px 0;cursor:pointer;color:var(--mut);border-radius:10px}
+.rail .n{flex:none;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-weight:800;background:var(--surface2);box-shadow:0 0 0 1px var(--line);color:var(--text);position:relative;z-index:1}
+.rail button[aria-current=true] .n{background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 92%,#fff),var(--ac2));color:var(--acink);box-shadow:0 8px 20px -8px var(--ac2)}
+.rail button[aria-current=true]{color:var(--text)}.rail strong{display:block;color:var(--text);line-height:1.25;padding-top:7px}
+.rail span.t{display:block;font-size:.9rem;line-height:1.45;margin-top:2px}
+.js .rail span.t{display:none}.js .rail button[aria-current=true] span.t{display:block}
+.ctrl{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 0;align-items:center}
+.ctrl .btn{padding:9px 14px;font-size:.9rem}
+.progress{height:3px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:12px}.progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--ac),var(--ac2))}
+.shots{position:relative}.shot{display:none}.shot.on{display:block}
+.nojs-list{display:grid;gap:22px;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr))}.js .nojs-list{display:none}.js .showall .nojs-list{display:grid}.js .showall .shots,.js .showall .rail,.js .showall .ctrl .only-one{display:none}
+.js .showall .flow{display:block}
+.static-step figcaption{font-weight:600;color:var(--text);margin:8px 0 2px}.static-step p{margin:0;color:var(--mut);font-size:.9rem}
+.demo-tag{display:inline-block;font-size:.76rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#fff;background:#c8461e;border-radius:6px;padding:2px 8px;margin-right:8px}
+.real-tag{display:inline-block;font-size:.76rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#fff;background:#18794e;border-radius:6px;padding:2px 8px;margin-right:8px}
+/* placement */
+.place{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:clamp(20px,4vw,48px);align-items:center}@media(max-width:900px){.place{grid-template-columns:1fr}}
+.place svg{width:100%;height:auto;border-radius:18px;background:linear-gradient(170deg,var(--surface2),var(--surface));box-shadow:0 0 0 1px var(--line),var(--shadow)}
+.place ol{margin:0 0 6px;padding:0;list-style:none;counter-reset:s}.place li{counter-increment:s;display:flex;gap:12px;padding:10px 0;border-top:1px solid var(--line);color:var(--mut)}
+.place li:before{content:counter(s);flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:.9rem;background:var(--surface2);color:var(--text);box-shadow:0 0 0 1px var(--line)}
+.place li[aria-current=true]{color:var(--text)}.place li[aria-current=true]:before{background:var(--ac);color:var(--acink)}
+.place li strong{display:block;color:var(--text)}
+.sensor{transition:transform 1.1s cubic-bezier(.3,.8,.3,1)}
+.s1 .sensor{transform:translate(70px,235px) rotate(-14deg)}.s2 .sensor{transform:translate(285px,150px) rotate(-3deg)}.s3 .sensor{transform:translate(318px,172px) rotate(0)}
+.s1 .lens{animation:pulse 1.6s ease-in-out infinite}.s3 .target{animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+/* concepts pipeline */
+.pipe{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin:26px 0 0;position:relative;list-style:none;padding:0}
+.pipe:before{content:"";position:absolute;left:5%;right:5%;top:19px;height:2px;background:linear-gradient(90deg,#ff5a5f,#ffb347,#8bd45a,#38b6ff,#7c6cff);opacity:.6}
+.pipe li{position:relative;padding:0 14px 0 0}
+.pipe .dot{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-weight:800;background:var(--surface);box-shadow:0 0 0 2px var(--ac),0 8px 18px -8px var(--ac2);position:relative;z-index:1;margin-bottom:12px}
+.pipe p{margin:0;color:var(--mut);font-size:.93rem}
+@media(max-width:860px){.pipe{grid-template-columns:1fr;gap:18px}.pipe:before{left:19px;right:auto;top:10px;bottom:10px;width:2px;height:auto}.pipe li{padding:0 0 0 56px}.pipe .dot{position:absolute;left:0;top:0;margin:0}}
+/* limits */
+.lim{display:grid;grid-template-columns:1fr 1fr;gap:clamp(18px,4vw,48px)}@media(max-width:820px){.lim{grid-template-columns:1fr}}
+.lim h3{display:flex;align-items:center;gap:8px}.lim ul{list-style:none;margin:10px 0 0;padding:0}.lim li{display:flex;gap:10px;padding:9px 0;border-top:1px solid var(--line);color:var(--mut)}
+.lim .mk{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:.8rem;margin-top:3px}
+.lim .y .mk{background:var(--ok);color:var(--markink)}.lim .n .mk{background:var(--warn);color:var(--markink)}
+.links{list-style:none;padding:0;margin:0}.links li{padding:7px 0;border-top:1px solid var(--line)}
+.star{display:inline-flex;align-items:center;gap:10px;margin-top:6px}.star img{width:22px;height:22px;filter:none}
+details.more{margin-top:10px}details.more summary{cursor:pointer;font-weight:700;color:var(--ac)}
+footer{border-top:1px solid var(--line);margin-top:30px;padding:26px 0 40px;color:var(--mut);font-size:.9rem}
+footer a{color:var(--mut)}footer .row{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:10px}
+.cards2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:22px;align-items:start}
+/* guide */
+.guide{display:grid;grid-template-columns:260px minmax(0,1fr);gap:clamp(20px,4vw,52px);padding:30px 0 40px}
+@media(max-width:900px){.guide{grid-template-columns:1fr}}
+.toc{position:sticky;top:78px;align-self:start;max-height:calc(100vh - 100px);overflow:auto;font-size:.92rem;padding-right:6px}
+.toc h2{font-size:.8rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ac);margin:0 0 8px}
+.toc ol{list-style:none;margin:0;padding:0}.toc a{display:block;padding:6px 10px;border-left:2px solid var(--line);color:var(--mut);text-decoration:none}.toc a:hover{color:var(--text);border-color:var(--ac)}
+@media(max-width:900px){.toc{position:static;max-height:none}.toc ol{columns:2}}
+.guide>*{min-width:0}.toc a{overflow-wrap:anywhere}.guide article{overflow-wrap:anywhere}.guide article code{white-space:normal;overflow-wrap:anywhere}
+@media(max-width:520px){.toc ol{columns:1}}
+[id$="-h"],#top,#get{scroll-margin-top:92px}article section{padding:8px 0 22px;border-top:1px solid var(--line);margin-top:22px;scroll-margin-top:84px}article section:first-of-type{border-top:0;margin-top:0}
+article h2{margin-top:14px}article h3{margin:22px 0 8px;font-size:1.15rem}
+article p,article li{max-width:72ch}article ol.steps{padding-left:1.3em}article ol.steps li{margin:0 0 8px}
+table.opt{border-collapse:collapse;width:100%;margin:14px 0;font-size:.95rem}table.opt th,table.opt td{border-top:1px solid var(--line);padding:9px 10px;text-align:left;vertical-align:top}table.opt th{color:var(--mut);font-weight:600}
+.callout{border-radius:14px;padding:14px 16px;margin:16px 0;background:var(--surface);box-shadow:0 0 0 1px var(--line);max-width:74ch}
+.callout.warn{box-shadow:0 0 0 1px color-mix(in srgb,var(--warn) 55%,transparent)}.callout.ok{box-shadow:0 0 0 1px color-mix(in srgb,var(--ok) 55%,transparent)}
+.callout strong{display:block;margin-bottom:4px}.callout p{margin:0}
+pre{overflow:auto;background:var(--surface);padding:12px 14px;border-radius:10px;box-shadow:0 0 0 1px var(--line)}
+</style><script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"DisplayCAL-CG","applicationCategory":"MultimediaApplication","operatingSystem":"macOS, Windows","softwareVersion":"3.10.0.dev82","license":"https://www.gnu.org/licenses/gpl-3.0.html","offers":{"@type":"Offer","price":"0","priceCurrency":"EUR"},"url":"https://gordas.dev/DisplayCAL-CG/","codeRepository":"https://github.com/gordasgdc/displaycal-py3","author":{"@type":"Person","name":"Cristi Gordaș"}}</script></head><body><a class="skip" href="#main">Sari la conținut</a><header class="top"><div class="wrap bar"><a class="brand" href=""><img src="assets/site/icon-b-180.png" width="32" height="32" alt=""><span>Display<b>CAL-CG</b></span></a><nav class="main" aria-label="Ghid tehnic"><a class="hide-s" href="#flow-h">Fluxul</a><a class="hide-s" href="#prep-h">Pregătirea</a><a class="hide-s" href="#plan-h">Planul</a><a class="hide-s" href="#limits-h">Limite</a><a href="ghid/">Ghid tehnic</a><a href="#get">Descarcă</a><div class="langs" role="group" aria-label="Language"><a href="" hreflang="ro" lang="ro" aria-current="page">RO</a><a href="en/" hreflang="en" lang="en">EN</a><a href="es/" hreflang="es" lang="es">ES</a></div></nav></div></header>
+<main id="main">
+<section class="hero" id="top"><div class="wrap grid">
+<div><p class="kicker">Calibrare și profilare de monitor</p><h1>Culori în care poți avea încredere, <span class="ac">pas cu pas.</span></h1><p class="lead">DisplayCAL-CG te conduce de la sondă la un profil ICC verificat: ce pregătești, cum așezi instrumentul, cât durează, ce se întâmplă dacă ceva se oprește. Peste motorul ArgyllCMS, gratuit și deschis.</p>
+<div class="cta" id="get"><a class="btn" href="https://github.com/gordasgdc/displaycal-py3/releases/latest/download/DisplayCAL-CG.dmg">Descarcă pentru macOS</a><a class="btn" href="https://github.com/gordasgdc/displaycal-py3/releases/latest/download/DisplayCAL-CG-Setup.exe">Descarcă pentru Windows</a><a class="btn ghost" href="ghid/">Ghid tehnic detaliat</a></div>
+<ul class="facts"><li>100% gratuit</li><li>GPLv3, fără trial sau activare</li><li>ArgyllCMS inclus și verificat</li><li>RO · EN · ES</li><li>macOS · Windows</li></ul><p class="ver">Versiunea 3.10.0.dev82 (cg.4) · Apple Silicon pentru macOS, x64 pentru Windows</p></div>
+<figure class="stage" style="margin:0"><img class="badge-icon" src="assets/site/icon-b-512.webp" width="84" height="84" alt="DisplayCAL-CG"><img src="assets/site/real-mac-step1-ro.webp" width="1300" height="1466" alt="Fereastra DisplayCAL-CG, pasul «Monitor și instrument»" fetchpriority="high"><span class="reflect"></span><figcaption><span class="real-tag">REAL</span>Captură reală din aplicație (macOS, temă întunecată).</figcaption></figure>
+</div></section>
 
-  header{ position:sticky; top:0; z-index:50; background:rgba(20,22,26,.82); backdrop-filter:blur(12px); border-bottom:1px solid var(--border); }
-  .header-inner{ display:flex; align-items:center; justify-content:space-between; padding:14px 24px; max-width:1080px; margin:0 auto; }
-  .brand{ display:flex; align-items:center; gap:10px; font-family:var(--mono); font-weight:700; font-size:15px; }
-  .brand .mark{ width:28px; height:28px; border-radius:8px; background:var(--accent); color:var(--accent-ink); display:flex; align-items:center; justify-content:center; }
-  .brand .mark svg{ width:16px; height:16px; }
-  .btn svg{ width:15px; height:15px; flex-shrink:0; }
-  #lang-switch{ display:flex; gap:4px; }
-  #lang-switch button{ font-family:var(--mono); font-size:11.5px; font-weight:600; color:var(--muted); background:transparent; border:1px solid var(--border); border-radius:6px; padding:5px 9px; cursor:pointer; }
-  #lang-switch button:hover{ color:var(--text); border-color:var(--accent); }
-  #lang-switch button.active{ color:var(--accent-ink); background:var(--accent); border-color:var(--accent); }
+<section class="band"><div class="wrap three prose"><div><h2>Ce face și pentru cine este</h2><p>Aplicația măsoară cum își afișează ecranul culorile și scrie un profil ICC pe care sistemul și programele îl folosesc pentru culori corecte. Este pentru fotografi, coloriști, designeri și oricine are nevoie ca monitorul să arate la fel de la o zi la alta și de la un program la altul.</p></div>
+<div><h2 style="font-size:1.3rem">Ce îți trebuie</h2><p>Un colorimetru sau un spectrofotometru compatibil cu ArgyllCMS (de exemplu din familiile i1Display, ColorMunki sau Spyder). Fără instrument fizic nu se poate măsura nimic: aplicația nu simulează măsurători.</p><p class="note">Modelul exact îl confirmi tu atunci când mai multe produse folosesc aceeași identitate USB; aplicația nu ghicește.</p></div></div></section>
 
-  .hero{ padding:76px 0 52px; text-align:center; }
-  .hero .badge-lg{ width:88px; height:88px; border-radius:20px; margin:0 auto 22px; background:var(--accent); color:var(--accent-ink); display:flex; align-items:center; justify-content:center; box-shadow:0 20px 60px rgba(0,0,0,.4); }
-  .hero .badge-lg svg{ width:40px; height:40px; }
-  .eyebrow{ display:inline-block; font-family:var(--mono); font-size:12px; color:var(--accent); background:rgba(232,150,60,.10); border:1px solid rgba(232,150,60,.3); padding:5px 12px; border-radius:999px; margin-bottom:22px; }
-  .hero h1{ font-size:44px; font-weight:800; letter-spacing:-.02em; margin-bottom:16px; text-wrap:balance; }
-  .hero h1 .accent{ color:var(--accent); }
-  .hero p.tagline{ font-size:17px; color:var(--muted); max-width:620px; margin:0 auto 34px; }
+<section class="band alt" aria-labelledby="flow-h"><div class="wrap"><h2 id="flow-h">Fluxul ghidat, în cinci pași</h2><p class="lead" style="margin-bottom:22px">Fiecare pas spune ce a fost detectat și ce ai confirmat tu, și blochează măsurarea doar cu motive explicate. Toate opțiunile avansate rămân în celelalte file.</p>
+<div class="flowwrap"><div class="flow" id="flow" role="group" aria-label="Demonstrație a fluxului ghidat">
+<div><ol class="rail"><li><button type="button" aria-current="true"><span class="n">1</span><span><strong>Monitor și instrument</strong><span class="t">Vezi ce a detectat sistemul. Dacă modelul nu poate fi dedus, îl alegi tu.</span></span></button></li><li><button type="button" aria-current="false"><span class="n">2</span><span><strong>Obiectivul tău</strong><span class="t">Foto, video, birou sau «păstrează setările mele actuale». Fiecare obiectiv încarcă o presetare, pe care o poți schimba după aceea.</span></span></button></li><li><button type="button" aria-current="false"><span class="n">3</span><span><strong>Pregătire</strong><span class="t">Listă de verificare cu surse: monitor stabilizat, mod neutru, lumina din cameră, instrumentul conectat, fără perturbări. Nimic nu se bifează automat.</span></span></button></li><li><button type="button" aria-current="false"><span class="n">4</span><span><strong>Măsurare</strong><span class="t">Planul înainte de pornire: tipul de profil, numărul de patch-uri, blocurile, timpul estimat, împiedicarea repausului.</span></span></button></li><li><button type="button" aria-current="false"><span class="n">5</span><span><strong>Instalare și verificare</strong><span class="t">Profilul se instalează abia după ce există unul valid; apoi aplicația citește înapoi profilul activ și spune dacă este cel creat acum.</span></span></button></li></ol>
+<div class="ctrl"><button class="btn small ghost" id="flow-prev" type="button">Pasul anterior</button><button class="btn small ghost" id="flow-next" type="button">Pasul următor</button>
+<button class="btn small" id="flow-play" type="button" aria-pressed="false" data-play="Redă" data-pause="Pauză">Pauză</button>
+<button class="btn small ghost" id="flow-all" type="button" aria-expanded="false" data-all="Arată toți pașii" data-one="Arată pe rând">Arată toți pașii</button></div><div class="progress" aria-hidden="true"><i></i></div></div>
+<div class="shots stage" style="padding:8px"><div class="shot on"><picture><source media="(prefers-color-scheme: light)" srcset="assets/site/flow1-ro-light.webp" width="1100" height="964"><img src="assets/site/flow1-ro-dark.webp" width="1100" height="964" alt="Monitor și instrument: Vezi ce a detectat sistemul. Dacă modelul nu poate fi dedus, îl alegi tu." loading="lazy" decoding="async"></picture></div><div class="shot"><picture><source media="(prefers-color-scheme: light)" srcset="assets/site/flow2-ro-light.webp" width="1100" height="964"><img src="assets/site/flow2-ro-dark.webp" width="1100" height="964" alt="Obiectivul tău: Foto, video, birou sau «păstrează setările mele actuale». Fiecare obiectiv încarcă o presetare, pe care o poți schimba după aceea." loading="lazy" decoding="async"></picture></div><div class="shot"><picture><source media="(prefers-color-scheme: light)" srcset="assets/site/flow3-ro-light.webp" width="1100" height="964"><img src="assets/site/flow3-ro-dark.webp" width="1100" height="964" alt="Pregătire: Listă de verificare cu surse: monitor stabilizat, mod neutru, lumina din cameră, instrumentul conectat, fără perturbări. Nimic nu se bifează automat." loading="lazy" decoding="async"></picture></div><div class="shot"><picture><source media="(prefers-color-scheme: light)" srcset="assets/site/flow4-ro-light.webp" width="1100" height="964"><img src="assets/site/flow4-ro-dark.webp" width="1100" height="964" alt="Măsurare: Planul înainte de pornire: tipul de profil, numărul de patch-uri, blocurile, timpul estimat, împiedicarea repausului." loading="lazy" decoding="async"></picture></div><div class="shot"><picture><source media="(prefers-color-scheme: light)" srcset="assets/site/flow5-ro-light.webp" width="1100" height="964"><img src="assets/site/flow5-ro-dark.webp" width="1100" height="964" alt="Instalare și verificare: Profilul se instalează abia după ce există unul valid; apoi aplicația citește înapoi profilul activ și spune dacă este cel creat acum." loading="lazy" decoding="async"></picture></div><p id="flow-live" class="sr" style="position:absolute;width:1px;height:1px;overflow:hidden" aria-live="polite"></p></div></div>
+<div class="nojs-list"><figure class="static-step"><picture><source media="(prefers-color-scheme: light)" srcset="assets/site/flow1-ro-light.webp" width="1100" height="964"><img src="assets/site/flow1-ro-dark.webp" width="1100" height="964" alt="Monitor și instrument" loading="lazy" decoding="async"></picture><figcaption>1. Monitor și instrument</figcaption><p>Vezi ce a detectat sistemul. Dacă modelul nu poate fi dedus, îl alegi tu.</p></figure><figure class="static-step"><picture><source media="(prefers-color-scheme: light)" srcset="assets/site/flow2-ro-light.webp" width="1100" height="964"><img src="assets/site/flow2-ro-dark.webp" width="1100" height="964" alt="Obiectivul tău" loading="lazy" decoding="async"></picture><figcaption>2. Obiectivul tău</figcaption><p>Foto, video, birou sau «păstrează setările mele actuale». Fiecare obiectiv încarcă o presetare, pe care o poți schimba după aceea.</p></figure><figure class="static-step"><picture><source media="(prefers-color-scheme: light)" srcset="assets/site/flow3-ro-light.webp" width="1100" height="964"><img src="assets/site/flow3-ro-dark.webp" width="1100" height="964" alt="Pregătire" loading="lazy" decoding="async"></picture><figcaption>3. Pregătire</figcaption><p>Listă de verificare cu surse: monitor stabilizat, mod neutru, lumina din cameră, instrumentul conectat, fără perturbări. Nimic nu se bifează automat.</p></figure><figure class="static-step"><picture><source media="(prefers-color-scheme: light)" srcset="assets/site/flow4-ro-light.webp" width="1100" height="964"><img src="assets/site/flow4-ro-dark.webp" width="1100" height="964" alt="Măsurare" loading="lazy" decoding="async"></picture><figcaption>4. Măsurare</figcaption><p>Planul înainte de pornire: tipul de profil, numărul de patch-uri, blocurile, timpul estimat, împiedicarea repausului.</p></figure><figure class="static-step"><picture><source media="(prefers-color-scheme: light)" srcset="assets/site/flow5-ro-light.webp" width="1100" height="964"><img src="assets/site/flow5-ro-dark.webp" width="1100" height="964" alt="Instalare și verificare" loading="lazy" decoding="async"></picture><figcaption>5. Instalare și verificare</figcaption><p>Profilul se instalează abia după ce există unul valid; apoi aplicația citește înapoi profilul activ și spune dacă este cel creat acum.</p></figure></div></div>
+<p class="cap"><span class="demo-tag">DEMO</span>Capturi demonstrative: monitor și instrument simulate, nicio sondă conectată, nicio măsurare reală. Banda de sus din imagine spune același lucru.</p></div></section>
 
-  .btn{ display:inline-flex; align-items:center; gap:8px; font-family:var(--mono); font-size:13.5px; font-weight:600; padding:12px 22px; border-radius:9px; text-decoration:none; white-space:nowrap; }
-  .btn-primary{ background:var(--accent); color:var(--accent-ink); }
-  .btn-primary:hover{ background:var(--accent-2); }
-  .btn-ghost{ border:1px solid var(--border); color:var(--text); }
-  .btn-ghost:hover{ border-color:var(--accent); }
-  .btn-disabled{ border:1px solid var(--border); color:var(--faint); cursor:default; opacity:.7; }
-  .btn-row{ display:flex; gap:14px; justify-content:center; flex-wrap:wrap; }
-  .signed-note{ margin-top:20px; font-size:12.5px; color:var(--faint); display:flex; align-items:center; justify-content:center; gap:6px; flex-wrap:wrap; }
-  .signed-note .dot{ width:6px; height:6px; border-radius:50%; background:var(--success); }
+<section class="band" aria-labelledby="prep-h"><div class="wrap"><h2 id="prep-h">Pregătirea și poziționarea sondei</h2><p class="lead" style="margin-bottom:22px">Majoritatea erorilor de măsurare vin din pregătire. Aplicația te însoțește, dar nu poate observa lumina din cameră sau cât timp a stat monitorul aprins: acestea le confirmi tu.</p>
+<div class="prose" style="margin-bottom:34px"><ul class="cols"><li>Monitorul pornit și stabilizat (recomandarea de 30 de minute apare doar pentru instrumentele la care producătorul o indică).</li><li>Mod de imagine neutru, cu luminozitatea automată, contrastul dinamic și filtrele de culoare oprite.</li><li>Lumina din încăpere sub control: fără lampă sau fereastră care luminează sau se reflectă în ecran.</li><li>Instrumentul conectat direct la computer, nu printr-un hub.</li><li>Alegerea corecției potrivită tipului de ecran; aplicația nu o alege automat în locul tău.</li></ul></div>
+<div id="place" class="place"><div><svg id="place-svg" class="s1" viewBox="0 0 520 360" role="img" aria-labelledby="place-t"><title id="place-t">Animație: poziționarea instrumentului pe ecran</title>
+<defs><linearGradient id="scr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2a2e38"/><stop offset="1" stop-color="#12141a"/></linearGradient><linearGradient id="gl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><linearGradient id="sn" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4a505c"/><stop offset="1" stop-color="#1b1e25"/></linearGradient></defs>
+<g transform="translate(60,26)"><rect x="0" y="0" width="400" height="248" rx="16" fill="#0b0c10" stroke="#555b68" stroke-width="2"/><rect x="10" y="10" width="380" height="228" rx="8" fill="url(#scr)"/>
+<rect x="10" y="10" width="380" height="80" rx="8" fill="url(#gl)" opacity=".12"/>
+<g class="target" transform="translate(150,76)"><rect width="96" height="96" rx="6" fill="#fff" opacity=".92"/><rect x="2" y="2" width="92" height="92" rx="5" fill="none" stroke="#ffb347" stroke-width="3" stroke-dasharray="9 7"/></g>
+<path d="M170 248 h60 l14 38 h-88 z" fill="#2a2e38" stroke="#555b68" stroke-width="2"/><rect x="120" y="286" width="160" height="10" rx="5" fill="#2a2e38" stroke="#555b68" stroke-width="2"/></g>
+<g class="sensor"><g transform="translate(-52,-52)"><rect width="104" height="104" rx="18" fill="url(#sn)" stroke="#8a919f" stroke-width="2"/><circle class="lens" cx="52" cy="52" r="26" fill="#0b0c10" stroke="#ffb347" stroke-width="3"/><circle cx="52" cy="52" r="12" fill="#2a3b6b"/><circle cx="46" cy="46" r="4" fill="#fff" opacity=".7"/><rect x="20" y="4" width="64" height="9" rx="4.5" fill="#fff" opacity=".12"/></g></g></svg>
+<div class="ctrl"><button class="btn small" id="place-play" type="button" aria-pressed="false" data-play="Redă animația" data-pause="Pauză">Pauză</button></div></div>
+<div><h3>Cum se așază instrumentul</h3><ol><li aria-current="true"><div><strong>Identifici fața de măsurare</strong>Partea cu lentila sau optica este cea care se sprijină pe ecran. Verifică instrucțiunile instrumentului tău dacă nu ești sigur.</div></li><li aria-current="false"><div><strong>O așezi pe ecran</strong>Sprijină senzorul plat pe ecran, cu fața de măsurare pe sticlă. Nu apăsa pe panou.</div></li><li aria-current="false"><div><strong>O centrezi pe zona de măsurare</strong>Centrează-l pe pătratul de măsurare afișat de aplicație și ține-l nemișcat pe toată durata rulării.</div></li></ol><p class="cap">Schemă generică, nu fotografie de produs. Pașii generali nu înlocuiesc documentul producătorului instrumentului tău.</p></div></div></div></section>
 
-  section{ padding:58px 0; border-top:1px solid var(--border); }
-  section h2{ font-size:27px; font-weight:800; margin-bottom:32px; text-align:center; text-wrap:balance; }
-  section .subhead{ text-align:center; font-size:14.5px; color:var(--muted); max-width:620px; margin:-20px auto 32px; }
+<section class="band alt" aria-labelledby="concepts-h"><div class="wrap"><h2 id="concepts-h">Calibrare, profil ICC, verificare, LUT 3D</h2><p class="lead">Patru lucruri diferite, în această ordine firească; LUT-ul 3D este opțional:</p><ol class="pipe"><li><div class="dot">1</div><h3>Calibrare</h3><p>Aduce monitorul la o țintă (punct alb, luminozitate, curbă de tonuri) prin controalele lui și prin curbele plăcii video. Produce curbe de calibrare, nu un profil.</p></li><li><div class="dot">2</div><h3>Profilare ICC</h3><p>Măsoară cum arată culorile ecranului calibrat și scrie profilul ICC. Tipul profilului este felul în care măsurătorile sunt descrise aplicațiilor.</p></li><li><div class="dot">3</div><h3>Verificare</h3><p>Măsoară din nou și compară cu ce prezice profilul. Arată o abatere, nu o garanție: limitele sunt explicate în ghid.</p></li><li><div class="dot">4</div><h3>LUT 3D</h3><p>Un tabel folosit de o singură aplicație sau dispozitiv care îl încarcă (de exemplu un instrument de etalonare sau de redare), independent de felul în care alte programe citesc profilul ICC.</p></li></ol>
+<div class="note" style="margin-top:28px"><strong>Tipul de profil și macOS</strong>Pe macOS 10.8 sau mai nou, înainte de calibrare sau profilare, aplicația întreabă o dată dacă tipul profilului este altul decât «curbă unică + matrice» cu compensarea punctului negru. Motivul, din proiectul original: aplicațiile care folosesc modulul de culoare propriu al Apple (de exemplu Previzualizare și Quick Look) pot arăta negru strivit și posterizare cu alte tipuri de profil, mai ales cele LUT. Nu este o interdicție: «Da» trece la tipul recomandat, «Nu» păstrează alegerea ta. Aplicațiile cu management propriu al culorii (Adobe, GIMP, Krita) și fluxurile cu LUT 3D nu sunt afectate.</div></div></section>
 
-  .features{ display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:20px; }
-  .feature{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:22px; }
-  .feature .icon{ margin-bottom:10px; color:var(--accent); }
-  .feature .icon svg{ width:26px; height:26px; display:block; }
-  .feature h3{ font-size:15.5px; font-weight:700; margin-bottom:8px; }
-  .feature p{ font-size:13.5px; color:var(--muted); line-height:1.55; }
+<section class="band" aria-labelledby="plan-h"><div class="wrap"><h2 id="plan-h">Planul de măsurare, înainte de pornire</h2><p class="lead" style="margin-bottom:22px">Trei numere separate, ca să nu se confunde: totalul de patch-uri din diagramă, cel mai mare bloc și numărul de blocuri. Mărimea blocului nu schimbă niciodată totalul; decide doar cum este tăiată aceeași diagramă.</p>
+<div class="split rev"><div class="stage" style="padding:8px"><figure style="margin:0"><img src="assets/site/real-mac-plan-ro.webp" width="1300" height="1466" alt="Captură reală: o diagramă de 10.986 de patch-uri, blocuri de maximum 500, aproximativ 22 de blocuri, 21 de citiri suplimentare de alb." loading="lazy" decoding="async"><figcaption><span class="real-tag">REAL</span>Captură reală: o diagramă de 10.986 de patch-uri, blocuri de maximum 500, aproximativ 22 de blocuri, 21 de citiri suplimentare de alb.</figcaption></figure></div>
+<div><dl class="defs"><div><dt>Total</dt><dd>Câte patch-uri are diagrama aleasă sau creată. Nu există o limită fixă în aplicație; diagrame de peste 10.000 de patch-uri au fost create și împărțite în blocuri în teste.</dd></div><div><dt>Blocuri</dt><dd>O rulare lungă poate fi tăiată în blocuri salvate pe disc pe măsură ce se termină. Fiecare bloc după primul repetă albul de referință; citirile suplimentare sunt afișate separat.</dd></div><div><dt>Timp estimat</dt><dd>Din viteza măsurată pe acest calculator, dacă există istoric, altfel din specificațiile instrumentului, și aplicația spune care. Este o estimare, nu o garanție.</dd></div><div><dt>Mai multe patch-uri nu înseamnă automat mai bine</dt><dd>Ajută acolo unde tipul de profil le poate folosi (mai ales LUT), costă timp și lasă ecranul să derive. Verifică rezultatul după profilare.</dd></div></dl></div></div>
+<div class="split" style="margin-top:34px"><div class="prose"><h3>Dacă o rulare se oprește</h3><p>Aplicația ține un jurnal al sesiunii. La următoarea pornire îți arată ce s-a păstrat și îți oferă să exporți, să deschizi folderul sau să continui cu blocurile rămase, doar dacă monitorul, instrumentul, modul, corecția și tipul de profil sunt aceleași. O rulare măsurată dintr-o singură bucată nu poate fi recuperată dacă este întreruptă: de aceea blocurile sunt recomandate pentru rulările lungi.</p></div>
+<div class="cards2"><figure class="stage" style="margin:0;padding:8px"><picture><source media="(prefers-color-scheme: light)" srcset="assets/site/rec-ro-light.webp" width="760" height="594"><img src="assets/site/rec-ro-dark.webp" width="760" height="594" alt="Progres, recuperare și raportul final" loading="lazy" decoding="async"></picture><figcaption><span class="demo-tag">DEMO</span>Imaginile de mai jos sunt DEMONSTRATIVE (date simulate, nicio măsurare): arată cum arată dialogul de recuperare și pagina de final, nu un rezultat obținut cu un instrument.</figcaption></figure></div></div></div></section>
 
-  .tools{ display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:8px; }
-  .tool-pill{ font-family:var(--mono); font-size:12.5px; background:var(--panel-2); border:1px solid var(--border); color:var(--muted); padding:7px 14px; border-radius:999px; }
+<section class="band alt" aria-labelledby="adv-h"><div class="wrap split rev"><figure class="stage" style="margin:0;padding:8px"><img src="assets/site/real-mac-adv-ro.webp" width="1300" height="1226" alt="Captură reală: fila Profilare, cu planul și alegerea diagramei." loading="lazy" decoding="async"><figcaption><span class="real-tag">REAL</span>Captură reală: fila Profilare, cu planul și alegerea diagramei.</figcaption></figure>
+<div class="prose"><h2 id="adv-h">Modul avansat, aceeași configurație</h2><p>Toate controalele rămân în file, grupate după decizia pe care o iei (tipul de profil, diagrama, comportamentul măsurării…), cu «Ce schimbă fiecare setare de aici» pentru fiecare grup. Ghidat și avansat folosesc aceeași configurație: ce schimbi într-unul se vede în celălalt.</p><h3>Text mai mare, citibil</h3><p>Butonul «Aa» schimbă imediat dimensiunea textului în toată aplicația (Normal, Mare, Foarte mare), pornind de la dimensiunea sistemului tău. Nu atinge fereastra de măsurare, mărimea patch-urilor sau culorile.</p></div></div></section>
 
-  .instruments{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:6px; }
-  .instr-pill{ font-size:12px; background:transparent; border:1px solid var(--border); color:var(--faint); padding:5px 12px; border-radius:999px; }
+<section class="band" aria-labelledby="plat-h"><div class="wrap"><h2 id="plat-h">Pe ambele platforme</h2><div class="cards2" style="margin-top:20px">
+<figure class="stage" style="margin:0;padding:8px"><img src="assets/site/real-mac-step1-ro.webp" width="1300" height="1466" alt="macOS (Apple Silicon): captură reală, temă întunecată." loading="lazy" decoding="async"><figcaption><span class="real-tag">REAL</span>macOS (Apple Silicon): captură reală, temă întunecată.</figcaption></figure>
+<figure class="stage" style="margin:0;padding:8px"><img src="assets/site/real-win-plan-en.webp" width="1126" height="1843" alt="Windows 11: captură reală (planul de măsurare, interfața în engleză), temă luminoasă." loading="lazy" decoding="async"><figcaption><span class="real-tag">REAL</span>Windows 11: captură reală (planul de măsurare, interfața în engleză), temă luminoasă.</figcaption></figure></div>
+<p class="cap" style="max-width:70ch">Fără instrument conectat, aplicația spune deschis «Nu a fost detectat niciun instrument» și blochează măsurarea; nu inventează date.</p>
+<figure class="stage" style="margin:26px 0 0;padding:8px;max-width:760px"><picture><source media="(prefers-color-scheme: light)" srcset="assets/site/fin-ro-light.webp" width="720" height="554"><img src="assets/site/fin-ro-dark.webp" width="720" height="554" alt="Progres, recuperare și raportul final" loading="lazy" decoding="async"></picture><figcaption><span class="demo-tag">DEMO</span>Imaginile de mai jos sunt DEMONSTRATIVE (date simulate, nicio măsurare): arată cum arată dialogul de recuperare și pagina de final, nu un rezultat obținut cu un instrument.</figcaption></figure></div></section>
 
-  .gallery{ display:grid; grid-template-columns:1.3fr 1fr; gap:16px; }
-  .gallery a{ display:block; border-radius:12px; overflow:hidden; border:1px solid var(--border); background:var(--panel); }
-  .gallery a img{ width:100%; display:block; transition:transform .25s; }
-  .gallery a:hover img{ transform:scale(1.02); }
-  .gallery .col{ display:flex; flex-direction:column; gap:16px; }
-  @media (max-width:720px){ .gallery{ grid-template-columns:1fr; } }
+<section class="band alt" aria-labelledby="limits-h"><div class="wrap"><h2 id="limits-h">Ce am verificat și ce nu</h2><p class="lead">Stare la versiunea 3.10.0.dev82 (cg.4). Ce nu este în coloana verde nu este promis.</p>
+<div class="lim"><div class="y"><h3>Verificat</h3><ul><li><span class="mk" aria-hidden="true">✓</span><span>Instalatoarele macOS (.pkg și .dmg) sunt semnate cu Developer ID, notarizate și verificate cu spctl; aplicația pornește.</span></li><li><span class="mk" aria-hidden="true">✓</span><span>Instalare curată pe Windows 11 (VM Parallels, ARM64 cu emulare x64): instalarea, pornirea, ArgyllCMS inclus, exportul de diagnostic.</span></li><li><span class="mk" aria-hidden="true">✓</span><span>O măsurare reală scurtă (38 de patch-uri) cu un colorimetru i1Display pe un monitor extern, pe macOS: repetabilitate, împărțire în blocuri, oprire și reluare, anulare.</span></li><li><span class="mk" aria-hidden="true">✓</span><span>Export de diagnostic local, fără trimitere automată, pe macOS și Windows.</span></li></ul></div><div class="n"><h3>Neverificat</h3><ul><li><span class="mk" aria-hidden="true">–</span><span>Sesiunile de mai multe ore (de exemplu 4–8 ore) nu au fost încă validate. Măsurarea în blocuri salvează local blocurile terminate, dar nu garantează stabilitatea, acuratețea sau recuperarea în orice condiții.</span></li><li><span class="mk" aria-hidden="true">–</span><span>Deconectarea sondei în timpul unei măsurători și revenirea după o pană de curent sau după repaus nu au fost verificate cu un instrument real.</span></li><li><span class="mk" aria-hidden="true">–</span><span>Alte instrumente decât cel testat funcționează pe baza suportului ArgyllCMS; nu le-am verificat noi.</span></li><li><span class="mk" aria-hidden="true">–</span><span>Windows pe hardware nativ x64 și macOS pe procesoare Intel: neverificat (pachetul macOS este pentru Apple Silicon).</span></li><li><span class="mk" aria-hidden="true">–</span><span>Instalatorul Windows nu este încă semnat cu un certificat plătit: SmartScreen poate avertiza. Descarcă-l numai de pe paginile oficiale.</span></li><li><span class="mk" aria-hidden="true">–</span><span>Traducerile în română și spaniolă nu au fost revizuite de vorbitori nativi.</span></li></ul></div></div></div></section>
 
-  .steps{ counter-reset:step; max-width:680px; margin:0 auto; }
-  .step{ display:flex; gap:16px; padding:16px 0; border-bottom:1px solid var(--border); }
-  .step:last-child{ border-bottom:none; }
-  .step .num{ font-family:var(--mono); font-weight:700; color:var(--accent); font-size:15px; flex-shrink:0; width:24px; }
-  .step h4{ font-size:14.5px; font-weight:700; margin-bottom:4px; }
-  .step p{ font-size:13px; color:var(--muted); line-height:1.6; }
+<section class="band" aria-labelledby="free-h"><div class="wrap split"><div class="prose"><h2 id="free-h">Gratuit și open source</h2><p>DisplayCAL-CG este 100% gratuit: fără trial, fără activare, fără funcții plătite. Este o ediție întreținută de Cristi Gordaș, peste același cod și aceeași licență GPLv3 ca proiectul original. Aplicația poate afișa mesajul opțional de susținere al proiectului original; îl poți închide și bifa «Nu mai arăta».</p><h3>Credite</h3><ul><li>DisplayCAL — Florian Höch, autorul original.</li><li>displaycal-py3 — continuarea comunității (portarea pe Python 3).</li><li>ArgyllCMS — Graeme Gill, motorul de măsurare și calcul al profilelor.</li><li>DisplayCAL-CG — adaptări, interfață ghidată și pachete de instalare: Cristi Gordaș.</li></ul></div>
+<div class="prose"><h3>Sursă, documentație, probleme, contribuții</h3><ul class="links"><li><a href="https://github.com/gordasgdc/displaycal-py3">Cod sursă</a></li><li><a href="https://github.com/gordasgdc/displaycal-py3/releases">Versiuni și descărcări</a></li><li><a href="https://github.com/gordasgdc/displaycal-py3/issues/new">Raportează o problemă</a></li><li><a href="https://github.com/gordasgdc/displaycal-py3/blob/develop/docs/upstream/README.upstream.md">Documentația proiectului original</a></li><li><a href="https://github.com/gordasgdc/displaycal-py3/blob/develop/docs/UPSTREAM_INTEGRATED.md">Ce vine din proiectul original</a></li><li><a href="DisplayCAL-CG_Ghid_RO.pdf">Ghidul complet (PDF)</a></li></ul>
+<p>Dacă ți-a fost de folos, o stea pe GitHub ajută proiectul să fie găsit.</p><a class="btn small ghost star" href="https://github.com/gordasgdc/displaycal-py3"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/site/github-invertocat-white.svg"><img src="assets/site/github-invertocat-black.svg" width="22" height="22" alt=""></picture>Oferă o stea pe GitHub</a></div></div></section>
 
-  .license-box{ max-width:600px; margin:0 auto; background:var(--panel); border:1px solid var(--border); border-radius:18px; padding:36px; text-align:center; }
-  .license-box .badge{ font-family:var(--mono); font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
-  .license-box .price{ font-family:var(--mono); font-size:32px; font-weight:700; color:var(--accent); margin:12px 0 4px; }
-  .license-box ul{ list-style:none; text-align:left; margin:24px 0; padding:0; }
-  .license-box li{ font-size:13.5px; color:var(--muted); padding:6px 0; padding-left:22px; position:relative; }
-  .license-box li::before{ content:"✓"; position:absolute; left:0; color:var(--accent); font-weight:700; }
-  .license-box .promo-note{ margin-top:20px; font-size:12px; line-height:1.6; color:var(--faint); text-align:left; background:var(--panel-2); border-radius:8px; padding:12px 14px; }
-
-  .credit-box{ max-width:680px; margin:36px auto 0; font-size:12.5px; color:var(--faint); text-align:center; line-height:1.7; border-top:1px solid var(--border); padding-top:24px; }
-  .credit-box b{ color:var(--muted); }
-
-  footer{ border-top:1px solid var(--border); padding:32px 24px; text-align:center; font-size:12.5px; color:var(--faint); }
-  footer a{ color:var(--muted); text-decoration:none; }
-  footer a:hover{ color:var(--text); }
-  footer .links{ display:flex; gap:16px; justify-content:center; flex-wrap:wrap; margin-bottom:8px; }
-</style>
-</head>
-<body>
-
-<!-- Sprite de iconite SVG, monocrome, tip contur — acelasi limbaj vizual
-     folosit pe mac-master-control-pro/, in loc de emoji colorate. -->
-<svg style="display:none" aria-hidden="true">
-  <defs>
-    <symbol id="icon-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.8" fill="currentColor" stroke="none"/>
-    </symbol>
-    <symbol id="icon-monitors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="2.5" y="5" width="12" height="9" rx="1.2"/><line x1="6" y1="17.5" x2="10.5" y2="17.5"/><line x1="8.5" y1="14" x2="8.5" y2="17.5"/>
-      <rect x="14.5" y="8.5" width="7" height="6" rx="1"/><line x1="18" y1="14.5" x2="18" y2="17"/>
-    </symbol>
-    <symbol id="icon-check-report" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M8 12l2.5 2.5L16 9"/>
-    </symbol>
-    <symbol id="icon-cube" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 3v18M4 7.5l8 4.5 8-4.5"/>
-    </symbol>
-    <symbol id="icon-gamut" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 3l8 15H4L12 3z"/><circle cx="12" cy="14.2" r="2.6"/>
-    </symbol>
-    <symbol id="icon-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-      <circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><line x1="3" y1="12" x2="21" y2="12"/>
-    </symbol>
-    <symbol id="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 3v13"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/>
-    </symbol>
-    <symbol id="icon-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/>
-    </symbol>
-  </defs>
-</svg>
-
-<header>
-  <div class="header-inner">
-    <div class="brand"><span class="mark"><svg><use href="#icon-target"/></svg></span> DisplayCAL-CG</div>
-    <div id="lang-switch">
-      <button data-lang="ro">RO</button>
-      <button data-lang="en">EN</button>
-      <button data-lang="es">ES</button>
-    </div>
-  </div>
-</header>
-
-<div class="hero wrap">
-  <div class="badge-lg"><svg><use href="#icon-target"/></svg></div>
-  <div class="eyebrow" data-i18n="hero.eyebrow">Mac · Windows · Calibrare de culoare</div>
-  <h1 data-i18n-html="hero.h1">Calibrare &amp; profilare, <span class="accent">la nivel de laborator.</span></h1>
-  <p class="tagline" data-i18n="hero.tagline">Calibrează și caracterizează orice display cu instrumentele de măsurare profesionale pe care le folosești deja — profiluri ICC precise, verificare și raportare, 3D LUT-uri video, gamut mapping CIECAM02 — pe Mac și Windows, complet gratuit.</p>
-  <div class="btn-row">
-    <a class="btn btn-primary" href="https://github.com/gordasgdc/displaycal-py3/releases/latest/download/DisplayCAL-CG.dmg"><svg><use href="#icon-download"/></svg> <span data-i18n="hero.mac">Descarcă pentru Mac</span></a>
-    <a class="btn btn-primary" href="https://github.com/gordasgdc/displaycal-py3/releases/latest/download/DisplayCAL-CG-Setup.exe"><svg><use href="#icon-download"/></svg> <span data-i18n="hero.win">Descarcă pentru Windows</span></a>
-  </div>
-  <div class="signed-note"><span class="dot"></span><span data-i18n="hero.signed">Pachetul Mac e semnat și notarizat oficial de Apple — se instalează direct în /Applications, fără avertismente.</span></div>
-</div>
-
-<section>
-  <div class="wrap">
-    <h2 data-i18n="features.title">Ce include DisplayCAL-CG</h2>
-    <p class="subhead" data-i18n="features.subhead">9 unelte complete pentru fluxul întreg de calibrare — de la măsurare până la verificare și export.</p>
-    <div class="features">
-      <div class="feature">
-        <div class="icon"><svg><use href="#icon-target"/></svg></div>
-        <h3 data-i18n="f1.h">Profile ICC precise</h3>
-        <p data-i18n="f1.p">Calibrare + caracterizare completă, cu suport pentru zeci de colorimetre și spectrometre — de la unități de consum până la instrumente de referință.</p>
-      </div>
-      <div class="feature">
-        <div class="icon"><svg><use href="#icon-monitors"/></svg></div>
-        <h3 data-i18n="f2.h">Multi-display</h3>
-        <p data-i18n="f2.p">Calibrează separat fiecare monitor dintr-un setup multi-display, cu profiluri și curbe independente pentru fiecare.</p>
-      </div>
-      <div class="feature">
-        <div class="icon"><svg><use href="#icon-check-report"/></svg></div>
-        <h3 data-i18n="f3.h">Verificare & raportare</h3>
-        <p data-i18n="f3.p">Verifică acuratețea unui profil deja creat, cu rapoarte detaliate (Delta E, gamma, punct alb/negru) — știi exact cât de bine calibrat e ecranul.</p>
-      </div>
-      <div class="feature">
-        <div class="icon"><svg><use href="#icon-cube"/></svg></div>
-        <h3 data-i18n="f4.h">3D LUT pentru video</h3>
-        <p data-i18n="f4.p">Generează 3D LUT-uri video pentru monitoare de grading, exportabile direct în formatele folosite de DaVinci Resolve și alte unelte de post-producție.</p>
-      </div>
-      <div class="feature">
-        <div class="icon"><svg><use href="#icon-gamut"/></svg></div>
-        <h3 data-i18n="f5.h">CIECAM02 gamut mapping</h3>
-        <p data-i18n="f5.p">Opțiune avansată de mapare a gamutului ținând cont de condițiile reale de vizualizare — pentru cei care au nevoie de acuratețe dincolo de calibrarea standard.</p>
-      </div>
-      <div class="feature">
-        <div class="icon"><svg><use href="#icon-globe"/></svg></div>
-        <h3 data-i18n="f6.h">Interfață completă în română</h3>
-        <p data-i18n="f6.p">Traducere completă a interfeței în limba română, pe lângă cele peste 15 limbi deja disponibile în proiectul original.</p>
-      </div>
-    </div>
-    <div class="tools">
-      <span class="tool-pill">DisplayCAL</span>
-      <span class="tool-pill">3D LUT Maker</span>
-      <span class="tool-pill">Curve Viewer</span>
-      <span class="tool-pill">ICC Profile Info</span>
-      <span class="tool-pill">Scripting Client</span>
-      <span class="tool-pill">Synthetic ICC</span>
-      <span class="tool-pill">Testchart Editor</span>
-      <span class="tool-pill">VRML to X3D</span>
-    </div>
-    <p class="subhead" style="margin-top:28px;" data-i18n="instruments.title">Compatibil cu instrumentele de măsurare cele mai folosite din industrie</p>
-    <div class="instruments">
-      <span class="instr-pill">X-Rite i1Display / i1Pro</span>
-      <span class="instr-pill">Datacolor Spyder</span>
-      <span class="instr-pill">Colorimètre ColorMunki</span>
-      <span class="instr-pill">Klein K10-A</span>
-      <span class="instr-pill">Konica Minolta</span>
-      <span class="instr-pill">JETI</span>
-      <span class="instr-pill">+ ArgyllCMS (motor de măsurare)</span>
-    </div>
-  </div>
-</section>
-
-<section id="galerie">
-  <div class="wrap">
-    <h2 data-i18n="gallery.title">Interfață completă în română</h2>
-    <p class="subhead" data-i18n="gallery.subhead">Captură reală din aplicație — fiecare pas al fluxului de calibrare, tradus integral.</p>
-    <div class="gallery">
-      <a href="assets/screenshot-main.jpg" target="_blank" rel="noopener"><img src="assets/screenshot-main.jpg" alt="DisplayCAL-CG — ecranul principal, în română"></a>
-      <div class="col">
-        <a href="assets/screenshot-lut3d.jpg" target="_blank" rel="noopener"><img src="assets/screenshot-lut3d.jpg" alt="DisplayCAL-CG — setări LUT 3D, în română"></a>
-        <a href="assets/screenshot-profile-info.jpg" target="_blank" rel="noopener"><img src="assets/screenshot-profile-info.jpg" alt="DisplayCAL-CG — ICC Profile Info, gamut și date profil"></a>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="install">
-  <div class="wrap">
-    <h2 data-i18n="install.title">Instalare</h2>
-    <div class="steps">
-      <div class="step">
-        <div class="num">1</div>
-        <div><h4 data-i18n="install.s1.h">Descarcă</h4><p data-i18n-html="install.s1.p">Alege pachetul de mai sus pentru Mac (<code>.dmg</code>) — varianta Windows urmează.</p></div>
-      </div>
-      <div class="step">
-        <div class="num">2</div>
-        <div><h4 data-i18n="install.s2.h">Instalează</h4><p data-i18n-html="install.s2.p"><b>Mac:</b> deschide <code>DisplayCAL-CG.dmg</code>, apoi dublu-click pe pachetul <code>.pkg</code> din el — se instalează direct în /Applications, toate cele 9 unelte deodată, fără avertismente Gatekeeper (pachet semnat + notarizat). <b>Windows:</b> rulează installer-ul — instalerul nu e încă semnat digital, așa că Windows poate arăta un avertisment SmartScreen; apasă „More info” → „Run anyway” pentru a continua.</p></div>
-      </div>
-      <div class="step">
-        <div class="num">3</div>
-        <div><h4 data-i18n="install.s3.h">Conectează instrumentul</h4><p data-i18n-html="install.s3.p">Conectează colorimetrul/spectrometrul înainte de a porni calibrarea — DisplayCAL-CG îl detectează automat la lansare, prin motorul de măsurare <code>ArgyllCMS</code> integrat.</p></div>
-      </div>
-      <div class="step">
-        <div class="num">4</div>
-        <div><h4 data-i18n="install.s4.h">Calibrează & profilează</h4><p data-i18n="install.s4.p">Alege setările țintă (gamma, punct alb, luminanță), pornește măsurarea, apoi verifică rezultatul cu raportul de acuratețe integrat.</p></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="licenta">
-  <div class="wrap">
-    <h2 data-i18n="license.title">Gratuit & Open Source</h2>
-    <div class="license-box">
-      <div class="badge" data-i18n="license.plan">Licență GPLv3</div>
-      <div class="price" data-i18n="license.once">100% gratuit</div>
-      <ul>
-        <li data-i18n="license.li1">Fără trial, fără activare, fără plafon de utilizare</li>
-        <li data-i18n="license.li2">Cod sursă deschis, disponibil integral pe GitHub</li>
-        <li data-i18n="license.li3">Fără telemetrie sau colectare de date ascunsă</li>
-        <li data-i18n="license.li4">Actualizări gratuite, pe viață</li>
-      </ul>
-      <div class="promo-note" data-i18n="license.note">
-        DisplayCAL-CG e o distribuție întreținută de GDC a proiectului open-source DisplayCAL — rebranding, traducere română și pachete de instalare native pentru Mac și Windows, sub aceeași licență GPLv3. Nu există nicio formă de monetizare a acestei distribuții.
-      </div>
-    </div>
-    <div class="credit-box" data-i18n-html="credit.text">
-      DisplayCAL-CG se bazează integral pe proiectul <b>DisplayCAL</b>, creat de <b>Florian Höch</b> și <b>Erkan Özgür Yılmaz</b>, și pe motorul de măsurare <b>ArgyllCMS</b>, creat de <b>Graeme Gill</b>. Această distribuție (rebranding, traducere română, pachete native) e întreținută de Cristi Gordaș (GDC) — creditul pentru munca originală de calibrare/profilare aparține integral autorilor de mai sus.
-    </div>
-  </div>
-</section>
-
-<footer>
-  <div class="links">
-    <a href="https://github.com/gordasgdc/displaycal-py3" data-i18n="footer.source">Cod sursă pe GitHub</a>
-    <a href="https://github.com/gordasgdc/displaycal-py3/releases" data-i18n="footer.releases">Toate versiunile</a>
-    <a href="https://github.com/eoyilmaz/displaycal-py3" data-i18n="footer.upstream">Proiectul original (upstream)</a>
-    <a href="https://gordas.dev/termeni">Termeni și Condiții</a>
-    <a href="https://gordas.dev/confidentialitate">Politică de Confidențialitate (GDPR)</a>
-    <a href="https://gordas.dev/cookie">Cookie-uri</a>
-    <a href="mailto:academiagdc@gmail.com">Contact</a>
-  </div>
-  <div data-i18n="footer.tag">DisplayCAL-CG — parte din ecosistemul GDC.</div>
-  <div style="margin-top:6px;font-size:11px;opacity:.75;">gordas.dev este o platformă administrată de dezvoltatori independenți. Aplicațiile și resursele sunt furnizate ca atare (AS IS), iar susținerea proiectului se bazează pe contribuții opționale de sprijin și donații.</div>
-</footer>
-
-<script>
-  const translations = {
-    ro: {
-      'hero.eyebrow': 'Mac · Windows · Calibrare de culoare',
-      'hero.h1': 'Calibrare &amp; profilare, <span class="accent">la nivel de laborator.</span>',
-      'hero.tagline': 'Calibrează și caracterizează orice display cu instrumentele de măsurare profesionale pe care le folosești deja — profiluri ICC precise, verificare și raportare, 3D LUT-uri video, gamut mapping CIECAM02 — pe Mac și Windows, complet gratuit.',
-      'hero.mac': 'Descarcă pentru Mac', 'hero.win': 'Descarcă pentru Windows',
-      'hero.signed': 'Pachetul Mac e semnat și notarizat oficial de Apple — se instalează direct în /Applications, fără avertismente.',
-      'features.title': 'Ce include DisplayCAL-CG',
-      'features.subhead': '9 unelte complete pentru fluxul întreg de calibrare — de la măsurare până la verificare și export.',
-      'f1.h': 'Profile ICC precise', 'f1.p': 'Calibrare + caracterizare completă, cu suport pentru zeci de colorimetre și spectrometre — de la unități de consum până la instrumente de referință.',
-      'f2.h': 'Multi-display', 'f2.p': 'Calibrează separat fiecare monitor dintr-un setup multi-display, cu profiluri și curbe independente pentru fiecare.',
-      'f3.h': 'Verificare & raportare', 'f3.p': 'Verifică acuratețea unui profil deja creat, cu rapoarte detaliate (Delta E, gamma, punct alb/negru) — știi exact cât de bine calibrat e ecranul.',
-      'f4.h': '3D LUT pentru video', 'f4.p': 'Generează 3D LUT-uri video pentru monitoare de grading, exportabile direct în formatele folosite de DaVinci Resolve și alte unelte de post-producție.',
-      'f5.h': 'CIECAM02 gamut mapping', 'f5.p': 'Opțiune avansată de mapare a gamutului ținând cont de condițiile reale de vizualizare — pentru cei care au nevoie de acuratețe dincolo de calibrarea standard.',
-      'f6.h': 'Interfață completă în română', 'f6.p': 'Traducere completă a interfeței în limba română, pe lângă cele peste 15 limbi deja disponibile în proiectul original.',
-      'instruments.title': 'Compatibil cu instrumentele de măsurare cele mai folosite din industrie',
-      'gallery.title': 'Interfață completă în română', 'gallery.subhead': 'Captură reală din aplicație — fiecare pas al fluxului de calibrare, tradus integral.',
-      'install.title': 'Instalare',
-      'install.s1.h': 'Descarcă', 'install.s1.p': 'Alege pachetul de mai sus pentru platforma ta — Mac (<code>.dmg</code>) sau Windows (<code>.exe</code>).',
-      'install.s2.h': 'Instalează', 'install.s2.p': '<b>Mac:</b> deschide <code>DisplayCAL-CG.dmg</code>, apoi dublu-click pe pachetul <code>.pkg</code> din el — se instalează direct în /Applications, toate cele 9 unelte deodată, fără avertismente Gatekeeper (pachet semnat + notarizat). <b>Windows:</b> rulează installer-ul — instalerul nu e încă semnat digital, așa că Windows poate arăta un avertisment SmartScreen; apasă „More info” → „Run anyway” pentru a continua.',
-      'install.s3.h': 'Conectează instrumentul', 'install.s3.p': 'Conectează colorimetrul/spectrometrul înainte de a porni calibrarea — DisplayCAL-CG îl detectează automat la lansare, prin motorul de măsurare <code>ArgyllCMS</code> integrat.',
-      'install.s4.h': 'Calibrează & profilează', 'install.s4.p': 'Alege setările țintă (gamma, punct alb, luminanță), pornește măsurarea, apoi verifică rezultatul cu raportul de acuratețe integrat.',
-      'license.title': 'Gratuit & Open Source', 'license.plan': 'Licență GPLv3', 'license.once': '100% gratuit',
-      'license.li1': 'Fără trial, fără activare, fără plafon de utilizare', 'license.li2': 'Cod sursă deschis, disponibil integral pe GitHub',
-      'license.li3': 'Fără telemetrie sau colectare de date ascunsă', 'license.li4': 'Actualizări gratuite, pe viață',
-      'license.note': 'DisplayCAL-CG e o distribuție întreținută de GDC a proiectului open-source DisplayCAL — rebranding, traducere română și pachete de instalare native pentru Mac și Windows, sub aceeași licență GPLv3. Nu există nicio formă de monetizare a acestei distribuții.',
-      'credit.text': 'DisplayCAL-CG se bazează integral pe proiectul <b>DisplayCAL</b>, creat de <b>Florian Höch</b> și <b>Erkan Özgür Yılmaz</b>, și pe motorul de măsurare <b>ArgyllCMS</b>, creat de <b>Graeme Gill</b>. Această distribuție (rebranding, traducere română, pachete native) e întreținută de Cristi Gordaș (GDC) — creditul pentru munca originală de calibrare/profilare aparține integral autorilor de mai sus.',
-      'footer.source': 'Cod sursă pe GitHub', 'footer.releases': 'Toate versiunile', 'footer.upstream': 'Proiectul original (upstream)', 'footer.tag': 'DisplayCAL-CG — parte din ecosistemul GDC.',
-    },
-    en: {
-      'hero.eyebrow': 'Mac · Windows · Color calibration',
-      'hero.h1': 'Calibration &amp; profiling, <span class="accent">at lab-grade precision.</span>',
-      'hero.tagline': 'Calibrate and characterize any display with the measurement instruments you already own — precise ICC profiles, verification and reporting, video 3D LUTs, CIECAM02 gamut mapping — for Mac and Windows, completely free.',
-      'hero.mac': 'Download for Mac', 'hero.win': 'Download for Windows',
-      'hero.signed': 'The Mac package is officially signed and notarized by Apple — installs directly into /Applications, no warnings.',
-      'features.title': 'What DisplayCAL-CG includes',
-      'features.subhead': '9 complete tools for the whole calibration workflow — from measurement to verification and export.',
-      'f1.h': 'Precise ICC profiles', 'f1.p': 'Full calibration + characterization, with support for dozens of colorimeters and spectrometers — from consumer units to reference-grade instruments.',
-      'f2.h': 'Multi-display', 'f2.p': 'Calibrate each monitor in a multi-display setup separately, with independent profiles and curves for each.',
-      'f3.h': 'Verification & reporting', 'f3.p': 'Verify the accuracy of an existing profile, with detailed reports (Delta E, gamma, white/black point) — know exactly how well-calibrated your screen is.',
-      'f4.h': 'Video 3D LUTs', 'f4.p': 'Generate video 3D LUTs for grading monitors, exportable directly in the formats used by DaVinci Resolve and other post-production tools.',
-      'f5.h': 'CIECAM02 gamut mapping', 'f5.p': 'Advanced gamut mapping option that accounts for real viewing conditions — for those who need accuracy beyond standard calibration.',
-      'f6.h': 'Full Romanian interface', 'f6.p': 'Complete Romanian translation of the interface, alongside the 15+ languages already available in the original project.',
-      'instruments.title': 'Compatible with the industry\'s most-used measurement instruments',
-      'gallery.title': 'Full Romanian interface', 'gallery.subhead': 'Real screenshots from the app — every step of the calibration workflow, fully translated.',
-      'install.title': 'Installation',
-      'install.s1.h': 'Download', 'install.s1.p': 'Pick the package above for your platform — Mac (<code>.dmg</code>) or Windows (<code>.exe</code>).',
-      'install.s2.h': 'Install', 'install.s2.p': '<b>Mac:</b> open <code>DisplayCAL-CG.dmg</code>, then double-click the <code>.pkg</code> inside — installs directly into /Applications, all 9 tools at once, no Gatekeeper warnings (signed + notarized package). <b>Windows:</b> run the installer — it isn\'t code-signed yet, so Windows may show a SmartScreen warning; click "More info" → "Run anyway" to continue.',
-      'install.s3.h': 'Connect your instrument', 'install.s3.p': 'Connect your colorimeter/spectrometer before starting calibration — DisplayCAL-CG detects it automatically at launch, through the integrated <code>ArgyllCMS</code> measurement engine.',
-      'install.s4.h': 'Calibrate & profile', 'install.s4.p': 'Pick your target settings (gamma, white point, luminance), start the measurement, then verify the result with the built-in accuracy report.',
-      'license.title': 'Free & Open Source', 'license.plan': 'GPLv3 License', 'license.once': '100% free',
-      'license.li1': 'No trial, no activation, no usage cap', 'license.li2': 'Open source code, fully available on GitHub',
-      'license.li3': 'No telemetry or hidden data collection', 'license.li4': 'Free updates, for life',
-      'license.note': 'DisplayCAL-CG is a GDC-maintained distribution of the open-source DisplayCAL project — rebranding, Romanian translation, and native installers for Mac and Windows, under the same GPLv3 license. There is no monetization of this distribution.',
-      'credit.text': 'DisplayCAL-CG is built entirely on the <b>DisplayCAL</b> project, created by <b>Florian Höch</b> and <b>Erkan Özgür Yılmaz</b>, and the <b>ArgyllCMS</b> measurement engine, created by <b>Graeme Gill</b>. This distribution (rebranding, Romanian translation, native packages) is maintained by Cristi Gordaș (GDC) — credit for the original calibration/profiling work belongs entirely to the authors above.',
-      'footer.source': 'Source code on GitHub', 'footer.releases': 'All releases', 'footer.upstream': 'Original project (upstream)', 'footer.tag': 'DisplayCAL-CG — part of the GDC ecosystem.',
-    },
-    es: {
-      'hero.eyebrow': 'Mac · Windows · Calibración de color',
-      'hero.h1': 'Calibración y perfilado, <span class="accent">con precisión de laboratorio.</span>',
-      'hero.tagline': 'Calibra y caracteriza cualquier pantalla con los instrumentos de medición profesionales que ya tienes — perfiles ICC precisos, verificación e informes, 3D LUTs de vídeo, mapeo de gama CIECAM02 — para Mac y Windows, totalmente gratis.',
-      'hero.mac': 'Descargar para Mac', 'hero.win': 'Descargar para Windows',
-      'hero.signed': 'El paquete de Mac está firmado y notarizado oficialmente por Apple — se instala directamente en /Applications, sin avisos.',
-      'features.title': 'Qué incluye DisplayCAL-CG',
-      'features.subhead': '9 herramientas completas para todo el flujo de calibración — desde la medición hasta la verificación y exportación.',
-      'f1.h': 'Perfiles ICC precisos', 'f1.p': 'Calibración y caracterización completa, con soporte para decenas de colorímetros y espectrómetros — desde unidades de consumo hasta instrumentos de referencia.',
-      'f2.h': 'Multipantalla', 'f2.p': 'Calibra cada monitor de una configuración multipantalla por separado, con perfiles y curvas independientes para cada uno.',
-      'f3.h': 'Verificación e informes', 'f3.p': 'Verifica la precisión de un perfil ya creado, con informes detallados (Delta E, gamma, punto blanco/negro) — sabe exactamente cuán bien calibrada está tu pantalla.',
-      'f4.h': '3D LUTs para vídeo', 'f4.p': 'Genera 3D LUTs de vídeo para monitores de grading, exportables directamente en los formatos usados por DaVinci Resolve y otras herramientas de posproducción.',
-      'f5.h': 'Mapeo de gama CIECAM02', 'f5.p': 'Opción avanzada de mapeo de gama que tiene en cuenta las condiciones reales de visualización — para quienes necesitan precisión más allá de la calibración estándar.',
-      'f6.h': 'Interfaz completa en rumano', 'f6.p': 'Traducción completa de la interfaz al rumano, además de los más de 15 idiomas ya disponibles en el proyecto original.',
-      'instruments.title': 'Compatible con los instrumentos de medición más usados de la industria',
-      'gallery.title': 'Interfaz completa en rumano', 'gallery.subhead': 'Capturas reales de la app — cada paso del flujo de calibración, traducido íntegramente.',
-      'install.title': 'Instalación',
-      'install.s1.h': 'Descarga', 'install.s1.p': 'Elige el paquete de arriba para tu plataforma — Mac (<code>.dmg</code>) o Windows (<code>.exe</code>).',
-      'install.s2.h': 'Instala', 'install.s2.p': '<b>Mac:</b> doble clic en <code>DisplayCAL-CG.pkg</code> — se instala directamente en /Applications, las 9 herramientas a la vez, sin avisos de Gatekeeper (paquete firmado y notarizado). <b>Windows:</b> ejecuta el instalador — todavía no está firmado digitalmente, así que Windows puede mostrar un aviso de SmartScreen; pulsa "Más información" → "Ejecutar de todos modos" para continuar.',
-      'install.s3.h': 'Conecta tu instrumento', 'install.s3.p': 'Conecta el colorímetro/espectrómetro antes de iniciar la calibración — DisplayCAL-CG lo detecta automáticamente al iniciar, mediante el motor de medición <code>ArgyllCMS</code> integrado.',
-      'install.s4.h': 'Calibra y perfila', 'install.s4.p': 'Elige tus ajustes objetivo (gamma, punto blanco, luminancia), inicia la medición y luego verifica el resultado con el informe de precisión integrado.',
-      'license.title': 'Gratis y de código abierto', 'license.plan': 'Licencia GPLv3', 'license.once': '100% gratis',
-      'license.li1': 'Sin prueba, sin activación, sin límite de uso', 'license.li2': 'Código fuente abierto, disponible íntegramente en GitHub',
-      'license.li3': 'Sin telemetría ni recolección oculta de datos', 'license.li4': 'Actualizaciones gratuitas, de por vida',
-      'license.note': 'DisplayCAL-CG es una distribución mantenida por GDC del proyecto de código abierto DisplayCAL — rebranding, traducción al rumano e instaladores nativos para Mac y Windows, bajo la misma licencia GPLv3. No existe ninguna forma de monetización de esta distribución.',
-      'credit.text': 'DisplayCAL-CG se basa íntegramente en el proyecto <b>DisplayCAL</b>, creado por <b>Florian Höch</b> y <b>Erkan Özgür Yılmaz</b>, y en el motor de medición <b>ArgyllCMS</b>, creado por <b>Graeme Gill</b>. Esta distribución (rebranding, traducción al rumano, paquetes nativos) la mantiene Cristi Gordaș (GDC) — el crédito por el trabajo original de calibración/perfilado pertenece íntegramente a los autores mencionados.',
-      'footer.source': 'Código fuente en GitHub', 'footer.releases': 'Todas las versiones', 'footer.upstream': 'Proyecto original (upstream)', 'footer.tag': 'DisplayCAL-CG — parte del ecosistema GDC.',
-    },
-  };
-
-  function t(key) {
-    const lang = document.documentElement.lang || 'ro';
-    return (translations[lang] && translations[lang][key]) || translations.ro[key] || key;
-  }
-
-  function applyLanguage(lang) {
-    if (!translations[lang]) lang = 'ro';
-    document.documentElement.lang = lang;
-    document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.getAttribute('data-i18n')); });
-    document.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = t(el.getAttribute('data-i18n-html')); });
-    document.querySelectorAll('#lang-switch button').forEach(btn => {
-      btn.classList.toggle('active', btn.getAttribute('data-lang') === lang);
-    });
-    localStorage.setItem('displaycalcg_lang', lang);
-  }
-
-  document.querySelectorAll('#lang-switch button').forEach(btn => {
-    btn.addEventListener('click', () => applyLanguage(btn.getAttribute('data-lang')));
-  });
-
-  const savedLang = localStorage.getItem('displaycalcg_lang');
-  const browserLang = (navigator.language || 'ro').slice(0, 2);
-  const initialLang = savedLang || (translations[browserLang] ? browserLang : 'ro');
-  applyLanguage(initialLang);
-</script>
-
-</body>
-</html>
+<section class="band alt" aria-labelledby="inst-h"><div class="wrap split"><div class="prose"><h2 id="inst-h">Instalare, actualizare, dezinstalare</h2><p>macOS: deschide .dmg-ul sau .pkg-ul, acceptă licența și instalează; aplicația și uneltele ei ajung în Applications.</p><p>Windows: rulează DisplayCAL-CG-Setup.exe, acceptă licența și urmează pașii. Dacă apare SmartScreen: Mai multe informații → Rulează oricum, doar pentru fișierul descărcat de pe paginile oficiale.</p><p>Instalatorul include ArgyllCMS, verificat cu o sumă SHA-256 fixă; dacă ar fi vreodată nevoie de o descărcare, un fișier care nu se potrivește este refuzat.</p></div>
+<div class="prose"><p>Actualizare: «Verifică actualizări» din aplicație; la acord, aplicația descarcă și instalează noua versiune (macOS cere parola de administrator în fereastra sistemului).</p><p>Dezinstalare: pe Windows din Setări → Aplicații; pe macOS mută aplicația și uneltele din Applications în Coș. Datele rămân în folderele aplicației (preferințe, jurnale, sesiuni) până le ștergi tu.</p><h3>Diagnostic și suport</h3><p>Aplicația păstrează local jurnale rotative și poate crea un pachet de diagnostic, cu redactare implicită, într-un loc ales de tine. Nu trimite nimic automat: tu decizi dacă îl atașezi la o problemă raportată.</p></div></div></section>
+</main><footer><div class="wrap"><div>© DisplayCAL-CG · GPLv3 · 3.10.0.dev82 (cg.4) · Cristi Gordaș</div><div style="margin-top:6px">Platformă administrată de dezvoltatori independenți, furnizată „as is”, cu contribuții opționale și donații.</div><div class="row"><a href="https://gordas.dev/termeni">Termeni</a><a href="https://gordas.dev/confidentialitate">Confidențialitate</a><a href="https://gordas.dev/cookie">Cookie</a><a href="https://github.com/gordasgdc/displaycal-py3">GitHub</a><a href="#top">Început</a></div></div></footer><script>
+(function(){
+var d=document,h=d.documentElement;h.classList.add('js');
+var reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+/* guided-flow demo */
+var f=d.getElementById('flow');
+if(f){var btns=[].slice.call(f.querySelectorAll('.rail button')),shots=[].slice.call(f.querySelectorAll('.shot')),pb=f.querySelector('.progress i'),
+ play=d.getElementById('flow-play'),prev=d.getElementById('flow-prev'),next=d.getElementById('flow-next'),all=d.getElementById('flow-all'),live=d.getElementById('flow-live'),
+ i=0,timer=null,playing=!reduce,T=5200;
+ function show(n,say){i=(n+btns.length)%btns.length;btns.forEach(function(b,k){b.setAttribute('aria-current',k===i?'true':'false')});shots.forEach(function(s,k){s.classList.toggle('on',k===i)});
+  if(say&&live){live.textContent=btns[i].querySelector('strong').textContent}
+  if(pb){pb.style.transition='none';pb.style.width='0';if(playing&&!reduce){void pb.offsetWidth;pb.style.transition='width '+T+'ms linear';pb.style.width='100%'}}}
+ function tick(){show(i+1,false)}
+ function set(p){playing=p;clearInterval(timer);if(p){timer=setInterval(tick,T)}play.setAttribute('aria-pressed',p?'true':'false');play.textContent=p?play.dataset.pause:play.dataset.play;show(i,false)}
+ btns.forEach(function(b,k){b.addEventListener('click',function(){set(false);show(k,true)})});
+ prev.addEventListener('click',function(){set(false);show(i-1,true)});next.addEventListener('click',function(){set(false);show(i+1,true)});
+ play.addEventListener('click',function(){set(!playing)});
+ all.addEventListener('click',function(){var on=f.parentNode.classList.toggle('showall');all.setAttribute('aria-expanded',on?'true':'false');all.textContent=on?all.dataset.one:all.dataset.all;if(on)set(false)});
+ f.addEventListener('mouseenter',function(){if(playing){clearInterval(timer)}});f.addEventListener('mouseleave',function(){if(playing){timer=setInterval(tick,T)}});
+ f.addEventListener('focusin',function(){if(playing){clearInterval(timer)}});
+ var seen=false;if('IntersectionObserver' in window){new IntersectionObserver(function(e){if(e[0].isIntersecting&&!seen){seen=true;set(!reduce)}else if(!e[0].isIntersecting){clearInterval(timer)}else if(playing){timer=setInterval(tick,T)}},{threshold:.35}).observe(f)}else{set(false)}
+ show(0,false);play.textContent=reduce?play.dataset.play:play.dataset.pause;play.setAttribute('aria-pressed',reduce?'false':'true');
+}
+/* placement animation */
+var p=d.getElementById('place');
+if(p){var svg=p.querySelector('svg'),lis=[].slice.call(p.querySelectorAll('ol li')),pp=d.getElementById('place-play'),k=0,pt=null,pl=!reduce;
+ function ps(n){k=(n+3)%3;svg.setAttribute('class','s'+(k+1));lis.forEach(function(l,j){l.setAttribute('aria-current',j===k?'true':'false')})}
+ function pset(v){pl=v;clearInterval(pt);if(v){pt=setInterval(function(){ps(k+1)},3400)}pp.setAttribute('aria-pressed',v?'true':'false');pp.textContent=v?pp.dataset.pause:pp.dataset.play}
+ lis.forEach(function(l,j){l.addEventListener('click',function(){pset(false);ps(j)})});
+ pp.addEventListener('click',function(){pset(!pl)});ps(0);pset(pl);
+ if('IntersectionObserver' in window){new IntersectionObserver(function(e){if(!e[0].isIntersecting){clearInterval(pt)}else if(pl){clearInterval(pt);pt=setInterval(function(){ps(k+1)},3400)}},{threshold:.2}).observe(p)}
+}
+})();
+</script></body></html>

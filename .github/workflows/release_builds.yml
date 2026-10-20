@@ -5,7 +5,7 @@ name: Release Builds
 # attaches them.  PyPI upload remains in `make new-release` (twine).
 #
 # [2026-09-06, fork GDC] Tag-urile ACESTUI fork arata `v3.10.0.dev82-cg.1`
-# (versiune upstream + sufix propriu de build "-cg.N", vezi CLAUDE.md) -
+# (versiune upstream + sufix propriu de build "-cg.N", vezi docs/ARCHITECTURE_NOTES.md) -
 # pattern-ul original de mai jos (`[0-9]*.[0-9]*.[0-9]*`) nu se potrivea
 # NICIODATA cu ele, deci acest CI nu s-a declansat vreodata pentru
 # fork-ul nostru (build-urile Windows au fost mereu manuale pana acum).
@@ -13,7 +13,7 @@ name: Release Builds
 # LOCAL (`build_pkg.sh`, semnare Developer ID reala + notarizare, nu ceva
 # reproductibil in CI fara certificate), iar pachetele Linux nu sunt (inca)
 # parte din livrarea oficiala a fork-ului (doar Mac .pkg + Windows .exe,
-# vezi CLAUDE.md "Decizii de scop confirmate de Cristi").
+# vezi docs/ARCHITECTURE_NOTES.md).
 on:
   # Manual run builds and tests the Windows installer without publishing.
   workflow_dispatch:
@@ -293,8 +293,8 @@ jobs:
   # -----------------------------------------------------------------------
   # Linux (DEB + RPM) - DEZACTIVAT pentru fork-ul GDC (2026-09-06): Linux
   # nu e (inca) parte din livrarea oficiala a acestui fork (doar Mac .pkg
-  # + Windows .exe - vezi CLAUDE.md "Decizii de scop confirmate de
-  # Cristi"). Pastrat neSTERS pentru sincronizare usoara cu upstream-ul.
+  # + Windows .exe - vezi docs/ARCHITECTURE_NOTES.md).
+  # Pastrat neSTERS pentru sincronizare usoara cu upstream-ul.
   # -----------------------------------------------------------------------
   linux:
     if: false

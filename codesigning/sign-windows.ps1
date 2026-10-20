@@ -1,7 +1,7 @@
 # sign-windows.ps1
 #
 # Semneaza un executabil Windows cu certificatul Self-Signed incarcat ca
-# secret CI (vezi README-windows.md + CLAUDE.md Regula 34). Apelat din
+# secret CI (vezi README-windows.md). Apelat din
 # .github/workflows/release_builds.yml, DOAR cand secretele exista - fara
 # ele, build-ul continua nesemnat (fluxul actual, neschimbat).
 #

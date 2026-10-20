@@ -3498,8 +3498,8 @@ class MainFrame(ReportFrame, BaseFrame, LUT3DMixin):
         self.Bind(wx.EVT_MENU, self.license_handler, self.menuitem_license)
         # DisplayCAL-CG (GDC): pagina dedicata acestei distributii, nu
         # radacina gordas.dev (care e site-ul intregii suite GDC, nu al
-        # DisplayCAL). Pagina inca nu exista (planificata in CLAUDE.md,
-        # sectiunea Progres) - link-ul e pregatit deja spre calea finala.
+        # DisplayCAL). Pagina e descrisa in docs/ARCHITECTURE_NOTES.md
+        # - link-ul e pregatit deja spre calea finala.
         menuitem = help_action.FindItemById(help_action.FindItem("go_to_website"))
         self.Bind(
             wx.EVT_MENU,

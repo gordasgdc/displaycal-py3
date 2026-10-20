@@ -2,7 +2,7 @@
 
 DisplayCAL-CG semnează `.pkg`-ul macOS separat (Developer ID real +
 notarizare, vezi `build_pkg.sh` — neatins de acest document). Acest folder
-acoperă DOAR partea Windows, adăugată 2026-09-06 (CLAUDE.md, Regula 34),
+acoperă DOAR partea Windows, adăugată 2026-09-06 (vezi docs/ARCHITECTURE_NOTES.md),
 aplicând pattern-ul deja folosit în CGConvertor (`codesigning/README-windows.md`
 din acel repo).
 
@@ -16,7 +16,7 @@ e util STRICT pentru:
 - distribuire către un cerc restrâns de colaboratori care importă manual
   certificatul public (`.cer`) în Trusted Root o singură dată.
 
-Aceasta e o stare tranzitorie deja documentată în CLAUDE.md ("Windows:
+Aceasta e o stare tranzitorie deja documentată în docs/ARCHITECTURE_NOTES.md ("Windows:
 fără certificat de semnare cod încă — installer rămâne nesemnat la
 primul release, SmartScreen va avertiza, acceptat ca stare tranzitorie") —
 acest folder o îmbunătățește (semnătură Authenticode prezentă, utilă
