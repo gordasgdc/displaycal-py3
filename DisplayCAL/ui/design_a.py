@@ -152,7 +152,7 @@ def _mix(a: str, b: str, k: float) -> str:
 def global_qss(t: Tokens | None = None) -> str:
     """The application style sheet. Lengths are in ``em`` so text size scales it."""
     t = t or tokens()
-    ink, sheet, inset = t.ink, t.sheet, t.inset
+    ink, inset = t.ink, t.inset
     found = config.get_data_path(
         "theme/guide/chevron_light.svg" if t.dark else "theme/guide/chevron.svg"
     )

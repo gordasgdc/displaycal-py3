@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from qtpy.QtCore import QRectF, Qt, QTimer
-from qtpy.QtGui import QBrush, QColor, QLinearGradient, QPainter, QPen, QPixmap
+from qtpy.QtCore import Qt, QTimer
+from qtpy.QtGui import QColor, QPainter, QPen, QPixmap
 from qtpy.QtWidgets import QWidget
 
 from DisplayCAL.config import get_data_path

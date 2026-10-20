@@ -21,7 +21,7 @@ from html import escape
 from typing import TYPE_CHECKING
 
 from qtpy.QtCore import QEvent, QPointF, QTimer, QRectF, QSize, Qt, Signal
-from qtpy.QtGui import QColor, QFont, QFontMetrics, QLinearGradient, QPainter, QPen, QPixmap
+from qtpy.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen, QPixmap
 from qtpy.QtWidgets import (
     QBoxLayout,
     QButtonGroup,
@@ -44,7 +44,6 @@ from DisplayCAL import guide_model as gm
 from DisplayCAL import instrument_catalog as ic
 from DisplayCAL import localization as lang
 from DisplayCAL import measurement_plan as mp
-from DisplayCAL import profile_name as profile_name_mod
 from DisplayCAL.argyll import check_argyll_bin
 from DisplayCAL.config import getcfg, setcfg
 from DisplayCAL.ui.guide_prepare import PreparePage

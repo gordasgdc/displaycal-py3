@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.10.0.dev82-cg.5
+
+- New look across the application: a "proof sheet" design (paper and ink, process-colour control strip, mono labels) in light and dark. New header, steps as a strip along the top, large page numbers, field names in small capitals, square controls, drawn tab icons, new start-up card.
+- Fonts Archivo and B612 Mono (SIL Open Font License) are bundled with the application.
+- The measurement plan now shows the blocks as a strip of coloured cells (one per block), next to the totals and the time estimate.
+- Probe-placement drawings and figures are redrawn (generic drawings; no maker's design); the placement animation sits on its own paper figure.
+- During a run the progress window stays dark in both appearances, and nothing in it moves: a static bar, the elapsed time and the estimate. The measurement itself is unchanged.
+- Status colours (warning, error, OK) are readable in light and dark.
+- Guides (Romanian, English, Spanish) redesigned: each guided step is one page with what you do, why, and what you check; new screenshots of the new interface; real, searchable text; contents with page numbers.
+
 ## 3.10.0.dev82-cg.4
 
 - New **Guided calibration** tab (default): five steps from a connected instrument to a verified profile, with honest labels for what was detected and what you confirmed.

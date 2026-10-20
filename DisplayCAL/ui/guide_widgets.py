@@ -15,7 +15,6 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from DisplayCAL import config
 from DisplayCAL.ui import text_scale
 
 
