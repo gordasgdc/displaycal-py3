@@ -213,8 +213,8 @@ QToolButton:hover{{background:{t.patch_bg};color:{t.patch_ink};}}
 QToolButton:focus{{border:2px solid {t.focus};}}
 QToolButton#text_size_button{{border:1px solid {ink};padding:0.1em 0.5em;}}
 QToolButton::menu-indicator{{image:none;width:0;}}
-QComboBox{{background:{inset};color:{ink};border:1px solid {ink};border-radius:0;
-  padding:0.3em 0.6em;min-height:1.3em;}}
+QComboBox{{background:{inset};color:{ink};border:1px solid {t.hair};border-bottom:2px solid {ink};
+  border-radius:0;padding:0.3em 0.6em;min-height:1.3em;}}
 QComboBox:focus,QLineEdit:focus,QSpinBox:focus,QDoubleSpinBox:focus{{
   border:2px solid {t.focus};}}
 QComboBox:disabled,QLineEdit:disabled,QSpinBox:disabled,QDoubleSpinBox:disabled{{
@@ -530,4 +530,152 @@ class BlocksBar(QWidget):
                 p.drawText(QRectF(rect.left(), cell_h + 2, rect.width(), fm.height()),
                            int(Qt.AlignHCenter | Qt.AlignTop), label)
             x += span + gap
+        p.end()
+
+
+class Booth(QWidget):
+    """The viewing booth: a neutral grey surround, lit from above, with a vignette.
+
+    The sheet lies on it; crop marks stand in the margin at the sheet's corners.
+    """
+
+    MARGIN = 26
+
+    def paintEvent(self, _event: object) -> None:  # noqa: N802
+        from qtpy.QtGui import QRadialGradient
+
+        t = tokens()
+        p = QPainter(self)
+        w, h = self.width(), self.height()
+        lit = QColor(_mix(t.booth, "#ffffff", 0.22) if not t.dark else _mix(t.booth, "#ffffff", 0.06))
+        g = QRadialGradient(w * 0.5, h * 0.18, max(w, h) * 0.95)
+        g.setColorAt(0.0, lit)
+        g.setColorAt(1.0, QColor(t.booth))
+        p.fillRect(self.rect(), g)
+        m = self.MARGIN
+        paint_sheet_shadow(p, QRectF(self.rect().adjusted(m, m, -m, -m)), t.dark)
+        # crop marks around the sheet
+        ink = QColor(t.ink)
+        ink.setAlpha(190)
+        p.setPen(QPen(ink, 1))
+        L = 12
+        for x, sx in ((m - 5, -1), (w - m + 5, 1)):
+            for y, sy in ((m - 5, -1), (h - m + 5, 1)):
+                p.drawLine(x, y + sy * 2, x, y + sy * (2 + L))
+                p.drawLine(x + sx * 2, y, x + sx * (2 + L), y)
+        p.end()
+
+
+class Sheet(QWidget):
+    """The paper: soft contact shadow, a hairline edge and a faint sheen of the booth light."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._sheen = _Sheen(self)
+
+    def resizeEvent(self, event: object) -> None:  # noqa: N802
+        self._sheen.setGeometry(self.rect())
+        self._sheen.raise_()
+        super().resizeEvent(event)
+
+    def paintEvent(self, _event: object) -> None:  # noqa: N802
+        t = tokens()
+        p = QPainter(self)
+        p.fillRect(self.rect(), QColor(t.sheet))
+        edge = QColor(t.ink)
+        edge.setAlpha(60)
+        p.setPen(QPen(edge, 1))
+        p.setBrush(Qt.NoBrush)
+        p.drawRect(self.rect().adjusted(0, 0, -1, -1))
+        p.end()
+
+
+class _Sheen(QWidget):
+    """A broad, very soft diagonal highlight over the paper (never over patches)."""
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.setFocusPolicy(Qt.NoFocus)
+
+    def paintEvent(self, _event: object) -> None:  # noqa: N802
+        from qtpy.QtGui import QLinearGradient
+
+        w, h = self.width(), self.height()
+        p = QPainter(self)
+        g = QLinearGradient(0, 0, w, h * 0.7)
+        clear, hi = QColor(255, 255, 255, 0), QColor(255, 255, 255, 22 if not tokens().dark else 9)
+        g.setColorAt(0.0, clear)
+        g.setColorAt(0.36, clear)
+        g.setColorAt(0.46, hi)
+        g.setColorAt(0.56, clear)
+        g.setColorAt(1.0, clear)
+        p.fillRect(self.rect(), g)
+        p.end()
+
+
+def paint_sheet_shadow(p: QPainter, rect: QRectF, dark: bool) -> None:
+    """Soft shadow of a sheet lying on the booth floor (layered, offset downwards)."""
+    layers = 14
+    for i in range(layers, 0, -1):
+        grow = i * 1.6
+        a = int((9 if not dark else 16) * (1 - i / (layers + 1)) ** 1.6)
+        c = QColor(10, 12, 16, a)
+        p.setPen(Qt.NoPen)
+        p.setBrush(c)
+        p.drawRoundedRect(rect.adjusted(-grow, -grow * 0.2, grow, grow * 1.5 + 6), 2, 2)
+
+
+class HeroPlate(QWidget):
+    """The picture: a rendered monitor with the probe on the measuring square.
+
+    A real image asset (``theme/guide/hero_monitor.jpg``), shown whole in a plate with a
+    hairline rule and two registration targets. It carries the depth of the screen:
+    glass, reflection, the booth floor.
+    """
+
+    def __init__(self, parent: QWidget | None = None, aspect: float | None = None, focus: float = 0.52) -> None:
+        super().__init__(parent)
+        from qtpy.QtGui import QPixmap
+
+        self._aspect, self._focus = aspect, focus
+        found = config.get_data_path("theme/guide/hero_monitor.jpg")
+        self._pix = QPixmap(found) if isinstance(found, str) else QPixmap()
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802
+        return not self._pix.isNull()
+
+    def _ratio(self) -> float:
+        if self._aspect:
+            return self._aspect
+        return self._pix.width() / self._pix.height() if not self._pix.isNull() else 2.0
+
+    def heightForWidth(self, w: int) -> int:  # noqa: N802
+        return int(w / self._ratio())
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return QSize(600, self.heightForWidth(600))
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return QSize(160, self.heightForWidth(160))
+
+    def paintEvent(self, _event: object) -> None:  # noqa: N802
+        p = QPainter(self)
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+        r = self.rect().adjusted(0, 0, -1, -1)
+        if not self._pix.isNull():
+            # cover: crop the picture to the plate's shape around the monitor
+            pw, ph = self._pix.width(), self._pix.height()
+            want = self.width() / max(1, self.height())
+            sw = min(pw, ph * want)
+            sh = sw / want
+            sx = max(0.0, min(pw - sw, pw * self._focus - sw / 2))
+            p.drawPixmap(QRectF(self.rect()), self._pix, QRectF(sx, (ph - sh) / 2, sw, sh))
+        ink = QColor(KEY)
+        p.setPen(QPen(ink, 1))
+        p.setBrush(Qt.NoBrush)
+        p.drawRect(r)
+        draw_registration(p, r.right() - 14, r.top() + 14, 5, ink)
+        draw_registration(p, r.left() + 14, r.bottom() - 14, 5, ink)
         p.end()

@@ -1504,9 +1504,13 @@ class MainWindow(BaseWindow):
 
     def _build_ui(self) -> None:
         """Assemble the tab bar, stacked settings panels and action buttons."""
-        central = QWidget()
-        central.setAutoFillBackground(True)
-        layout = QVBoxLayout(central)
+        # The proof sheet lies on the viewing booth: everything of the window sits on it.
+        central = design_a.Booth()
+        booth_box = QVBoxLayout(central)
+        booth_box.setContentsMargins(*(design_a.Booth.MARGIN,) * 4)
+        sheet = design_a.Sheet()
+        booth_box.addWidget(sheet)
+        layout = QVBoxLayout(sheet)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 

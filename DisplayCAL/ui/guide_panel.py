@@ -286,15 +286,15 @@ class GuidePanel(QWidget):
     # ------------------------------------------------------------------ build
     def _build(self) -> None:
         root = QVBoxLayout(self)
-        root.setContentsMargins(20, 16, 20, 12)
+        root.setContentsMargins(20, 10, 20, 12)
         root.setSpacing(10)
 
+        # One slim row: the five steps, then the text size and the advanced settings.
         head = QHBoxLayout()
-        title_box = QVBoxLayout()
-        self.title = _slug(_tr("guide.title"), strong=True, size=1.0)
+        head.setSpacing(10)
+        self.title = _slug(_tr("guide.title"), strong=True, size=1.0)  # accessible name only
+        self.title.hide()
         self.subtitle = _label(_tr("guide.subtitle"), muted=True)
-        title_box.addWidget(self.title, 0, Qt.AlignLeft)
-        head.addLayout(title_box, 1)
         self.advanced_btn = QPushButton(_m(_tr("guide.advanced")))
         self.advanced_btn.setCursor(Qt.PointingHandCursor)
         self.advanced_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -304,20 +304,17 @@ class GuidePanel(QWidget):
         from DisplayCAL.ui.text_size_menu import TextSizeButton
 
         self.text_size_btn = TextSizeButton()
-        head.addWidget(self.text_size_btn, 0, Qt.AlignTop)
-        head.addWidget(self.advanced_btn, 0, Qt.AlignTop)
+        self.rail = _Rail()
+        self.rail.step_requested.connect(self.go)
+        head.addWidget(self.rail, 1)
+        head.addWidget(self.text_size_btn, 0, Qt.AlignVCenter)
+        head.addWidget(self.advanced_btn, 0, Qt.AlignVCenter)
         root.addLayout(head)
-        # Full width, so it wraps to the room it really has (a label inside the head
-        # row would be cut when the window is narrow).
-        root.addWidget(self.subtitle)
 
         body = QBoxLayout(QBoxLayout.TopToBottom)
         body.setSpacing(12)
-        self._root, self._head_margins = root, (20, 16, 20, 12)
+        self._root, self._head_margins = root, (20, 10, 20, 12)
         self._body = body
-        self.rail = _Rail()
-        self.rail.step_requested.connect(self.go)
-        body.addWidget(self.rail, 0)
 
         self.pages = QStackedWidget()
         self._page_builders = (
@@ -383,26 +380,29 @@ class GuidePanel(QWidget):
 
     # page 1 ----------------------------------------------------------------
     def _build_page_devices(self, lay: QVBoxLayout) -> None:
-        lay.addWidget(_page_head(1, _tr("guide.s1.title")))
-        status = QHBoxLayout()
-        self.ready_label = _label("", size=1.15, bold=True)
+        """Left: what to choose. Right: the picture (a rendered monitor with the probe)."""
+        left = QWidget()
+        ll = QVBoxLayout(left)
+        ll.setContentsMargins(0, 0, 0, 0)
+        ll.setSpacing(6)
+        ll.addWidget(_page_head(1, _tr("guide.s1.title")))
+        text_scale.set_scaled_font(self.subtitle, 0.95)
+        ll.addWidget(self.subtitle)
+        status = QVBoxLayout()
+        status.setSpacing(0)
+        self.ready_label = _label("", size=1.05, bold=True)
         self.rescan_btn = QPushButton(_m(_tr("guide.s1.rescan")))
         self.rescan_btn.setFlat(True)
         self.rescan_btn.setCursor(Qt.PointingHandCursor)
         self.rescan_btn.clicked.connect(
             self.window_ref.detect_displays_and_ports_btn_handler
         )
-        status.addWidget(self.ready_label, 1)
-        status.addWidget(self.rescan_btn, 0, Qt.AlignRight)
-        lay.addLayout(status)
-        self.ready_actions = _label("", size=1.05)
-        lay.addWidget(self.ready_actions)
+        status.addWidget(self.ready_label)
+        status.addWidget(self.rescan_btn, 0, Qt.AlignLeft)
+        ll.addLayout(status)
+        self.ready_actions = _label("", size=1.0)
+        ll.addWidget(self.ready_actions)
 
-        # Main stage: what to choose (left), where it goes (right).
-        left = QWidget()
-        ll = QVBoxLayout(left)
-        ll.setContentsMargins(0, 0, 0, 0)
-        ll.setSpacing(4)
         self.monitor_combo = QComboBox()
         self.instrument_combo = QComboBox()
         self.mode_combo = QComboBox()
@@ -410,11 +410,12 @@ class GuidePanel(QWidget):
             # Long monitor/instrument names are elided, not a reason to widen the page.
             combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
             combo.setMinimumContentsLength(14)
-            text_scale.set_scaled_font(combo, 1.15)
-            text_scale.set_min_height(combo, 34)
+            text_scale.set_scaled_font(combo, 1.05)
+            text_scale.set_min_height(combo, 32)
+        ll.addSpacing(4)
         ll.addWidget(_slug(_tr("guide.s1.monitor")))
         ll.addWidget(self.monitor_combo)
-        ll.addSpacing(10)
+        ll.addSpacing(4)
         ll.addWidget(_slug(_tr("guide.s1.instrument")))
         ll.addWidget(self.instrument_combo)
         # Which commercial model is it? Only asked when the identifier is shared
@@ -424,7 +425,7 @@ class GuidePanel(QWidget):
         mb = QVBoxLayout(self.model_box)
         mb.setContentsMargins(0, 6, 0, 0)
         mb.setSpacing(3)
-        mb.addWidget(_label(_tr("guide.s1.model_pick"), size=1.0, muted=True))
+        mb.addWidget(_label(_tr("guide.s1.model_pick"), size=0.95, muted=True))
         self.model_combo = QComboBox()
         self.model_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         self.model_combo.setMinimumContentsLength(14)
@@ -434,32 +435,27 @@ class GuidePanel(QWidget):
         ll.addWidget(self.model_box)
         self.model_hint = _label("", muted=True)
         ll.addWidget(self.model_hint)
-        ll.addSpacing(10)
         # Measurement summary stays visible; the options live in the details.
-        self.summary_label = _label("", size=1.05)
-        ll.addWidget(self.summary_label)
-        self.action_label = _label("", size=1.1, bold=True)
-        ll.addSpacing(6)
+        self.summary_label = _label("", size=1.0)  # shown in the details, under the picture
+        self.action_label = _label("", size=1.05, bold=True)
         ll.addWidget(self.action_label)
         ll.addStretch(1)
         self.monitor_combo.currentIndexChanged.connect(self._monitor_changed)
         self.instrument_combo.currentIndexChanged.connect(self._instrument_changed)
         self.mode_combo.currentIndexChanged.connect(self._mode_changed)
 
-        hero = QWidget()
-        hl = QVBoxLayout(hero)
-        hl.setContentsMargins(0, 0, 0, 0)
-        hl.setSpacing(4)
-        self.illustration = design_a.FigureFrame()
-        # Decorative: it may be cropped in a narrow window but must never be the
-        # reason the whole page needs sideways scrolling.
-        self.illustration.setMinimumHeight(text_scale.scale_px(200))
-        hl.addWidget(self.illustration)
-        self.illustration_caption = _label("", size=0.9, muted=True)
-        self.illustration_caption.setAlignment(Qt.AlignCenter)
-        hl.addWidget(self.illustration_caption)
-        lay.addWidget(_AdaptiveRow(left, hero, threshold=720))
-
+        right = QWidget()
+        rl = QVBoxLayout(right)
+        rl.setContentsMargins(0, 0, 0, 0)
+        rl.setSpacing(6)
+        rl.addWidget(design_a.HeroPlate(aspect=0.98, focus=0.50))
+        self.illustration = design_a.FigureFrame()  # per-instrument drawing (placement help)
+        self.illustration_caption = _slug(_tr("guide.place.kind.other"))
+        rl.addWidget(self.illustration_caption)
+        rl.addSpacing(6)
+        rl.addWidget(self.summary_label)
+        rl.addStretch(1)
+        lay.addWidget(_AdaptiveRow(left, right, threshold=620, ratio=(5, 6)))
         lay.addWidget(_Disclosure(_tr("guide.s1.details"), self._make_details()))
 
     def _make_details(self) -> QWidget:
@@ -998,7 +994,7 @@ class GuidePanel(QWidget):
             pix = QPixmap.fromImage(img)
             pix.setDevicePixelRatio(dpr)
             self.illustration.setPixmap(pix)
-        self.illustration_caption.setText(_tr(f"guide.place.kind.{kind}"))
+        self.illustration_caption.setText(_tr(f"guide.place.kind.{kind}").upper())
 
     def _paint_goal_page(self) -> None:
         w = self.window_ref
