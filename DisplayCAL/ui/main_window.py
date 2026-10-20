@@ -1553,7 +1553,7 @@ class MainWindow(BaseWindow):
     #: on 2026-07-16. Tabs taller than this at a given platform/font/DPI
     #: combination scroll instead (see :class:`_TabScrollArea`), rather than
     #: growing the window to accommodate them.
-    _DEFAULT_SIZE = QSize(766, 836)
+    _DEFAULT_SIZE = QSize(940, 780)
 
     def _apply_initial_geometry(self) -> None:
         """Size the window to :attr:`_DEFAULT_SIZE`, clamped to the screen.

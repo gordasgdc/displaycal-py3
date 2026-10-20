@@ -493,7 +493,7 @@ class GuidePanel(QWidget):
         self.illustration_caption = _label(_tr("guide.place.kind.other"), size=0.85, muted=True)
         self.illustration_caption.setAlignment(Qt.AlignHCenter)
         rl.addWidget(self.illustration_caption)
-        lay.addWidget(_AdaptiveRow(left, right, threshold=760, ratio=(43, 57)))
+        lay.addWidget(_AdaptiveRow(left, right, threshold=640, ratio=(43, 57)))
         self._paint_row_icons()
         text_scale.bus.changed.connect(lambda _f: self._paint_row_icons())
 
