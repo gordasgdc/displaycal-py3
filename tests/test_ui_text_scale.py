@@ -142,7 +142,7 @@ def test_model_question_is_never_covered_by_the_selector_below(window, level):
         QApplication.processEvents()
     if not g.model_box.isVisible():
         pytest.skip("this instrument does not ask for a model")
-    label = g.model_box.findChild(QLabel)
+    label = next(lab for lab in g.model_box.findChildren(QLabel) if lab.text())  # not the icon
     assert label.height() >= label.heightForWidth(label.width())
     assert label.geometry().bottom() < g.model_combo.geometry().top()
 
