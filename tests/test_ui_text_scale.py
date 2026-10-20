@@ -292,3 +292,30 @@ def test_advanced_tabs_have_no_sideways_scroll_at_the_largest_text(window, tab):
     for _ in range(3):
         QApplication.processEvents()
     assert window._scroll_area.horizontalScrollBar().maximum() == 0, (tab, window._scroll_area.horizontalScrollBar().maximum())
+
+
+@pytest.mark.parametrize("width,level", [(766, "normal"), (766, "xlarge"), (1300, "normal")])
+def test_sleep_option_text_is_never_squeezed_or_centred(window, monkeypatch, width, level):
+    """The option's wrapped label keeps its full height and sits next to the box."""
+    from qtpy.QtCore import QPoint
+
+    monkeypatch.setattr(window.worker, "blocks_supported", lambda: (True, ""), raising=False)
+    window.resize(width, 864)
+    window.show()
+    window._select_tab("guide")
+    ts.apply(level)
+    g = window._guide
+    g._reached = 4
+    g.go(3)
+    g.refresh()
+    for _ in range(6):
+        QApplication.processEvents()
+    window._pin_stack_size_to_current_tab()
+    for _ in range(3):
+        QApplication.processEvents()
+    from qtpy.QtWidgets import QLabel
+
+    label = next(l for l in g.findChildren(QLabel) if l.text() == lang.getstr("awake.keep"))
+    assert label.height() >= label.heightForWidth(label.width())
+    gap = label.mapTo(g, QPoint(0, 0)).x() - g.awake_cb.mapTo(g, QPoint(g.awake_cb.width(), 0)).x()
+    assert gap < 40, gap

@@ -563,7 +563,11 @@ class GuidePanel(QWidget):
         awake_label.setTextInteractionFlags(Qt.NoTextInteraction)
         awake_label.mousePressEvent = lambda _e: self.awake_cb.toggle()
         awake_label.setCursor(Qt.PointingHandCursor)
-        awake_row.addWidget(awake_label, 1, Qt.AlignLeft | Qt.AlignVCenter)
+        # One short line: no reading-width limit, so the layout never centres it in
+        # a wide window (an AlignLeft flag would drop its wrapped height instead).
+        awake_label.setProperty("_maxchars", None)
+        awake_label.setMaximumWidth(16777215)
+        awake_row.addWidget(awake_label, 1)
         lay.addLayout(awake_row)
         self.awake_note = _label("", muted=True)
         lay.addWidget(self.awake_note)
