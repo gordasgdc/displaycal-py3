@@ -69,6 +69,25 @@ def base_points() -> float:
     return max(float(size) if size > 0 else MIN_BASE_POINTS, MIN_BASE_POINTS)
 
 
+def _match_style_to_size(app: QApplication, f: float) -> None:
+    """macOS: a native pop-up button has a fixed height (about 22 pt), so at a
+    larger text size its label is cut off. Above Normal the standard Fusion
+    style is used (it grows with the text, as on Windows); at Normal the
+    native look is restored. Nothing else about the interface changes."""
+    import sys
+
+    if sys.platform != "darwin":
+        return
+    from qtpy.QtWidgets import QStyleFactory
+
+    native = _state.setdefault("native_style", app.style().objectName())
+    want = "Fusion" if f > 1.0 else native
+    if app.style().objectName().lower() != str(want).lower():
+        style = QStyleFactory.create(want)
+        if style is not None:
+            app.setStyle(style)
+
+
 def apply(level: str | None = None, persist: bool = False) -> float:
     """Apply a level to the application font and every scaled widget.
 
@@ -90,6 +109,7 @@ def apply(level: str | None = None, persist: bool = False) -> float:
     app = QApplication.instance()
     f = factor(level)
     if app is not None:
+        _match_style_to_size(app, f)
         _state["prev_size"] = app.font().pointSizeF()
         font = QFont(app.font())
         font.setPointSizeF(base_points() * f)

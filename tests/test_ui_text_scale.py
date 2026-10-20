@@ -369,3 +369,19 @@ def test_large_text_gives_the_room_to_the_content(window):
     # still reachable and the reader's size is untouched
     assert window._scroll_area.verticalScrollBar().maximum() == 0
     assert ts.factor() == 1.5
+
+
+def test_macos_uses_a_style_that_grows_with_the_text(qapp, monkeypatch):
+    """Native pop-up buttons have a fixed height; above Normal a scalable style is used."""
+    import sys
+
+    from qtpy.QtWidgets import QApplication
+
+    if sys.platform != "darwin":
+        pytest.skip("macOS only")
+    ts.apply("normal")
+    native = QApplication.style().objectName().lower()
+    ts.apply("xlarge")
+    assert QApplication.style().objectName().lower() == "fusion"
+    ts.apply("normal")
+    assert QApplication.style().objectName().lower() == native
