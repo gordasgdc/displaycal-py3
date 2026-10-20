@@ -428,6 +428,14 @@ for APP_PATH in "$APP_ROOT"/*.app; do
     cp -R "$APP_PATH" "$PAYLOAD_ROOT/Applications/"
 done
 
+# [2026-10-20] Permisiuni: unele fisiere (ref/ Argyll, licente, SVG-uri) ieseau 0750 (umask
+# restrictiv la build) si, instalate ca root:wheel, nu puteau fi citite de utilizator.
+# Normalizez (fara a schimba continutul sigilat de semnatura) si pica build-ul daca ramane
+# vreun fisier necitibil de oricine.
+chmod -R u+rwX,go+rX,go-w "$PAYLOAD_ROOT/Applications"
+UNREADABLE=$(find "$PAYLOAD_ROOT/Applications" ! -type l ! -perm -004 | head -3)
+if [ -n "$UNREADABLE" ]; then echo "EROARE: fisiere necitibile de utilizator in payload: $UNREADABLE"; exit 1; fi
+
 COMPONENT_PKG="$DIST_DIR/DisplayCAL-CG-component.pkg"
 FINAL_PKG="$DIST_DIR/DisplayCAL-CG-$VERSION.pkg"
 
