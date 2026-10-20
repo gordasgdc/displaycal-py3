@@ -151,7 +151,10 @@ def describe(item: sh.Item, owner: object, panel: QWidget) -> str:
     """Rich text for one setting."""
     k = sh.item_keys(item.id)
     badge = _tr(f"help.kind.{item.kind}")
-    parts = [f"<b>{escape(_tr(k['name']))}</b> <span style='color:gray'>· {escape(badge)}</span>"]
+    from DisplayCAL.ui import design_a
+
+    tk = design_a.tokens()
+    parts = [f"<b>{escape(_tr(k['name']))}</b> <span style='color:{tk.ink2}'>· {escape(badge)}</span>"]
     parts.append(escape(_tr(k["what"])))
     parts.append(f"<i>{escape(_tr('help.label.when'))}</i> {escape(_tr(k['when']))}")
     meta = []
@@ -166,7 +169,7 @@ def describe(item: sh.Item, owner: object, panel: QWidget) -> str:
         parts.append(f"<i>{escape(_tr('help.label.needs'))}</i> {escape(_tr(k['needs']))}")
     reason = unavailable_reason(item, owner, panel)
     if reason:
-        parts.append(f"<span style='color:#b25000'><b>{escape(_tr('help.label.unavailable'))}</b> {escape(reason)}</span>")
+        parts.append(f"<span style='color:{tk.warn}'><b>{escape(_tr('help.label.unavailable'))}</b> {escape(reason)}</span>")
     return "<p style='margin:0 0 10px 0; line-height:125%'>" + "<br>".join(parts) + "</p>"
 
 
@@ -182,10 +185,12 @@ class SectionHeader(QFrame):
         lay.setContentsMargins(0, 10, 0, 2)
         lay.setSpacing(2)
         tkey, pkey = sh.section_keys(tab, section)
-        self.title = QLabel(f"<b>{escape(_tr(tkey))}</b>")
-        self.title.setTextFormat(Qt.RichText)
-        text_scale.set_scaled_font(self.title, 1.1)
+        from DisplayCAL.ui import design_a
+
+        self.title = QLabel(_tr(tkey))
+        text_scale.set_scaled_font(self.title, 1.18, weight=800)
         lay.addWidget(self.title)
+        lay.addWidget(design_a.Rule(1, hair=True))
         self.purpose = text_scale.WrapLabel(_tr(pkey))
         self.purpose.setWordWrap(True)
         self.purpose.setStyleSheet(f"color: {muted_css()};")

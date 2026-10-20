@@ -20,24 +20,28 @@ from DisplayCAL.ui import text_scale
 
 
 def tokens() -> dict[str, QColor]:
-    """Colour tokens derived from the active palette (follows light/dark)."""
+    """Colour tokens of the proof-sheet system (follow light/dark)."""
+    from DisplayCAL.ui import design_a
+
     pal = QApplication.palette()
-    window = pal.window().color()
-    text = pal.windowText().color()
-    dark = window.lightness() < 128
-    plate = QColor(window)
-    plate = plate.lighter(118) if dark else plate.darker(104)
+    dark = pal.window().color().lightness() < 128
+    d = design_a.tokens(dark)
+    ink = QColor(d.ink)
     return {
-        "window": window,
-        "text": text,
-        # Secondary text is never "disabled" grey: it keeps WCAG AA contrast.
-        "muted": text_scale.muted_color(text, window),
-        "plate": plate,
-        "line": QColor(text.red(), text.green(), text.blue(), 40),
-        "accent": QColor("#ffb347") if dark else QColor("#b86e00"),
-        "ok": QColor("#4cc38a") if dark else QColor("#18794e"),
-        "warn": QColor("#ffb347") if dark else QColor("#b86e00"),
-        "bad": QColor("#ff6b6b") if dark else QColor("#c62828"),
+        "window": QColor(d.sheet),
+        "text": ink,
+        "muted": QColor(d.ink2),
+        "plate": QColor(d.inset),
+        "line": QColor(ink.red(), ink.green(), ink.blue(), 56),
+        # Actions and the current step are ink; colour is kept for data and state.
+        "accent": ink,
+        "ink": ink,
+        "focus": QColor(d.focus),
+        "patch_bg": QColor(d.patch_bg),
+        "patch_ink": QColor(d.patch_ink),
+        "ok": QColor(d.ok),
+        "warn": QColor(d.warn),
+        "bad": QColor(d.bad),
     }
 
 
@@ -64,8 +68,8 @@ class Card(QFrame):
         """Re-apply the plate colours (theme change)."""
         t = tokens()
         self.setStyleSheet(
-            f"QFrame#guideCard{{background:{css(t['plate'])};border:none;"
-            "border-radius:12px;}"
+            f"QFrame#guideCard{{background:{css(t['plate'])};"
+            f"border:1px solid {css(t['line'])};border-radius:0;}}"
         )
 
 
@@ -97,40 +101,12 @@ class Disclosure(QWidget):
 
 
 def control_css() -> str:
-    """Indicator styling that stays visible in light and dark themes."""
-    t = tokens()
-    ring = css(QColor(t["text"].red(), t["text"].green(), t["text"].blue(), 190))
-    acc = css(t["accent"])
-    check = config.get_data_path("theme/guide/check.svg")
-    check_image = (
-        f'image:url("{check.replace(chr(92), "/")}");' if isinstance(check, str) else ""
-    )
-    px = text_scale.scale_px(16)
-    dark = t["window"].lightness() < 128
-    fill, ink = ("#ffb347", "#1b1c20") if dark else ("#8f5600", "#ffffff")
-    hover = "#ffc36b" if dark else "#a46300"
-    off = css(t["plate"])
-    off_ink = css(t["muted"])
-    pad = text_scale.scale_px(10)
-    return (
-        # The one primary action of a page: filled, high contrast, same shape
-        # everywhere; every other button stays quiet.
-        f'QPushButton[primary="true"]{{background:{fill};color:{ink};border:none;'
-        f"border-radius:7px;padding:{text_scale.scale_px(6)}px {pad * 2}px;}}"
-        f'QPushButton[primary="true"]:hover{{background:{hover};}}'
-        f'QPushButton[primary="true"]:pressed{{background:{fill};}}'
-        f'QPushButton[primary="true"]:focus{{border:2px solid {ink};}}'
-        f'QPushButton[primary="true"]:disabled{{background:{off};color:{off_ink};}}'
-        f"QRadioButton::indicator{{width:{px}px;height:{px}px;border-radius:{px // 2 + 1}px;"
-        f"border:2px solid {ring};background:transparent;}}"
-        f"QRadioButton::indicator:checked{{border:2px solid {acc};"
-        f"background:qradialgradient(cx:.5,cy:.5,radius:.5,fx:.5,fy:.5,"
-        f"stop:0 {acc},stop:.55 {acc},stop:.6 transparent,stop:1 transparent);}}"
-        f"QCheckBox::indicator{{width:{px}px;height:{px}px;border-radius:4px;"
-        f"border:2px solid {ring};background:transparent;}}"
-        f"QCheckBox::indicator:checked{{border:2px solid {acc};background:{acc};"
-        f"{check_image}}}"
-    )
+    """Page-level style sheet of the guided flow.
+
+    Buttons, fields, menus, radio buttons and ticks all come from the
+    application style sheet (:func:`DisplayCAL.ui.design_a.global_qss`).
+    """
+    return ""
 
 
 def label(
@@ -151,6 +127,61 @@ def label(
     if muted:
         lab.setStyleSheet(f"color:{css(tokens()['muted'])};")
     return lab
+
+
+def section_head(text: str) -> QWidget:
+    """A section of a page: its name as a slug over a hairline."""
+    from DisplayCAL.ui import design_a
+
+    box = QWidget()
+    col = QVBoxLayout(box)
+    col.setContentsMargins(0, 6, 0, 0)
+    col.setSpacing(4)
+    col.addWidget(slug(text, strong=True, size=0.9))
+    col.addWidget(design_a.Rule(1, hair=True))
+    return box
+
+
+def slug(text: str = "", strong: bool = False, size: float = 0.82) -> QLabel:
+    """A small upper-case label in the proof's mono face (a field's name)."""
+    from DisplayCAL.ui import design_a
+
+    lab = text_scale.WrapLabel(text.upper())
+    lab.setWordWrap(True)
+    lab.setTextFormat(Qt.PlainText)
+    lab.setAccessibleName(text)
+    text_scale.set_scaled_font(lab, size, bold=True)
+    mono = design_a.family("mono")
+    if mono:
+        lab.setProperty("_ffamily", mono)
+    f = lab.font()
+    f.setFamily(mono or f.family())
+    f.setLetterSpacing(f.SpacingType.PercentageSpacing, 105)
+    lab.setFont(f)
+    lab.setStyleSheet(f"color:{css(tokens()['text' if strong else 'muted'])};")
+    return lab
+
+
+def page_head(number: int, title: str) -> QWidget:
+    """The head of a step's page: a large numeral, the title, then an ink rule."""
+    from DisplayCAL.ui import design_a
+
+    box = QWidget()
+    col = QVBoxLayout(box)
+    col.setContentsMargins(0, 0, 0, 0)
+    col.setSpacing(8)
+    row = QHBoxLayout()
+    row.setSpacing(14)
+    num = text_scale.WrapLabel(f"{number:02d}")
+    num.setWordWrap(False)
+    text_scale.set_scaled_font(num, 2.9, weight=800)
+    name = label(title, size=1.7, wrap=True)
+    text_scale.set_scaled_font(name, 1.7, weight=800)
+    row.addWidget(num, 0, Qt.AlignBottom)
+    row.addWidget(name, 1, Qt.AlignBottom)
+    col.addLayout(row)
+    col.addWidget(design_a.Rule(2))
+    return box
 
 
 class AdaptiveRow(QWidget):

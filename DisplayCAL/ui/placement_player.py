@@ -137,7 +137,7 @@ def _colors(dark: bool) -> _Colors:
         QColor("#34363c"),
         QColor("#9a9da6"),
         QColor("#10131c"),
-        QColor("#ffb347"),
+        QColor("#d4147a"),
         QColor(125, 127, 133, 150),
         QColor("#80838c"),
     )
@@ -428,13 +428,24 @@ class _Canvas(QWidget):
         return int(w * H / W)
 
     def paintEvent(self, _event: object) -> None:  # noqa: N802
+        from DisplayCAL.ui import design_a
+
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
+        # A figure is a print on its own paper: the same in light and dark.
+        p.fillRect(self.rect(), QColor(design_a.FigureFrame.PAPER))
         scale = min(self.width() / W, self.height() / H)
+        p.save()
         p.translate((self.width() - W * scale) / 2, (self.height() - H * scale) / 2)
         p.scale(scale, scale)
-        dark = self.palette().window().color().lightness() < 128
-        draw_scene(p, self.step, self.t, self.variant, self.kind, dark)
+        draw_scene(p, self.step, self.t, self.variant, self.kind, False)
+        p.restore()
+        ink = QColor(design_a.KEY)
+        p.setPen(QPen(ink, 1))
+        p.setBrush(Qt.NoBrush)
+        p.drawRect(self.rect().adjusted(0, 0, -1, -1))
+        design_a.draw_registration(p, self.width() - 13, 13, 5, ink)
+        design_a.draw_registration(p, 13, self.height() - 13, 5, ink)
 
 
 class PlacementPlayer(QWidget):

@@ -118,6 +118,8 @@ config = {
             "theme/instruments/*.svg",
             "theme/brands/*.svg",
             "theme/guide/*.svg",
+            "theme/fonts/*.ttf",
+            "theme/fonts/NOTICE.txt",
             "theme/jet_anim/*.png",
             "theme/patch_anim/*.png",
             "theme/splash_anim/*.png",

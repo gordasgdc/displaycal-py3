@@ -321,13 +321,14 @@ def test_sleep_option_text_is_never_squeezed_or_centred(window, monkeypatch, wid
     assert gap < 40, gap
 
 
-def test_text_size_button_on_the_dark_bar_states_its_own_colours(qapp):
-    """White text on a transparent fill with an outline: readable whatever the platform style."""
+def test_text_size_button_takes_its_look_from_the_application_sheet(qapp):
+    """The button carries no colours of its own; the proof-sheet sheet outlines it in ink."""
+    from DisplayCAL.ui import design_a
     from DisplayCAL.ui.text_size_menu import TextSizeButton
 
-    btn = TextSizeButton(on_dark_bar=True)
-    css = btn.styleSheet()
-    assert "color: #ffffff" in css and "background: transparent" in css and "border:" in css
+    btn = TextSizeButton()
+    assert btn.styleSheet() == ""
+    assert "QToolButton#text_size_button" in design_a.global_qss(design_a.LIGHT)
 
 
 def _settle(window, level):
@@ -353,17 +354,18 @@ def test_brand_banner_keeps_its_height_whatever_the_text_size(window):
 
 
 def test_large_text_gives_the_room_to_the_content(window):
-    """The step column becomes a one-row strip: the page gets (nearly) the full width."""
+    """The steps are always one slim row: the page keeps the full width at every size,
+    and at a large size the names give way to numbers (the text is never shrunk)."""
     from qtpy.QtCore import QPoint
 
     _settle(window, "normal")
     g = window._guide
     normal_w = g.pages.width()
     normal_top = g.pages.mapTo(window, QPoint(0, 0)).y()
-    assert not g.rail._compact
+    assert g.rail.height() < 80
     _settle(window, "xlarge")
     assert g.rail._compact and g.rail.height() < 80
-    assert g.pages.width() > normal_w + 120
+    assert g.pages.width() >= normal_w - 10
     # the page starts no lower than a strip's height below where it started at Normal
     assert g.pages.mapTo(window, QPoint(0, 0)).y() <= normal_top + 40
     # still reachable and the reader's size is untouched

@@ -1,27 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 234" width="340" height="234">
-<title>Measuring instrument</title>
-<defs>
-<linearGradient id="glass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b2d33"/><stop offset="1" stop-color="#15161a"/></linearGradient>
-<linearGradient id="bezel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a4d55"/><stop offset="1" stop-color="#26282d"/></linearGradient>
-<linearGradient id="body" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5b5e66"/><stop offset=".5" stop-color="#2d2f35"/><stop offset="1" stop-color="#121316"/></linearGradient>
-<radialGradient id="lens" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#6d7fb8"/><stop offset=".35" stop-color="#1c2236"/><stop offset="1" stop-color="#07080b"/></radialGradient>
-<radialGradient id="bloomR" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ff5a4d" stop-opacity=".55"/><stop offset="1" stop-color="#ff5a4d" stop-opacity="0"/></radialGradient>
-<radialGradient id="bloomG" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#59f07a" stop-opacity=".45"/><stop offset="1" stop-color="#59f07a" stop-opacity="0"/></radialGradient>
-<radialGradient id="bloomB" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#5a7bff" stop-opacity=".5"/><stop offset="1" stop-color="#5a7bff" stop-opacity="0"/></radialGradient>
-<linearGradient id="beam" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ff5a4d"/><stop offset=".25" stop-color="#ffb347"/><stop offset=".5" stop-color="#ffe14d"/><stop offset=".75" stop-color="#59f07a"/><stop offset="1" stop-color="#5a7bff"/></linearGradient>
-<linearGradient id="fadeR" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
-<mask id="beamMask"><rect x="0" y="0" width="340" height="234" fill="url(#fadeR)"/></mask>
-<filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3"/></filter>
-<filter id="shadow" x="-30%" y="-30%" width="160%" height="170%"><feGaussianBlur stdDeviation="4"/></filter>
-</defs>
-<ellipse cx="170" cy="212" rx="86" ry="7" fill="#000" opacity=".28" filter="url(#shadow)"/>
-<path d="M150 170 L190 170 L198 202 L142 202 Z" fill="url(#bezel)"/>
-<rect x="112" y="200" width="116" height="8" rx="4" fill="url(#bezel)"/>
-<rect x="38" y="26" width="264" height="150" rx="11" fill="url(#bezel)"/>
-<rect x="45" y="33" width="250" height="136" rx="6" fill="url(#glass)"/>
-<rect x="140" y="70" width="60" height="60" rx="3" fill="#7d7f85" opacity=".55"/>
-<path d="M45 33 H210 L150 169 H45 Z" fill="#fff" opacity=".035"/>
-<circle cx="170" cy="100" r="26" fill="none" stroke="#8a8d95" stroke-width="3" stroke-dasharray="7 5"/>
-<path d="M162 92 a8 8 0 1 1 12 7 c-3 2 -4 3 -4 7" stroke="#8a8d95" stroke-width="3.2" fill="none" stroke-linecap="round"/>
-<circle cx="170" cy="116" r="2.2" fill="#8a8d95"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 234" width="340" height="234"><defs>
+<linearGradient id="scr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b3e46"/><stop offset="1" stop-color="#1f2125"/></linearGradient>
+<linearGradient id="neck" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#b9babd"/><stop offset=".5" stop-color="#e3e4e5"/><stop offset="1" stop-color="#a9abae"/></linearGradient>
+<radialGradient id="lens" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#5d6069"/><stop offset=".45" stop-color="#17181b"/><stop offset="1" stop-color="#050506"/></radialGradient>
+<linearGradient id="body" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#2b2d33"/><stop offset=".5" stop-color="#3a3d45"/><stop offset="1" stop-color="#1a1b1f"/></linearGradient>
+</defs><path d="M152 176h36l6 30h-48z" fill="url(#neck)"/><rect x="118" y="205" width="104" height="9" rx="4.5" fill="url(#neck)"/>
+<rect x="40" y="14" width="260" height="162" rx="8" fill="#16171a"/><rect x="47" y="21" width="246" height="148" rx="3" fill="url(#scr)"/>
+<path d="M47 21h120l-64 148H47z" fill="#fff" opacity=".05"/>
+<rect x="122" y="47" width="96" height="96" fill="#f6f6f4"/><path d="M170 64V34C170 8 196 2 214 8" fill="none" stroke="#16171a" stroke-width="3" stroke-linecap="round"/><circle cx="170" cy="95" r="30" fill="#1d1e22" stroke="#0a0a0c" stroke-width="2" stroke-dasharray="4 3"/><circle cx="170" cy="95" r="21.0" fill="none" stroke="#4a4c52" stroke-width="1.5"/><circle cx="170" cy="95" r="11.1" fill="url(#lens)"/><ellipse cx="166.4" cy="90.2" rx="3.0" ry="1.8" fill="#fff" opacity=".55"/></svg>

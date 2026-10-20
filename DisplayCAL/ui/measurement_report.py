@@ -64,6 +64,7 @@ from qtpy.QtWidgets import (
 )
 
 from DisplayCAL import config
+from DisplayCAL.ui import design_a
 from DisplayCAL.ui import text_scale
 from DisplayCAL import localization as lang
 from DisplayCAL.cgats import (
@@ -576,7 +577,7 @@ class ReportPanel(QWidget):
         self.input_value_clipping_label = QLabel(
             lang.getstr("warning.input_value_clipping")
         )
-        self.input_value_clipping_label.setStyleSheet("color: #F07F00")
+        self.input_value_clipping_label.setStyleSheet(f"color: {design_a.tokens().warn}")
         self.input_value_clipping_label.setVisible(False)
         none_layout.addWidget(self.input_value_clipping_label)
         none_layout.addStretch(1)
@@ -1760,9 +1761,9 @@ class ReportPanel(QWidget):
         label = getattr(self, f"{which}_meas_time")
         label.setText(lang.getstr("estimated_measurement_time", (hours, minutes)))
         if hours != "--" and hours > 7:
-            color = "#FF3300"
+            color = design_a.tokens().bad
         elif hours != "--" and hours > 3:
-            color = "#F07F00"
+            color = design_a.tokens().warn
         else:
             color = ""
         label.setStyleSheet(f"color: {color}" if color else "")

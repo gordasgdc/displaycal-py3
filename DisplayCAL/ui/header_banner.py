@@ -12,10 +12,9 @@ from __future__ import annotations
 from qtpy.QtCore import QRect, Qt
 from qtpy.QtGui import (
     QColor,
-    QFont,
-    QLinearGradient,
     QPainter,
     QPaintEvent,
+    QPen,
     QPixmap,
 )
 from qtpy.QtWidgets import QWidget
@@ -85,19 +84,15 @@ def brand_icon_pixmap(size: int = 128) -> QPixmap:
     return QPixmap(path) if path else QPixmap()
 
 
-#: Spectrum of the symbol's beam, used as a quiet hairline under the header.
-BRAND_SPECTRUM = ("#ff5a4d", "#ffb347", "#ffe14d", "#59f07a", "#4dc9ff", "#5a7bff")
-
-
 class HeaderBanner(QWidget):
-    """The brand header: the symbol, the wordmark and the tagline.
+    """The brand header, drawn as the top of a proof sheet.
 
-    A neutral dark plate with the application symbol, "DisplayCAL" with the
-    "-CG" edition mark in the accent colour and a hairline carrying the beam
-    spectrum of the symbol. It deliberately has no photographic artwork, so it
-    reads cleanly in both light and dark system themes and never competes with
-    the settings below it. ``pixmap`` (the legacy wx wordmark bitmap) is kept in
-    the signature for compatibility and is no longer drawn.
+    A slug line (mono: name, version, licence), then the symbol, the wordmark
+    underlined by the four process colours and the tagline, and last the
+    control strip of the proof. It has no photographic artwork and no
+    gradient, so it reads the same in light and dark and never competes with
+    the settings below it. ``pixmap`` (the legacy wx wordmark bitmap) is kept
+    in the signature for compatibility and is no longer drawn.
     """
 
     def __init__(
@@ -120,55 +115,88 @@ class HeaderBanner(QWidget):
         self.setFixedHeight(px)
 
     @staticmethod
-    def _chrome_font(font: QFont, mult: float) -> QFont:
+    def _chrome_size(mult: float) -> float:
         """The plate's type is sized from the system size, not the chosen one."""
         from DisplayCAL.ui import text_scale
 
-        f = QFont(font)
-        f.setPointSizeF(text_scale.base_points() * mult)
-        return f
+        return text_scale.base_points() * mult
+
+    @staticmethod
+    def _slug_text() -> str:
+        from DisplayCAL import meta
+
+        build = f" [CG.{meta.CG_BUILD}]" if getattr(meta, "CG_BUILD", 0) else ""
+        return f"DisplayCAL-CG · {meta.VERSION_STRING}{build}"
 
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: D102, N802
+        from DisplayCAL.ui import design_a
+
+        t = design_a.tokens()
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
         rect = self.rect()
-        grad = QLinearGradient(0, 0, 0, rect.height())
-        grad.setColorAt(0, QColor("#1d1e22"))
-        grad.setColorAt(1, QColor("#121316"))
-        painter.fillRect(rect, grad)
-        # Symbol, vertically centred, left-aligned to the bar content below.
-        side = min(rect.height() - 8, 72)
+        painter.fillRect(rect, QColor(t.sheet))
+        w, h = rect.width(), rect.height()
+        pad = 14
+        # Slug line.
+        slug_font = design_a.mono_font(self._chrome_size(0.72))
+        painter.setFont(slug_font)
+        slug_h = painter.fontMetrics().height() + 8
+        painter.setPen(QColor(t.ink2))
+        painter.drawText(
+            QRect(pad, 0, w - 2 * pad, slug_h), int(Qt.AlignLeft | Qt.AlignVCenter),
+            self._slug_text().upper(),
+        )
+        painter.drawText(
+            QRect(pad, 0, w - 2 * pad, slug_h), int(Qt.AlignRight | Qt.AlignVCenter),
+            "GPLV3",
+        )
+        painter.fillRect(QRect(pad, slug_h - 1, w - 2 * pad, 1), QColor(t.rule))
+        # Control strip along the bottom edge.
+        strip_h = 10
+        strip_top = h - strip_h - 1
+        n = len(design_a.STRIP)
+        for i, hexcolor in enumerate(design_a.STRIP):
+            x0 = pad + round(i * (w - 2 * pad) / n)
+            x1 = pad + round((i + 1) * (w - 2 * pad) / n)
+            painter.fillRect(x0, strip_top, x1 - x0, strip_h, QColor(hexcolor))
+        painter.setPen(QPen(QColor(t.rule), 1))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawRect(pad, strip_top, w - 2 * pad - 1, strip_h - 1)
+        # Symbol, wordmark, tagline in the band between the two.
+        band_top, band_bottom = slug_h + 4, strip_top - 4
+        band_h = max(20, band_bottom - band_top)
+        side = min(band_h, 48)
         if not self._icon.isNull():
-            icon_rect = QRect(14, (rect.height() - side) // 2, side, side)
+            icon_rect = QRect(pad, band_top + (band_h - side) // 2, side, side)
             painter.drawPixmap(icon_rect, self._icon)
-        text_x = max(self._inset, 14 + side + 12)
-        title = self._chrome_font(self.font(), 1.9)
-        title.setBold(True)
+        text_x = pad + side + 10
+        title = design_a.sans_font(self._chrome_size(1.75), 800)
         painter.setFont(title)
         fm = painter.fontMetrics()
-        baseline = rect.height() // 2 - 2
-        painter.setPen(QColor("#f2f3f5"))
-        painter.drawText(text_x, baseline, "DisplayCAL")
-        painter.setPen(QColor("#ffb347"))
-        painter.drawText(text_x + fm.horizontalAdvance("DisplayCAL"), baseline, "-CG")
-        tag = self._chrome_font(self.font(), 0.95)
-        painter.setFont(tag)
-        painter.setPen(QColor(255, 255, 255, 165))
-        painter.drawText(
-            QRect(
-                text_x,
-                baseline + 6,
-                rect.width() - text_x - 12,
-                painter.fontMetrics().height() + 8,
-            ),
-            int(Qt.AlignLeft | Qt.AlignTop),
-            self._tagline,
-        )
-        # Beam hairline.
-        line = QLinearGradient(0, 0, rect.width(), 0)
-        for i, hex_ in enumerate(BRAND_SPECTRUM):
-            line.setColorAt(i / (len(BRAND_SPECTRUM) - 1), QColor(hex_))
-        painter.setOpacity(0.9)
-        painter.fillRect(QRect(0, rect.height() - 2, rect.width(), 2), line)
+        word = "DisplayCAL-CG"
+        word_w = fm.horizontalAdvance(word)
+        base = band_top + (band_h - 4 - fm.height()) // 2 + fm.ascent()
+        painter.setPen(QColor(t.ink))
+        painter.drawText(text_x, base, word)
+        bar_y = base + fm.descent() + 1
+        for i, hexcolor in enumerate((design_a.CYAN, design_a.MAGENTA, design_a.YELLOW, t.ink)):
+            x0 = text_x + round(i * word_w / 4)
+            x1 = text_x + round((i + 1) * word_w / 4)
+            painter.fillRect(x0, bar_y, x1 - x0, 3, QColor(hexcolor))
+        # Tagline on the right of the wordmark, never wider than what is left.
+        tag_x = text_x + word_w + 22
+        room = w - pad - tag_x
+        if room > 120:
+            tag = design_a.sans_font(self._chrome_size(0.95), 400)
+            painter.setFont(tag)
+            painter.setPen(QColor(t.ink2))
+            elided = painter.fontMetrics().elidedText(
+                self._tagline, Qt.ElideRight, room
+            )
+            painter.drawText(
+                QRect(tag_x, band_top, room, band_h - 4),
+                int(Qt.AlignLeft | Qt.AlignVCenter), elided,
+            )
         painter.end()

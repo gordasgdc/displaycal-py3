@@ -65,15 +65,10 @@ def main() -> int:
             config.setcfg("lang", code)
             lang.init()
             lang.update_defaults()
-            pal = QPalette(app.style().standardPalette())
-            if theme == "dark":
-                pal.setColor(QPalette.Window, QColor("#1e1f23"))
-                pal.setColor(QPalette.WindowText, QColor("#eceef1"))
-                pal.setColor(QPalette.Base, QColor("#16171a"))
-                pal.setColor(QPalette.Text, QColor("#eceef1"))
-                pal.setColor(QPalette.Button, QColor("#2a2c31"))
-                pal.setColor(QPalette.ButtonText, QColor("#eceef1"))
-            app.setPalette(pal)
+            from DisplayCAL.ui import theme as theme_mod
+
+            theme_mod.is_dark = lambda source=None, _t=theme: _t == "dark"
+            theme_mod.apply_theme(app)
             from DisplayCAL.ui import main_window as mw
 
             win = mw.MainWindow(worker=Worker())
@@ -119,15 +114,14 @@ def main() -> int:
                     app.processEvents()
                 base = win.grab().toImage()
                 img = QImage(base.width(), base.height() + 34, QImage.Format_ARGB32)
-                img.fill(QColor(200, 70, 30))
+                img.fill(QColor("#16171a"))
                 painter = QPainter(img)
                 painter.drawImage(0, 34, base)
-                painter.setPen(QColor("white"))
-                f = painter.font()
-                f.setBold(True)
-                f.setPointSize(13)
-                painter.setFont(f)
-                painter.drawText(14, 23, BAND[code])
+                painter.setPen(QColor("#f6f6f4"))
+                from DisplayCAL.ui import design_a
+
+                painter.setFont(design_a.mono_font(9.5, bold=True))
+                painter.drawText(14, 23, BAND[code].upper())
                 painter.end()
                 img.save(os.path.join(args.out, f"guide_step{step + 1}_{code}_{theme}.png"))
             win.close()

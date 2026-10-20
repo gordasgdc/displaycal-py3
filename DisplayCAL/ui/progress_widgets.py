@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from qtpy.QtCore import QRectF, Qt, QTimer
-from qtpy.QtGui import QBrush, QColor, QLinearGradient, QPainter, QPixmap
+from qtpy.QtGui import QBrush, QColor, QLinearGradient, QPainter, QPen, QPixmap
 from qtpy.QtWidgets import QWidget
 
 from DisplayCAL.config import get_data_path
@@ -397,7 +397,7 @@ class GradientGauge(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setFixedHeight(4)
+        self.setFixedHeight(14)
         self._minimum = 0
         self._maximum = 0
         self._value = 0.0
@@ -406,9 +406,10 @@ class GradientGauge(QWidget):
         self._bar_gradients = BAR_GRADIENTS
         self._indeterminate_gradients = INDETERMINATE_BAR_GRADIENTS
         self._gradient_index = 0
+        # Nothing animates while a measurement runs: the bar is static and the
+        # elapsed-time read-out (once a second) is the sign of life.
         self._cycle_timer = QTimer(self)
         self._cycle_timer.timeout.connect(self._on_cycle_tick)
-        self._cycle_timer.start(67)  # Matches BetterPyGauge.Start() default.
 
     def minimum(self) -> int:
         """The gauge's minimum value (always 0)."""
@@ -462,30 +463,26 @@ class GradientGauge(QWidget):
         self.update()
 
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802, ARG002
-        """Paint the rounded capsule background and the gradient fill."""
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        rect = QRectF(self.rect())
-        radius = rect.height() / 2
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QBrush(self._background_color))
-        painter.drawRoundedRect(rect, radius, radius)
+        """Paint the proof-style bar: an inset track, an ink fill, tick marks."""
+        from DisplayCAL.ui import design_a
 
-        pool = self._gradient_pool()
-        if not pool:
-            return
+        t = design_a.tokens(self.palette().window().color().lightness() < 128)
+        painter = QPainter(self)
+        rect = self.rect().adjusted(0, 0, -1, -1)
+        painter.fillRect(rect, QColor(t.inset))
+        ink = QColor(t.ink)
         if self._indeterminate:
-            width = rect.width()
+            # Static hatching: "working, length unknown"; no motion.
+            painter.setClipRect(rect.adjusted(1, 1, 0, 0))
+            painter.setPen(QPen(QColor(ink.red(), ink.green(), ink.blue(), 110), 1))
+            for x in range(rect.left() - rect.height(), rect.right(), 6):
+                painter.drawLine(x, rect.bottom(), x + rect.height(), rect.top())
+            painter.setClipping(False)
         else:
             ceiling = self._maximum or 1
-            width = max(rect.width() * (self._value / ceiling), rect.height())
-        width = min(width, rect.width())
-        if width <= 0:
-            return
-
-        c1, c2 = pool[self._gradient_index % len(pool)]
-        gradient = QLinearGradient(0, 0, width, 0)
-        gradient.setColorAt(0, QColor(c1))
-        gradient.setColorAt(1, QColor(c2))
-        painter.setBrush(QBrush(gradient))
-        painter.drawRoundedRect(QRectF(0, 0, width, rect.height()), radius, radius)
+            width = int(rect.width() * (self._value / ceiling))
+            painter.fillRect(rect.left(), rect.top(), width, rect.height() + 1, ink)
+        painter.setPen(QPen(ink, 1))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawRect(rect)
+        painter.end()

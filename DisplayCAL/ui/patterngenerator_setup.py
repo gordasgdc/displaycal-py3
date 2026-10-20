@@ -61,6 +61,7 @@ from DisplayCAL import localization as lang
 from DisplayCAL.config import getcfg, setcfg
 from DisplayCAL.debughelpers import Error, Info
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import design_a
 from DisplayCAL.ui import message_box
 from DisplayCAL.util_io import LineCache
 from DisplayCAL.worker import Worker
@@ -156,7 +157,7 @@ class PrismaHostDialog(QDialog):
 
         self.error_label = QLabel("")
         self.error_label.setWordWrap(True)
-        self.error_label.setStyleSheet("color: #cc0000")
+        self.error_label.setStyleSheet(f"color: {design_a.tokens().bad}")
         layout.addWidget(self.error_label)
 
         self.preset_ctrl = None
@@ -236,7 +237,7 @@ class PrismaHostDialog(QDialog):
         self._checking = False
         self._check_thread = None
         if isinstance(result, Exception):
-            self.error_label.setStyleSheet("color: #cc0000")
+            self.error_label.setStyleSheet(f"color: {design_a.tokens().bad}")
             if isinstance(result, socket.gaierror):
                 self.error_label.setText(lang.getstr("host.invalid.lookup_failed"))
             else:

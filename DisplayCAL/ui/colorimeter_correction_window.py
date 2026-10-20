@@ -81,6 +81,7 @@ from qtpy.QtWidgets import (
 )
 
 from DisplayCAL import argyll_instruments, colord, colormath
+from DisplayCAL.ui import design_a
 from DisplayCAL.ui import text_scale
 from DisplayCAL import colorimeter_correction as ccxx_helpers
 from DisplayCAL import localization as lang
@@ -324,7 +325,7 @@ class CreateCorrectionWindow(BaseWindow):
         warning_row.addWidget(warning_icon)
         warning_label = QLabel(lang.getstr("colorimeter_correction.create.warning"))
         warning_label.setWordWrap(True)
-        warning_label.setStyleSheet("color: #F07F00;")
+        warning_label.setStyleSheet(f"color: {design_a.tokens().warn};")
         warning_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         warning_row.addWidget(warning_label, 1)
         layout.addLayout(warning_row)

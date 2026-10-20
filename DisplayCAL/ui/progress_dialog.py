@@ -60,34 +60,14 @@ if TYPE_CHECKING:
 # matching the wx dialog's ``REMAINING_TIME_LABEL``.
 TIME_UNKNOWN = "--:--:--"
 
-# Dark theme, lifted from DisplayCAL.wx_windows.ProgressDialog.__init__
-# (self.BackgroundColour = "#141414" / self.ForegroundColour = "#FFFFFF").
+# The dialog is on screen while measuring, so it keeps a dark, quiet surround in
+# every appearance (no bright window beside the instrument) and nothing animates.
+# Same proof-sheet system, in its dark scheme.
 _STYLESHEET = """
 QDialog#progressdialog {
-    background-color: #141414;
+    background-color: palette(window);
 }
-QDialog#progressdialog QLabel {
-    color: #FFFFFF;
-    background: transparent;
-}
-QDialog#progressdialog QPushButton {
-    color: #FFFFFF;
-    background-color: #222222;
-    border: none;
-    border-radius: 8px;
-    padding: 5px 14px;
-}
-QDialog#progressdialog QPushButton:hover {
-    background-color: #333333;
-}
-QDialog#progressdialog QPushButton:pressed {
-    background-color: #111111;
-}
-QDialog#progressdialog QPushButton:disabled {
-    color: #777777;
-    background-color: #1a1a1a;
-}
-QDialog#progressdialog QPushButton#soundButton {
+QPushButton#soundButton {
     padding: 0px;
 }
 """
@@ -173,7 +153,10 @@ class ProgressDialog(QDialog):
         self.setWindowTitle(title)
         # Keep the dialog non-modal; the driver disables the owner window.
         self.setModal(False)
-        self.setStyleSheet(_STYLESHEET)
+        from DisplayCAL.ui import design_a, theme
+
+        self.setPalette(theme.build_palette(True))
+        self.setStyleSheet(design_a.global_qss(design_a.DARK) + _STYLESHEET)
 
         self._maximum = maximum
         self._progress = 0.0
@@ -191,7 +174,9 @@ class ProgressDialog(QDialog):
 
         outer = QHBoxLayout(self)
         self.animbmp = AnimatedBitmap(self)
-        outer.addWidget(self.animbmp, 0, Qt.AlignmentFlag.AlignVCenter)
+        # The shutter/patch throbber is decoration: it stays hidden (and idle)
+        # so nothing moves next to a running measurement.
+        self.animbmp.setVisible(False)
 
         layout = QVBoxLayout()
         outer.addLayout(layout, 1)
@@ -424,6 +409,8 @@ class ProgressDialog(QDialog):
         Ports wx ``ProgressDialog.anim_fadein``: each progress type loops a
         different frame range of its animation (see :mod:`.progress_widgets`).
         """
+        if not self.animbmp.isVisibleTo(self):
+            return
         bitmaps = get_progress_bitmaps(self.progress_type)
         if self.progress_type == 1:
             frame_range, loop = (0, 9), False  # Measuring: shutter open/close.

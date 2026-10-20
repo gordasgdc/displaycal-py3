@@ -85,7 +85,7 @@ def screen_dpr() -> float:
     return screen.devicePixelRatio() if screen else 1.0
 
 
-def splash_pixmap() -> QPixmap:
+def splash_pixmap(dpr: float = 1.0) -> QPixmap:
     """Return the illustrated splash image as a ``QPixmap``.
 
     wx offers a "simple splash screen" fallback (``splash.simple``) because
@@ -100,8 +100,9 @@ def splash_pixmap() -> QPixmap:
     Returns:
         QPixmap: The splash bitmap, or a null pixmap if the asset is missing.
     """
-    path = config.get_data_path("theme/splash.png")
-    return QPixmap(path) if path else QPixmap()
+    from DisplayCAL.ui import design_a
+
+    return design_a.splash_base(dpr=dpr)
 
 
 def welcome_message() -> str:
@@ -249,13 +250,7 @@ class _EnumerateThread(QThread):
 
 
 def _draw_embossed_message(painter: QPainter, w: int, h: int, message: str) -> None:
-    """Draw the status message with wx's raised/embossed text style.
-
-    Mirrors ``StartupFrame.Draw``'s three-pass label draw (a dark shadow,
-    then black, then light gray drawn last on top): wx never actually shows
-    solid black text, the topmost and most visible layer is light gray, with
-    a subtle dark bevel underneath it for contrast against both the lighter
-    and darker regions of the splash image.
+    """Draw the status message on the splash card (ink on paper).
 
     Args:
         painter (QPainter): The active painter to draw into.
@@ -263,35 +258,32 @@ def _draw_embossed_message(painter: QPainter, w: int, h: int, message: str) -> N
         h (int): The splash pixmap height.
         message (str): The (possibly multi-line) status message.
     """
-    rect = QRect(0, round(h * 0.75), w, 40)
-    align = int(Qt.AlignHCenter | Qt.AlignTop)
-    font = painter.font()
-    font.setPointSize(_SPLASH_FONT_POINT_SIZE)
+    from DisplayCAL.ui import design_a
+
+    rect = QRect(28, round(h * 0.56), w - 56, round(h * 0.26))
+    font = design_a.sans_font(_SPLASH_FONT_POINT_SIZE, 400)
     painter.setFont(font)
-    for color, dy in (("#101010", 2), ("#000000", 1), ("#CCCCCC", 0)):
-        painter.setPen(QColor(color))
-        painter.drawText(rect.translated(0, dy), align, message)
+    painter.setPen(QColor(design_a.LIGHT.ink))
+    painter.drawText(rect, int(Qt.AlignLeft | Qt.AlignTop), message)
 
 
 def _draw_version_text(painter: QPainter, w: int) -> None:
-    """Draw the running version string just below the DisplayCAL3 wordmark.
-
-    Not part of the wx splash (``theme/splash_version.png`` there is only the
-    static "3" logo badge, no actual version number) -- a new addition so the
-    splash reflects which build is starting, independent of the "3" badge's
-    own fade-in alpha (the caller sets the painter opacity for that).
+    """Draw the running version in the top slug line (it fades in).
 
     Args:
         painter (QPainter): The active painter to draw into.
         w (int): The splash pixmap width.
     """
-    rect = QRect(0, 116, w, 20)
-    align = int(Qt.AlignHCenter | Qt.AlignTop)
-    font = painter.font()
-    font.setPointSize(_SPLASH_FONT_POINT_SIZE)
-    painter.setFont(font)
-    painter.setPen(QColor("#D3D3D3"))
-    painter.drawText(rect, align, VERSION_STRING)
+    from DisplayCAL import meta
+    from DisplayCAL.ui import design_a
+
+    build = f" [CG.{meta.CG_BUILD}]" if getattr(meta, "CG_BUILD", 0) else ""
+    painter.setFont(design_a.mono_font(8.5))
+    painter.setPen(QColor(design_a.LIGHT.ink2))
+    painter.drawText(
+        QRect(28, 12, w - 56, 18), int(Qt.AlignRight | Qt.AlignVCenter),
+        f"{VERSION_STRING}{build}".upper(),
+    )
 
 
 class _SplashAnimator(QObject):
@@ -312,7 +304,8 @@ class _SplashAnimator(QObject):
         super().__init__()
         self._splash = splash
         self._message = message
-        self._base = splash_pixmap()
+        self._dpr = screen_dpr()
+        self._base = splash_pixmap(self._dpr)
         self._anim_frames = load_anim_frames()
         self._version_frames = load_version_frames()
         self._zoom_scales = zoom_scales() if getcfg("splash.zoom") else []
@@ -321,7 +314,6 @@ class _SplashAnimator(QObject):
         #: :func:`screen_dpr`). The source art stays single-resolution and is
         #: simply upscaled along with everything else -- soft, but no softer
         #: than before, and consistent with the (now correctly sized) text.
-        self._dpr = screen_dpr()
         self._frame = 0
         self._total = (
             len(self._zoom_scales) + len(self._anim_frames) + len(self._version_frames)
@@ -352,63 +344,31 @@ class _SplashAnimator(QObject):
         QTimer.singleShot(interval, self._advance)
 
     def _render_frame(self, index: int) -> None:
-        w, h = self._base.width(), self._base.height()
+        """Compose the card: the paper, the fading version, the message.
+
+        The pacing of the old frame art is kept (it gates start-up), but only the
+        proof-sheet card is drawn; nothing moves.
+        """
+        size = self._base.deviceIndependentSize()
+        w, h = round(size.width()), round(size.height())
         dpr = self._dpr
-        # devicePixelRatio must NOT be set yet: QPainter auto-applies a
-        # device-tagged target's ratio on top of any painter.scale() already
-        # in effect, so tagging composite before painting would double the
-        # scale (drawing lands 2x too far out and clips against the physical
-        # edge). Paint into a plain (untagged) physical-size pixmap and tag
-        # it only once the drawing is done, below.
+        # devicePixelRatio is tagged only after painting (see QPainter docs).
         composite = QPixmap(round(w * dpr), round(h * dpr))
         composite.fill(Qt.transparent)
         painter = QPainter(composite)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
-        # Logical coordinates from here on -- the scale makes every existing
-        # drawPixmap/drawText call below land at the right physical pixel.
         painter.scale(dpr, dpr)
         painter.drawPixmap(0, 0, self._base)
-        if index < len(self._zoom_scales):
-            if self._anim_frames:
-                painter.drawPixmap(0, 0, self._anim_frames[0])
-            _draw_embossed_message(painter, w, h, self._message)
-            painter.end()
-            scale = self._zoom_scales[index]
-            # composite.size() is physical pixels; scaled()/zoom_painter below
-            # work in that same physical space (no painter.scale() on either).
-            scaled = composite.scaled(
-                max(1, round(composite.width() * scale)),
-                max(1, round(composite.height() * scale)),
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation,
-            )
-            frame_pixmap = QPixmap(composite.size())
-            frame_pixmap.fill(Qt.transparent)
-            zoom_painter = QPainter(frame_pixmap)
-            zoom_painter.drawPixmap(
-                round((composite.width() - scaled.width()) / 2),
-                round((composite.height() - scaled.height()) / 2),
-                scaled,
-            )
-            zoom_painter.end()
-            frame_pixmap.setDevicePixelRatio(dpr)
-        else:
-            if self._anim_frames:
-                anim_index = min(
-                    index - len(self._zoom_scales), len(self._anim_frames) - 1
-                )
-                painter.drawPixmap(0, 0, self._anim_frames[anim_index])
-            version_index = index - len(self._zoom_scales) - len(self._anim_frames)
-            if 0 <= version_index < len(self._version_frames):
-                painter.drawPixmap(0, 0, self._version_frames[version_index])
-                painter.setOpacity(_VERSION_ALPHAS[version_index])
-                _draw_version_text(painter, w)
-                painter.setOpacity(1.0)
-            _draw_embossed_message(painter, w, h, self._message)
-            painter.end()
-            composite.setDevicePixelRatio(dpr)
-            frame_pixmap = composite
-        self._splash.setPixmap(frame_pixmap)
+        version_index = index - len(self._zoom_scales) - len(self._anim_frames)
+        if version_index >= 0:
+            alpha = _VERSION_ALPHAS[min(version_index, len(_VERSION_ALPHAS) - 1)]
+            painter.setOpacity(alpha)
+            _draw_version_text(painter, w)
+            painter.setOpacity(1.0)
+        _draw_embossed_message(painter, w, h, self._message)
+        painter.end()
+        composite.setDevicePixelRatio(dpr)
+        self._splash.setPixmap(composite)
 
 
 class StartupController(QObject):

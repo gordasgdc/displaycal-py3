@@ -22,7 +22,7 @@ from DisplayCAL import localization as lang
 from DisplayCAL import measured_speed, measurement_plan as mp
 from DisplayCAL import profile_name as profile_name_mod
 from DisplayCAL.config import getcfg, setcfg
-from DisplayCAL.ui import text_scale
+from DisplayCAL.ui import design_a, text_scale
 from DisplayCAL.ui.guide_widgets import css as _css
 from DisplayCAL.ui.guide_widgets import label as _label
 from DisplayCAL.ui.guide_widgets import m as _m
@@ -99,6 +99,8 @@ class ChartPlanWidget(QWidget):
             _label(_tr("plan.blocks.title"), bold=True), self.block_combo, grow_second=True
         )
         lay.addWidget(self._block_row)
+        self.blocks_bar = design_a.BlocksBar()
+        lay.addWidget(self.blocks_bar)
         self.summary = _label("", size=1.05)
         self.white = _label("", muted=True)
         self.time = _label("", size=1.05)
@@ -169,6 +171,7 @@ class ChartPlanWidget(QWidget):
         self._fill_combo()
         self.block_combo.setEnabled(supported)
         self.total_label.setText(_tr("plan.total", count(plan.total)))
+        self.blocks_bar.set_plan(plan.total, plan.blocks, plan.per_block)
         if plan.split:
             self.summary.setText(
                 _tr(

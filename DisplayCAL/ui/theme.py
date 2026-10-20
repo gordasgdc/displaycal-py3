@@ -49,52 +49,27 @@ CHANNEL_COLORS = {
 #: Point size for UI text, matching wx's ``SetMaxFontSize(11)``.
 FONT_POINT_SIZE = 11
 
-#: Palette role → colour for the dark scheme, tuned to match wx's actual
-#: *on-screen* native window background. ``wx.SystemSettings.GetColour(wx
-#: .SYS_COLOUR_WINDOW)`` reports ``#171717`` on macOS Dark Mode, but that raw
-#: ``NSColor.windowBackgroundColor`` value is not what's actually painted:
-#: AppKit composites a vibrancy/tint pass on top of it, so a real on-screen
-#: wx window samples as ``#232323`` (confirmed via `screencapture` + pixel
-#: sampling of a live wx frame, not just the colour-query API). Qt's opaque
-#: palette fill has no such compositing step and renders exactly as
-#: specified, so matching the raw query left Qt visibly darker than wx even
-#: though the two hex values looked close. Tuned to ``#232323`` instead, the
-#: same offset from the plot canvases' fixed ``BGCOLOUR = "#333333"``.
-_DARK = {
-    QPalette.Window: "#232323",
-    QPalette.WindowText: "#999999",
-    QPalette.Base: "#232323",
-    QPalette.AlternateBase: "#2c2c2c",
-    QPalette.Text: "#cccccc",
-    QPalette.Button: "#343434",
-    QPalette.ButtonText: "#cccccc",
-    QPalette.ToolTipBase: "#232323",
-    QPalette.ToolTipText: "#cccccc",
-    QPalette.Highlight: "#4d7ea5",
-    QPalette.HighlightedText: "#ffffff",
-    QPalette.PlaceholderText: "#777777",
-    QPalette.Link: "#5a9fd4",
-}
+def _palette_roles(dark: bool) -> dict:
+    """Palette roles of direction A («proof sheet»): ink on paper, a black patch
+    as the selection, the booth blue as the link/focus colour."""
+    from DisplayCAL.ui import design_a
 
-#: Palette role → colour for the light scheme (a light counterpart).
-_LIGHT = {
-    QPalette.Window: "#ececec",
-    QPalette.WindowText: "#606060",
-    QPalette.Base: "#fbfbfb",
-    QPalette.AlternateBase: "#f0f0f0",
-    QPalette.Text: "#222222",
-    QPalette.Button: "#e4e4e4",
-    QPalette.ButtonText: "#333333",
-    QPalette.ToolTipBase: "#fbfbfb",
-    QPalette.ToolTipText: "#222222",
-    QPalette.Highlight: "#3d7eb8",
-    QPalette.HighlightedText: "#ffffff",
-    QPalette.PlaceholderText: "#999999",
-    QPalette.Link: "#2a6fb0",
-}
-
-#: Disabled-state text colour per scheme.
-_DISABLED = {True: "#666666", False: "#a0a0a0"}
+    t = design_a.tokens(dark)
+    return {
+        QPalette.Window: t.sheet,
+        QPalette.WindowText: t.ink,
+        QPalette.Base: t.inset,
+        QPalette.AlternateBase: t.sheet,
+        QPalette.Text: t.ink,
+        QPalette.Button: t.inset,
+        QPalette.ButtonText: t.ink,
+        QPalette.ToolTipBase: t.inset,
+        QPalette.ToolTipText: t.ink,
+        QPalette.Highlight: t.patch_bg,
+        QPalette.HighlightedText: t.patch_ink,
+        QPalette.PlaceholderText: t.ink2,
+        QPalette.Link: t.focus,
+    }
 
 
 def is_dark(source: QWidget | None = None) -> bool:
@@ -135,11 +110,12 @@ def build_palette(dark: bool) -> QPalette:
     Returns:
         QPalette: The configured palette.
     """
-    colors = _DARK if dark else _LIGHT
+    from DisplayCAL.ui import design_a
+
     palette = QPalette()
-    for role, hexcolor in colors.items():
+    for role, hexcolor in _palette_roles(dark).items():
         palette.setColor(role, QColor(hexcolor))
-    disabled = QColor(_DISABLED[dark])
+    disabled = QColor(design_a.tokens(dark).off_ink)
     for role in (QPalette.WindowText, QPalette.Text, QPalette.ButtonText):
         palette.setColor(QPalette.Disabled, role, disabled)
     return palette
@@ -168,7 +144,17 @@ def apply_theme(app: QApplication) -> None:
     """
     if sys.platform == "win32":
         app.setStyle(QStyleFactory.create("Fusion"))
-    app.setPalette(build_palette(is_dark()))
+    from DisplayCAL.ui import design_a
+
+    design_a.load_fonts()
+    dark = is_dark()
+    app.setPalette(build_palette(dark))
+    sans = design_a.family("sans")
+    if sans:
+        font = app.font()
+        font.setFamily(sans)
+        app.setFont(font)
+    app.setStyleSheet(design_a.global_qss(design_a.tokens(dark)))
     # The base size is the system font (not a fixed 11 points) times the saved
     # "Text size" level; see :mod:`DisplayCAL.ui.text_scale`.
     from DisplayCAL.ui import text_scale

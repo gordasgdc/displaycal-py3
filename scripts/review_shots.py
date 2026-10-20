@@ -121,6 +121,21 @@ def dialogs(win, g, app, save, config, lang, settle, code, tmp):
     dlg.show()
     save(dlg, "dlg_recovery", "Dialog — Recuperare după o oprire neașteptată", "Fapte din jurnal (nu cauze), opțiuni: exportă, arată folderul, continuă cu blocurile rămase.", "Sesiune demonstrativă creată pentru captură.")
     dlg.close()
+    from DisplayCAL.ui.progress_dialog import ProgressDialog
+
+    demo_msg = {
+        "ro": "Se măsoară patch-ul 213 din 500 (blocul 1 din 4). Date demonstrative.",
+        "en": "Measuring patch 213 of 500 (block 1 of 4). Demonstration data.",
+        "es": "Midiendo el parche 213 de 500 (bloque 1 de 4). Datos de demostración.",
+    }[code]
+    pdlg = ProgressDialog(win, message=demo_msg, maximum=100, cancelable=True, pauseable=True)
+    pdlg.set_progress(43)
+    pdlg._elapsed_label.setText("00:12:41")
+    if pdlg._remaining_label is not None:
+        pdlg._remaining_label.setText("00:16:52")
+    pdlg.show()
+    save(pdlg, "dlg_progress", "Dialog — Progres, anulare, pauză", "Bară statică (nimic nu se animă în timpul măsurării), timp scurs și estimat.", "Date demonstrative.")
+    pdlg.close()
     for name, dlg2, title, shows in (
         ("dlg_diagnostic", dd.DiagnosticDialog(win.worker, win), "Dialog — Diagnostic și suport", "Versiuni, folderul de loguri, ID-ul sesiunii, jurnal detaliat temporar, cum trimiți pachetul."),
         ("dlg_export", dd.ExportDialog(win.worker, win, diagnostics.plan_package(os.path.join(tmp, "nolog"), root)), "Dialog — Exportă pachetul de diagnostic", "Ce intră în pachet, înainte de salvare; opționalele sunt oprite implicit."),

@@ -31,7 +31,7 @@ from DisplayCAL import instrument_catalog as ic
 from DisplayCAL import localization as lang
 from DisplayCAL.guide_sources import SOURCES
 from DisplayCAL.ui import text_scale
-from DisplayCAL.ui.guide_widgets import AdaptiveRow, Disclosure, label, m
+from DisplayCAL.ui.guide_widgets import AdaptiveRow, Disclosure, label, m, page_head, section_head
 from DisplayCAL.ui.placement_player import PlacementPlayer
 
 
@@ -91,7 +91,7 @@ class PreparePage(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(10)
-        root.addWidget(label(_tr("guide.s3.title"), size=1.6, bold=True))
+        root.addWidget(page_head(3, _tr("guide.s3.title")))
         root.addWidget(label(_tr("guide.s3.hint"), muted=True))
 
         self._list_host = QWidget()
@@ -104,7 +104,7 @@ class PreparePage(QWidget):
         sl = QVBoxLayout(side)
         sl.setContentsMargins(0, 0, 0, 0)
         sl.setSpacing(8)
-        sl.addWidget(label(_tr("guide.pl.title"), size=1.15, bold=True))
+        sl.addWidget(section_head(_tr("guide.pl.title")))
         sl.addWidget(self.player)
         self.reduced_note = label(_tr("guide.pl.reduced_note"), size=0.95, muted=True)
         self.reduced_note.setVisible(self.player.reduced_motion)
@@ -170,10 +170,7 @@ class PreparePage(QWidget):
         for item in items:
             if item.group != group:
                 group = item.group
-                head = label(
-                    _tr(f"guide.prep.group.{group}"), size=0.95, bold=True, muted=True
-                )
-                self._list.addWidget(head)
+                self._list.addWidget(section_head(_tr(f"guide.prep.group.{group}")))
             self._list.addWidget(self._make_item(item, seq))
         self._list.addStretch(1)
         self._paint_sequence(seq)

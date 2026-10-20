@@ -173,6 +173,9 @@ def _refresh_widget(w: QWidget) -> None:
         f = QFont(QApplication.font())
         f.setPointSizeF(f.pointSizeF() * float(mult))
         f.setBold(bool(w.property("_fbold")))
+        weight = w.property("_fweight")
+        if weight:
+            f.setWeight(QFont.Weight(int(weight)))
         w.setFont(f)
     minh = w.property("_minh")
     if minh:
@@ -182,10 +185,16 @@ def _refresh_widget(w: QWidget) -> None:
         w.setMaximumWidth(chars_px(w, int(maxc)))
 
 
-def set_scaled_font(widget: QWidget, mult: float = 1.0, bold: bool = False) -> None:
-    """Give a widget ``mult`` x the application font size (kept in sync)."""
+def set_scaled_font(
+    widget: QWidget, mult: float = 1.0, bold: bool = False, weight: int | None = None
+) -> None:
+    """Give a widget ``mult`` x the application font size (kept in sync).
+
+    ``weight`` (CSS-style 100..900) overrides ``bold`` for variable fonts.
+    """
     widget.setProperty("_fmult", mult)
     widget.setProperty("_fbold", bold)
+    widget.setProperty("_fweight", weight)
     _refresh_widget(widget)
 
 

@@ -55,7 +55,7 @@ def make_menu(parent: QWidget | None = None, title: str | None = None) -> QMenu:
 class TextSizeButton(QToolButton):
     """A small always-visible "Aa" button that opens the text-size menu."""
 
-    def __init__(self, parent: QWidget | None = None, on_dark_bar: bool = False) -> None:
+    def __init__(self, parent: QWidget | None = None, on_dark_bar: bool = False) -> None:  # noqa: ARG002
         super().__init__(parent)
         self.setText("Aa")
         self.setObjectName("text_size_button")
@@ -66,13 +66,3 @@ class TextSizeButton(QToolButton):
         self.setAutoRaise(True)
         self.setMenu(make_menu(self))
         text_scale.set_scaled_font(self, 1.1, bold=True)
-        if on_dark_bar:
-            # The bar is dark in every appearance: spell out text, fill and outline
-            # so the platform's light-mode button never turns it into pale-on-pale.
-            self.setStyleSheet(
-                "QToolButton { color: #ffffff; background: transparent;"
-                " border: 1px solid rgba(255,255,255,0.45); border-radius: 5px;"
-                " padding: 2px 8px; }"
-                "QToolButton:hover, QToolButton:pressed {"
-                " background: rgba(255,255,255,0.18); }"
-            )

@@ -215,6 +215,7 @@ from DisplayCAL.meta import DEVELOPMENT_HOME_PAGE, DOMAIN, VERSION_STRING
 from DisplayCAL.meta import NAME as APPNAME
 from DisplayCAL.options import TEST
 from DisplayCAL.profile_verify import verify_active_profile
+from DisplayCAL.ui import design_a
 from DisplayCAL.ui import message_box, text_scale
 from DisplayCAL.ui.about_window import AboutWindow
 from DisplayCAL.ui.application import Application
@@ -1192,8 +1193,12 @@ class _HeaderPanelBar(QWidget):
         self.setAttribute(Qt.WA_StyledBackground, True)
 
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: D102 (Qt override)
-        super().paintEvent(event)
-        # The legacy flare continuation is intentionally not painted any more.
+        
+        t = design_a.tokens()
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor(t.sheet))
+        painter.fillRect(14, self.height() - 1, max(0, self.width() - 28), 1, QColor(t.rule))
+        painter.end()
 
 
 class _TabStack(QStackedWidget):
@@ -3447,7 +3452,7 @@ class MainWindow(BaseWindow):
             lang.getstr("header"),
             self._HEADER_LOGO_INSET,
         )
-        banner.set_base_height(HEADER_BANNER_SIZE[1] + 12)
+        banner.set_base_height(HEADER_BANNER_SIZE[1] + 20)
         # Matches the actual gradient sampled from ``theme/header@2x.png``: it
         # reaches its final blue by the vertical midpoint and stays flat below
         # that (a plain 2-stop linear gradient over-darkens the top half).
@@ -3460,14 +3465,12 @@ class MainWindow(BaseWindow):
         # widget forces Qt to draw its children (like the combo box below) via
         # the CSS style engine instead of the native one, losing the native
         # chevron / popup chrome the rest of the app's combo boxes keep.
-        bar.setStyleSheet("QWidget#headerpanel { background-color: #17181b; }")
         self._header_bar = bar
         bar_row = QHBoxLayout(bar)
         bar_row.setContentsMargins(self._HEADER_LOGO_INSET, 8, 16, 8)
         bar_row.setSpacing(8)
 
         file_label = QLabel(lang.getstr("calibration.file"))
-        file_label.setStyleSheet("color: white;")
         bar_row.addWidget(file_label)
 
         self.calibration_file_ctrl = QComboBox()
@@ -3523,13 +3526,14 @@ class MainWindow(BaseWindow):
         pixmap = get_theme_pixmap(size, name)
         if pixmap.isNull():
             return pixmap
+        
         white = QPixmap(pixmap.size())
         white.setDevicePixelRatio(pixmap.devicePixelRatio())
         white.fill(Qt.transparent)
         painter = QPainter(white)
         painter.drawPixmap(0, 0, pixmap)
         painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
-        painter.fillRect(white.rect(), QColor("white"))
+        painter.fillRect(white.rect(), QColor(design_a.tokens().ink))
         painter.end()
         return white
 
@@ -3570,6 +3574,12 @@ class MainWindow(BaseWindow):
         """Re-apply every icon registered via :meth:`_themed_icon`."""
         for update in self._themed_icon_updaters:
             update()
+        for button in self.findChildren(QToolButton):
+            name = button.property("_icon_name")
+            if name:
+                pixmap = self._header_icon_pixmap(16, str(name))
+                if not pixmap.isNull():
+                    button.setIcon(pixmap)
 
     def _repolish_styled_widgets(self) -> None:
         """Force every widget with its own stylesheet to re-read the palette.
@@ -3609,18 +3619,9 @@ class MainWindow(BaseWindow):
     #: regardless of theme, so force them flat/transparent instead, matching
     #: wx's own flat "-inverted" toolbar buttons.
     _HEADER_TOOL_BUTTON_STYLE = (
-        "QToolButton {"
-        " border: none;"
-        " background: transparent;"
-        " padding: 4px;"
-        " border-radius: 4px;"
-        "}"
-        "QToolButton:hover {"
-        " background: rgba(255, 255, 255, 40);"
-        "}"
-        "QToolButton:pressed {"
-        " background: rgba(255, 255, 255, 70);"
-        "}"
+        "QToolButton { border: none; background: transparent; padding: 4px; }"
+        "QToolButton:hover { background: rgba(127, 127, 127, 60); }"
+        "QToolButton:pressed { background: rgba(127, 127, 127, 100); }"
     )
 
     @classmethod
@@ -3634,6 +3635,7 @@ class MainWindow(BaseWindow):
             button.setIcon(pixmap)
         button.setToolTip(lang.getstr(tooltip_key))
         button.setAutoRaise(True)
+        button.setProperty("_icon_name", icon_name)
         button.setStyleSheet(cls._HEADER_TOOL_BUTTON_STYLE)
         button.clicked.connect(lambda _checked=False: slot())
         return button
@@ -3661,16 +3663,17 @@ class MainWindow(BaseWindow):
     _TAB_BUTTON_STYLE = (
         "QToolButton {"
         " border: none;"
+        " border-bottom: 3px solid transparent;"
         " background: transparent;"
+        " color: palette(window-text);"
         " padding: 4px 10px;"
         "}"
         "QToolButton:checked {"
-        " background: rgba(128, 128, 128, 60);"
-        " border-radius: 4px;"
+        " border-bottom: 3px solid palette(window-text);"
+        " font-weight: 700;"
         "}"
         "QToolButton:hover:!checked {"
-        " background: rgba(128, 128, 128, 30);"
-        " border-radius: 4px;"
+        " border-bottom: 3px solid palette(mid);"
         "}"
     )
 
@@ -3697,7 +3700,7 @@ class MainWindow(BaseWindow):
         " border: none;"
         " background: transparent;"
         " padding: 4px;"
-        " border-radius: 4px;"
+        " border-radius: 0;"
         "}"
         "QToolButton:hover {"
         " background: rgba(128, 128, 128, 30);"
@@ -3706,6 +3709,20 @@ class MainWindow(BaseWindow):
         " background: rgba(128, 128, 128, 60);"
         "}"
     )
+
+    def _tab_icon(self, button: QToolButton, key: str, fallback: str) -> None:
+        """Line icon of a tab in the ink colour (follows light/dark); the old
+        coloured PNG stays as the fallback if the drawing is missing."""
+        
+        def apply() -> None:
+            pixmap = design_a.tab_pixmap(key, 30)
+            if pixmap is None or pixmap.isNull():
+                pixmap = self._pixmap(32, fallback)
+            if not pixmap.isNull():
+                button.setIcon(pixmap)
+
+        self._themed_icon_updaters.append(apply)
+        apply()
 
     def _build_tabbar(self) -> QWidget:
         """Build the exclusive toggle-button tab bar."""
@@ -3727,7 +3744,7 @@ class MainWindow(BaseWindow):
             button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
             button.setIconSize(QSize(32, 32))
             button.setStyleSheet(self._TAB_BUTTON_STYLE)
-            self._themed_icon(button, 32, icon_name)
+            self._tab_icon(button, key, icon_name)
             # Escape "&" (wx doesn't treat it as a mnemonic marker on a
             # plain label the way Qt does by default; an unescaped "&" here
             # is silently consumed instead of shown, e.g. "Display &
@@ -5078,22 +5095,24 @@ class MainWindow(BaseWindow):
     #: actually be visible against the surrounding themed panel.
     _ACTION_BUTTON_STYLE = (
         "QPushButton {"
-        " border-radius: 12px;"
-        " padding: 6px 18px;"
-        " background-color: #ffffff;"
-        " color: #222222;"
-        " border: 1px solid #c0c0c0;"
+        " border-radius: 0;"
+        " padding: 7px 20px;"
+        " background-color: palette(window-text);"
+        " color: palette(window);"
+        " border: 1px solid palette(window-text);"
+        " font-weight: 700;"
         "}"
         "QPushButton:hover {"
-        " background-color: #f2f2f2;"
+        " background-color: palette(link);"
+        " border-color: palette(link);"
         "}"
         "QPushButton:pressed {"
-        " background-color: #e0e0e0;"
+        " background-color: palette(link);"
         "}"
         "QPushButton:disabled {"
-        " background-color: #eaeaea;"
-        " color: #999999;"
-        " border-color: #d5d5d5;"
+        " background-color: transparent;"
+        " color: palette(mid);"
+        " border: 1px solid palette(mid);"
         "}"
     )
 
@@ -5819,7 +5838,7 @@ class MainWindow(BaseWindow):
             getcfg("3dlut.hdr_maxmll"),
             getcfg("3dlut.hdr_maxmll_alt_clip"),
         )
-        color = "#CC0000" if below_reference else "#008000"
+        color = design_a.tokens().bad if below_reference else design_a.tokens().ok
         self.lut3d_hdr_diffuse_white_txt.setText(f"{value:.2f} cd/m²")
         self.lut3d_hdr_diffuse_white_txt.setStyleSheet(f"color: {color};")
 
@@ -7547,9 +7566,9 @@ class MainWindow(BaseWindow):
         )
         self.cal_meas_time.setText(estimate.label())
         self.cal_meas_time.setStyleSheet(
-            "color: #FF3300;"
+            f"color: {design_a.tokens().bad};"
             if estimate.hours is not None and estimate.hours > 7
-            else "color: #F07F00;"
+            else f"color: {design_a.tokens().warn};"
             if estimate.is_long()
             else ""
         )
@@ -8905,9 +8924,9 @@ class MainWindow(BaseWindow):
         self.refresh_plan_widgets()
         self.testchart_meas_time.setText(estimate.label())
         self.testchart_meas_time.setStyleSheet(
-            "color: #FF3300;"
+            f"color: {design_a.tokens().bad};"
             if estimate.hours is not None and estimate.hours > 7
-            else "color: #F07F00;"
+            else f"color: {design_a.tokens().warn};"
             if estimate.is_long()
             else ""
         )

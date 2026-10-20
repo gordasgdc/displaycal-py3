@@ -20,8 +20,8 @@ from __future__ import annotations
 from html import escape
 from typing import TYPE_CHECKING
 
-from qtpy.QtCore import QEvent, QTimer, QRectF, QSize, Qt, Signal
-from qtpy.QtGui import QColor, QFont, QLinearGradient, QPainter, QPen, QPixmap
+from qtpy.QtCore import QEvent, QPointF, QTimer, QRectF, QSize, Qt, Signal
+from qtpy.QtGui import QColor, QFont, QFontMetrics, QLinearGradient, QPainter, QPen, QPixmap
 from qtpy.QtWidgets import (
     QBoxLayout,
     QButtonGroup,
@@ -49,7 +49,7 @@ from DisplayCAL.argyll import check_argyll_bin
 from DisplayCAL.config import getcfg, setcfg
 from DisplayCAL.ui.guide_prepare import PreparePage
 from DisplayCAL.ui.plan_widget import ChartPlanWidget
-from DisplayCAL.ui import text_scale
+from DisplayCAL.ui import design_a, text_scale
 from DisplayCAL.ui.guide_widgets import (
     AdaptiveRow as _AdaptiveRow,
 )
@@ -73,14 +73,15 @@ from DisplayCAL.ui.guide_widgets import (
 )
 from DisplayCAL.ui.guide_widgets import (
     tokens as _tokens,
+    page_head as _page_head,
+    section_head as _section_head,
+    slug as _slug,
 )
 from DisplayCAL.ui.support_dialog import SupportInvite, invite_allowed
 
 if TYPE_CHECKING:
     from DisplayCAL.ui.main_window import MainWindow
 
-#: Spectrum used for the beam motif of the app icon (kept subtle in the UI).
-_SPECTRUM = ("#ff5a4d", "#ffb347", "#ffe14d", "#59f07a", "#4dc9ff", "#5a7bff")
 
 STEPS = 5
 
@@ -100,24 +101,14 @@ def _tr(key: str, *args: object) -> str:
     return lang.getstr(key, list(args)) if args else lang.getstr(key)
 
 
-class _SpectrumLine(QWidget):
-    """A thin beam line (the icon's spectrum), used as a quiet header accent."""
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setFixedHeight(3)
-
-    def paintEvent(self, _event: object) -> None:  # noqa: N802
-        painter = QPainter(self)
-        grad = QLinearGradient(0, 0, self.width(), 0)
-        for i, hex_ in enumerate(_SPECTRUM):
-            grad.setColorAt(i / (len(_SPECTRUM) - 1), QColor(hex_))
-        painter.setOpacity(0.85)
-        painter.fillRect(self.rect(), grad)
-
-
 class _Rail(QWidget):
-    """Vertical journey rail: numbered nodes joined by a line."""
+    """The five steps as the nav of a proof: a control strip over a row of cells.
+
+    The current step is a black patch, finished steps carry a tick in a
+    registration circle, steps ahead wait in ink2. When the names do not fit
+    (large text, narrow window) every cell shrinks to its number and only the
+    current step keeps its name: the text itself is never made smaller.
+    """
 
     step_requested = Signal(int)
 
@@ -126,65 +117,67 @@ class _Rail(QWidget):
         self._current = 0
         self._reached = 0
         self._compact = False
-        self.setMinimumWidth(self._min_width())
-        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setCursor(Qt.PointingHandCursor)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setAccessibleName(lang.getstr("guide.title"))
-
-    def _row_h(self) -> int:
-        """Row height follows the font, so large text scales instead of clipping."""
-        return max(60, int(self.fontMetrics().height() * 3.2))
-
-    def _min_width(self) -> int:
-        if self._compact:
-            return 0
-        return max(176, self.fontMetrics().horizontalAdvance("M") * 15)
-
-    # Compact strip (large text): the room goes to the content, not to a column
-    # of step names. The step's name is already the heading of its page.
-    def set_compact(self, compact: bool) -> None:
-        """Lay the steps out as one row of numbered nodes (``True``) or a column."""
-        if compact == self._compact:
-            return
-        self._compact = compact
-        self.setSizePolicy(
-            *(
-                (QSizePolicy.Expanding, QSizePolicy.Fixed)
-                if compact
-                else (QSizePolicy.Fixed, QSizePolicy.Expanding)
-            )
-        )
-        self.setMinimumWidth(self._min_width())
         self._sync_height()
-        self.updateGeometry()
-        self.set_state(self._current, self._reached)
 
-    def _node(self) -> int:
-        return max(24, int(self.fontMetrics().height() * 1.5))
+    # -- geometry ----------------------------------------------------------
+    def _slug_font(self) -> QFont:
+        return design_a.mono_font(max(8.0, self.font().pointSizeF() * 0.82), bold=True)
 
-    def _strip_h(self) -> int:
-        return self._node() + 8
+    def _cell_h(self) -> int:
+        return int(QFontMetrics(self._slug_font()).height() * 2.0)
 
     def _sync_height(self) -> None:
-        if self._compact:
-            self.setFixedHeight(self._strip_h())
-        else:
-            self.setMinimumHeight(0)
-            self.setMaximumHeight(16777215)
+        self.setFixedHeight(self._cell_h() + 2)
 
-    def _node_rect(self, i: int) -> QRectF:
-        n = self._node()
-        return QRectF(4 + i * (n + n * 0.9), 4, n, n)
+    def set_compact(self, compact: bool) -> None:
+        """Kept for the panel's text-size hook; the strip decides by itself."""
+        self.update()
 
     def changeEvent(self, event: object) -> None:  # noqa: N802, D102
         if event.type() == QEvent.FontChange:
-            self.setMinimumWidth(self._min_width())
             self._sync_height()
             self.updateGeometry()
             self.update()
         super().changeEvent(event)
 
+    def _label(self, i: int) -> str:
+        return f"{i + 1:02d}  {lang.getstr(f'guide.step.{i + 1}')}".upper()
+
+    def _layout_cells(self) -> list[QRectF]:
+        fm = QFontMetrics(self._slug_font())
+        top = 1
+        h = self._cell_h()
+        pad = fm.height() * 0.5
+        mark = fm.height() * 0.9
+        full = [fm.horizontalAdvance(self._label(i)) + 2 * pad + mark + pad * 0.6
+                for i in range(STEPS)]
+        width = float(self.width())
+        self._compact = sum(full) > width
+        if not self._compact:
+            extra = (width - sum(full)) / STEPS
+            widths = [f + extra for f in full]
+        else:
+            num = [fm.horizontalAdvance(f"{i + 1:02d}") + 2 * pad + mark + pad * 0.6
+                   for i in range(STEPS)]
+            widths = list(num)
+            widths[self._current] = max(num[self._current], width - (sum(num) - num[self._current]))
+        rects, x = [], 0.0
+        for w in widths:
+            rects.append(QRectF(x, top, w, h))
+            x += w
+        return rects
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return QSize(300, self.height())
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return QSize(0, self.height())
+
+    # -- behaviour ---------------------------------------------------------
     def set_state(self, current: int, reached: int) -> None:
         self._current, self._reached = current, reached
         self.setAccessibleDescription(
@@ -194,21 +187,11 @@ class _Rail(QWidget):
             "\n".join(
                 f"{i + 1}. {lang.getstr(f'guide.step.{i + 1}')}" for i in range(STEPS)
             )
-            if self._compact
-            else ""
         )
         self.update()
 
-    def sizeHint(self) -> QSize:  # noqa: N802
-        if self._compact:
-            return QSize(int(self._node_rect(STEPS).left()) + 160, self._strip_h())
-        return QSize(self._min_width() + 14, self._row_h() * STEPS + 24)
-
-    def _row_rect(self, i: int) -> QRectF:
-        return QRectF(6, 12 + i * self._row_h(), self.width() - 12, self._row_h() - 8)
-
     def keyPressEvent(self, event: object) -> None:  # noqa: N802
-        """Up/Down (or Left/Right) move between the steps already reached."""
+        """Left/Right (or Up/Down) move between the steps already reached."""
         key = event.key()
         delta = {Qt.Key_Up: -1, Qt.Key_Left: -1, Qt.Key_Down: 1, Qt.Key_Right: 1}.get(
             key
@@ -230,119 +213,55 @@ class _Rail(QWidget):
 
     def mousePressEvent(self, event: object) -> None:  # noqa: N802
         pos = event.position() if hasattr(event, "position") else event.pos()
-        for i in range(STEPS):
-            rect = self._node_rect(i) if self._compact else self._row_rect(i)
-            if self._compact:
-                rect = rect.adjusted(-4, -4, 4, 4)
+        for i, rect in enumerate(self._layout_cells()):
             if rect.contains(pos) and i <= self._reached:
                 self.step_requested.emit(i)
                 return
 
-    def _paint_strip(self) -> None:
-        """One row: numbered nodes on a line, then "n / 5" (the step's name is
-        the heading of its page and the rail's accessible name)."""
-        t = _tokens()
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        first, last = self._node_rect(0), self._node_rect(STEPS - 1)
-        cy = first.center().y()
-        p.setPen(QPen(t["line"], 2))
-        p.drawLine(int(first.center().x()), int(cy), int(last.center().x()), int(cy))
-        if self._current > 0:
-            end = self._node_rect(self._current).center().x()
-            grad = QLinearGradient(first.center().x(), 0, max(end, first.center().x() + 1), 0)
-            for i, hex_ in enumerate(_SPECTRUM):
-                grad.setColorAt(i / (len(_SPECTRUM) - 1), QColor(hex_))
-            p.setPen(QPen(grad, 2.5))
-            p.drawLine(int(first.center().x()), int(cy), int(end), int(cy))
-        font = QFont(self.font())
-        for i in range(STEPS):
-            node = self._node_rect(i)
-            done, active = i < self._current, i == self._current
-            if active and self.hasFocus():
-                p.setPen(QPen(t["accent"], 2))
-                p.setBrush(Qt.NoBrush)
-                p.drawEllipse(node.adjusted(-3, -3, 3, 3))
-            p.setPen(Qt.NoPen)
-            p.setBrush(t["accent"] if active else t["ok"] if done else t["plate"])
-            p.drawEllipse(node)
-            if not (active or done):
-                p.setPen(QPen(t["line"], 1.5))
-                p.setBrush(Qt.NoBrush)
-                p.drawEllipse(node)
-            nf = QFont(font)
-            nf.setBold(True)
-            p.setFont(nf)
-            p.setPen(t["window"] if (active or done) else t["muted"])
-            p.drawText(node, Qt.AlignCenter, "✓" if done else str(i + 1))
-        p.setFont(font)
-        p.setPen(t["text"])
-        p.drawText(
-            QRectF(last.right() + 14, 0, max(0, self.width() - last.right() - 18), self.height()),
-            Qt.AlignVCenter | Qt.AlignLeft,
-            f"{self._current + 1} / {STEPS}",
-        )
-        p.end()
-
     def paintEvent(self, _event: object) -> None:  # noqa: N802
-        if self._compact:
-            self._paint_strip()
-            return
-        t = _tokens()
+        t = design_a.tokens()
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        x = 24.0
-        p.setPen(QPen(t["line"], 2))
-        half = self._row_h() // 2 - 4
-        row = self._row_h()
-        p.drawLine(int(x), 12 + half, int(x), 12 + (STEPS - 1) * row + half)
-        # progressed part of the line in the spectrum
-        if self._current > 0:
-            grad = QLinearGradient(0, 12 + half, 0, 12 + half + self._current * row)
-            for i, hex_ in enumerate(_SPECTRUM):
-                grad.setColorAt(i / (len(_SPECTRUM) - 1), QColor(hex_))
-            p.setPen(QPen(grad, 2.5))
-            p.drawLine(int(x), 12 + half, int(x), 12 + half + self._current * row)
-        font = QFont(self.font())
-        for i in range(STEPS):
-            r = self._row_rect(i)
-            cy = r.top() + r.height() / 2
+        w = self.width()
+        font = self._slug_font()
+        p.setFont(font)
+        fm = QFontMetrics(font)
+        pad = fm.height() * 0.5
+        mark = fm.height() * 0.9
+        rects = self._layout_cells()
+        p.setPen(QPen(QColor(t.rule), 1))
+        p.drawLine(0, 0, w - 1, 0)
+        p.drawLine(0, int(rects[0].bottom()), w - 1, int(rects[0].bottom()))
+        for i, r in enumerate(rects):
+            done, active = i < self._current, i == self._current
             reached = i <= self._reached
-            done = i < self._current
-            active = i == self._current
-            if active and self.hasFocus():
-                p.setPen(QPen(t["accent"], 2))
-                p.setBrush(Qt.NoBrush)
-                p.drawRoundedRect(r.adjusted(2, 2, -2, -2), 8, 8)
-            node = QRectF(x - 11, cy - 11, 22, 22)
-            p.setPen(Qt.NoPen)
+            ink = QColor(t.ink if reached else t.ink2)
             if active:
-                p.setBrush(t["accent"])
-            elif done:
-                p.setBrush(t["ok"])
-            else:
-                p.setBrush(t["plate"])
-            p.drawEllipse(node)
-            if not (active or done):
-                p.setPen(QPen(t["line"], 1.5))
+                p.fillRect(r, QColor(t.patch_bg))
+                ink = QColor(t.patch_ink)
+            if active and self.hasFocus():
+                p.setPen(QPen(QColor(t.focus), 2))
                 p.setBrush(Qt.NoBrush)
-                p.drawEllipse(node)
-            p.setPen(t["window"] if (active or done) else t["muted"])
-            nf = QFont(font)
-            nf.setBold(True)
-            nf.setPointSizeF(font.pointSizeF() * 0.95)
-            p.setFont(nf)
-            p.drawText(node, Qt.AlignCenter, "✓" if done else str(i + 1))
-            tf = QFont(font)
-            tf.setBold(active)
-            tf.setPointSizeF(font.pointSizeF() * 1.05)
-            p.setFont(tf)
-            p.setPen(t["text"] if reached else t["muted"])
-            p.drawText(
-                QRectF(x + 22, r.top(), r.width() - x - 22, r.height()),
-                Qt.AlignVCenter | Qt.TextWordWrap,
-                lang.getstr(f"guide.step.{i + 1}"),
-            )
+                p.drawRect(r.adjusted(1, 1, -1, -1))
+            cy = r.center().y()
+            # registration target: circle (+ tick when finished)
+            mx = r.left() + pad + mark / 2
+            p.setPen(QPen(ink, 1.4))
+            p.setBrush(Qt.NoBrush)
+            p.drawEllipse(QRectF(mx - mark / 2, cy - mark / 2, mark, mark))
+            if done:
+                p.drawLine(QPointF(mx - mark * 0.22, cy), QPointF(mx - mark * 0.05, cy + mark * 0.18))
+                p.drawLine(QPointF(mx - mark * 0.05, cy + mark * 0.18), QPointF(mx + mark * 0.26, cy - mark * 0.2))
+            elif active:
+                p.setBrush(ink)
+                p.drawEllipse(QPointF(mx, cy), mark * 0.16, mark * 0.16)
+            tx = mx + mark / 2 + pad * 0.6
+            text = self._label(i) if (not self._compact or active) else f"{i + 1:02d}"
+            text = fm.elidedText(text, Qt.ElideRight, int(r.right() - tx - pad * 0.4))
+            p.setPen(ink)
+            p.drawText(QRectF(tx, r.top(), r.right() - tx, r.height()),
+                       int(Qt.AlignVCenter | Qt.AlignLeft), text)
+        p.end()
 
 
 class GuidePanel(QWidget):
@@ -373,14 +292,14 @@ class GuidePanel(QWidget):
 
         head = QHBoxLayout()
         title_box = QVBoxLayout()
-        self.title = _label(_tr("guide.title"), size=1.7, bold=True, wrap=False)
+        self.title = _slug(_tr("guide.title"), strong=True, size=1.0)
         self.subtitle = _label(_tr("guide.subtitle"), muted=True)
         title_box.addWidget(self.title)
         title_box.addWidget(self.subtitle)
         head.addLayout(title_box, 1)
         self.advanced_btn = QPushButton(_m(_tr("guide.advanced")))
-        self.advanced_btn.setFlat(True)
         self.advanced_btn.setCursor(Qt.PointingHandCursor)
+        self.advanced_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.advanced_btn.clicked.connect(
             lambda: self.window_ref._select_tab("display_instrument")
         )
@@ -391,8 +310,8 @@ class GuidePanel(QWidget):
         head.addWidget(self.advanced_btn, 0, Qt.AlignTop)
         root.addLayout(head)
 
-        body = QHBoxLayout()
-        body.setSpacing(18)
+        body = QBoxLayout(QBoxLayout.TopToBottom)
+        body.setSpacing(12)
         self._root, self._head_margins = root, (20, 16, 20, 12)
         self._body = body
         self.rail = _Rail()
@@ -430,12 +349,15 @@ class GuidePanel(QWidget):
         self.back_btn.clicked.connect(lambda: self.go(self._step - 1))
         self.next_btn = QPushButton(_tr("guide.next"))
         self.next_btn.setDefault(True)
+        for nav_btn in (self.back_btn, self.next_btn):
+            nav_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.next_btn.setProperty("primary", True)
         self.next_btn.clicked.connect(self._next)
         self.gate_label = _label("", muted=True)
-        nav.addWidget(self.back_btn)
+        nav.addWidget(self.back_btn, 0, Qt.AlignLeft)
         nav.addWidget(self.gate_label, 1, Qt.AlignVCenter)
-        nav.addWidget(self.next_btn)
+        nav.addWidget(self.next_btn, 0, Qt.AlignRight)
+        nav.addStretch(0)
         root.addLayout(nav)
         text_scale.bus.changed.connect(lambda _f: self._apply_compact())
         self._apply_compact()
@@ -449,22 +371,18 @@ class GuidePanel(QWidget):
         """
         compact = text_scale.factor() > 1.0
         self.rail.set_compact(compact)
-        self._body.setDirection(
-            QBoxLayout.TopToBottom if compact else QBoxLayout.LeftToRight
-        )
-        self._body.setSpacing(6 if compact else 18)
+        self._body.setSpacing(6 if compact else 12)
         self._root.setSpacing(6 if compact else 10)
         left, top, right, bottom = self._head_margins
         self._root.setContentsMargins(
             *((14, 8, 14, 8) if compact else (left, top, right, bottom))
         )
         self.subtitle.setVisible(not compact)
-        self.title.setProperty("_fmult", 1.35 if compact else 1.7)
         text_scale.refresh()
 
     # page 1 ----------------------------------------------------------------
     def _build_page_devices(self, lay: QVBoxLayout) -> None:
-        lay.addWidget(_label(_tr("guide.s1.title"), size=1.6, bold=True))
+        lay.addWidget(_page_head(1, _tr("guide.s1.title")))
         status = QHBoxLayout()
         self.ready_label = _label("", size=1.15, bold=True)
         self.rescan_btn = QPushButton(_m(_tr("guide.s1.rescan")))
@@ -493,10 +411,10 @@ class GuidePanel(QWidget):
             combo.setMinimumContentsLength(14)
             text_scale.set_scaled_font(combo, 1.15)
             text_scale.set_min_height(combo, 34)
-        ll.addWidget(_label(_tr("guide.s1.monitor"), size=1.05, muted=True))
+        ll.addWidget(_slug(_tr("guide.s1.monitor")))
         ll.addWidget(self.monitor_combo)
         ll.addSpacing(10)
-        ll.addWidget(_label(_tr("guide.s1.instrument"), size=1.05, muted=True))
+        ll.addWidget(_slug(_tr("guide.s1.instrument")))
         ll.addWidget(self.instrument_combo)
         # Which commercial model is it? Only asked when the identifier is shared
         # by several products; it changes the physical placement help, never
@@ -531,11 +449,10 @@ class GuidePanel(QWidget):
         hl = QVBoxLayout(hero)
         hl.setContentsMargins(0, 0, 0, 0)
         hl.setSpacing(4)
-        self.illustration = QLabel()
-        self.illustration.setAlignment(Qt.AlignCenter)
+        self.illustration = design_a.FigureFrame()
         # Decorative: it may be cropped in a narrow window but must never be the
         # reason the whole page needs sideways scrolling.
-        self.illustration.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.illustration.setMinimumHeight(text_scale.scale_px(200))
         hl.addWidget(self.illustration)
         self.illustration_caption = _label("", size=0.9, muted=True)
         self.illustration_caption.setAlignment(Qt.AlignCenter)
@@ -549,7 +466,7 @@ class GuidePanel(QWidget):
         dl = QVBoxLayout(box)
         dl.setContentsMargins(22, 4, 0, 0)
         dl.setSpacing(6)
-        dl.addWidget(_label(_tr("guide.s1.mode"), size=1.0, muted=True))
+        dl.addWidget(_slug(_tr("guide.s1.mode")))
         dl.addWidget(self.mode_combo)
         self.correction_label = _label("", muted=True)
         dl.addWidget(self.correction_label)
@@ -563,7 +480,7 @@ class GuidePanel(QWidget):
         return box
 
     def _build_page_goal(self, lay: QVBoxLayout) -> None:
-        lay.addWidget(_label(_tr("guide.s2.title"), size=1.3, bold=True))
+        lay.addWidget(_page_head(2, _tr("guide.s2.title")))
         lay.addWidget(_label(_tr("guide.s2.hint"), muted=True))
         self.builtin_note = _label(_tr("guide.s2.builtin_note"), muted=True)
         lay.addWidget(self.builtin_note)
@@ -633,8 +550,8 @@ class GuidePanel(QWidget):
 
     # page 4 ----------------------------------------------------------------
     def _build_page_measure(self, lay: QVBoxLayout) -> None:
-        lay.addWidget(_label(_tr("guide.s4.title"), size=1.6, bold=True))
-        lay.addWidget(_label(_tr("guide.s4.summary_title"), size=1.1, bold=True))
+        lay.addWidget(_page_head(4, _tr("guide.s4.title")))
+        lay.addWidget(_section_head(_tr("guide.s4.summary_title")))
         self.summary_box = QWidget()
         self.summary_lay = QVBoxLayout(self.summary_box)
         self.summary_lay.setContentsMargins(0, 0, 0, 0)
@@ -672,7 +589,7 @@ class GuidePanel(QWidget):
     def _build_plan(self, lay: QVBoxLayout) -> None:
         """The measurement plan: what will be measured, how long, how safely."""
         lay.addSpacing(6)
-        lay.addWidget(_label(_tr("plan.title"), size=1.1, bold=True))
+        lay.addWidget(_section_head(_tr("plan.title")))
         self.plan_type = _label("", size=1.05)
         self.plan_type_use = _label("", muted=True)
         for w in (self.plan_type, self.plan_type_use):
@@ -729,7 +646,7 @@ class GuidePanel(QWidget):
         lay.addWidget(_Disclosure(_tr("guide.s4.choices_title"), body))
 
     def _build_page_finish(self, lay: QVBoxLayout) -> None:
-        lay.addWidget(_label(_tr("guide.s5.title"), size=1.3, bold=True))
+        lay.addWidget(_page_head(5, _tr("guide.s5.title")))
         lay.addWidget(_label(_tr("guide.s5.intro"), muted=True))
         self.profile_state = _label("", bold=True)
         lay.addWidget(self.profile_state)
@@ -741,7 +658,7 @@ class GuidePanel(QWidget):
         row.addWidget(verify)
         row.addStretch(1)
         lay.addLayout(row)
-        lay.addWidget(_label(_tr("guide.s5.what_is"), bold=True))
+        lay.addWidget(_section_head(_tr("guide.s5.what_is")))
         for title_key, info_key in gm.CONCEPTS:
             card = _Card()
             cl = QVBoxLayout(card)
@@ -750,7 +667,7 @@ class GuidePanel(QWidget):
             cl.addWidget(_label(_tr(title_key), bold=True))
             cl.addWidget(_label(_tr(info_key), muted=True))
             lay.addWidget(card)
-        lay.addWidget(_label(_tr("guide.s5.limits"), bold=True))
+        lay.addWidget(_section_head(_tr("guide.s5.limits")))
         for key in gm.LIMITS:
             lay.addWidget(_label("• " + _tr(key), muted=True))
         # Discreet, voluntary and closable for good; shown only once a flow has
