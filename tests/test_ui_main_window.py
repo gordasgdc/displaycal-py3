@@ -8925,7 +8925,7 @@ class _PolishSpyStyle:
 
 def test_repolish_styled_widgets_only_touches_stylesheet_widgets(window, monkeypatch):
     """Only widgets with a non-empty stylesheet should get repolished."""
-    styled = window.calibrate_btn  # has _ACTION_BUTTON_STYLE
+    styled = window._tab_group.buttons()[0]  # a tab button, has _TAB_BUTTON_STYLE
     assert styled.styleSheet()
     plain = window.calibration_file_ctrl  # a combo box, no stylesheet
     assert not plain.styleSheet()
