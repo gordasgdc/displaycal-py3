@@ -487,7 +487,7 @@ def landing(lang: str, sizes: dict) -> str:
     adv_img = single(adv_real, depth, t["adv_cap"], sizes) or pic("adv", lang, depth, t["adv_cap"], sizes)
     adv_tag = f'<span class="real-tag">REAL</span>' if adv_real in sizes else '<span class="demo-tag">DEMO</span>'
     mac_img = single(f"real-mac-step1-{lang}", depth, t["plat_mac"], sizes) or pic("flow1", lang, depth, t["plat_mac"], sizes)
-    win_img = single("real-win-plan-en", depth, t["plat_win"], sizes) or single("real-win-step1-en", depth, t["plat_win"], sizes)
+    win_img = single("real-win-step1-en", depth, t["plat_win"], sizes)
     rec_img = pic("rec", lang, depth, t["report_h"], sizes)
     fin_img = pic("fin", lang, depth, t["report_h"], sizes)
     ok = "".join(f'<li><span class="mk" aria-hidden="true">✓</span><span>{E(x)}</span></li>' for x in t["limits_ok"])
