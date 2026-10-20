@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # build_pkg.sh — DisplayCAL-CG, packaging macOS (.pkg semnat + notarizat,
-# instalare automată în /Applications, standard GDC — vezi CLAUDE.md).
+# instalare automată în /Applications, vezi docs/ARCHITECTURE_NOTES.md).
 #
 # Reutilizează EXACT secvența de semnare din .github/workflows/release_builds.yml
 # (upstream, dovedită real — vezi comentariile lungi de-acolo despre
