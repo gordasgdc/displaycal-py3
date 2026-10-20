@@ -4,7 +4,7 @@
 # The long technical guide is generated from docs/guides/ (same sources as the PDFs).
 
 VERSION = "3.10.0.dev82"
-BUILD = "cg.5"
+BUILD = "cg.6"
 SITE = "https://gordas.dev/DisplayCAL-CG/"
 REPO = "https://github.com/gordasgdc/displaycal-py3"
 REL = REPO + "/releases/latest/download/"

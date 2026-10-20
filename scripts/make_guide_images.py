@@ -42,7 +42,7 @@ def main() -> None:
     langs = (sys.argv[2] if len(sys.argv) > 2 else "ro,en,es").split(",")
     theme = sys.argv[3] if len(sys.argv) > 3 else "light"
     env = dict(os.environ, QT_QPA_PLATFORM="offscreen", CAPTURE_DPR="2", DEMO_PLAN="10986:500",
-               SHOT_HEIGHTS="guide_1_monitor=720,guide_2_goal=1010,guide_5_finish=900")
+               SHOT_HEIGHTS="guide_1_monitor=760,guide_2_goal=900,guide_5_finish=860")
     for lang in langs:
         tmp = tempfile.mkdtemp(prefix=f"gi_{lang}_")
         subprocess.run(

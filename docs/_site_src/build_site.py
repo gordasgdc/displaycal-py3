@@ -68,7 +68,12 @@ def prep_images(out_root: str) -> dict[str, tuple[int, int]]:
                 hit = next((f for f in files if f.endswith(".png") and frag in f), None)
                 if hit:
                     save(f"{base}/{hit}", f"{key}-{lang}-{theme}", 1100 if key.startswith(("flow", "adv")) else 760)
-    save(f"{EXT}/design/render/hero_A_remaster.png", "hero-render", 1500, 82)
+    hero = f"{REPO}/DisplayCAL/theme/guide/monitor_spectral.png"
+    if os.path.isfile(hero):
+        im = Image.open(hero).convert("RGBA")
+        im = im.resize((1400, round(im.height * 1400 / im.width)), Image.LANCZOS)
+        im.save(os.path.join(out, "hero-render.webp"), "WEBP", quality=88, method=6)
+        sizes["hero-render"] = im.size
     for lang in ("ro", "en", "es"):
         for n in range(1, 6):
             save(f"{REPO}/docs/guides/img/{lang}/step{n}.png", f"gstep{n}-{lang}", 1100)
@@ -442,9 +447,9 @@ def landing(lang: str, sizes: dict) -> str:
     depth = S.PATHS[lang]["home"].count("/")
     r = rel(depth)
     real_hero = f"real-mac-step1-{lang}"
-    ill = {"ro": ("ILUSTRAȚIE", "Randare originală: sonda pe pătratul alb de măsurare, în timp ce aplicația rulează planul. Nu este o fotografie de produs și nu este un model anume de instrument; imaginea de pe ecran este captura reală a aplicației.", "Monitor cu sonda generică așezată pe pătratul alb de măsurare"),
-           "en": ("ILLUSTRATION", "Original render: the probe on the white measurement square while the application runs the plan. It is not a product photo and not a specific instrument model; the picture on the screen is a real capture of the application.", "A monitor with a generic probe resting on the white measurement square"),
-           "es": ("ILUSTRACIÓN", "Render original: la sonda sobre el cuadrado blanco de medición mientras la aplicación ejecuta el plan. No es una foto de producto ni un modelo concreto de instrumento; la imagen de la pantalla es una captura real de la aplicación.", "Un monitor con una sonda genérica sobre el cuadrado blanco de medición")}[lang]
+    ill = {"ro": ("ILUSTRAȚIE", "Ilustrație originală, decorativă: un monitor cu o sondă generică așezată pe un pătrat alb. Nu este o fotografie de produs, nu este un model anume de instrument și nu este o captură a aplicației sau o măsurare.", "Monitor cu sonda generică așezată pe pătratul alb de măsurare"),
+           "en": ("ILLUSTRATION", "Original, decorative illustration: a monitor with a generic probe on a white square. It is not a product photo, not a specific instrument model, and not a capture of the application or a measurement.", "A monitor with a generic probe resting on the white measurement square"),
+           "es": ("ILUSTRACIÓN", "Ilustración original y decorativa: un monitor con una sonda genérica sobre un cuadrado blanco. No es una foto de producto, ni un modelo concreto de instrumento, ni una captura de la aplicación o una medición.", "Un monitor con una sonda genérica sobre el cuadrado blanco de medición")}[lang]
     hero_img = single("hero-render", depth, ill[2], sizes, lazy=False) or pic("flow1", lang, depth, t["hero_alt"], sizes, lazy=False)
     tag_html = f'<span class="ill-tag">{ill[0]}</span>{E(ill[1])}'
     steps = t["flow_steps"]
