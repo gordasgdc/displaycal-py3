@@ -68,7 +68,7 @@ def prep_images(out_root: str) -> dict[str, tuple[int, int]]:
                 hit = next((f for f in files if f.endswith(".png") and frag in f), None)
                 if hit:
                     save(f"{base}/{hit}", f"{key}-{lang}-{theme}", 1100 if key.startswith(("flow", "adv")) else 760)
-    save(f"{EXT}/design/render/hero_A_final.png", "hero-render", 1500, 82)
+    save(f"{EXT}/design/render/hero_A_remaster.png", "hero-render", 1500, 82)
     fdir = os.path.join(out, "fonts"); os.makedirs(fdir, exist_ok=True)
     import shutil
     for fn in ("Archivo-VF.ttf", "B612Mono-Regular.ttf", "B612Mono-Bold.ttf"):
@@ -127,7 +127,7 @@ a{color:var(--ac)}a:hover{text-decoration-thickness:2px}
 .skip{position:absolute;left:12px;top:-60px;background:var(--ac);color:var(--acink);padding:10px 14px;border-radius:8px;font-weight:600;z-index:100}.skip:focus{top:12px}
 .wrap{width:min(1180px,100% - 32px);margin-inline:auto}
 header.top{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px)}
-header.top:after{content:"";display:block;height:2px;background:linear-gradient(90deg,#ff5a5f,#ffb347,#8bd45a,#38b6ff,#7c6cff)}
+header.top:after{content:none}
 .bar{display:flex;align-items:center;gap:14px;padding:10px 0}
 .brand{display:flex;align-items:center;gap:10px;color:var(--text);text-decoration:none;font-weight:700;letter-spacing:-.01em}
 .brand img{width:32px;height:32px;border-radius:8px}.brand b{color:var(--ac)}
@@ -175,7 +175,7 @@ section.alt{background:linear-gradient(180deg,transparent,color-mix(in srgb,var(
 .flow{display:grid;grid-template-columns:minmax(230px,300px) minmax(0,1fr);gap:clamp(16px,3vw,36px);align-items:start}
 @media(max-width:900px){.flow{grid-template-columns:1fr}}
 .rail{list-style:none;margin:0;padding:0;position:relative}
-.rail:before{content:"";position:absolute;left:17px;top:14px;bottom:14px;width:2px;background:linear-gradient(#ff5a5f,#ffb347,#8bd45a,#38b6ff,#7c6cff);opacity:.55;border-radius:2px}
+.rail:before{content:"";position:absolute;left:17px;top:14px;bottom:14px;width:2px;background:#16171a;opacity:.5}
 .rail li{position:relative}
 .rail button{all:unset;box-sizing:border-box;display:flex;gap:12px;align-items:flex-start;width:100%;padding:9px 8px 9px 0;cursor:pointer;color:var(--mut);border-radius:10px}
 .rail .n{flex:none;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-weight:800;background:var(--surface2);box-shadow:0 0 0 1px var(--line);color:var(--text);position:relative;z-index:1}
@@ -205,7 +205,7 @@ section.alt{background:linear-gradient(180deg,transparent,color-mix(in srgb,var(
 @keyframes pulse{50%{opacity:.35}}
 /* concepts pipeline */
 .pipe{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin:26px 0 0;position:relative;list-style:none;padding:0}
-.pipe:before{content:"";position:absolute;left:5%;right:5%;top:19px;height:2px;background:linear-gradient(90deg,#ff5a5f,#ffb347,#8bd45a,#38b6ff,#7c6cff);opacity:.6}
+.pipe:before{content:"";position:absolute;left:5%;right:5%;top:19px;height:2px;background:#16171a;opacity:.5}
 .pipe li{position:relative;padding:0 14px 0 0}
 .pipe .dot{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-weight:800;background:var(--surface);box-shadow:0 0 0 2px var(--ac),0 8px 18px -8px var(--ac2);position:relative;z-index:1;margin-bottom:12px}
 .pipe p{margin:0;color:var(--mut);font-size:.93rem}
@@ -271,7 +271,7 @@ h2{font-family:"Archivo";font-stretch:106%;font-weight:800;letter-spacing:-.03em
 .stage .reflect{display:none}.stage img.badge-icon{display:none}
 .stage figcaption,.cap{color:var(--mut)}
 .ill-tag,.real-tag,.demo-tag{display:inline-block;font:700 11px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:#fff;border-radius:0;padding:4px 7px;margin-right:8px;vertical-align:1px}
-.ill-tag{background:#16171a}.real-tag{background:#00794a}.demo-tag{background:#b4401a}
+.ill-tag{background:#16171a}.real-tag{background:#00794a}.demo-tag{background:#d4147a}
 section.alt{background:transparent;border-block:1px solid var(--text)}
 .note{border-left:0;border:1px solid var(--text);padding:12px 16px;background:#fff}
 .callout{border-radius:0;box-shadow:0 0 0 1px var(--text);background:#fff}.callout.warn,.callout.ok{box-shadow:0 0 0 1px var(--text)}
@@ -332,9 +332,9 @@ PLACEMENT_SVG = """<svg id="place-svg" class="s1" viewBox="0 0 520 360" role="im
 <defs><linearGradient id="scr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2a2e38"/><stop offset="1" stop-color="#12141a"/></linearGradient><linearGradient id="gl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><linearGradient id="sn" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4a505c"/><stop offset="1" stop-color="#1b1e25"/></linearGradient></defs>
 <g transform="translate(60,26)"><rect x="0" y="0" width="400" height="248" rx="16" fill="#0b0c10" stroke="#555b68" stroke-width="2"/><rect x="10" y="10" width="380" height="228" rx="8" fill="url(#scr)"/>
 <rect x="10" y="10" width="380" height="80" rx="8" fill="url(#gl)" opacity=".12"/>
-<g class="target" transform="translate(150,76)"><rect width="96" height="96" rx="6" fill="#fff" opacity=".92"/><rect x="2" y="2" width="92" height="92" rx="5" fill="none" stroke="#ffb347" stroke-width="3" stroke-dasharray="9 7"/></g>
+<g class="target" transform="translate(150,76)"><rect width="96" height="96" rx="6" fill="#fff" opacity=".92"/><rect x="2" y="2" width="92" height="92" rx="5" fill="none" stroke="#d4147a" stroke-width="3" stroke-dasharray="9 7"/></g>
 <path d="M170 248 h60 l14 38 h-88 z" fill="#2a2e38" stroke="#555b68" stroke-width="2"/><rect x="120" y="286" width="160" height="10" rx="5" fill="#2a2e38" stroke="#555b68" stroke-width="2"/></g>
-<g class="sensor"><g transform="translate(-52,-52)"><rect width="104" height="104" rx="18" fill="url(#sn)" stroke="#8a919f" stroke-width="2"/><circle class="lens" cx="52" cy="52" r="26" fill="#0b0c10" stroke="#ffb347" stroke-width="3"/><circle cx="52" cy="52" r="12" fill="#2a3b6b"/><circle cx="46" cy="46" r="4" fill="#fff" opacity=".7"/><rect x="20" y="4" width="64" height="9" rx="4.5" fill="#fff" opacity=".12"/></g></g></svg>"""
+<g class="sensor"><g transform="translate(-52,-52)"><rect width="104" height="104" rx="18" fill="url(#sn)" stroke="#8a919f" stroke-width="2"/><circle class="lens" cx="52" cy="52" r="26" fill="#0b0c10" stroke="#d4147a" stroke-width="3"/><circle cx="52" cy="52" r="12" fill="#2a3b6b"/><circle cx="46" cy="46" r="4" fill="#fff" opacity=".7"/><rect x="20" y="4" width="64" height="9" rx="4.5" fill="#fff" opacity=".12"/></g></g></svg>"""
 
 # --------------------------------------------------------------------------- helpers
 
