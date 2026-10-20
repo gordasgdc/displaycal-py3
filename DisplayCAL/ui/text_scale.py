@@ -83,15 +83,6 @@ class _ComboStyleFilter(QObject):
         return False
 
 
-def _fusion_style():
-    style = _state.get("fusion")
-    if style is None:
-        from qtpy.QtWidgets import QStyleFactory
-
-        style = _state["fusion"] = QStyleFactory.create("Fusion")
-    return style
-
-
 def _style_combo(combo: QComboBox) -> None:
     import sys
 
@@ -101,7 +92,16 @@ def _style_combo(combo: QComboBox) -> None:
     if bool(combo.property("_fusion")) == want:
         return
     combo.setProperty("_fusion", want)
-    combo.setStyle(_fusion_style() if want else None)
+    if want:
+        from qtpy.QtWidgets import QStyleFactory
+
+        # One style per pop-up button, owned by it: a shared style would be
+        # deleted together with the first button that is closed.
+        style = QStyleFactory.create("Fusion")
+        style.setParent(combo)
+        combo.setStyle(style)
+    else:
+        combo.setStyle(None)
 
 
 def _match_style_to_size(app: QApplication, f: float) -> None:
