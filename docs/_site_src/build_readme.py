@@ -22,7 +22,7 @@ T["ro"] = dict(
         "**Calibrare ghidată** în cinci pași (monitor și instrument, obiectiv, pregătire, măsurare, instalare și verificare), cu interfață Qt. Modul avansat rămâne, regrupat pe decizii, cu aceeași configurație.",
         "**Pregătire cu surse și poziționarea sondei**, cu animație schematică pentru instrumentele documentate de producător; modelul exact îl confirmi tu când mai multe produse au aceeași identitate USB.",
         "**Planul de măsurare înainte de pornire**: total de patch-uri, mărimea blocului, numărul de blocuri și timp estimat, afișate separat; alegerea sau crearea diagramei lângă total.",
-        "**Măsurare în blocuri cu recuperare**: blocurile terminate se salvează local, există un jurnal de sesiune și o reluare cu blocurile rămase (doar în aceleași condiții), iar repausul este împiedicat doar pe durata rulării. Sesiunile de mai multe ore nu au fost încă validate; nimic din aceasta nu garantează stabilitatea.",
+        "**Măsurare în blocuri cu recuperare**: blocurile terminate se salvează local, există un jurnal de sesiune și o reluare cu blocurile rămase (doar în aceleași condiții), iar repausul este împiedicat doar pe durata rulării. O calibrare de durată a fost finalizată cu succes de proprietarul proiectului, folosind versiunea publică, pe configurația sa. Stabilitatea pe alte configurații și durate nu este încă validată. Raport al proprietarului, nu un test executat de dezvoltare; durata, numărul de patch-uri și versiunea exactă nu sunt consemnate. Nimic din aceasta nu garantează stabilitatea.",
         "**Diagnostic local**: jurnale rotative și export de pachet cu redactare implicită, fără trimitere automată.",
         "**Text redimensionabil** («Aa»), contrast verificat, interfață în română, engleză și spaniolă; **ArgyllCMS inclus** și verificat cu o sumă SHA-256 fixă; instalatoare native.",
     ],
@@ -32,7 +32,7 @@ T["ro"] = dict(
     req=[
         "Un instrument de măsură compatibil ArgyllCMS.",
         "Verificat: instalatoarele macOS, instalarea curată pe Windows 11 (VM ARM64 cu emulare x64), o măsurare reală scurtă (38 de patch-uri) cu un colorimetru i1Display pe macOS.",
-        "**Neverificat**: sesiuni de mai multe ore, deconectarea sondei în timpul măsurării și revenirea după o pană de curent, Windows pe hardware x64 nativ, macOS pe Intel, alte instrumente decât cel testat, revizuirea traducerilor de către vorbitori nativi.",
+        "**Neverificat**: stabilitatea pe alte configurații și durate (nu am executat eu o calibrare de durată), deconectarea sondei în timpul măsurării și revenirea după o pană de curent, Windows pe hardware x64 nativ, macOS pe Intel, alte instrumente decât cel testat, revizuirea traducerilor de către vorbitori nativi.",
     ],
     guide_h="## Ghid, suport, probleme",
     gitems=[
@@ -58,7 +58,7 @@ T["en"] = dict(
         "**Guided calibration** in five steps (monitor and instrument, goal, preparation, measurement, install and verify), with a Qt interface. Advanced mode stays, regrouped by decision, on the same configuration.",
         "**Sourced preparation and probe placement**, with a schematic animation for instruments the maker documents; you confirm the exact model when several products share one USB identity.",
         "**The measurement plan before you start**: total patches, block size, number of blocks and estimated time, shown separately; choosing or creating the chart beside the total.",
-        "**Measurement in blocks with recovery**: finished blocks are saved locally, there is a session journal and a way to continue with the remaining blocks (only under the same conditions), and sleep is prevented only while a run is active. Sessions of several hours have not been validated yet; none of this guarantees stability.",
+        "**Measurement in blocks with recovery**: finished blocks are saved locally, there is a session journal and a way to continue with the remaining blocks (only under the same conditions), and sleep is prevented only while a run is active. A long calibration was completed successfully by the project owner, using the public version, on their own setup. Stability on other setups and durations is not yet validated. This is the owner's report, not a test run by the development side; the duration, the patch count and the exact version were not recorded. None of this guarantees stability.",
         "**Local diagnostics**: rotating logs and a package export with redaction by default, never sent automatically.",
         "**Adjustable text** (“Aa”), checked contrast, Romanian/English/Spanish interface; **ArgyllCMS included** and verified against a fixed SHA-256 hash; native installers.",
     ],
@@ -68,7 +68,7 @@ T["en"] = dict(
     req=[
         "An ArgyllCMS-supported measuring instrument.",
         "Verified: the macOS installers, a clean install on Windows 11 (ARM64 VM with x64 emulation), a short real measurement (38 patches) with an i1Display colorimeter on macOS.",
-        "**Not verified**: multi-hour sessions, unplugging the probe during a measurement and recovery after a power cut, Windows on native x64 hardware, macOS on Intel, instruments other than the one tested, review of the translations by native speakers.",
+        "**Not verified**: stability on other setups and durations (no long calibration was run by the development side), unplugging the probe during a measurement and recovery after a power cut, Windows on native x64 hardware, macOS on Intel, instruments other than the one tested, review of the translations by native speakers.",
     ],
     guide_h="## Guide, support, issues",
     gitems=[
@@ -94,7 +94,7 @@ T["es"] = dict(
         "**Calibración guiada** en cinco pasos (monitor e instrumento, objetivo, preparación, medición, instalar y verificar), con interfaz Qt. El modo avanzado se mantiene, reagrupado por decisión, con la misma configuración.",
         "**Preparación con fuentes y colocación de la sonda**, con una animación esquemática para los instrumentos que el fabricante documenta; el modelo exacto lo confirmas tú cuando varios productos comparten la misma identidad USB.",
         "**El plan de medición antes de empezar**: total de parches, tamaño del bloque, número de bloques y tiempo estimado, mostrados por separado; elegir o crear la carta junto al total.",
-        "**Medición en bloques con recuperación**: los bloques terminados se guardan localmente, hay un diario de sesión y se puede continuar con los bloques restantes (solo en las mismas condiciones); el reposo se evita solo durante la ejecución. Las sesiones de varias horas todavía no se han validado; nada de esto garantiza estabilidad.",
+        "**Medición en bloques con recuperación**: los bloques terminados se guardan localmente, hay un diario de sesión y se puede continuar con los bloques restantes (solo en las mismas condiciones); el reposo se evita solo durante la ejecución. El propietario del proyecto completó con éxito una calibración de larga duración, con la versión pública y en su propia configuración. La estabilidad en otras configuraciones y duraciones aún no está validada. Es un informe del propietario, no una prueba ejecutada por el desarrollo; no constan la duración, el número de parches ni la versión exacta. Nada de esto garantiza estabilidad.",
         "**Diagnóstico local**: registros rotativos y exportación de un paquete con redacción por defecto, sin envío automático.",
         "**Texto ajustable** («Aa»), contraste comprobado, interfaz en rumano, inglés y español; **ArgyllCMS incluido** y verificado con una suma SHA-256 fija; instaladores nativos.",
     ],
@@ -104,7 +104,7 @@ T["es"] = dict(
     req=[
         "Un instrumento de medición compatible con ArgyllCMS.",
         "Verificado: los instaladores de macOS, una instalación limpia en Windows 11 (VM ARM64 con emulación x64), una medición real corta (38 parches) con un colorímetro i1Display en macOS.",
-        "**No verificado**: sesiones de varias horas, desconexión de la sonda durante la medición y recuperación tras un corte de corriente, Windows en hardware x64 nativo, macOS en Intel, instrumentos distintos del probado, revisión de las traducciones por hablantes nativos.",
+        "**No verificado**: estabilidad en otras configuraciones y duraciones (el desarrollo no ejecutó una calibración larga), desconexión de la sonda durante la medición y recuperación tras un corte de corriente, Windows en hardware x64 nativo, macOS en Intel, instrumentos distintos del probado, revisión de las traducciones por hablantes nativos.",
     ],
     guide_h="## Guía, soporte, incidencias",
     gitems=[

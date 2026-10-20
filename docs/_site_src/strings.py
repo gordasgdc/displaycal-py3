@@ -131,7 +131,7 @@ L["ro"] = {
         "Export de diagnostic local, fără trimitere automată, pe macOS și Windows.",
     ],
     "limits_no": [
-        "Sesiunile de mai multe ore (de exemplu 4–8 ore) nu au fost încă validate. Măsurarea în blocuri salvează local blocurile terminate, dar nu garantează stabilitatea, acuratețea sau recuperarea în orice condiții.",
+        "O calibrare de durată a fost finalizată cu succes de proprietarul proiectului, folosind versiunea publică, pe configurația sa. Stabilitatea pe alte configurații și durate nu este încă validată. Raport al proprietarului, nu un test executat de dezvoltare; durata, numărul de patch-uri și versiunea exactă nu sunt consemnate. Măsurarea în blocuri salvează local blocurile terminate, dar nu garantează stabilitatea, acuratețea sau recuperarea în orice condiții.",
         "Deconectarea sondei în timpul unei măsurători și revenirea după o pană de curent sau după repaus nu au fost verificate cu un instrument real.",
         "Alte instrumente decât cel testat funcționează pe baza suportului ArgyllCMS; nu le-am verificat noi.",
         "Windows pe hardware nativ x64 și macOS pe procesoare Intel: neverificat (pachetul macOS este pentru Apple Silicon).",
@@ -288,7 +288,7 @@ L["en"] = {
         "Local diagnostic export, never sent automatically, on macOS and Windows.",
     ],
     "limits_no": [
-        "Sessions of several hours (say 4–8 hours) have not been validated yet. Measuring in blocks saves finished blocks locally, but it does not guarantee stability, accuracy or recovery in every condition.",
+        "A long calibration was completed successfully by the project owner, using the public version, on their own setup. Stability on other setups and durations is not yet validated. This is the owner's report, not a test run by the development side; the duration, the patch count and the exact version were not recorded. Measuring in blocks saves finished blocks locally, but it does not guarantee stability, accuracy or recovery in every condition.",
         "Unplugging the probe during a measurement, and recovering after a power cut or sleep, have not been verified with a real instrument.",
         "Instruments other than the one tested rely on ArgyllCMS support; we did not verify them ourselves.",
         "Windows on native x64 hardware and macOS on Intel processors: not verified (the macOS package is for Apple Silicon).",
@@ -445,7 +445,7 @@ L["es"] = {
         "Exportación de diagnóstico local, sin envío automático, en macOS y Windows.",
     ],
     "limits_no": [
-        "Las sesiones de varias horas (por ejemplo 4–8 horas) todavía no se han validado. Medir en bloques guarda localmente los bloques terminados, pero no garantiza estabilidad, precisión ni recuperación en cualquier condición.",
+        "El propietario del proyecto completó con éxito una calibración de larga duración, con la versión pública y en su propia configuración. La estabilidad en otras configuraciones y duraciones aún no está validada. Es un informe del propietario, no una prueba ejecutada por el desarrollo; no constan la duración, el número de parches ni la versión exacta. Medir en bloques guarda localmente los bloques terminados, pero no garantiza estabilidad, precisión ni recuperación en cualquier condición.",
         "La desconexión de la sonda durante una medición, y la recuperación tras un corte de corriente o tras la suspensión, no se han verificado con un instrumento real.",
         "Los instrumentos distintos del probado dependen del soporte de ArgyllCMS; no los hemos verificado nosotros.",
         "Windows en hardware x64 nativo y macOS en procesadores Intel: no verificado (el paquete de macOS es para Apple Silicon).",

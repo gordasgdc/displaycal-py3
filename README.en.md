@@ -23,7 +23,7 @@ It measures how your screen shows colour and writes an ICC profile that the syst
 - **Guided calibration** in five steps (monitor and instrument, goal, preparation, measurement, install and verify), with a Qt interface. Advanced mode stays, regrouped by decision, on the same configuration.
 - **Sourced preparation and probe placement**, with a schematic animation for instruments the maker documents; you confirm the exact model when several products share one USB identity.
 - **The measurement plan before you start**: total patches, block size, number of blocks and estimated time, shown separately; choosing or creating the chart beside the total.
-- **Measurement in blocks with recovery**: finished blocks are saved locally, there is a session journal and a way to continue with the remaining blocks (only under the same conditions), and sleep is prevented only while a run is active. Sessions of several hours have not been validated yet; none of this guarantees stability.
+- **Measurement in blocks with recovery**: finished blocks are saved locally, there is a session journal and a way to continue with the remaining blocks (only under the same conditions), and sleep is prevented only while a run is active. A long calibration was completed successfully by the project owner, using the public version, on their own setup. Stability on other setups and durations is not yet validated. This is the owner's report, not a test run by the development side; the duration, the patch count and the exact version were not recorded. None of this guarantees stability.
 - **Local diagnostics**: rotating logs and a package export with redaction by default, never sent automatically.
 - **Adjustable text** (“Aa”), checked contrast, Romanian/English/Spanish interface; **ArgyllCMS included** and verified against a fixed SHA-256 hash; native installers.
 
@@ -42,7 +42,7 @@ Downloads and the overview page are at **[gordas.dev/DisplayCAL-CG](https://gord
 
 - An ArgyllCMS-supported measuring instrument.
 - Verified: the macOS installers, a clean install on Windows 11 (ARM64 VM with x64 emulation), a short real measurement (38 patches) with an i1Display colorimeter on macOS.
-- **Not verified**: multi-hour sessions, unplugging the probe during a measurement and recovery after a power cut, Windows on native x64 hardware, macOS on Intel, instruments other than the one tested, review of the translations by native speakers.
+- **Not verified**: stability on other setups and durations (no long calibration was run by the development side), unplugging the probe during a measurement and recovery after a power cut, Windows on native x64 hardware, macOS on Intel, instruments other than the one tested, review of the translations by native speakers.
 
 ## Guide, support, issues
 

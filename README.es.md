@@ -23,7 +23,7 @@ Mide cómo muestra el color tu pantalla y escribe un perfil ICC que el sistema y
 - **Calibración guiada** en cinco pasos (monitor e instrumento, objetivo, preparación, medición, instalar y verificar), con interfaz Qt. El modo avanzado se mantiene, reagrupado por decisión, con la misma configuración.
 - **Preparación con fuentes y colocación de la sonda**, con una animación esquemática para los instrumentos que el fabricante documenta; el modelo exacto lo confirmas tú cuando varios productos comparten la misma identidad USB.
 - **El plan de medición antes de empezar**: total de parches, tamaño del bloque, número de bloques y tiempo estimado, mostrados por separado; elegir o crear la carta junto al total.
-- **Medición en bloques con recuperación**: los bloques terminados se guardan localmente, hay un diario de sesión y se puede continuar con los bloques restantes (solo en las mismas condiciones); el reposo se evita solo durante la ejecución. Las sesiones de varias horas todavía no se han validado; nada de esto garantiza estabilidad.
+- **Medición en bloques con recuperación**: los bloques terminados se guardan localmente, hay un diario de sesión y se puede continuar con los bloques restantes (solo en las mismas condiciones); el reposo se evita solo durante la ejecución. El propietario del proyecto completó con éxito una calibración de larga duración, con la versión pública y en su propia configuración. La estabilidad en otras configuraciones y duraciones aún no está validada. Es un informe del propietario, no una prueba ejecutada por el desarrollo; no constan la duración, el número de parches ni la versión exacta. Nada de esto garantiza estabilidad.
 - **Diagnóstico local**: registros rotativos y exportación de un paquete con redacción por defecto, sin envío automático.
 - **Texto ajustable** («Aa»), contraste comprobado, interfaz en rumano, inglés y español; **ArgyllCMS incluido** y verificado con una suma SHA-256 fija; instaladores nativos.
 
@@ -42,7 +42,7 @@ Las descargas y la página de presentación están en **[gordas.dev/DisplayCAL-C
 
 - Un instrumento de medición compatible con ArgyllCMS.
 - Verificado: los instaladores de macOS, una instalación limpia en Windows 11 (VM ARM64 con emulación x64), una medición real corta (38 parches) con un colorímetro i1Display en macOS.
-- **No verificado**: sesiones de varias horas, desconexión de la sonda durante la medición y recuperación tras un corte de corriente, Windows en hardware x64 nativo, macOS en Intel, instrumentos distintos del probado, revisión de las traducciones por hablantes nativos.
+- **No verificado**: estabilidad en otras configuraciones y duraciones (el desarrollo no ejecutó una calibración larga), desconexión de la sonda durante la medición y recuperación tras un corte de corriente, Windows en hardware x64 nativo, macOS en Intel, instrumentos distintos del probado, revisión de las traducciones por hablantes nativos.
 
 ## Guía, soporte, incidencias
 

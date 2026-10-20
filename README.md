@@ -23,7 +23,7 @@ Măsoară cum își afișează ecranul culorile și scrie un profil ICC pe care 
 - **Calibrare ghidată** în cinci pași (monitor și instrument, obiectiv, pregătire, măsurare, instalare și verificare), cu interfață Qt. Modul avansat rămâne, regrupat pe decizii, cu aceeași configurație.
 - **Pregătire cu surse și poziționarea sondei**, cu animație schematică pentru instrumentele documentate de producător; modelul exact îl confirmi tu când mai multe produse au aceeași identitate USB.
 - **Planul de măsurare înainte de pornire**: total de patch-uri, mărimea blocului, numărul de blocuri și timp estimat, afișate separat; alegerea sau crearea diagramei lângă total.
-- **Măsurare în blocuri cu recuperare**: blocurile terminate se salvează local, există un jurnal de sesiune și o reluare cu blocurile rămase (doar în aceleași condiții), iar repausul este împiedicat doar pe durata rulării. Sesiunile de mai multe ore nu au fost încă validate; nimic din aceasta nu garantează stabilitatea.
+- **Măsurare în blocuri cu recuperare**: blocurile terminate se salvează local, există un jurnal de sesiune și o reluare cu blocurile rămase (doar în aceleași condiții), iar repausul este împiedicat doar pe durata rulării. O calibrare de durată a fost finalizată cu succes de proprietarul proiectului, folosind versiunea publică, pe configurația sa. Stabilitatea pe alte configurații și durate nu este încă validată. Raport al proprietarului, nu un test executat de dezvoltare; durata, numărul de patch-uri și versiunea exactă nu sunt consemnate. Nimic din aceasta nu garantează stabilitatea.
 - **Diagnostic local**: jurnale rotative și export de pachet cu redactare implicită, fără trimitere automată.
 - **Text redimensionabil** («Aa»), contrast verificat, interfață în română, engleză și spaniolă; **ArgyllCMS inclus** și verificat cu o sumă SHA-256 fixă; instalatoare native.
 
@@ -42,7 +42,7 @@ Descărcările și pagina de prezentare sunt la **[gordas.dev/DisplayCAL-CG](htt
 
 - Un instrument de măsură compatibil ArgyllCMS.
 - Verificat: instalatoarele macOS, instalarea curată pe Windows 11 (VM ARM64 cu emulare x64), o măsurare reală scurtă (38 de patch-uri) cu un colorimetru i1Display pe macOS.
-- **Neverificat**: sesiuni de mai multe ore, deconectarea sondei în timpul măsurării și revenirea după o pană de curent, Windows pe hardware x64 nativ, macOS pe Intel, alte instrumente decât cel testat, revizuirea traducerilor de către vorbitori nativi.
+- **Neverificat**: stabilitatea pe alte configurații și durate (nu am executat eu o calibrare de durată), deconectarea sondei în timpul măsurării și revenirea după o pană de curent, Windows pe hardware x64 nativ, macOS pe Intel, alte instrumente decât cel testat, revizuirea traducerilor de către vorbitori nativi.
 
 ## Ghid, suport, probleme
 

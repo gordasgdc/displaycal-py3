@@ -79,7 +79,7 @@ _L = {
                     "Banda colorată arată câte blocuri vor fi; cifrele de sub ea sunt numerele lor.",
                     "Estimarea e o estimare, nu o garanție.",
                 ],
-                "limit": "Sesiunile de mai multe ore nu au fost încă validate. Salvarea blocurilor nu garantează stabilitatea, acuratețea sau recuperarea în orice condiții.",
+                "limit": "O calibrare de durată a fost finalizată cu succes de proprietarul proiectului, folosind versiunea publică, pe configurația sa. Stabilitatea pe alte configurații și durate nu este încă validată. Raport al proprietarului, nu un test executat de dezvoltare; durata, numărul de patch-uri și versiunea exactă nu sunt consemnate. Salvarea blocurilor nu garantează stabilitatea, acuratețea sau recuperarea în orice condiții.",
             },
             {
                 "title": "Instalare și verificare",
@@ -177,7 +177,7 @@ _L = {
                     "The coloured strip shows how many blocks there will be; the numbers under it are their numbers.",
                     "The estimate is an estimate, not a guarantee.",
                 ],
-                "limit": "Multi-hour sessions have not been validated yet. Saving blocks does not guarantee stability, accuracy or recovery in every condition.",
+                "limit": "A long calibration was completed successfully by the project owner, using the public version, on their own setup. Stability on other setups and durations is not yet validated. This is the owner's report, not a test run by the development side; the duration, the patch count and the exact version were not recorded. Saving blocks does not guarantee stability, accuracy or recovery in every condition.",
             },
             {
                 "title": "Install and verify",
@@ -275,7 +275,7 @@ _L = {
                     "La banda de colores muestra cuántos bloques habrá; los números bajo ella son sus números.",
                     "La estimación es una estimación, no una garantía.",
                 ],
-                "limit": "Las sesiones de varias horas aún no se han validado. Guardar los bloques no garantiza estabilidad, precisión ni recuperación en toda condición.",
+                "limit": "El propietario del proyecto completó con éxito una calibración de larga duración, con la versión pública y en su propia configuración. La estabilidad en otras configuraciones y duraciones aún no está validada. Es un informe del propietario, no una prueba ejecutada por el desarrollo; no constan la duración, el número de parches ni la versión exacta. Guardar los bloques no garantiza estabilidad, precisión ni recuperación en toda condición.",
             },
             {
                 "title": "Instalar y verificar",
