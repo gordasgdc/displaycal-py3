@@ -328,3 +328,44 @@ def test_text_size_button_on_the_dark_bar_states_its_own_colours(qapp):
     btn = TextSizeButton(on_dark_bar=True)
     css = btn.styleSheet()
     assert "color: #ffffff" in css and "background: transparent" in css and "border:" in css
+
+
+def _settle(window, level):
+    window.resize(766, 864)
+    window.show()
+    window._select_tab("guide")
+    ts.apply(level)
+    for _ in range(5):
+        QApplication.processEvents()
+    window._pin_stack_size_to_current_tab()
+    for _ in range(3):
+        QApplication.processEvents()
+
+
+def test_brand_banner_keeps_its_height_whatever_the_text_size(window):
+    from DisplayCAL.ui.header_banner import HeaderBanner
+
+    heights = {}
+    for level in ("normal", "large", "xlarge"):
+        _settle(window, level)
+        heights[level] = window.findChild(HeaderBanner).height()
+    assert len(set(heights.values())) == 1, heights
+
+
+def test_large_text_gives_the_room_to_the_content(window):
+    """The step column becomes a one-row strip: the page gets (nearly) the full width."""
+    from qtpy.QtCore import QPoint
+
+    _settle(window, "normal")
+    g = window._guide
+    normal_w = g.pages.width()
+    normal_top = g.pages.mapTo(window, QPoint(0, 0)).y()
+    assert not g.rail._compact
+    _settle(window, "xlarge")
+    assert g.rail._compact and g.rail.height() < 80
+    assert g.pages.width() > normal_w + 120
+    # the page starts no lower than a strip's height below where it started at Normal
+    assert g.pages.mapTo(window, QPoint(0, 0)).y() <= normal_top + 40
+    # still reachable and the reader's size is untouched
+    assert window._scroll_area.verticalScrollBar().maximum() == 0
+    assert ts.factor() == 1.5

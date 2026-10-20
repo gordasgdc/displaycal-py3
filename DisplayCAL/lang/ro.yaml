@@ -3247,9 +3247,9 @@
 "plan.long.warn": |-
   Rulările lungi sunt expuse derivei ecranului și întreruperilor.
 "plan.blocks.title": |-
-  Rulare lungă sigură (blocuri)
+  Măsurare în blocuri cu recuperare
 "plan.blocks.text": |-
-  Diagrama se măsoară în blocuri consecutive; fiecare bloc terminat este salvat pe disc. Dacă ceva oprește rularea, pierzi cel mult blocul curent și poți continua cu restul. Compromisuri: un patch alb în plus pe bloc, instrumentul pornește din nou între blocuri, iar fiecare bloc este normalizat la propriul alb (o mică corecție de derivă).
+  Diagrama se măsoară în blocuri consecutive; fiecare bloc terminat este salvat pe disc. Dacă ceva oprește rularea, blocurile deja terminate se păstrează și poți încerca să continui cu restul; recuperarea nu este garantată în orice situație (de exemplu o pană de curent sau un alt monitor ori instrument după aceea). Compromisuri: un patch alb în plus pe bloc, instrumentul pornește din nou între blocuri, iar fiecare bloc este normalizat la propriul alb, ceea ce compensează parțial deriva lentă dintre blocuri, dar nu este o verificare a derivei.
 "plan.blocks.size": |-
   Mărimea blocului
 "plan.blocks.off": |-
@@ -3843,9 +3843,9 @@
 "help.patches.needs": |-
   Doar pentru diagrama auto-optimizată; estimarea arată timpul.
 "help.blocks.name": |-
-  Blocuri (rulare lungă în siguranță)
+  Blocuri (măsurare cu recuperare)
 "help.blocks.what": |-
-  Taie măsurarea diagramei în blocuri consecutive de cel mult atâtea patch-uri; fiecare bloc terminat este salvat pe disc, deci o întrerupere pierde cel mult blocul curent. Mărimea blocului nu este numărul de patch-uri din diagramă.
+  Taie măsurarea diagramei în blocuri consecutive de cel mult atâtea patch-uri; fiecare bloc terminat este salvat pe disc, deci la o întrerupere blocurile deja terminate se păstrează și se reia doar blocul curent. Mărimea blocului nu este numărul de patch-uri din diagramă.
 "help.blocks.when": |-
   Pentru rulări lungi (cam o oră sau mai mult). Nu este necesar pentru o diagramă mică.
 "help.blocks.needs": |-

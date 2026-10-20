@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 from qtpy.QtCore import QEvent, QTimer, QRectF, QSize, Qt, Signal
 from qtpy.QtGui import QColor, QFont, QLinearGradient, QPainter, QPen, QPixmap
 from qtpy.QtWidgets import (
+    QBoxLayout,
     QButtonGroup,
     QCheckBox,
     QComboBox,
@@ -124,6 +125,7 @@ class _Rail(QWidget):
         super().__init__(parent)
         self._current = 0
         self._reached = 0
+        self._compact = False
         self.setMinimumWidth(self._min_width())
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self.setCursor(Qt.PointingHandCursor)
@@ -135,20 +137,71 @@ class _Rail(QWidget):
         return max(60, int(self.fontMetrics().height() * 3.2))
 
     def _min_width(self) -> int:
+        if self._compact:
+            return 0
         return max(176, self.fontMetrics().horizontalAdvance("M") * 15)
+
+    # Compact strip (large text): the room goes to the content, not to a column
+    # of step names. The step's name is already the heading of its page.
+    def set_compact(self, compact: bool) -> None:
+        """Lay the steps out as one row of numbered nodes (``True``) or a column."""
+        if compact == self._compact:
+            return
+        self._compact = compact
+        self.setSizePolicy(
+            *(
+                (QSizePolicy.Expanding, QSizePolicy.Fixed)
+                if compact
+                else (QSizePolicy.Fixed, QSizePolicy.Expanding)
+            )
+        )
+        self.setMinimumWidth(self._min_width())
+        self._sync_height()
+        self.updateGeometry()
+        self.set_state(self._current, self._reached)
+
+    def _node(self) -> int:
+        return max(24, int(self.fontMetrics().height() * 1.5))
+
+    def _strip_h(self) -> int:
+        return self._node() + 8
+
+    def _sync_height(self) -> None:
+        if self._compact:
+            self.setFixedHeight(self._strip_h())
+        else:
+            self.setMinimumHeight(0)
+            self.setMaximumHeight(16777215)
+
+    def _node_rect(self, i: int) -> QRectF:
+        n = self._node()
+        return QRectF(4 + i * (n + n * 0.9), 4, n, n)
 
     def changeEvent(self, event: object) -> None:  # noqa: N802, D102
         if event.type() == QEvent.FontChange:
             self.setMinimumWidth(self._min_width())
+            self._sync_height()
             self.updateGeometry()
             self.update()
         super().changeEvent(event)
 
     def set_state(self, current: int, reached: int) -> None:
         self._current, self._reached = current, reached
+        self.setAccessibleDescription(
+            f"{current + 1} / {STEPS}: {lang.getstr(f'guide.step.{current + 1}')}"
+        )
+        self.setToolTip(
+            "\n".join(
+                f"{i + 1}. {lang.getstr(f'guide.step.{i + 1}')}" for i in range(STEPS)
+            )
+            if self._compact
+            else ""
+        )
         self.update()
 
     def sizeHint(self) -> QSize:  # noqa: N802
+        if self._compact:
+            return QSize(int(self._node_rect(STEPS).left()) + 160, self._strip_h())
         return QSize(self._min_width() + 14, self._row_h() * STEPS + 24)
 
     def _row_rect(self, i: int) -> QRectF:
@@ -178,11 +231,63 @@ class _Rail(QWidget):
     def mousePressEvent(self, event: object) -> None:  # noqa: N802
         pos = event.position() if hasattr(event, "position") else event.pos()
         for i in range(STEPS):
-            if self._row_rect(i).contains(pos) and i <= self._reached:
+            rect = self._node_rect(i) if self._compact else self._row_rect(i)
+            if self._compact:
+                rect = rect.adjusted(-4, -4, 4, 4)
+            if rect.contains(pos) and i <= self._reached:
                 self.step_requested.emit(i)
                 return
 
+    def _paint_strip(self) -> None:
+        """One row: numbered nodes on a line, then "n / 5" (the step's name is
+        the heading of its page and the rail's accessible name)."""
+        t = _tokens()
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        first, last = self._node_rect(0), self._node_rect(STEPS - 1)
+        cy = first.center().y()
+        p.setPen(QPen(t["line"], 2))
+        p.drawLine(int(first.center().x()), int(cy), int(last.center().x()), int(cy))
+        if self._current > 0:
+            end = self._node_rect(self._current).center().x()
+            grad = QLinearGradient(first.center().x(), 0, max(end, first.center().x() + 1), 0)
+            for i, hex_ in enumerate(_SPECTRUM):
+                grad.setColorAt(i / (len(_SPECTRUM) - 1), QColor(hex_))
+            p.setPen(QPen(grad, 2.5))
+            p.drawLine(int(first.center().x()), int(cy), int(end), int(cy))
+        font = QFont(self.font())
+        for i in range(STEPS):
+            node = self._node_rect(i)
+            done, active = i < self._current, i == self._current
+            if active and self.hasFocus():
+                p.setPen(QPen(t["accent"], 2))
+                p.setBrush(Qt.NoBrush)
+                p.drawEllipse(node.adjusted(-3, -3, 3, 3))
+            p.setPen(Qt.NoPen)
+            p.setBrush(t["accent"] if active else t["ok"] if done else t["plate"])
+            p.drawEllipse(node)
+            if not (active or done):
+                p.setPen(QPen(t["line"], 1.5))
+                p.setBrush(Qt.NoBrush)
+                p.drawEllipse(node)
+            nf = QFont(font)
+            nf.setBold(True)
+            p.setFont(nf)
+            p.setPen(t["window"] if (active or done) else t["muted"])
+            p.drawText(node, Qt.AlignCenter, "✓" if done else str(i + 1))
+        p.setFont(font)
+        p.setPen(t["text"])
+        p.drawText(
+            QRectF(last.right() + 14, 0, max(0, self.width() - last.right() - 18), self.height()),
+            Qt.AlignVCenter | Qt.AlignLeft,
+            f"{self._current + 1} / {STEPS}",
+        )
+        p.end()
+
     def paintEvent(self, _event: object) -> None:  # noqa: N802
+        if self._compact:
+            self._paint_strip()
+            return
         t = _tokens()
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
@@ -288,6 +393,8 @@ class GuidePanel(QWidget):
 
         body = QHBoxLayout()
         body.setSpacing(18)
+        self._root, self._head_margins = root, (20, 16, 20, 12)
+        self._body = body
         self.rail = _Rail()
         self.rail.step_requested.connect(self.go)
         body.addWidget(self.rail, 0)
@@ -323,12 +430,37 @@ class GuidePanel(QWidget):
         self.back_btn.clicked.connect(lambda: self.go(self._step - 1))
         self.next_btn = QPushButton(_tr("guide.next"))
         self.next_btn.setDefault(True)
+        self.next_btn.setProperty("primary", True)
         self.next_btn.clicked.connect(self._next)
         self.gate_label = _label("", muted=True)
         nav.addWidget(self.back_btn)
         nav.addWidget(self.gate_label, 1, Qt.AlignVCenter)
         nav.addWidget(self.next_btn)
         root.addLayout(nav)
+        text_scale.bus.changed.connect(lambda _f: self._apply_compact())
+        self._apply_compact()
+
+    def _apply_compact(self) -> None:
+        """Enlarged text: spend the room on the content.
+
+        The step column becomes a one-row strip above the page, the lead-in line
+        goes (the page headings carry the same information) and the margins
+        tighten. The reader's text size itself is never reduced.
+        """
+        compact = text_scale.factor() > 1.0
+        self.rail.set_compact(compact)
+        self._body.setDirection(
+            QBoxLayout.TopToBottom if compact else QBoxLayout.LeftToRight
+        )
+        self._body.setSpacing(6 if compact else 18)
+        self._root.setSpacing(6 if compact else 10)
+        left, top, right, bottom = self._head_margins
+        self._root.setContentsMargins(
+            *((14, 8, 14, 8) if compact else (left, top, right, bottom))
+        )
+        self.subtitle.setVisible(not compact)
+        self.title.setProperty("_fmult", 1.35 if compact else 1.7)
+        text_scale.refresh()
 
     # page 1 ----------------------------------------------------------------
     def _build_page_devices(self, lay: QVBoxLayout) -> None:
@@ -516,6 +648,7 @@ class GuidePanel(QWidget):
         self.start_btn = QPushButton(_m(_tr("guide.s4.start")))
         text_scale.set_min_height(self.start_btn, 44)
         text_scale.set_scaled_font(self.start_btn, 1.15, bold=True)
+        self.start_btn.setProperty("primary", True)
         self.start_btn.clicked.connect(self._start)
         lay.addWidget(self.start_btn)
         lay.addWidget(_label(_tr("guide.s4.reminder"), size=1.05, bold=True))

@@ -106,7 +106,21 @@ def control_css() -> str:
         f'image:url("{check.replace(chr(92), "/")}");' if isinstance(check, str) else ""
     )
     px = text_scale.scale_px(16)
+    dark = t["window"].lightness() < 128
+    fill, ink = ("#ffb347", "#1b1c20") if dark else ("#8f5600", "#ffffff")
+    hover = "#ffc36b" if dark else "#a46300"
+    off = css(t["plate"])
+    off_ink = css(t["muted"])
+    pad = text_scale.scale_px(10)
     return (
+        # The one primary action of a page: filled, high contrast, same shape
+        # everywhere; every other button stays quiet.
+        f'QPushButton[primary="true"]{{background:{fill};color:{ink};border:none;'
+        f"border-radius:7px;padding:{text_scale.scale_px(6)}px {pad * 2}px;}}"
+        f'QPushButton[primary="true"]:hover{{background:{hover};}}'
+        f'QPushButton[primary="true"]:pressed{{background:{fill};}}'
+        f'QPushButton[primary="true"]:focus{{border:2px solid {ink};}}'
+        f'QPushButton[primary="true"]:disabled{{background:{off};color:{off_ink};}}'
         f"QRadioButton::indicator{{width:{px}px;height:{px}px;border-radius:{px // 2 + 1}px;"
         f"border:2px solid {ring};background:transparent;}}"
         f"QRadioButton::indicator:checked{{border:2px solid {acc};"

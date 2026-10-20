@@ -111,27 +111,22 @@ class HeaderBanner(QWidget):
         self._base_height = 0
         from DisplayCAL.ui import text_scale
 
-        text_scale.bus.changed.connect(lambda _f: self._fit_height())
+        text_scale.bus.changed.connect(lambda _f: self.update())
 
     def set_base_height(self, px: int) -> None:
-        """Height at the Normal text size; grows when the text does."""
+        """Height of the plate. It is brand chrome, so it does not grow with the
+        reader's text size: the room goes to the content instead."""
         self._base_height = px
-        self._fit_height()
+        self.setFixedHeight(px)
 
-    def _fit_height(self) -> None:
-        """Wordmark (1.9x) + tagline must fit: never clip at a large text size."""
-        if not self._base_height:
-            return
-        fm = self.fontMetrics()
-        need = round(fm.height() * 1.9 * 1.3 + fm.height() * 1.6 + 40)
-        self.setFixedHeight(max(self._base_height, need))
+    @staticmethod
+    def _chrome_font(font: QFont, mult: float) -> QFont:
+        """The plate's type is sized from the system size, not the chosen one."""
+        from DisplayCAL.ui import text_scale
 
-    def changeEvent(self, event) -> None:  # noqa: N802, D102
-        from qtpy.QtCore import QEvent
-
-        if event.type() == QEvent.FontChange:
-            self._fit_height()
-        super().changeEvent(event)
+        f = QFont(font)
+        f.setPointSizeF(text_scale.base_points() * mult)
+        return f
 
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: D102, N802
         painter = QPainter(self)
@@ -148,8 +143,7 @@ class HeaderBanner(QWidget):
             icon_rect = QRect(14, (rect.height() - side) // 2, side, side)
             painter.drawPixmap(icon_rect, self._icon)
         text_x = max(self._inset, 14 + side + 12)
-        title = QFont(self.font())
-        title.setPointSizeF(title.pointSizeF() * 1.9)
+        title = self._chrome_font(self.font(), 1.9)
         title.setBold(True)
         painter.setFont(title)
         fm = painter.fontMetrics()
@@ -158,8 +152,7 @@ class HeaderBanner(QWidget):
         painter.drawText(text_x, baseline, "DisplayCAL")
         painter.setPen(QColor("#ffb347"))
         painter.drawText(text_x + fm.horizontalAdvance("DisplayCAL"), baseline, "-CG")
-        tag = QFont(self.font())
-        tag.setPointSizeF(tag.pointSizeF() * 0.95)
+        tag = self._chrome_font(self.font(), 0.95)
         painter.setFont(tag)
         painter.setPen(QColor(255, 255, 255, 165))
         painter.drawText(

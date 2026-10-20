@@ -3239,9 +3239,9 @@
 "plan.long.warn": |-
   Las ejecuciones largas están expuestas a la deriva de la pantalla y a las interrupciones.
 "plan.blocks.title": |-
-  Ejecución larga segura (bloques)
+  Medición en bloques con recuperación
 "plan.blocks.text": |-
-  La carta se mide en bloques consecutivos; cada bloque terminado se guarda en disco. Si algo detiene la ejecución, pierdes como máximo el bloque actual y puedes continuar con el resto. Contrapartidas: un parche blanco extra por bloque, el instrumento arranca de nuevo entre bloques y cada bloque se normaliza a su propio blanco (una pequeña corrección de deriva).
+  La carta se mide en bloques consecutivos; cada bloque terminado se guarda en disco. Si algo detiene la ejecución, los bloques ya terminados se conservan y puedes intentar continuar con el resto; la recuperación no está garantizada en todas las situaciones (por ejemplo un corte de corriente, o otra pantalla o instrumento después). Contrapartidas: un parche blanco extra por bloque, el instrumento arranca de nuevo entre bloques y cada bloque se normaliza a su propio blanco, lo que compensa en parte la deriva lenta entre bloques pero no es una comprobación de deriva.
 "plan.blocks.size": |-
   Tamaño del bloque
 "plan.blocks.off": |-
@@ -3835,9 +3835,9 @@
 "help.patches.needs": |-
   Solo para la carta autooptimizada; la estimación indica el tiempo.
 "help.blocks.name": |-
-  Bloques (ejecución larga segura)
+  Bloques (medición con recuperación)
 "help.blocks.what": |-
-  Corta la medición de la carta en bloques consecutivos de como máximo esta cantidad de parches; cada bloque terminado se guarda en disco, así que una interrupción pierde como mucho el bloque en curso. El tamaño del bloque no es el número de parches de la carta.
+  Corta la medición de la carta en bloques consecutivos de como máximo esta cantidad de parches; cada bloque terminado se guarda en disco, así que si se interrumpe la ejecución se conservan los bloques ya terminados y solo hay que volver a medir el bloque en curso. El tamaño del bloque no es el número de parches de la carta.
 "help.blocks.when": |-
   Para ejecuciones largas (aproximadamente una hora o más). No hace falta con una carta pequeña.
 "help.blocks.needs": |-

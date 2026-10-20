@@ -3247,9 +3247,9 @@
 "plan.long.warn": |-
   Long runs are exposed to display drift and to interruptions.
 "plan.blocks.title": |-
-  Safe long run (blocks)
+  Measurement in blocks with recovery
 "plan.blocks.text": |-
-  The chart is measured as consecutive blocks; every finished block is stored on disk. If something stops the run, you lose at most the current block and can continue with the rest. Compromises: one extra white patch per block, the instrument starts again between blocks, and each block is normalised to its own white (a small drift correction).
+  The chart is measured as consecutive blocks; every finished block is stored on disk. If something stops the run, the blocks already finished are kept and you can try to continue with the rest; recovery is not guaranteed in every situation (for example a power cut, or a different display or instrument afterwards). Compromises: one extra white patch per block, the instrument starts again between blocks, and each block is normalised to its own white, which partly compensates slow drift between blocks but is not a drift check.
 "plan.blocks.size": |-
   Block size
 "plan.blocks.off": |-
@@ -3843,9 +3843,9 @@
 "help.patches.needs": |-
   Only for the auto-optimized chart; the estimate shows the time.
 "help.blocks.name": |-
-  Blocks (safe long run)
+  Blocks (measurement with recovery)
 "help.blocks.what": |-
-  Cuts the measurement of the chart into consecutive blocks of at most this many patches; every finished block is stored on disk, so an interruption loses at most the current block. The block size is not the number of patches in the chart.
+  Cuts the measurement of the chart into consecutive blocks of at most this many patches; every finished block is stored on disk, so the blocks already finished are kept if the run is interrupted and only the current block has to be measured again. The block size is not the number of patches in the chart.
 "help.blocks.when": |-
   For long runs (about an hour or more). Not needed for a small chart.
 "help.blocks.needs": |-
