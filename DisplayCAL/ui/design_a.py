@@ -657,9 +657,6 @@ class HeroPlate(QWidget):
         from qtpy.QtGui import QPainterPath
 
         r = self.rect().adjusted(0, 0, -1, -1)
-        clip = QPainterPath()
-        clip.addRoundedRect(QRectF(self.rect()), 8, 8)
-        p.setClipPath(clip)
         if not self._pix.isNull():
             # cover: crop the picture to the plate's shape around the monitor
             pw, ph = self._pix.width(), self._pix.height()
@@ -668,4 +665,20 @@ class HeroPlate(QWidget):
             sh = sw / want
             sx = max(0.0, min(pw - sw, pw * self._focus - sw / 2))
             p.drawPixmap(QRectF(self.rect()), self._pix, QRectF(sx, (ph - sh) / 2, sw, sh))
+            # the booth floor melts into the page: feather every edge into the sheet colour
+            from qtpy.QtGui import QLinearGradient
+
+            sheet = QColor(tokens().sheet)
+            clear = QColor(sheet)
+            clear.setAlpha(0)
+            w, h = self.width(), self.height()
+            f = int(min(w, h) * 0.16)
+            for (x0, y0, x1, y1, rx, ry, rw, rh) in (
+                (0, 0, f, 0, 0, 0, f, h), (w, 0, w - f, 0, w - f, 0, f, h),
+                (0, 0, 0, f, 0, 0, w, f), (0, h, 0, h - f, 0, h - f, w, f),
+            ):
+                g = QLinearGradient(x0, y0, x1, y1)
+                g.setColorAt(0, sheet)
+                g.setColorAt(1, clear)
+                p.fillRect(rx, ry, rw, rh, g)
         p.end()
