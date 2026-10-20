@@ -66,16 +66,16 @@ class Tokens:
 
 
 LIGHT = Tokens(
-    dark=False, booth="#b3b5b8", sheet="#f6f6f4", inset="#fdfdfc", ink="#16171a",
-    ink2="#4a4c52", hair="rgba(22,23,26,0.22)", rule="#16171a", ok="#0b7a45",
-    warn="#8a5b00", bad="#b3121f", focus="#2e3192", patch_bg="#16171a",
-    patch_ink="#f6f6f4", off_bg="#e4e4e0", off_ink="#6b6d73",
+    dark=False, booth="#e9e8e4", sheet="#f7f6f3", inset="#fbfbf9", ink="#1d1f24",
+    ink2="#5b5f68", hair="rgba(29,31,36,0.16)", rule="#1d1f24", ok="#0b7a45",
+    warn="#8a5b00", bad="#b3121f", focus="#2d5bd8", patch_bg="#2c2f36",
+    patch_ink="#f7f6f3", off_bg="#ecebe7", off_ink="#7d818a",
 )  # fmt: skip
 DARK = Tokens(
-    dark=True, booth="#26272a", sheet="#1b1c1f", inset="#111214", ink="#eceef2",
-    ink2="#a9adb6", hair="rgba(236,238,242,0.22)", rule="#eceef2", ok="#4cc38a",
-    warn="#f0b44c", bad="#ff6b6b", focus="#8fa6ff", patch_bg="#eceef2",
-    patch_ink="#16171a", off_bg="#2a2b2f", off_ink="#8d919b",
+    dark=True, booth="#17181b", sheet="#1c1d20", inset="#26282d", ink="#eceef2",
+    ink2="#a3a8b2", hair="rgba(236,238,242,0.16)", rule="#eceef2", ok="#4cc38a",
+    warn="#f0b44c", bad="#ff6b6b", focus="#8fa6ff", patch_bg="#3b3e47",
+    patch_ink="#f2f3f6", off_bg="#2a2c31", off_ink="#8d919b",
 )  # fmt: skip
 
 _fonts: dict[str, str] = {}
@@ -158,6 +158,30 @@ def global_qss(t: Tokens | None = None) -> str:
     )
     chevron = found.replace(chr(92), "/") if isinstance(found, str) else ""
     handle = _mix(t.sheet, t.ink2, 0.5)
+    light = not t.dark
+    satin = (
+        "qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #ffffff,stop:1 #f1f0ec)" if light
+        else "qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #2d2f35,stop:1 #25272c)"
+    )
+    satin_hover = (
+        "qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #ffffff,stop:1 #ebeae5)" if light
+        else "qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #34363d,stop:1 #2b2d33)"
+    )
+    satin_down = (
+        "qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #e6e5e0,stop:1 #efeeea)" if light
+        else "qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #202226,stop:1 #282a2f)"
+    )
+    edge = "rgba(29,31,36,0.34)" if light else "rgba(236,238,242,0.36)"
+    graphite = (
+        "qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #3b3e47,stop:0.5 #2c2f36,stop:1 #24262c)" if light
+        else "qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #4a4d57,stop:1 #3b3e47)"
+    )
+    graphite_hover = (
+        "qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #484c56,stop:0.5 #383b43,stop:1 #2e3037)" if light
+        else "qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #565a65,stop:1 #464a54)"
+    )
+    graphite_down = "#22242a" if light else "#33363e"
+    graphite_edge = "#1c1e23" if light else "rgba(236,238,242,0.30)"
     tick = config.get_data_path(
         "theme/guide/check.svg" if t.dark else "theme/guide/check_light.svg"
     )
@@ -178,43 +202,33 @@ def global_qss(t: Tokens | None = None) -> str:
     )
     return f"""{arrow}
 QToolTip{{background:{inset};color:{ink};border:1px solid {ink};padding:0.3em 0.5em;}}
-QPushButton{{background:{inset};color:{ink};border:1px solid {t.hair};border-radius:5px;
-  padding:0.42em 1.1em;min-height:1.2em;}}
-QPushButton:hover{{background:{t.patch_bg};color:{t.patch_ink};}}
-QPushButton:pressed{{background:{t.patch_bg};color:{t.patch_ink};}}
-QPushButton:focus{{border:2px solid {t.focus};padding:0.34em 1.04em;}}
+QPushButton{{background:{satin};color:{ink};border:1px solid {t.hair};border-radius:11px;
+  padding:0.45em 1.2em;min-height:1.2em;}}
+QPushButton:hover{{background:{satin_hover};border-color:{edge};}}
+QPushButton:pressed{{background:{satin_down};border-color:{edge};padding-top:0.5em;padding-bottom:0.4em;}}
+QPushButton:focus{{border:2px solid {t.focus};padding:0.4em 1.15em;}}
 QPushButton:disabled{{background:{t.off_bg};color:{t.off_ink};border:1px solid {t.hair};}}
 QPushButton:flat{{background:transparent;border:none;color:{ink};
   text-decoration:underline;padding:0.3em 0.4em;}}
 QPushButton:flat:hover{{background:transparent;color:{t.focus};}}
-QPushButton[primary="true"]{{background:{t.patch_bg};color:{t.patch_ink};
-  border:1px solid {t.patch_bg};border-radius:5px;padding:0.55em 1.8em;font-weight:700;}}
-QPushButton[primary="true"]:hover{{background:{t.ink2};border-color:{t.ink2};}}
+QPushButton[primary="true"]{{background:{graphite};color:{t.patch_ink};
+  border:1px solid {graphite_edge};border-radius:11px;padding:0.6em 2em;font-weight:700;}}
+QPushButton[primary="true"]:hover{{background:{graphite_hover};}}
+QPushButton[primary="true"]:pressed{{background:{graphite_down};padding-top:0.65em;padding-bottom:0.55em;}}
+QPushButton[primary="true"]:focus{{border:2px solid {t.focus};padding:0.55em 1.95em;}}
 QPushButton[primary="true"]:disabled{{background:{t.off_bg};color:{t.off_ink};
   border:1px solid {t.hair};}}
-QRadioButton::indicator{{width:0.9em;height:0.9em;border-radius:0.55em;
-  border:2px solid {ink};background:transparent;}}
-QRadioButton::indicator:checked{{border:2px solid {ink};
-  background:qradialgradient(cx:.5,cy:.5,radius:.5,fx:.5,fy:.5,
-  stop:0 {ink},stop:.5 {ink},stop:.56 transparent,stop:1 transparent);}}
-QRadioButton::indicator:disabled,QCheckBox::indicator:disabled{{border-color:{t.off_ink};}}
-QCheckBox::indicator{{width:0.9em;height:0.9em;border-radius:0;
-  border:2px solid {ink};background:transparent;}}
-QCheckBox::indicator:checked{{border:2px solid {ink};background:{ink};{check_image}}}
-QSlider::groove:horizontal{{height:2px;background:{ink};margin:0;}}
-QSlider::sub-page:horizontal{{background:{ink};}}
-QSlider::handle:horizontal{{background:{t.patch_bg};border:1px solid {ink};
-  width:0.5em;margin:-0.45em 0;border-radius:0;}}
-QSlider::handle:horizontal:hover{{background:{t.focus};}}
-QSlider:disabled{{opacity:0.5;}}
+QComboBox{{background:{satin};color:{ink};border:1px solid {t.hair};
+  border-radius:11px;padding:0.4em 0.85em;min-height:1.35em;}}
+QComboBox:hover{{border-color:{edge};background:{satin_hover};}}
+QComboBox:on{{border-color:{t.focus};}}
 QToolButton{{background:transparent;color:{ink};border:1px solid transparent;
-  border-radius:0;padding:0.25em 0.4em;}}
-QToolButton:hover{{background:{t.patch_bg};color:{t.patch_ink};}}
+  border-radius:8px;padding:0.25em 0.4em;}}
+QToolButton:hover{{background:{satin_hover};border-color:{t.hair};}}
+QToolButton:pressed{{background:{satin_down};}}
 QToolButton:focus{{border:2px solid {t.focus};}}
-QToolButton#text_size_button{{border:1px solid {t.hair};border-radius:5px;padding:0.2em 0.6em;}}
+QToolButton#text_size_button{{border:1px solid {t.hair};border-radius:13px;padding:0.35em 0.75em;background:{satin};}}
 QToolButton::menu-indicator{{image:none;width:0;}}
-QComboBox{{background:{inset};color:{ink};border:1px solid {t.hair};
-  border-radius:5px;padding:0.35em 0.7em;min-height:1.3em;}}
 QComboBox:focus,QLineEdit:focus,QSpinBox:focus,QDoubleSpinBox:focus{{
   border:2px solid {t.focus};}}
 QComboBox:disabled,QLineEdit:disabled,QSpinBox:disabled,QDoubleSpinBox:disabled{{
@@ -405,6 +419,16 @@ def svg_pixmap(path: str, size: int, color: str, dpr: float = 1.0):
     pix = QPixmap.fromImage(img)
     pix.setDevicePixelRatio(dpr)
     return pix
+
+
+def icon_pixmap(name: str, size: int = 24, color: str | None = None):
+    """A small line icon (``theme/guide/ico_<name>.svg``) in the ink colour."""
+    found = config.get_data_path(f"theme/guide/ico_{name}.svg")
+    if not isinstance(found, str):
+        return None
+    app = QApplication.instance()
+    dpr = app.devicePixelRatio() if app is not None else 1.0
+    return svg_pixmap(found, size, color or tokens().ink, max(1.0, dpr))
 
 
 def tab_pixmap(key: str, size: int = 28):
@@ -615,6 +639,36 @@ def paint_sheet_shadow(p: QPainter, rect: QRectF, dark: bool) -> None:
         p.setPen(Qt.NoPen)
         p.setBrush(c)
         p.drawRoundedRect(rect.adjusted(-grow, -grow * 0.2, grow, grow * 1.5 + 6), 2, 2)
+
+
+class ProductImage(QWidget):
+    """The rendered monitor (a clean image, no interface in it), light or dark to match.
+
+    It rests on the page itself: the picture's ground is the page colour, so there is
+    no frame and no feathering. ``theme/guide/hero_monitor_{light,dark}.jpg``.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        from qtpy.QtGui import QPixmap
+
+        self._pix = {}
+        for kind in ("light", "dark"):
+            found = config.get_data_path(f"theme/guide/hero_monitor_{kind}.jpg")
+            self._pix[kind] = QPixmap(found) if isinstance(found, str) else QPixmap()
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
+        self.setMinimumHeight(120)
+
+    def paintEvent(self, _event: object) -> None:  # noqa: N802
+        pix = self._pix["dark" if tokens().dark else "light"]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+        p.fillRect(self.rect(), QColor(tokens().sheet))
+        if not pix.isNull():
+            scale = min(self.width() / pix.width(), self.height() / pix.height())
+            w, h = pix.width() * scale, pix.height() * scale
+            p.drawPixmap(QRectF((self.width() - w) / 2, self.height() - h, w, h), pix, QRectF(pix.rect()))
+        p.end()
 
 
 class HeroPlate(QWidget):

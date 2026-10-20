@@ -1504,13 +1504,9 @@ class MainWindow(BaseWindow):
 
     def _build_ui(self) -> None:
         """Assemble the tab bar, stacked settings panels and action buttons."""
-        # The proof sheet lies on the viewing booth: everything of the window sits on it.
-        central = design_a.Booth()
-        booth_box = QVBoxLayout(central)
-        booth_box.setContentsMargins(*(design_a.Booth.MARGIN,) * 4)
-        sheet = design_a.Sheet()
-        booth_box.addWidget(sheet)
-        layout = QVBoxLayout(sheet)
+        central = QWidget()
+        central.setAutoFillBackground(True)
+        layout = QVBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
@@ -3456,7 +3452,7 @@ class MainWindow(BaseWindow):
             lang.getstr("header"),
             self._HEADER_LOGO_INSET,
         )
-        banner.set_base_height(HEADER_BANNER_SIZE[1])
+        banner.set_base_height(60)
         # Matches the actual gradient sampled from ``theme/header@2x.png``: it
         # reaches its final blue by the vertical midpoint and stays flat below
         # that (a plain 2-stop linear gradient over-darkens the top half).
@@ -5163,7 +5159,7 @@ class MainWindow(BaseWindow):
             self.measurement_report_btn,
         ):
             button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-            button.setStyleSheet(self._ACTION_BUTTON_STYLE)
+            button.setProperty("primary", True)
             row.addWidget(button)
         row.addStretch(1)
         return bar

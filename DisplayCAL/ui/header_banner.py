@@ -80,6 +80,11 @@ def header_continuation_pixmap() -> QPixmap:
 
 def brand_icon_pixmap(size: int = 128) -> QPixmap:
     """Return the application icon (the approved symbol) at ``size`` px."""
+    master = config.get_data_path("theme/guide/logo_b.png")  # the approved symbol, 256 px
+    if isinstance(master, str):
+        pix = QPixmap(master)
+        if not pix.isNull():
+            return pix
     # Not every packaging ships every size: take the nearest larger one, then smaller.
     for candidate in (size, 256, 512, 72, 48, 32):
         path = config.get_data_path(f"theme/icons/{candidate}x{candidate}/displaycal.png")
@@ -145,33 +150,36 @@ class HeaderBanner(QWidget):
         painter.fillRect(rect, QColor(t.sheet))
         w, h = rect.width(), rect.height()
         pad = 28
-        # The colour strip: a thin accent along the top edge, not a ruler.
-        n = len(design_a.STRIP)
-        for i, hexcolor in enumerate(design_a.STRIP):
-            x0, x1 = round(i * w / n), round((i + 1) * w / n)
-            painter.fillRect(x0, 0, x1 - x0, 5, QColor(hexcolor))
-        side = min(h - 20, 44)
-        icon_rect = QRect(pad, (h - side) // 2 + 2, side, side)
+        side = 38
+        x = pad
+        y = (h - side) // 2
         if not self._icon.isNull():
-            if t.dark:
-                painter.setBrush(QColor(design_a.LIGHT.sheet))
+            if t.dark:  # the symbol is black: it sits on a soft light tile in the dark scheme
                 painter.setPen(Qt.NoPen)
-                painter.drawRoundedRect(icon_rect, 9, 9)
-                icon_rect = icon_rect.adjusted(4, 4, -4, -4)
-            painter.drawPixmap(icon_rect, self._icon)
-        text_x = pad + side + 12
-        title = design_a.sans_font(self._chrome_size(1.55), 800)
+                painter.setBrush(QColor("#e9eaee"))
+                painter.drawRoundedRect(QRect(x - 3, y - 3, side + 6, side + 6), 11, 11)
+            painter.drawPixmap(QRect(x, y, side, side), self._icon)
+        title = design_a.sans_font(self._chrome_size(1.4), 700)
         painter.setFont(title)
         fm = painter.fontMetrics()
         word = "DisplayCAL-CG"
-        base = (h - fm.height()) // 2 + fm.ascent() + 3
+        text_x = x + side + 12
+        base = (h - fm.height()) // 2 + fm.ascent()
         painter.setPen(QColor(t.ink))
         painter.drawText(text_x, base, word)
-        tag_x = text_x + fm.horizontalAdvance(word) + 18
-        room = w - pad - tag_x
-        if room > 160:
-            painter.setFont(design_a.sans_font(self._chrome_size(0.92), 400))
-            painter.setPen(QColor(t.ink2))
-            elided = painter.fontMetrics().elidedText(self._tagline, Qt.ElideRight, room)
-            painter.drawText(QRect(tag_x, 3, room, h), int(Qt.AlignLeft | Qt.AlignVCenter), elided)
+        # A fine spectral line, discreet, fading at both ends (the strip of the proof, calmed).
+        from qtpy.QtGui import QLinearGradient
+
+        lx0 = text_x + fm.horizontalAdvance(word) + 22
+        lx1 = w - pad - 120
+        if lx1 - lx0 > 80:
+            g = QLinearGradient(lx0, 0, lx1, 0)
+            stops = (design_a.BLUE, design_a.MAGENTA, design_a.RED, design_a.YELLOW, design_a.GREEN, design_a.CYAN)
+            fade = QColor(t.sheet)
+            fade.setAlpha(0)
+            g.setColorAt(0.0, fade)
+            for i, hexcolor in enumerate(stops):
+                g.setColorAt(0.08 + 0.84 * i / (len(stops) - 1), QColor(hexcolor))
+            g.setColorAt(1.0, fade)
+            painter.fillRect(QRect(int(lx0), h // 2 - 1, int(lx1 - lx0), 3), g)
         painter.end()

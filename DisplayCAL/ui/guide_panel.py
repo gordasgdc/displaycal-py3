@@ -21,7 +21,7 @@ from html import escape
 from typing import TYPE_CHECKING
 
 from qtpy.QtCore import QEvent, QPointF, QTimer, QRectF, QSize, Qt, Signal
-from qtpy.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen, QPixmap
+from qtpy.QtGui import QBrush, QColor, QFont, QFontMetrics, QLinearGradient, QPainter, QPen, QPixmap
 from qtpy.QtWidgets import (
     QBoxLayout,
     QButtonGroup,
@@ -147,12 +147,14 @@ class _Rail(QWidget):
         return lang.getstr(f"guide.step.{i + 1}")
 
     def _layout_cells(self) -> list[QRectF]:
-        fm = QFontMetrics(self.font())
+        bold_font = QFont(self.font())
+        bold_font.setWeight(QFont.Weight(700))
+        fm = QFontMetrics(bold_font)
         top = 1
         h = self._cell_h()
         pad = fm.height() * 0.5
         mark = fm.height() * 0.9
-        full = [fm.horizontalAdvance(self._label(i)) + 2 * pad + mark + pad * 0.6
+        full = [fm.horizontalAdvance(self._label(i)) + 2 * pad + mark * 1.6 + pad * 3.2
                 for i in range(STEPS)]
         width = float(self.width())
         self._compact = sum(full) > width
@@ -160,7 +162,7 @@ class _Rail(QWidget):
             extra = (width - sum(full)) / STEPS
             widths = [f + extra for f in full]
         else:
-            num = [fm.horizontalAdvance(str(i + 1)) + 2 * pad + mark + pad * 0.6
+            num = [fm.horizontalAdvance(str(i + 1)) + 2 * pad + mark * 1.6 + pad * 0.6
                    for i in range(STEPS)]
             widths = list(num)
             widths[self._current] = max(num[self._current], width - (sum(num) - num[self._current]))
@@ -218,32 +220,53 @@ class _Rail(QWidget):
                 return
 
     def paintEvent(self, _event: object) -> None:  # noqa: N802
+        """Numbered circles joined by fine lines; the current step is a graphite pill."""
         t = design_a.tokens()
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         font = QFont(self.font())
-        fm = QFontMetrics(font)
         bold = QFont(font)
         bold.setWeight(QFont.Weight(700))
-        for i, r in enumerate(self._layout_cells()):
+        rects = self._layout_cells()
+        d = QFontMetrics(font).height() * 1.45
+        for i, r in enumerate(rects):
             active, done = i == self._current, i < self._current
             reached = i <= self._reached
-            ink = QColor(t.ink if (active or reached) else t.ink2)
+            cy = r.center().y()
+            if i:  # the connector from the previous step
+                prev = rects[i - 1]
+                x0 = prev.right() - 6
+                x1 = r.left() + 4
+                p.setPen(QPen(QColor(t.ink2 if done or active else t.ink2), 1))
+                hair = QColor(t.ink)
+                hair.setAlpha(60)
+                p.setPen(QPen(hair, 1))
+                p.drawLine(QPointF(x0, cy), QPointF(x1, cy))
+            pill = QRectF(r.left() + 2, cy - d / 2 - 3, r.width() - 8, d + 6)
+            if active:
+                grad = QLinearGradient(0, pill.top(), 0, pill.bottom())
+                for stop, hexc in ((0.0, "#3b3e47"), (0.5, "#2c2f36"), (1.0, "#24262c")) if not t.dark else ((0.0, "#4a4d57"), (1.0, "#3b3e47")):
+                    grad.setColorAt(stop, QColor(hexc))
+                p.setPen(Qt.NoPen)
+                p.setBrush(QBrush(grad))
+                p.drawRoundedRect(pill, pill.height() / 2, pill.height() / 2)
             if active and self.hasFocus():
                 p.setPen(QPen(QColor(t.focus), 2))
                 p.setBrush(Qt.NoBrush)
-                p.drawRoundedRect(r.adjusted(1, 1, -1, -1), 4, 4)
-            cy, d = r.center().y(), 9.0
-            x = r.left() + 6
-            p.setPen(QPen(ink, 1.4))
-            p.setBrush(ink if (active or done) else Qt.NoBrush)
-            p.drawEllipse(QRectF(x, cy - d / 2, d, d))
-            p.setFont(bold if active else font)
-            p.setPen(ink)
-            text = lang.getstr(f"guide.step.{i + 1}") if (not self._compact or active) else str(i + 1)
-            text = QFontMetrics(bold if active else font).elidedText(text, Qt.ElideRight, int(r.right() - x - d - 14))
-            p.drawText(QRectF(x + d + 8, r.top(), r.right() - x - d - 8, r.height()),
-                       int(Qt.AlignVCenter | Qt.AlignLeft), text)
+                p.drawRoundedRect(pill.adjusted(-2, -2, 2, 2), pill.height() / 2 + 2, pill.height() / 2 + 2)
+            ink = QColor(t.patch_ink) if active else QColor(t.ink if reached else t.ink2)
+            circ = QRectF(pill.left() + 3, cy - d / 2, d, d)
+            p.setBrush(Qt.NoBrush)
+            p.setPen(QPen(ink, 1.3))
+            p.drawEllipse(circ)
+            p.setFont(bold)
+            p.drawText(circ, int(Qt.AlignCenter), "\u2713" if done else str(i + 1))
+            if not self._compact or active:
+                p.setFont(bold if active else font)
+                text = lang.getstr(f"guide.step.{i + 1}")
+                tx = circ.right() + 10
+                text = QFontMetrics(bold if active else font).elidedText(text, Qt.ElideRight, int(pill.right() - tx - 10))
+                p.drawText(QRectF(tx, r.top(), pill.right() - tx, r.height()), int(Qt.AlignVCenter | Qt.AlignLeft), text)
         p.end()
 
 
@@ -282,6 +305,11 @@ class GuidePanel(QWidget):
         self.advanced_btn = QPushButton(_m(_tr("guide.advanced")))
         self.advanced_btn.setCursor(Qt.PointingHandCursor)
         self.advanced_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        gear = design_a.icon_pixmap("gear", 18)
+        if gear is not None:
+            from qtpy.QtGui import QIcon
+
+            self.advanced_btn.setIcon(QIcon(gear))
         self.advanced_btn.clicked.connect(
             lambda: self.window_ref._select_tab("display_instrument")
         )
@@ -364,19 +392,19 @@ class GuidePanel(QWidget):
 
     # page 1 ----------------------------------------------------------------
     def _build_page_devices(self, lay: QVBoxLayout) -> None:
-        """Title, one sentence, the two choices, then on. The picture takes the other half."""
+        """Left (about 43 %): the choices. Right: the product image. Details stay folded."""
         left = QWidget()
         ll = QVBoxLayout(left)
-        ll.setContentsMargins(0, 8, 24, 0)
+        ll.setContentsMargins(0, 10, 28, 0)
         ll.setSpacing(0)
-        title = _label(_tr("guide.s1.title"), size=2.3, wrap=True)
-        text_scale.set_scaled_font(title, 2.3, weight=800)
+        title = _label(_tr("guide.s1.title"), size=2.2, wrap=True)
+        text_scale.set_scaled_font(title, 2.2, weight=800)
         ll.addWidget(title)
-        ll.addSpacing(10)
+        ll.addSpacing(8)
         self.subtitle.setText(_tr("guide.subtitle").split(". ")[0].rstrip(".") + ".")
-        text_scale.set_scaled_font(self.subtitle, 1.05)
+        text_scale.set_scaled_font(self.subtitle, 1.1)
         ll.addWidget(self.subtitle)
-        ll.addSpacing(26)
+        ll.addSpacing(20)
 
         self.monitor_combo = QComboBox()
         self.instrument_combo = QComboBox()
@@ -385,66 +413,94 @@ class GuidePanel(QWidget):
             # Long monitor/instrument names are elided, not a reason to widen the page.
             combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
             combo.setMinimumContentsLength(14)
-            text_scale.set_scaled_font(combo, 1.05)
-            text_scale.set_min_height(combo, 38)
-        ll.addWidget(_label(_tr("guide.s1.monitor"), size=0.95, muted=True))
-        ll.addSpacing(5)
-        ll.addWidget(self.monitor_combo)
-        ll.addSpacing(18)
-        ll.addWidget(_label(_tr("guide.s1.instrument"), size=0.95, muted=True))
-        ll.addSpacing(5)
-        ll.addWidget(self.instrument_combo)
+            text_scale.set_scaled_font(combo, 1.1)
+            text_scale.set_min_height(combo, 40)
+
+        def row(icon: str, label: str, widget: QWidget, note: QLabel | None = None) -> QWidget:
+            box = QWidget()
+            h = QHBoxLayout(box)
+            h.setContentsMargins(0, 0, 0, 0)
+            h.setSpacing(14)
+            pic = QLabel()
+            pic.setFixedWidth(text_scale.scale_px(34))
+            pic.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
+            pic.setProperty("_ico", icon)
+            h.addWidget(pic, 0, Qt.AlignTop)
+            col = QVBoxLayout()
+            col.setSpacing(5)
+            col.addWidget(_label(label, size=0.95, muted=True))
+            col.addWidget(widget)
+            if note is not None:
+                col.addWidget(note)
+            h.addLayout(col, 1)
+            self._ico_labels.append(pic)
+            return box
+
+        self._ico_labels: list[QLabel] = []
+        self.monitor_note = _label("", size=0.88, muted=True)
+        ll.addWidget(row("monitor", _tr("guide.s1.monitor"), self.monitor_combo, self.monitor_note))
+        ll.addSpacing(12)
+        # The detection line sits with the instrument: said once, from the real state.
+        self.ready_label = _label("", size=0.9, wrap=True)
+        ll.addWidget(row("probe", _tr("guide.s1.instrument"), self.instrument_combo, self.ready_label))
+        ll.addSpacing(12)
         # Which commercial model is it? Only asked when the identifier is shared
         # by several products; it changes the physical placement help, never
         # the measurement parameters.
-        self.model_box = QWidget()
-        mb = QVBoxLayout(self.model_box)
-        mb.setContentsMargins(0, 18, 0, 0)
-        mb.setSpacing(5)
-        mb.addWidget(_label(_tr("guide.s1.model_pick"), size=0.95, muted=True))
         self.model_combo = QComboBox()
         self.model_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         self.model_combo.setMinimumContentsLength(14)
-        text_scale.set_min_height(self.model_combo, 38)
+        text_scale.set_scaled_font(self.model_combo, 1.1)
+        text_scale.set_min_height(self.model_combo, 40)
         self.model_combo.currentIndexChanged.connect(self._model_changed)
-        mb.addWidget(self.model_combo)
+        self.model_box = row("model", _tr("guide.s1.model_pick"), self.model_combo)
         ll.addWidget(self.model_box)
-        ll.addSpacing(18)
-        # Detection: a quiet line (its text and colour come from the existing logic).
-        status = QHBoxLayout()
-        status.setSpacing(10)
-        self.ready_label = _label("", size=0.92, wrap=True)
         self.rescan_btn = QPushButton(_m(_tr("guide.s1.rescan")))
         self.rescan_btn.setFlat(True)
         self.rescan_btn.setCursor(Qt.PointingHandCursor)
         self.rescan_btn.clicked.connect(
             self.window_ref.detect_displays_and_ports_btn_handler
         )
-        status.addWidget(self.ready_label, 1)
-        status.addWidget(self.rescan_btn, 0, Qt.AlignRight | Qt.AlignTop)
-        ll.addLayout(status)
+        ll.addSpacing(6)
+        ll.addWidget(self.rescan_btn, 0, Qt.AlignLeft)
         # Not shown here: said once by the status line and the model selector above.
         self.ready_actions = _label("", size=1.0)
         self.model_hint = _label("", muted=True)
         self.action_label = _label("", size=1.0)
         self.summary_label = _label("", size=1.0)  # lives in the details
-        ll.addSpacing(8)
+        ll.addSpacing(4)
         ll.addWidget(_Disclosure(_tr("guide.s1.details"), self._make_details()))
         ll.addStretch(1)
         self.monitor_combo.currentIndexChanged.connect(self._monitor_changed)
+        self.monitor_combo.currentTextChanged.connect(self._monitor_note)
         self.instrument_combo.currentIndexChanged.connect(self._instrument_changed)
         self.mode_combo.currentIndexChanged.connect(self._mode_changed)
 
         right = QWidget()
         rl = QVBoxLayout(right)
         rl.setContentsMargins(0, 0, 0, 0)
-        rl.setSpacing(8)
-        rl.addWidget(design_a.HeroPlate(aspect=1.08, focus=0.50))
+        rl.setSpacing(6)
+        rl.addWidget(design_a.ProductImage(), 1)
         self.illustration = design_a.FigureFrame()  # per-instrument drawing (placement help)
         self.illustration_caption = _label(_tr("guide.place.kind.other"), size=0.85, muted=True)
+        self.illustration_caption.setAlignment(Qt.AlignHCenter)
         rl.addWidget(self.illustration_caption)
-        rl.addStretch(1)
-        lay.addWidget(_AdaptiveRow(left, right, threshold=760, ratio=(4, 5)))
+        lay.addWidget(_AdaptiveRow(left, right, threshold=760, ratio=(43, 57)))
+        self._paint_row_icons()
+        text_scale.bus.changed.connect(lambda _f: self._paint_row_icons())
+
+    def _paint_row_icons(self) -> None:
+        for lab in self._ico_labels:
+            pm = design_a.icon_pixmap(str(lab.property("_ico")), text_scale.scale_px(26))
+            if pm is not None:
+                lab.setPixmap(pm)
+
+    def _monitor_note(self, text: str) -> None:
+        """The resolution of the chosen monitor, as the system reports it."""
+        import re
+
+        m = re.search(r"(\d{3,5})\s*x\s*(\d{3,5})", text)
+        self.monitor_note.setText(f"{m.group(1)} \u00d7 {m.group(2)}" if m else "")
 
     def _make_details(self) -> QWidget:
         box = QWidget()
