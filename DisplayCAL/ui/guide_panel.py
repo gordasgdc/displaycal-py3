@@ -294,7 +294,6 @@ class GuidePanel(QWidget):
         self.title = _slug(_tr("guide.title"), strong=True, size=1.0)
         self.subtitle = _label(_tr("guide.subtitle"), muted=True)
         title_box.addWidget(self.title, 0, Qt.AlignLeft)
-        title_box.addWidget(self.subtitle, 0, Qt.AlignLeft)
         head.addLayout(title_box, 1)
         self.advanced_btn = QPushButton(_m(_tr("guide.advanced")))
         self.advanced_btn.setCursor(Qt.PointingHandCursor)
@@ -308,6 +307,9 @@ class GuidePanel(QWidget):
         head.addWidget(self.text_size_btn, 0, Qt.AlignTop)
         head.addWidget(self.advanced_btn, 0, Qt.AlignTop)
         root.addLayout(head)
+        # Full width, so it wraps to the room it really has (a label inside the head
+        # row would be cut when the window is narrow).
+        root.addWidget(self.subtitle)
 
         body = QBoxLayout(QBoxLayout.TopToBottom)
         body.setSpacing(12)

@@ -80,8 +80,14 @@ def header_continuation_pixmap() -> QPixmap:
 
 def brand_icon_pixmap(size: int = 128) -> QPixmap:
     """Return the application icon (the approved symbol) at ``size`` px."""
-    path = config.get_data_path(f"theme/icons/{size}x{size}/displaycal.png")
-    return QPixmap(path) if path else QPixmap()
+    # Not every packaging ships every size: take the nearest larger one, then smaller.
+    for candidate in (size, 256, 512, 72, 48, 32):
+        path = config.get_data_path(f"theme/icons/{candidate}x{candidate}/displaycal.png")
+        if path:
+            pix = QPixmap(path)
+            if not pix.isNull():
+                return pix
+    return QPixmap()
 
 
 class HeaderBanner(QWidget):

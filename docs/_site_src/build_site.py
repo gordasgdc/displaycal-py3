@@ -69,6 +69,9 @@ def prep_images(out_root: str) -> dict[str, tuple[int, int]]:
                 if hit:
                     save(f"{base}/{hit}", f"{key}-{lang}-{theme}", 1100 if key.startswith(("flow", "adv")) else 760)
     save(f"{EXT}/design/render/hero_A_remaster.png", "hero-render", 1500, 82)
+    for lang in ("ro", "en", "es"):
+        for n in range(1, 6):
+            save(f"{REPO}/docs/guides/img/{lang}/step{n}.png", f"gstep{n}-{lang}", 1100)
     fdir = os.path.join(out, "fonts"); os.makedirs(fdir, exist_ok=True)
     import shutil
     for fn in ("Archivo-VF.ttf", "B612Mono-Regular.ttf", "B612Mono-Bold.ttf"):
@@ -272,6 +275,7 @@ h2{font-family:"Archivo";font-stretch:106%;font-weight:800;letter-spacing:-.03em
 .stage figcaption,.cap{color:var(--mut)}
 .ill-tag,.real-tag,.demo-tag{display:inline-block;font:700 11px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:#fff;border-radius:0;padding:4px 7px;margin-right:8px;vertical-align:1px}
 .ill-tag{background:#16171a}.real-tag{background:#00794a}.demo-tag{background:#d4147a}
+.wcv{margin:26px 0;padding-top:14px;border-top:2px solid var(--text)}.wcv-fig{margin:14px 0}.wcv-fig img{width:100%;height:auto;display:block;border:1px solid var(--text)}.wcv-fig figcaption{font:400 .85rem/1.4 var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin-top:6px}.wcv-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px}.wcv-col h4{font:700 .8rem var(--mono);text-transform:uppercase;letter-spacing:.08em;margin:0 0 6px;border-top:3px solid var(--text);padding-top:6px}.wcv-limit{border:1px dashed var(--mut);padding:10px 12px}
 section.alt{background:transparent;border-block:1px solid var(--text)}
 .note{border-left:0;border:1px solid var(--text);padding:12px 16px;background:#fff}
 .callout{border-radius:0;box-shadow:0 0 0 1px var(--text);background:#fff}.callout.warn,.callout.ok{box-shadow:0 0 0 1px var(--text)}
@@ -566,7 +570,7 @@ def _web(text: str) -> str:
     return re.sub(r"<font face=['\"]Courier['\"]>(.*?)</font>", r"<code>\1</code>", text, flags=re.S)
 
 
-def blocks_html(blocks: list) -> str:
+def blocks_html(blocks: list, lang: str = "", sizes: dict | None = None, r: str = "") -> str:
     out = []
     for b in blocks:
         kind, val = b[0], b[1]
@@ -591,6 +595,20 @@ def blocks_html(blocks: list) -> str:
             title, text = val
             cls = {"info": "", "warn": " warn", "ok": " ok"}[kind]
             out.append(f'<aside class="callout{cls}" role="note"><strong>{title}</strong><p>{text}</p></aside>')
+        elif kind == "wcv":
+            lab_do, lab_why, lab_chk, lab_lim, lab_step = val["labels"]
+            name = f"gstep{val['n']}-{lang}"
+            fig = ""
+            if sizes and name in sizes:
+                w, h = sizes[name]
+                fig = (f'<figure class="wcv-fig"><img src="{r}{ASSETS}/{name}.webp" width="{w}" height="{h}" loading="lazy" alt="{E(val["fig"])}">'
+                       f'<figcaption>{E(val["fig"])}</figcaption></figure>')
+            cols = "".join(
+                f'<div class="wcv-col"><h4>{lab}</h4>' + "".join(f"<p>{x}</p>" for x in items) + "</div>"
+                for lab, items in ((lab_do, val["do"]), (lab_why, val["why"]), (lab_chk, val["check"]))
+            )
+            limit = f'<p class="wcv-limit"><strong>{lab_lim}.</strong> {val["limit"]}</p>' if val.get("limit") else ""
+            out.append(f'<div class="wcv"><h3>{val["n"]}. {val["title"]}</h3><p>{val["purpose"]}</p>{fig}<div class="wcv-cols">{cols}</div>{limit}</div>')
         # "img" blocks point to earlier screenshots of the old layout: left to the PDF
     return _web("".join(out))
 
@@ -610,7 +628,7 @@ def guide(lang: str, sizes: dict) -> str:
     })
     ids = [slug(s["h"]) for s in secs]
     toc = "".join(f'<li><a href="#{i}">{s["h"]}</a></li>' for i, s in zip(ids, secs))
-    art = "".join(f'<section id="{i}"><h2>{s["h"]}</h2>{blocks_html(s["blocks"])}</section>' for i, s in zip(ids, secs))
+    art = "".join(f'<section id="{i}"><h2>{s["h"]}</h2>{blocks_html(s["blocks"], lang, sizes, r)}</section>' for i, s in zip(ids, secs))
     home = f"{r}{S.PATHS[lang]['home']}"
     pdf = f"{r}{S.PDF[lang]}"
     body = (
