@@ -21,7 +21,7 @@ from __future__ import annotations
 from qtpy.QtCore import QObject, Signal
 from qtpy.QtGui import QColor, QFont, QFontDatabase
 from qtpy.QtCore import QSize
-from qtpy.QtWidgets import QApplication, QAbstractButton, QCheckBox, QLabel, QPushButton, QSizePolicy, QWidget
+from qtpy.QtWidgets import QApplication, QAbstractButton, QCheckBox, QComboBox, QLabel, QPushButton, QSizePolicy, QWidget
 
 from DisplayCAL import config
 
@@ -69,23 +69,52 @@ def base_points() -> float:
     return max(float(size) if size > 0 else MIN_BASE_POINTS, MIN_BASE_POINTS)
 
 
-def _match_style_to_size(app: QApplication, f: float) -> None:
+class _ComboStyleFilter(QObject):
     """macOS: a native pop-up button has a fixed height (about 22 pt), so at a
-    larger text size its label is cut off. Above Normal the standard Fusion
-    style is used (it grows with the text, as on Windows); at Normal the
-    native look is restored. Nothing else about the interface changes."""
+    larger text size its label is cut off. Above Normal, pop-up buttons use the
+    standard Fusion style (it grows with the text, as on Windows); at Normal
+    they keep the native look. Scroll bars, buttons and the rest stay native."""
+
+    def eventFilter(self, obj, event):  # noqa: N802, D102
+        from qtpy.QtCore import QEvent
+
+        if event.type() == QEvent.Polish and isinstance(obj, QComboBox):
+            _style_combo(obj)
+        return False
+
+
+def _fusion_style():
+    style = _state.get("fusion")
+    if style is None:
+        from qtpy.QtWidgets import QStyleFactory
+
+        style = _state["fusion"] = QStyleFactory.create("Fusion")
+    return style
+
+
+def _style_combo(combo: QComboBox) -> None:
     import sys
 
     if sys.platform != "darwin":
         return
-    from qtpy.QtWidgets import QStyleFactory
+    want = factor() > 1.0
+    if bool(combo.property("_fusion")) == want:
+        return
+    combo.setProperty("_fusion", want)
+    combo.setStyle(_fusion_style() if want else None)
 
-    native = _state.setdefault("native_style", app.style().objectName())
-    want = "Fusion" if f > 1.0 else native
-    if app.style().objectName().lower() != str(want).lower():
-        style = QStyleFactory.create(want)
-        if style is not None:
-            app.setStyle(style)
+
+def _match_style_to_size(app: QApplication, f: float) -> None:
+    import sys
+
+    if sys.platform != "darwin":
+        return
+    if "combo_filter" not in _state:
+        _state["combo_filter"] = _ComboStyleFilter(app)
+        app.installEventFilter(_state["combo_filter"])
+    for combo in app.allWidgets():
+        if isinstance(combo, QComboBox):
+            _style_combo(combo)
 
 
 def apply(level: str | None = None, persist: bool = False) -> float:
