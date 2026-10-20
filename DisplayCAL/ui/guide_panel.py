@@ -563,7 +563,7 @@ class GuidePanel(QWidget):
         awake_label.setTextInteractionFlags(Qt.NoTextInteraction)
         awake_label.mousePressEvent = lambda _e: self.awake_cb.toggle()
         awake_label.setCursor(Qt.PointingHandCursor)
-        awake_row.addWidget(awake_label, 1)
+        awake_row.addWidget(awake_label, 1, Qt.AlignLeft | Qt.AlignVCenter)
         lay.addLayout(awake_row)
         self.awake_note = _label("", muted=True)
         lay.addWidget(self.awake_note)

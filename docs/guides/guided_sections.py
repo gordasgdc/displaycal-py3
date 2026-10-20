@@ -949,11 +949,93 @@ _T = {
     },
 }
 
+import os as _os
+
+_YAML = {}
+
+
+def _y(lang: str, key: str) -> str:
+    """A string from the application's own language file (one source of truth)."""
+    if lang not in _YAML:
+        import yaml
+
+        path = _os.path.join(_os.path.dirname(__file__), "..", "..", "DisplayCAL", "lang", f"{lang}.yaml")
+        with open(path, encoding="utf-8") as f:
+            _YAML[lang] = yaml.safe_load(f)
+    return str(_YAML[lang][key]).strip()
+
+
+_EXTRA = {
+    "en": {
+        "results": ("What the results mean, and their limits",
+            "Verification measures a set of patches and compares them with what the profile predicts. It describes those patches, on that monitor, with that instrument, at that moment; it is not a certificate for every colour.",
+            "What is what", "Limits to keep in mind",
+            "Two more limits: a result obtained with one instrument says nothing about another, and a profile made with a long, drifting run is only as good as the stability of the screen during it. Verify after profiling and repeat if the screen has changed."),
+        "uninstall": ("Uninstall and where your data stays",
+            ["<b>macOS</b> — quit the application, then move DisplayCAL and the other tools (Curve Viewer, ICC Profile Info, Testchart Editor, 3D LUT Maker, Scripting Client, Synthetic ICC, VRML to X3D) from Applications to the Bin.",
+             "<b>Windows</b> — Settings → Apps → DisplayCAL-CG → Uninstall."],
+            "The application's data is not removed by either way, so you can reinstall without losing settings. To delete it too:",
+            ["macOS: <font face='Courier'>~/Library/Preferences/DisplayCAL</font> (settings), <font face='Courier'>~/Library/Application Support/DisplayCAL</font> (data and session records), <font face='Courier'>~/Library/Logs/DisplayCAL</font> (logs).",
+             "Windows: <font face='Courier'>%APPDATA%\\DisplayCAL</font> (settings, data and session records), <font face='Courier'>%LOCALAPPDATA%\\DisplayCAL\\Logs</font> (logs)."]),
+    },
+    "ro": {
+        "results": ("Ce înseamnă rezultatele și care le sunt limitele",
+            "Verificarea măsoară un set de patch-uri și le compară cu ce prezice profilul. Descrie acele patch-uri, pe acel monitor, cu acel instrument, în acel moment; nu este un certificat pentru fiecare culoare.",
+            "Ce este ce", "Limite de ținut minte",
+            "Încă două limite: un rezultat obținut cu un instrument nu spune nimic despre altul, iar un profil făcut dintr-o rulare lungă, cu derivă, este la fel de bun ca stabilitatea ecranului în acel timp. Verifică după profilare și repetă dacă ecranul s-a schimbat."),
+        "uninstall": ("Dezinstalare și unde rămân datele tale",
+            ["<b>macOS</b> — închide aplicația, apoi mută DisplayCAL și celelalte unelte (Curve Viewer, ICC Profile Info, Testchart Editor, 3D LUT Maker, Scripting Client, Synthetic ICC, VRML to X3D) din Applications în Coș.",
+             "<b>Windows</b> — Setări → Aplicații → DisplayCAL-CG → Dezinstalează."],
+            "Datele aplicației nu sunt șterse în niciunul dintre cazuri, deci poți reinstala fără să pierzi setările. Ca să le ștergi și pe ele:",
+            ["macOS: <font face='Courier'>~/Library/Preferences/DisplayCAL</font> (setări), <font face='Courier'>~/Library/Application Support/DisplayCAL</font> (date și înregistrările sesiunilor), <font face='Courier'>~/Library/Logs/DisplayCAL</font> (jurnale).",
+             "Windows: <font face='Courier'>%APPDATA%\\DisplayCAL</font> (setări, date și înregistrările sesiunilor), <font face='Courier'>%LOCALAPPDATA%\\DisplayCAL\\Logs</font> (jurnale)."]),
+    },
+    "es": {
+        "results": ("Qué significan los resultados y sus límites",
+            "La verificación mide un conjunto de parches y los compara con lo que predice el perfil. Describe esos parches, en ese monitor, con ese instrumento, en ese momento; no es un certificado para cada color.",
+            "Qué es qué", "Límites que conviene recordar",
+            "Dos límites más: un resultado obtenido con un instrumento no dice nada de otro, y un perfil hecho con una ejecución larga y con deriva es tan bueno como la estabilidad de la pantalla durante ella. Verifica tras perfilar y repite si la pantalla ha cambiado."),
+        "uninstall": ("Desinstalar y dónde quedan tus datos",
+            ["<b>macOS</b> — cierra la aplicación y mueve DisplayCAL y las demás herramientas (Curve Viewer, ICC Profile Info, Testchart Editor, 3D LUT Maker, Scripting Client, Synthetic ICC, VRML to X3D) de Aplicaciones a la Papelera.",
+             "<b>Windows</b> — Configuración → Aplicaciones → DisplayCAL-CG → Desinstalar."],
+            "Los datos de la aplicación no se borran en ningún caso, así que puedes reinstalar sin perder los ajustes. Para borrarlos también:",
+            ["macOS: <font face='Courier'>~/Library/Preferences/DisplayCAL</font> (ajustes), <font face='Courier'>~/Library/Application Support/DisplayCAL</font> (datos y registros de sesión), <font face='Courier'>~/Library/Logs/DisplayCAL</font> (registros).",
+             "Windows: <font face='Courier'>%APPDATA%\\DisplayCAL</font> (ajustes, datos y registros de sesión), <font face='Courier'>%LOCALAPPDATA%\\DisplayCAL\\Logs</font> (registros)."]),
+    },
+}
+
+
+def _extra_sections(lang: str) -> list[dict]:
+    r = _EXTRA[lang]
+    h, intro, what, lim, more = r["results"]
+    concepts = [
+        f"<b>{_y(lang, k)}</b> — {_y(lang, k + '.info')}"
+        for k in ("guide.concept.calibration", "guide.concept.profile", "guide.concept.curves", "guide.concept.lut3d")
+    ]
+    limits = [_y(lang, k) for k in ("guide.limit.color_management", "guide.limit.hdr", "guide.limit.multi_display")]
+    results = {
+        "h": h,
+        "blocks": [
+            ("p", _y(lang, "guide.s5.intro")),
+            ("p", intro),
+            ("h2", what),
+            ("ul", concepts),
+            ("h2", lim),
+            ("ul", limits),
+            ("p", more),
+        ],
+    }
+    uh, ul, p2, ul2 = r["uninstall"]
+    uninstall = {"h": uh, "blocks": [("ul", ul), ("p", p2), ("ul", ul2)]}
+    return [results, uninstall]
+
+
 
 def sections(lang: str) -> list[dict]:
     """Chapters for one language, in reading order."""
     t = _T[lang]
-    return [t[k] for k in ("guided", "prep", "plan", "recovery", "diag", "advanced", "lookup")]
+    res, uninst = _extra_sections(lang)
+    return [t["guided"], t["prep"], t["plan"], t["recovery"], res, t["diag"], t["advanced"], t["lookup"], uninst]
 
 
 def support_section(lang: str) -> dict:
