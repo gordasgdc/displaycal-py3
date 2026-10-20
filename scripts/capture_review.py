@@ -134,12 +134,25 @@ def main() -> int:
         for _ in range(3):
             app.processEvents()
 
+    heights = dict(kv.split("=") for kv in os.environ.get("SHOT_HEIGHTS", "").split(",") if "=" in kv)
+
     def save(widget, name, title, shows, simulated="", framed=True) -> None:
         if only and name not in only:
             return
+        if name in heights and widget is win:
+            win.resize(width, int(heights[name]))
         settle()
-        base = widget.grab().toImage()
-        band_h = 34
+        dpr = float(os.environ.get("CAPTURE_DPR", "1"))
+        if dpr == 1.0:
+            base = widget.grab().toImage()
+        else:
+            # Render into a 2x device: the text is drawn at full resolution, not scaled up.
+            base = QImage(round(widget.width() * dpr), round(widget.height() * dpr), QImage.Format_ARGB32)
+            base.setDevicePixelRatio(dpr)
+            base.fill(QColor("#ffffff"))
+            widget.render(base)
+            base.setDevicePixelRatio(1.0)
+        band_h = round(34 * dpr)
         img = QImage(base.width(), base.height() + band_h, QImage.Format_ARGB32)
         img.fill(QColor("#16171a"))
         p = QPainter(img)
@@ -147,8 +160,8 @@ def main() -> int:
         p.setPen(QColor("#f6f6f4"))
         from DisplayCAL.ui import design_a
 
-        p.setFont(design_a.mono_font(9.5, bold=True))
-        p.drawText(14, 23, BAND[code].upper())
+        p.setFont(design_a.mono_font(9.5 * dpr, bold=True))
+        p.drawText(round(14 * dpr), round(23 * dpr), BAND[code].upper())
         p.end()
         counter[0] += 1
         fn = f"{counter[0]:02d}_{name}.png"
@@ -171,12 +184,13 @@ def main() -> int:
         win._select_tab(key)
         settle()
 
-    from review_shots import dialogs, finish_dialog, run_shots  # noqa: E402  (next to this script)
+    from review_shots import dialogs, finish_dialog, run_shots, tools  # noqa: E402  (next to this script)
 
     import tempfile
 
     run_shots(win, g, app, save, tab, config, lang, settle, code)
     dialogs(win, g, app, save, config, lang, settle, code, tempfile.mkdtemp(dir=os.environ.get("TMPDIR")))
+    tools(win, app, save, config, lang, settle)
     finish_dialog(win, save, lang)
     with open(os.path.join(out_dir, "index.json"), "w", encoding="utf-8") as f:
         json.dump(index, f, ensure_ascii=False, indent=1)

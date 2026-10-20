@@ -17,6 +17,14 @@ def run_shots(win, g, app, save, tab, config, lang, settle, code) -> None:
         if step == 3:
             for cb in g.prepare._boxes.values():
                 cb.setChecked(True)
+            import os
+
+            demo_plan = os.environ.get("DEMO_PLAN")  # "10986:500" (demonstration chart size:block)
+            if demo_plan:
+                total, size = demo_plan.split(":")
+                win.testchart_patches_amount.setText(total)
+                config.setcfg("measurement.block_size", int(size))
+                win.refresh_plan_widgets()
         win._select_tab("guide")
         g.go(step)
         g.prepare.stop_motion()
@@ -165,6 +173,31 @@ def dialogs(win, g, app, save, config, lang, settle, code, tmp):
         w.close()
     except Exception as exc:  # noqa: BLE001
         print("testchart editor skipped:", exc)
+
+
+def tools(win, app, save, config, lang, settle):
+    """Auxiliary tool windows (empty, demonstration state; no profile, curve or device is touched)."""
+    from DisplayCAL.ui.tools.curve_viewer import CurveViewerWindow
+    from DisplayCAL.ui.tools.log_window import LogWindow
+    from DisplayCAL.ui.tools.lut3d import LUT3DWindow
+    from DisplayCAL.ui.tools.profile_info import ProfileInfoWindow
+    from DisplayCAL.ui.tools.synth_profile import SynthICCWindow
+
+    for name, factory, size, title in (
+        ("tool_synth_profile", SynthICCWindow, (900, 800), "Unealtă — Creează profil ICC sintetic"),
+        ("tool_lut3d", LUT3DWindow, (900, 860), "Unealtă — Creează LUT 3D (independent)"),
+        ("tool_profile_info", ProfileInfoWindow, (1100, 760), "Unealtă — Informații profil"),
+        ("tool_curve_viewer", CurveViewerWindow, (1000, 720), "Unealtă — Vizualizator de curbe"),
+        ("tool_log", LogWindow, (820, 520), "Unealtă — Jurnal"),
+    ):
+        try:
+            w = factory()
+            w.resize(*size)
+            w.show()
+            save(w, name, title, "Fereastra așa cum se deschide, fără date.", "Fără profil, curbă sau instrument.")
+            w.close()
+        except Exception as exc:  # noqa: BLE001
+            print(f"{name} skipped:", exc)
 
 
 def finish_dialog(win, save, lang):

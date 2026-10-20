@@ -48,7 +48,6 @@ from DisplayCAL.ui.plot.colorspaces import COLORSPACES
 from DisplayCAL.ui.plot.curve_data import CURVE_MODES, available_curve_modes
 from DisplayCAL.ui.plot.gamut import GamutPlot
 from DisplayCAL.ui.plot.gamut_data import compute_profile_gamut, is_supported
-from DisplayCAL.ui.theme import label_color
 from DisplayCAL.ui.tools.curve_viewer import INTENTS, CurvePanel
 from DisplayCAL.util_os import launch_file, make_win32_compatible_long_path, waccess
 from DisplayCAL.worker import Worker
@@ -78,6 +77,8 @@ _BROWSE_COMPARISON = "browse"
 #: dialog on its own fixed dark-grey scheme rather than following the OS
 #: light/dark theme the rest of the Qt UI uses.
 _BGCOLOUR = "#333333"
+#: Secondary text on that neutral dark ground (the app text colour may be dark).
+_LABEL_ON_DARK = "#b9bcc4"
 
 
 def _bounded_combo(contents_length: int = 16) -> QComboBox:
@@ -418,7 +419,7 @@ class ProfileInfoWindow(BaseWindow):
             QLabel: The styled marker label.
         """
         label = QLabel(text)
-        label.setStyleSheet(f"color: {label_color(self).name()};")
+        label.setStyleSheet(f"color: {_LABEL_ON_DARK};")
         label.setAlignment(Qt.AlignCenter)
         return label
 
@@ -452,7 +453,7 @@ class ProfileInfoWindow(BaseWindow):
             )
         )
         for legend in (self.whitepoint_legend, self.comparison_whitepoint_legend):
-            legend.setStyleSheet(f"color: {label_color(self).name()};")
+            legend.setStyleSheet(f"color: {_LABEL_ON_DARK};")
         legend_row = QHBoxLayout()
         legend_row.addStretch(1)
         legend_row.addWidget(self.whitepoint_legend)
@@ -615,6 +616,7 @@ class ProfileInfoWindow(BaseWindow):
         central.setAutoFillBackground(True)
         palette = central.palette()
         palette.setColor(QPalette.Window, QColor(_BGCOLOUR))
+        palette.setColor(QPalette.WindowText, QColor("#dadde3"))
         central.setPalette(palette)
         layout = QVBoxLayout(central)
         layout.addWidget(splitter, 1)
@@ -882,7 +884,7 @@ class ProfileInfoWindow(BaseWindow):
         rows = list(profile.get_info())
         if computing:
             rows.append((lang.getstr("please_wait"), ""))
-        grey = label_color(self)
+        grey = QColor(_LABEL_ON_DARK)
         self.info.setRowCount(len(rows))
         for row, (label, value) in enumerate(rows):
             # Property (label) column uses the grey secondary text colour, as

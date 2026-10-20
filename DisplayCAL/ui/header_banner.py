@@ -170,6 +170,10 @@ class HeaderBanner(QWidget):
         side = min(band_h, 48)
         if not self._icon.isNull():
             icon_rect = QRect(pad, band_top + (band_h - side) // 2, side, side)
+            if t.dark:
+                # the symbol is black: on the dark sheet it sits on a paper chip
+                painter.fillRect(icon_rect, QColor(design_a.LIGHT.sheet))
+                icon_rect = icon_rect.adjusted(3, 3, -3, -3)
             painter.drawPixmap(icon_rect, self._icon)
         text_x = pad + side + 10
         title = design_a.sans_font(self._chrome_size(1.75), 800)

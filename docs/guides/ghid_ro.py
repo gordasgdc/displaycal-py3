@@ -6,7 +6,7 @@
 CONTENT = {
     "title": "Ghid de utilizare DisplayCAL-CG",
     "subtitle": "Calibrare și profilare de monitor, pas cu pas — ediția GDC",
-    "note": "Versiune document 2.0 · bazat pe DisplayCAL-CG 3.10.0.dev82-cg.4",
+    "note": "Versiune document 3.0 · bazat pe DisplayCAL-CG 3.10.0.dev82-cg.5",
     "toc_title": "Cuprins",
     "cover_subtitle": "Calibrare și caracterizare monitor pe baza ArgyllCMS",
     "cover_version_label": "Versiune aplicație",
@@ -434,6 +434,8 @@ CONTENT = {
 # and after the licence chapter.
 from guided_sections import sections, support_section  # noqa: E402
 
-CONTENT["sections"][2:2] = sections("ro")
+import guided_pages  # noqa: E402
+
+CONTENT["sections"][2:2] = [guided_pages.section("ro")] + sections("ro")
 _i = next(i for i, sec in enumerate(CONTENT["sections"]) if "GPLv3" in sec["h"])
 CONTENT["sections"].insert(_i + 1, support_section("ro"))

@@ -19,7 +19,7 @@ import subprocess
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-FONTS = os.path.abspath(os.path.join(HERE, "..", "..", "DisplayCAL", "theme", "fonts"))
+FONTS = os.path.join(HERE, "fonts")  # static instances (a variable font loses its text mapping in PDF)
 IMG_DIR = os.path.join(HERE, "img")
 BRAVE = "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
 
@@ -39,7 +39,11 @@ def _strip_gradient() -> str:
 
 
 CSS = """
-@font-face{font-family:"Archivo";src:url("file://@@fonts@@/Archivo-VF.ttf");font-weight:100 900;font-stretch:62% 125%}
+@font-face{font-family:"Archivo";src:url("file://@@fonts@@/Archivo-400.ttf");font-weight:400}
+@font-face{font-family:"Archivo";src:url("file://@@fonts@@/Archivo-500.ttf");font-weight:500}
+@font-face{font-family:"Archivo";src:url("file://@@fonts@@/Archivo-700.ttf");font-weight:700}
+@font-face{font-family:"Archivo";src:url("file://@@fonts@@/Archivo-800.ttf");font-weight:800}
+@font-face{font-family:"Archivo Wide";src:url("file://@@fonts@@/Archivo-800-wide.ttf");font-weight:800}
 @font-face{font-family:"B612 Mono";src:url("file://@@fonts@@/B612Mono-Regular.ttf");font-weight:400}
 @font-face{font-family:"B612 Mono";src:url("file://@@fonts@@/B612Mono-Bold.ttf");font-weight:700}
 @page{size:210mm 297mm;margin:25mm 15mm 19mm 15mm;
@@ -54,11 +58,12 @@ body{margin:0;font:400 10pt/1.5 "Archivo",sans-serif;color:#16171a;background:tr
 .mono{font-family:"B612 Mono",monospace;letter-spacing:.07em;text-transform:uppercase}
 a{color:#16171a;text-decoration:underline;text-underline-offset:.5mm}
 b{font-weight:700}
+.tok{font-size:1px;color:transparent;position:absolute}
 .chap{break-before:page}
 .chap:first-of-type{break-before:auto}
 .head{display:flex;gap:6mm;align-items:flex-end;border-bottom:.45mm solid #16171a;padding-bottom:3.6mm;margin:0 0 5mm}
 .num{font:800 50pt/.78 "Archivo";letter-spacing:-.04em}
-h1{font:800 22pt/1.04 "Archivo";font-stretch:106%;letter-spacing:-.025em;margin:0;break-after:avoid}
+h1{font:800 22pt/1.04 "Archivo Wide","Archivo";letter-spacing:-.025em;margin:0;break-after:avoid}
 h2{font:800 13pt/1.2 "Archivo";letter-spacing:-.01em;margin:6mm 0 2.2mm;padding-bottom:1.4mm;border-bottom:.2mm solid rgba(22,23,26,.35);break-after:avoid}
 p{margin:0 0 2.8mm;orphans:3;widows:3}
 ul{margin:0 0 3mm;padding:0;list-style:none}
@@ -87,6 +92,18 @@ figure .reg::before,figure .reg::after{content:"";position:absolute;background:#
 figure .reg::before{left:-1.4mm;right:-1.4mm;top:2.3mm;height:.25mm}figure .reg::after{top:-1.4mm;bottom:-1.4mm;left:2.3mm;width:.25mm}
 figcaption{display:flex;gap:3mm;margin-top:1.8mm;color:#4a4c52;font-size:8pt;line-height:1.4}
 figcaption .mono{color:#16171a;white-space:nowrap;font-size:7pt;padding-top:.3mm}
+.wcv{break-before:page}
+.wcv .slugline{color:#4a4c52;font-size:7.2pt}
+.wcv .slugline b{color:#16171a}
+h2.wcvh{display:flex;align-items:baseline;gap:4mm;font:800 20pt/1.05 "Archivo";letter-spacing:-.025em;border-bottom:.45mm solid #16171a;padding-bottom:2.4mm;margin:2mm 0 3mm}
+h2.wcvh .wn{font:800 34pt/.8 "Archivo";letter-spacing:-.04em}
+.purpose{font:500 10.6pt/1.4 "Archivo";margin:0 0 3mm}
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:5mm;margin-top:3mm}
+.blk{border-top:.6mm solid #16171a;padding-top:2mm}
+.blk h3{font:700 7.6pt "B612 Mono";letter-spacing:.08em;text-transform:uppercase;margin:0 0 2mm;display:flex;align-items:center;gap:2mm}
+.blk h3 i{width:5mm;height:5mm;border-radius:50%;border:.3mm solid #16171a;display:grid;place-items:center;font-style:normal;font-size:6.8pt}
+.blk p{margin:0 0 1.6mm;font-size:8.8pt;line-height:1.4}
+.blk.why,.blk.chk{border-top-color:#8a8c92}
 .tocp{break-before:page}
 .toc{list-style:none;margin:6mm 0 0;padding:0}
 .toc li::before{content:none}
@@ -125,9 +142,42 @@ def _fig(block_args: tuple, ctx: dict) -> str:
     ctx["fig_in"] += 1
     return (
         f'<figure><div class="fig"><img src="file://{html.escape(path)}" alt="">'
-        '<span class="reg" style="right:2.2mm;top:2.2mm"></span>'
-        '<span class="reg" style="left:2.2mm;bottom:2.2mm"></span></div>'
+        '<span class="reg" style="right:-2.6mm;top:-2.6mm"></span>'
+        '<span class="reg" style="left:-2.6mm;bottom:-2.6mm"></span></div>'
         f'<figcaption><span class="mono">{ctx["fig_word"]} {label}</span><span>{_markup(caption)}</span></figcaption></figure>'
+    )
+
+
+def _tok(ctx: dict, title: str) -> str:
+    """Register a contents entry; the hidden token lets pass 2 find its page."""
+    n = sum(1 for c, _ in ctx["h2s"] if c == ctx["chapter"])
+    ctx["h2s"].append((ctx["chapter"], title))
+    return f'<span class="tok">§h{ctx["chapter"]}_{n}§</span>'
+
+
+def _wcv(d: dict, ctx: dict) -> str:
+    """One guided step as a page: head, figure, then what you do / why / what you check."""
+    do_l, why_l, chk_l, lim_l, step_w = d["labels"]
+    path = os.path.join(ctx["img_dir"], d["img"])
+    fig = ""
+    if os.path.exists(path):
+        fig = (
+            f'<figure><div class="fig"><img src="file://{html.escape(path)}" alt="">'
+            '<span class="reg" style="right:-2.6mm;top:-2.6mm"></span>'
+            '<span class="reg" style="left:-2.6mm;bottom:-2.6mm"></span></div>'
+            f'<figcaption><span class="mono">{ctx["fig_word"]} {ctx["chapter"]}.{d["n"]}</span>'
+            f'<span>{_markup(d["fig"])}</span></figcaption></figure>'
+        )
+    def col(cls: str, label: str, items: list, mark: str) -> str:
+        lis = "".join(f"<p><b>{i}.</b> {_markup(t)}</p>" if cls == "do" else f"<p>{_markup(t)}</p>" for i, t in enumerate(items, 1))
+        return f'<div class="blk {cls}"><h3><i>{mark}</i>{label}</h3>{lis}</div>'
+    limit = f'<div class="limit"><span class="mono">{lim_l}</span> {_markup(d["limit"])}</div>' if d.get("limit") else ""
+    tok = _tok(ctx, d["title"])
+    return (
+        f'<div class="wcv">{tok}<div class="slugline mono"><b>{step_w} {d["n"]} / 5</b></div>'
+        f'<h2 class="wcvh"><span class="wn">{d["n"]:02d}</span>{_markup(d["title"])}</h2>'
+        f'<p class="purpose">{_markup(d["purpose"])}</p>{fig}'
+        f'<div class="three">{col("do", do_l, d["do"], "↗")}{col("why", why_l, d["why"], "?")}{col("chk", chk_l, d["check"], "✓")}</div>{limit}</div>'
     )
 
 
@@ -136,8 +186,7 @@ def _block(block: tuple, ctx: dict) -> str:
     if kind == "p":
         return f"<p>{_markup(block[1])}</p>"
     if kind == "h2":
-        ctx["h2s"].append((ctx["chapter"], block[1]))
-        return f"<h2>{_markup(block[1])}</h2>"
+        return f"<h2>{_tok(ctx, block[1])}{_markup(block[1])}</h2>"
     if kind == "ul":
         return "<ul>" + "".join(f"<li>{_markup(t)}</li>" for t in block[1]) + "</ul>"
     if kind == "code":
@@ -154,12 +203,14 @@ def _block(block: tuple, ctx: dict) -> str:
     if kind in ("info", "warn", "ok"):
         tag, text = block[1]
         return f'<div class="call {kind}"><span class="tag">{_markup(tag)}</span><div class="body">{_markup(text)}</div></div>'
+    if kind == "wcv":
+        return _wcv(block[1], ctx)
     if kind == "pagebreak":
         return '<div style="break-after:page"></div>'
     return ""
 
 
-def render_html(content: dict, lang: str, toc_pages: dict | None = None, img_dir: str = IMG_DIR) -> str:
+def render_html(content: dict, lang: str, toc_pages: dict | None = None, img_dir: str = IMG_DIR, tokens: bool = True) -> str:
     """The whole interior (title page, contents, chapters) as one HTML document."""
     ctx = {
         "h2s": [], "img_dir": img_dir, "chapter": 0, "fig_in": 1,
@@ -170,7 +221,7 @@ def render_html(content: dict, lang: str, toc_pages: dict | None = None, img_dir
         ctx["chapter"], ctx["fig_in"] = idx, 1
         body = "".join(_block(b, ctx) for b in sec["blocks"])
         chapters.append(
-            f'<section class="chap" id="c{idx}"><div class="head"><span class="num">{idx:02d}</span>'
+            f'<section class="chap" id="c{idx}"><span class="tok">§c{idx}§</span><div class="head"><span class="num">{idx:02d}</span>'
             f"<h1>{_markup(sec['h'])}</h1></div>{body}</section>"
         )
     toc_pages = toc_pages or {}
@@ -178,12 +229,12 @@ def render_html(content: dict, lang: str, toc_pages: dict | None = None, img_dir
     for idx, sec in enumerate(content["sections"], 1):
         toc_rows.append(
             f'<li class="l1"><span class="n">{idx:02d}</span><span class="t">{_markup(sec["h"])}</span>'
-            f'<span class="p">{toc_pages.get(("c", idx), "")}</span></li>'
+            f'<span class="p">{toc_pages.get(f"c{idx}", "")}</span></li>'
         )
         for n, (chap, h) in enumerate([x for x in ctx["h2s"] if x[0] == idx]):
             toc_rows.append(
                 f'<li class="l2"><span class="n"></span><span class="t">{_markup(h)}</span>'
-                f'<span class="p">{toc_pages.get(("h", idx, n), "")}</span></li>'
+                f'<span class="p">{toc_pages.get(f"h{idx}_{n}", "")}</span></li>'
             )
     title = (
         '<section class="title"><div class="head"><h1>'
@@ -201,10 +252,11 @@ def render_html(content: dict, lang: str, toc_pages: dict | None = None, img_dir
     css = CSS
     for key, value in values.items():
         css = css.replace(f"@@{key}@@", value)
-    return (
+    out = (
         f'<!doctype html><html lang="{lang}"><meta charset="utf-8"><title>{html.escape(content["title"])}</title>'
         f"<style>{css}</style><body>{title}{toc}{''.join(chapters)}</body></html>"
     )
+    return out if tokens else re.sub(r'<span class="tok">[^<]*</span>', "", out)
 
 
 def html_to_pdf(html_path: str, pdf_path: str) -> None:
@@ -217,24 +269,22 @@ def html_to_pdf(html_path: str, pdf_path: str) -> None:
     )
 
 
-def page_of_titles(pdf_path: str, titles: dict) -> dict:
-    """Find the page where each title first appears after the contents page(s)."""
+def page_of_titles(pdf_path: str, tokens: list) -> dict:
+    """Page number (1-based) of each hidden token (``§c3§``, ``§h3_0§``)."""
     from pypdf import PdfReader
 
-    reader = PdfReader(pdf_path)
-    texts = [re.sub(r"\s+", " ", (p.extract_text() or "")) for p in reader.pages]
+    texts = [p.extract_text() or "" for p in PdfReader(pdf_path).pages]
     found: dict = {}
-    start = 2  # the title page and the contents are never targets
-    for key, text in titles.items():
-        needle = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", text)).strip()
-        for i in range(start, len(texts)):
-            if needle and needle in texts[i]:
-                found[key] = i + 1
+    for tok in tokens:
+        for i, text in enumerate(texts):
+            if f"§{tok}§" in text:
+                found[tok] = i + 1
                 break
     return found
 
 
-def build(lang: str, out_path: str, content: dict, img_dir: str = IMG_DIR) -> None:
+def build(lang: str, out_path: str, content: dict, img_dir: str | None = None) -> None:
+    img_dir = img_dir or os.path.join(IMG_DIR, lang)
     """Two passes: lay out, read the page numbers, lay out again with the contents filled."""
     tmp = tempfile.mkdtemp(prefix="guide_")
     h1 = os.path.join(tmp, "g.html")
@@ -242,16 +292,15 @@ def build(lang: str, out_path: str, content: dict, img_dir: str = IMG_DIR) -> No
     html_doc = render_html(content, lang, None, img_dir)
     open(h1, "w", encoding="utf-8").write(html_doc)
     html_to_pdf(h1, pdf1)
-    titles: dict = {}
-    h2_by_chapter: dict = {}
+    tokens = []
     for idx, sec in enumerate(content["sections"], 1):
-        titles[("c", idx)] = sec["h"]
+        tokens.append(f"c{idx}")
         n = 0
-        for b in sec["blocks"]:
-            if b[0] == "h2":
-                titles[("h", idx, n)] = b[1]
+        for blk in sec["blocks"]:
+            if blk[0] in ("h2", "wcv"):
+                tokens.append(f"h{idx}_{n}")
                 n += 1
-    pages = page_of_titles(pdf1, titles)
-    open(h1, "w", encoding="utf-8").write(render_html(content, lang, pages, img_dir))
+    pages = page_of_titles(pdf1, tokens)
+    open(h1, "w", encoding="utf-8").write(render_html(content, lang, pages, img_dir, tokens=False))
     html_to_pdf(h1, out_path)
-    print(f"OK: {out_path} ({len(pages)} titluri în cuprins)")
+    print(f"OK: {out_path} ({len(pages)}/{len(tokens)} intrări în cuprins)")

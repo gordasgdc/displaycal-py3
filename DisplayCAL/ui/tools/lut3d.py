@@ -71,6 +71,7 @@ from DisplayCAL.icc_profile import (
     VideoCardGammaType,
 )
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import design_a
 from DisplayCAL.ui import message_box
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.assets import get_theme_pixmap
@@ -544,7 +545,7 @@ class LUT3DWindow(BaseWindow):
         self.lut3d_input_value_clipping_label = QLabel(
             lang.getstr("warning.input_value_clipping")
         )
-        self.lut3d_input_value_clipping_label.setStyleSheet("color: #F07F00")
+        self.lut3d_input_value_clipping_label.setStyleSheet(f"color: {design_a.tokens().warn}")
         self.lut3d_input_value_clipping_label.setVisible(False)
         none_layout.addWidget(self.lut3d_input_value_clipping_label)
         none_layout.addStretch(1)
@@ -1498,7 +1499,7 @@ class LUT3DWindow(BaseWindow):
         diffuse_tgt_cdm2 = (
             colormath.special_pow(bt2390.apply(diffuse_PQ), -2084) * 10000
         )
-        color = "#CC0000" if diffuse_tgt_cdm2 < diffuse_ref_cdm2 else "#008000"
+        color = design_a.tokens().bad if diffuse_tgt_cdm2 < diffuse_ref_cdm2 else design_a.tokens().ok
         self.lut3d_hdr_diffuse_white_txt.setStyleSheet(f"color: {color}")
         self.lut3d_hdr_diffuse_white_txt.setText(f"{diffuse_tgt_cdm2:.2f}")
 

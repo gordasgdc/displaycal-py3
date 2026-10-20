@@ -178,7 +178,7 @@ def page_head(number: int, title: str) -> QWidget:
     name = label(title, size=1.7, wrap=True)
     text_scale.set_scaled_font(name, 1.7, weight=800)
     row.addWidget(num, 0, Qt.AlignBottom)
-    row.addWidget(name, 1, Qt.AlignBottom)
+    row.addWidget(name, 1, Qt.AlignBottom | Qt.AlignLeft)
     col.addLayout(row)
     col.addWidget(design_a.Rule(2))
     return box

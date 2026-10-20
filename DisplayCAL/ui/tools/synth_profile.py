@@ -79,6 +79,7 @@ from DisplayCAL.icc_profile import (
 )
 from DisplayCAL.log import LOG
 from DisplayCAL.meta import NAME as APPNAME
+from DisplayCAL.ui import design_a
 from DisplayCAL.ui import message_box
 from DisplayCAL.ui.application import Application
 from DisplayCAL.ui.base_window import BaseWindow
@@ -856,7 +857,7 @@ class SynthICCWindow(BaseWindow):
         diffuse_tgt_cdm2 = (
             colormath.special_pow(bt2390.apply(diffuse_PQ), -2084) * 10000
         )
-        color = "#CC0000" if diffuse_tgt_cdm2 < diffuse_ref_cdm2 else "#008000"
+        color = design_a.tokens().bad if diffuse_tgt_cdm2 < diffuse_ref_cdm2 else design_a.tokens().ok
         self.lut3d_hdr_diffuse_white_txt.setStyleSheet(f"color: {color}")
         self.lut3d_hdr_diffuse_white_txt.setText(f"{diffuse_tgt_cdm2:.2f}")
 
