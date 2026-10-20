@@ -670,8 +670,21 @@ class ProductImage(QWidget):
 
         found = config.get_data_path("theme/guide/monitor_spectral.png")
         self._pix = QPixmap(found) if isinstance(found, str) else QPixmap()
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
-        self.setMinimumHeight(120)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.setMinimumHeight(0)
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802
+        return not self._pix.isNull()
+
+    def heightForWidth(self, w: int) -> int:  # noqa: N802
+        # when the page stacks (narrow window) the picture keeps its own proportions
+        return int(w * self._pix.height() / self._pix.width()) if not self._pix.isNull() else 0
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return QSize(420, self.heightForWidth(420))
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return QSize(120, 0)
 
     def paintEvent(self, _event: object) -> None:  # noqa: N802
         if self._pix.isNull():
