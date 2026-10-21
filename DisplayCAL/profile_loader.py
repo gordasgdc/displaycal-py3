@@ -106,6 +106,8 @@ if sys.platform == "win32":
         MONITORINFOF_PRIMARY,
         USE_REGISTRY,
         calibration_management_isenabled,
+        disable_calibration_management,
+        enable_calibration_management,
         enable_per_user_profiles,
         get_active_display_device,
         get_active_display_devices,
@@ -132,6 +134,14 @@ else:
     def calibration_management_isenabled() -> bool:
         """Stub for non-Windows platforms."""
         return False
+
+    def disable_calibration_management() -> None:
+        """Stub for non-Windows platforms."""
+        raise NotImplementedError
+
+    def enable_calibration_management() -> bool:
+        """Stub for non-Windows platforms."""
+        raise NotImplementedError
 
 
 if TYPE_CHECKING:
@@ -5208,6 +5218,44 @@ def get_profile_desc(
             return f"{profile_desc} ({basename})"
         return profile_desc
     return profile_path
+
+
+def run_install_step(argv: list[str] | None = None) -> int | None:
+    """Run a Windows installer step, if ``--install-step=<step>`` was given.
+
+    The installer starts the executable elevated, so the logon task can be
+    created and the Windows calibration management switched. ``displaycal``:
+    calibration loading is handled by this application (Windows' own
+    management off, logon task created); ``os``: handled by Windows.
+
+    Args:
+        argv (list[str] | None): Arguments; defaults to ``sys.argv[1:]``.
+
+    Returns:
+        int | None: ``None`` if no step was requested, else the exit code
+            (0 done, 1 failed, 2 unknown step).
+    """
+    argv = sys.argv[1:] if argv is None else argv
+    steps = [arg.split("=", 1)[1] for arg in argv if arg.startswith("--install-step=")]
+    if not steps:
+        return None
+    step = steps[0]
+    print(f"Installer step: {step}")
+    try:
+        if step == "displaycal":
+            if calibration_management_isenabled():
+                disable_calibration_management()
+            setup_profile_loader_task(EXE, EXEDIR, PYDIR)
+        elif step == "os":
+            if not calibration_management_isenabled():
+                enable_calibration_management()
+        else:
+            print(f"Unknown installer step: {step}")
+            return 2
+    except Exception:
+        print(f"Installer step {step} failed:", traceback.format_exc())
+        return 1
+    return 0
 
 
 def main() -> None:

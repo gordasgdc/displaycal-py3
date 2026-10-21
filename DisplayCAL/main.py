@@ -67,6 +67,7 @@ elif sys.platform == "darwin":
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from types import TracebackType
+
     if sys.version_info >= (3, 11):
         from typing import Self
     else:
@@ -962,6 +963,14 @@ def main(module: None | str = None) -> None:
     mp.freeze_support()
     if mp.current_process().name != "MainProcess":
         return
+    if module == "apply-profiles" and sys.platform == "win32":
+        # Installer steps (logon task, calibration management); run before
+        # the instance lock so they work while a loader is running.
+        from DisplayCAL.profile_loader import run_install_step
+
+        result = run_install_step()
+        if result is not None:
+            sys.exit(result)
     name = f"{APPBASENAME}-{module}" if module else APPBASENAME
     app_lock_file_name = os.path.join(CONFIG_HOME, f"{name}.lock")
     try:

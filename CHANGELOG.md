@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.10.0.dev82-cg.7
+
+- Windows: the profile loader (the tray component that applies your calibration when you sign in) no longer stops at start-up with an error, applies the calibration curves, and keeps running when you open its tray menu.
+- Windows: the installer now sets up the sign-in task and your choice of who loads the calibration reliably.
+
 ## 3.10.0.dev82-cg.6
 
 - New look across the application, in light and dark: ivory and graphite surfaces, satin selectors and buttons with fine edges, a compact header with the symbol and a discreet spectral line, five steps shown as numbered circles with the current step highlighted, a clean product image of a monitor, and quieter secondary text. Fonts Archivo and B612 Mono (SIL Open Font License) are bundled.
