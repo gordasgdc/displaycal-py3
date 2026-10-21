@@ -46,7 +46,9 @@ cross-platform equivalent.
 
 from __future__ import annotations
 
+import ctypes
 import os
+import subprocess
 import sys
 import threading
 from typing import Callable
@@ -549,6 +551,7 @@ class QtProfileLoader(profile_loader.ProfileLoader):
     """
 
     tray: ApplyProfilesTrayIcon | None
+    _own_windows: tuple | list = ()
 
     def _bootstrap_app(self) -> None:
         """No-op: the Qt ``Application`` is already constructed by :func:`main`."""
@@ -579,6 +582,11 @@ class QtProfileLoader(profile_loader.ProfileLoader):
             # tray menu's own _is_other_running() checks) excludes our own
             # process by pid.
             self._pid = os.getpid()
+            self._setup_gdi32()
+            self._refresh_own_windows()
+            self._own_windows_timer = QTimer()
+            self._own_windows_timer.timeout.connect(self._refresh_own_windows)
+            self._own_windows_timer.start(250)
             self._check_display_conf_thread = threading.Thread(
                 target=self._check_display_conf_wrapper,
                 name="DisplayConfigurationMonitoring",
@@ -596,6 +604,24 @@ class QtProfileLoader(profile_loader.ProfileLoader):
                 name="MacOSVideoLUTWatch",
                 daemon=True,
             ).start()
+
+    def _setup_gdi32(self) -> None:
+        """Load the GDI gamma-ramp API used to apply the calibration curves.
+
+        Matches wx's ``setup_taskbar_icon()``, which the Qt ``_setup_ui``
+        replaces: the inherited ``SetDeviceGammaRamp``/``GetDeviceGammaRamp``
+        calls read ``self.gdi32``. ``None`` (with a balloon explaining why)
+        when the API cannot be loaded, which the inherited code handles.
+        """
+        try:
+            self.gdi32 = ctypes.windll.gdi32
+            self.gdi32.GetDeviceGammaRamp.restype = ctypes.c_bool
+            self.gdi32.SetDeviceGammaRamp.restype = ctypes.c_bool
+        except Exception as exception:
+            self.gdi32 = None
+            print(exception)
+            if self.tray is not None:
+                self.tray.show_notification(str(exception))
 
     def _dispatch_call(self, func: Callable, args: tuple, delay_ms: int) -> None:
         """GUI-thread slot backing :class:`_CallBridge`.
@@ -648,15 +674,31 @@ class QtProfileLoader(profile_loader.ProfileLoader):
         closing one of those doesn't look like an external close request.
 
         Returns:
-            list: The process's own top-level, non-dialog widgets.
+            list: The process's own top-level, non-dialog windows, as of the
+                last :meth:`_refresh_own_windows` (safe from any thread).
+        """
+        return list(self._own_windows)
+
+    def _refresh_own_windows(self) -> None:
+        """Re-read the process's own top-level windows; GUI thread only.
+
+        :meth:`_enumerate_own_top_level_windows` is called from the display
+        monitoring thread (``_check_keep_running``), and Qt widgets must not
+        be touched from there: listing ``topLevelWidgets()`` while the GUI
+        thread rebuilds the tray menu made the loader exit when the menu was
+        opened. A timer on the GUI thread keeps this snapshot current
+        instead. Only real windows count: dialogs (see above) and popups such
+        as the tray menu and its submenus come and go on their own.
         """
         app = QApplication.instance()
         if app is None:
-            return []
-        return [
+            self._own_windows = []
+            return
+        self._own_windows = [
             widget
             for widget in app.topLevelWidgets()
-            if not isinstance(widget, QDialog)
+            if widget.windowType() == Qt.WindowType.Window
+            and not isinstance(widget, QDialog)
         ]
 
     def _request_forced_shutdown(self) -> None:
@@ -671,6 +713,9 @@ class QtProfileLoader(profile_loader.ProfileLoader):
 
     def _teardown_ui(self) -> None:
         """Hide the tray icon and stop the IPC host."""
+        timer = getattr(self, "_own_windows_timer", None)
+        if timer is not None:
+            timer.stop()
         if self.tray is not None:
             self.tray.hide()
         if getattr(self, "host", None):
@@ -780,6 +825,35 @@ class QtProfileLoader(profile_loader.ProfileLoader):
 
         dlg = ProfileAssociationsDialog(self)
         dlg.exec()
+
+    def open_display_settings(self, event: object = None) -> None:
+        """Open the Windows display settings.
+
+        Only ever wired up on Windows (see
+        :meth:`ApplyProfilesTrayIcon._rebuild_menu`). The wx
+        ``TaskBarIcon.open_display_settings`` lives on the wx tray icon, not on
+        :class:`~DisplayCAL.profile_loader.ProfileLoader`, so the Qt tray has
+        to provide its own. The settings page is started without waiting for
+        it, so the tray's GUI thread is never blocked.
+
+        Args:
+            event: Unused; kept for interface parity with the wx method.
+        """
+        print("Menu command: Open display settings")
+        try:
+            subprocess.Popen(  # noqa: S603
+                [  # noqa: S607
+                    "control",
+                    "/name",
+                    "Microsoft.Display",
+                    "/page",
+                    "Settings",
+                ],
+                close_fds=True,
+            )
+        except OSError as exception:
+            QApplication.beep()
+            print(f"Could not open the display settings: {exception}")
 
     def set_exceptions(self, event: object = None) -> None:
         """Open the Qt exceptions dialog and persist any changes.

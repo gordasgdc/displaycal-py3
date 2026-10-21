@@ -80,6 +80,7 @@ def test_enumerate_own_top_level_windows_excludes_dialogs(qapp, monkeypatch):
     widget = QWidget()
     dialog = QDialog()
     try:
+        pl._refresh_own_windows()
         windows = pl._enumerate_own_top_level_windows()
         assert widget in windows
         assert dialog not in windows
